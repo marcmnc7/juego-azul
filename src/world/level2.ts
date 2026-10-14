@@ -329,7 +329,7 @@ export class Level2 implements Level {
   }
 
   get threeScene() {
-    return this.terrace && (this.phase === 'terrace' || this.phase === 'done') ? this.terrace.scene : this.scene;
+    return this.terrace && this.phase === 'terrace' ? this.terrace.scene : this.scene;
   }
 
   private regionAt = (z: number): Region => {
@@ -608,7 +608,7 @@ export class Level2 implements Level {
 
   update(dt: number) {
     this.t += dt;
-    if ((this.phase === 'terrace' || this.phase === 'done') && this.terrace) {
+    if (this.phase === 'terrace' && this.terrace) {
       this.terrace.update(dt, this.camera);
       const can = this.phase === 'terrace' && !this.eating && !this.busy;
       this.hud.setAction(can ? '🍽️ Comerse una zamburiña' : null, can);
@@ -821,7 +821,7 @@ export class Level2 implements Level {
     window.removeEventListener('pointerdown', this.onTap);
     this.input.enabled = true;
     this.updateHud();
-    setTimeout(() => dialogue(ROAD.zambDone, () => this.startDrive2()), 600);
+    setTimeout(() => dialogue(ROAD.zambDone, () => this.sitOnTerrace()), 600);
   }
 
   private startDrive2() {
@@ -839,14 +839,14 @@ export class Level2 implements Level {
     this.phase = 'logrono';
     this.updateHud();
     audio.bark();
-    setTimeout(() => dialogue(ROAD.arriveLogrono, () => this.sitOnTerrace()), 1500);
+    setTimeout(() => dialogue(ROAD.arriveLogrono, () => this.finish()), 1500);
   }
 
-  /** Final: sentados en la terraza del restaurante de las zamburiñas. */
+  /** En San Vicente: sentados en la terraza de El Ancla comiéndose una zamburiña. */
   private sitOnTerrace() {
     fadeFlash(() => {
       if (!this.terrace) {
-        this.terrace = new Terrace(ROAD.restaurant);
+        this.terrace = new Terrace();
         applyShadows(this.terrace.scene);
       }
       this.phase = 'terrace';
@@ -868,7 +868,12 @@ export class Level2 implements Level {
     this.hud.setAction(null);
     this.terrace.eat(() => {
       audio.fanfare();
-      dialogue(ROAD.terraceDone, () => this.finish());
+      dialogue(ROAD.terraceDone, () =>
+        fadeFlash(() => {
+          this.route.style.display = '';
+          this.startDrive2();
+        }, 400),
+      );
     });
   }
 
@@ -937,6 +942,9 @@ export class Level2 implements Level {
 
   debug(): DebugItem[] {
     const clean = () => {
+      this.route.style.display = '';
+      this.eating = false;
+      this.busy = false;
       window.removeEventListener('pointerdown', this.onTap);
       this.input.enabled = true;
     };
@@ -982,6 +990,7 @@ export class Level2 implements Level {
           this.startGrill();
         },
       },
+      { label: '4b · Terraza de El Ancla', run: () => { clean(); this.sitOnTerrace(); } },
       { label: '5 · Camino de Logroño', run: () => { clean(); this.startDrive2(); } },
       {
         label: '6 · Llegar a Logroño',
@@ -991,7 +1000,6 @@ export class Level2 implements Level {
           this.reset(this.legStart + LEG2 - 50);
         },
       },
-      { label: '7 · Terraza', run: () => { clean(); this.sitOnTerrace(); } },
       { label: '✓ Completar capítulo', run: () => { clean(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }

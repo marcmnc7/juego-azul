@@ -78,7 +78,7 @@ export const ROAD = {
   },
   arriveSV: [
     { who: 'Narrador', text: 'San Vicente de la Barquera. El puente, el castillo, el mar… y un olor a plancha que no se puede aguantar.' },
-    { who: 'Gas', text: 'Dicen que aquí ponen las mejores zamburiñas del Cantábrico. ¿Las hacemos nosotros?' },
+    { who: 'Gas', text: 'En El Ancla ponen las mejores zamburiñas del Cantábrico. Y el cocinero dice que, si las hacemos nosotros, invita él.' },
     { who: 'Narrador', text: 'Toca cada zamburiña cuando esté dorada. Si se quema… Buu.' },
   ] as Line[],
   zambDone: [
@@ -92,15 +92,14 @@ export const ROAD = {
     { who: 'Gas', text: 'Por el mejor viaje. Y por la copiloto… digo, la conductora.' },
     { who: 'Joy', text: '¡Guau!' },
   ] as Line[],
-  restaurant: 'Restaurante',
   terrace: [
-    { who: 'Narrador', text: 'Y al final del viaje, la terraza de siempre. La de aquellas zamburiñas que nunca se os olvidan.' },
+    { who: 'Narrador', text: 'La terraza de El Ancla, en San Vicente. Las zamburiñas que nunca se os van a olvidar.' },
     { who: 'Gas', text: 'Pide tú, que a mí no me entienden.' },
     { who: 'Narrador', text: 'Cómete una zamburiña.' },
   ] as Line[],
   terraceDone: [
     { who: 'Azul', text: 'Mmm… Siguen siendo las mejores.' },
-    { who: 'Gas', text: 'Por muchas más rutas así. Y por la que se come la última.' },
+    { who: 'Gas', text: 'Pues ahora, a Logroño. Que el vino no se bebe solo.' },
     { who: 'Joy', text: '¡Guau! (Joy también quiere una)' },
   ] as Line[],
   hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!'],
