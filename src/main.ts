@@ -8,7 +8,7 @@ import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import type { Level, LevelResult } from './world/level';
-import { applyShadows, quality, setEnvRenderer } from './core/gfx';
+import { applyShadows, quality, removeEnvironment, setEnvRenderer } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -23,6 +23,35 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = quality.shadows;
+
+// Modo seguro. ?lite arranca sin grano, sin luz de entorno y sin postproceso. Y si en este
+// dispositivo algún shader no compila (cada GPU es más o menos estricta), se quitan esos efectos
+// uno a uno hasta que todo se vea.
+if (new URLSearchParams(location.search).has('lite')) {
+  quality.grain = false;
+  quality.env = false;
+  quality.post = false;
+}
+let shaderFailed = false;
+renderer.debug.onShaderError = (gl, program, vs, fs) => {
+  shaderFailed = true;
+  console.warn('[gfx] shader no compila en este dispositivo:', gl.getProgramInfoLog(program), gl.getShaderInfoLog(vs), gl.getShaderInfoLog(fs));
+};
+function safeStep() {
+  shaderFailed = false;
+  if (quality.grain) quality.grain = false;
+  else if (quality.env) quality.env = false;
+  else if (quality.post) quality.post = false;
+  else return;
+  console.warn('[gfx] modo seguro:', JSON.stringify(quality));
+  const sc = level ? level.threeScene : null;
+  if (!sc) return;
+  if (!quality.env) removeEnvironment(sc);
+  sc.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => (x.needsUpdate = true));
+  });
+}
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
 let ratio = Math.min(maxRatio, 1.5);
@@ -178,6 +207,7 @@ function frame() {
   if (level) {
     level.update(dt);
     draw(level.threeScene);
+    if (shaderFailed) safeStep();
   } else {
     draw(idle);
   }

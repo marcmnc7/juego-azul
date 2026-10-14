@@ -9,6 +9,10 @@ export const quality = {
   shadows: true,
   outlines: false,
   post: true,
+  /** Grano procedural en las superficies. Se apaga solo si el shader no compila en el dispositivo. */
+  grain: true,
+  /** Luz de entorno a partir del cielo (PMREM). */
+  env: true,
 };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
@@ -24,8 +28,9 @@ export function toon(params: THREE.MeshStandardMaterialParameters) {
  */
 export function addGrain(m: THREE.MeshStandardMaterial, amount = 0.14) {
   m.onBeforeCompile = (sh) => {
+    if (!quality.grain) return;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
+      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -39,7 +44,7 @@ export function addGrain(m: THREE.MeshStandardMaterial, amount = 0.14) {
       .replace(
         '#include <common>',
         `#include <common>
-        varying vec3 vGrainPos;
+        varying highp vec3 vGrainPos;
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -59,7 +64,7 @@ export function addGrain(m: THREE.MeshStandardMaterial, amount = 0.14) {
         roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);`,
       );
   };
-  m.customProgramCacheKey = () => 'grain' + amount;
+  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount : 'plain');
 }
 
 /**
@@ -71,7 +76,7 @@ export function setEnvRenderer(r: THREE.WebGLRenderer) {
   pmrem = new THREE.PMREMGenerator(r);
 }
 export function applyEnvironment(scene: THREE.Scene) {
-  if (!pmrem || scene.userData.envDone) return;
+  if (!pmrem || !quality.env || scene.userData.envDone) return;
   scene.userData.envDone = true;
   let sky: THREE.Object3D | null = null;
   scene.traverse((o) => {
@@ -90,6 +95,16 @@ export function applyEnvironment(scene: THREE.Scene) {
   scene.traverse((o) => {
     const h = o as THREE.HemisphereLight;
     if (h.isHemisphereLight) h.intensity *= 0.55;
+  });
+}
+
+/** Quita la luz de entorno de una escena (modo seguro) y devuelve las luces hemisféricas a su valor. */
+export function removeEnvironment(scene: THREE.Scene) {
+  if (!scene.userData.envDone || !scene.environment) return;
+  scene.environment = null;
+  scene.traverse((o) => {
+    const h = o as THREE.HemisphereLight;
+    if (h.isHemisphereLight) h.intensity /= 0.55;
   });
 }
 

@@ -12,7 +12,7 @@ Juego 3D para el móvil (Three.js + Vite + TypeScript) para el cumpleaños de Ma
 | 💌 | **Sorpresa final** | Carta de Gas (y Joy) al terminar los cuatro capítulos. | — |
 
 ## Cómo se ve y se juega
-- Estilo realista suave: materiales PBR iluminados por el cielo de cada nivel (reflejos de entorno), textura de grano en las superficies, sombras suaves de 2048, bloom en luces y focos, viñeta y corrección de color. Agua de piscina y mar con reflejos. Si el móvil va justo, baja la resolución, luego quita el postprocesado y por último las sombras. Con `?hq` en la URL no baja nunca la calidad (para capturas).
+- Estilo realista suave: materiales PBR iluminados por el cielo de cada nivel (reflejos de entorno), textura de grano en las superficies, sombras suaves de 2048, bloom en luces y focos, viñeta y corrección de color. Agua de piscina y mar con reflejos. Si el móvil va justo, baja la resolución, luego quita el postprocesado y por último las sombras. Con `?hq` en la URL no baja nunca la calidad (para capturas). Si en algún dispositivo un shader no compila, se quitan solos el grano, luego la luz de entorno y luego el postproceso; `?lite` arranca ya sin ellos.
 - Cap. 1: los ases avisan con un **!** antes de ponerse de manos; tocarlos en lo más alto (aro dorado) es un toque perfecto. Azul lleva la pomada en la mano; confeti y ovación al final.
 - Ferreries: banderas de Menorca y senyeres en los balcones, pancartas de las Festes de Sant Bartomeu, placas de calle, iglesia con campanario, Ajuntament, fabiolera, bares con gente bailando y luces de fiesta.
 - Cap. 2: carril deslizando el dedo o con ◀ ▶, barra de ruta, ⛽ turbo, 🚬 que Gas confisca, adelantamientos "por los pelos" y rachas de fotos con Joy ladrando.
