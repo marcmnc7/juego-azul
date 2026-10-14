@@ -92,6 +92,17 @@ export const ROAD = {
     { who: 'Gas', text: 'Por el mejor viaje. Y por la copiloto… digo, la conductora.' },
     { who: 'Joy', text: '¡Guau!' },
   ] as Line[],
+  restaurant: 'Restaurante',
+  terrace: [
+    { who: 'Narrador', text: 'Y al final del viaje, la terraza de siempre. La de aquellas zamburiñas que nunca se os olvidan.' },
+    { who: 'Gas', text: 'Pide tú, que a mí no me entienden.' },
+    { who: 'Narrador', text: 'Cómete una zamburiña.' },
+  ] as Line[],
+  terraceDone: [
+    { who: 'Azul', text: 'Mmm… Siguen siendo las mejores.' },
+    { who: 'Gas', text: 'Por muchas más rutas así. Y por la que se come la última.' },
+    { who: 'Joy', text: '¡Guau! (Joy también quiere una)' },
+  ] as Line[],
   hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!'],
   smoke: ['Gas: «Azul, ¿otra vez? ¡Que lo tienes que dejar!» 🚭', 'Gas: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Gas: «Te lo requisó. Por tu bien.» 🚭'],
   turbo: '¡Gasolina! ⛽ Turbo',

@@ -3,16 +3,17 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
 import { G, Merger, makeCar, makeScallop, vertexMat } from '../entities/models';
-import { Sky, Sun, toon, vibrate, addOutline } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, addOutline, applyShadows } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import { Terrace } from './terrace';
 import { clock, type Level, type LevelDone } from './level';
 
 // Capítulo 2 · La ruta de las zamburiñas.
 // Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
 // → carretera entre viñedos → Logroño.
 
-type Phase = 'intro' | 'drive1' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'done';
+type Phase = 'intro' | 'drive1' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
 type Region = 'madrid' | 'meseta' | 'cantabria' | 'rioja';
 
 const LANES = [-2.6, 0, 2.6];
@@ -131,6 +132,9 @@ interface Thing {
 
 export class Level2 implements Level {
   private scene = new THREE.Scene();
+  private terrace: Terrace | null = null;
+  private eating = false;
+  private busy = false;
   private hud: Hud;
   private fx: Particles;
   private phase: Phase = 'intro';
@@ -325,7 +329,7 @@ export class Level2 implements Level {
   }
 
   get threeScene() {
-    return this.scene;
+    return this.terrace && (this.phase === 'terrace' || this.phase === 'done') ? this.terrace.scene : this.scene;
   }
 
   private regionAt = (z: number): Region => {
@@ -526,6 +530,10 @@ export class Level2 implements Level {
       const left = Math.max(0, Math.round((total - this.dist) / 10));
       h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} a ${left} km`);
       h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
+    } else if (this.phase === 'terrace') {
+      this.showLaneButtons(false);
+      h.setObjective('Cómete una zamburiña en la terraza');
+      h.setCounters('');
     } else if (this.phase === 'grill') {
       h.setObjective('Toca cada zamburiña cuando esté dorada');
       h.setCounters(`<span class="chip">🐚 ${this.served}/${NEED_ZAMB}</span>`);
@@ -600,6 +608,13 @@ export class Level2 implements Level {
 
   update(dt: number) {
     this.t += dt;
+    if ((this.phase === 'terrace' || this.phase === 'done') && this.terrace) {
+      this.terrace.update(dt, this.camera);
+      const can = this.phase === 'terrace' && !this.eating && !this.busy;
+      this.hud.setAction(can ? '🍽️ Comerse una zamburiña' : null, can);
+      if (this.input.consumeAction() && can) this.eatZamburina();
+      return;
+    }
     this.fx.update(dt);
     const drive = this.phase === 'drive1' || this.phase === 'drive2';
 
@@ -824,21 +839,51 @@ export class Level2 implements Level {
     this.phase = 'logrono';
     this.updateHud();
     audio.bark();
-    setTimeout(() => {
-      dialogue(ROAD.arriveLogrono, () => {
-        this.phase = 'done';
-        const stars = 1 + (this.photos >= 30 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
-        this.onComplete({
-          stars,
-          stats: [
-            ['Fotos del viaje', `${this.photos} 📸`],
-            ['Choques', `${this.hits}`],
-            ['Zamburiñas quemadas', `${this.burnt}`],
-            ['Al volante', clock(this.driveTime)],
-          ],
-        });
-      });
-    }, 1500);
+    setTimeout(() => dialogue(ROAD.arriveLogrono, () => this.sitOnTerrace()), 1500);
+  }
+
+  /** Final: sentados en la terraza del restaurante de las zamburiñas. */
+  private sitOnTerrace() {
+    fadeFlash(() => {
+      if (!this.terrace) {
+        this.terrace = new Terrace(ROAD.restaurant);
+        applyShadows(this.terrace.scene);
+      }
+      this.phase = 'terrace';
+      this.eating = false;
+      this.route.style.display = 'none';
+      this.input.enabled = true;
+      this.terrace.frame(this.camera);
+      this.camera.fov = this.baseFov;
+      this.camera.updateProjectionMatrix();
+      this.updateHud();
+      this.busy = true;
+      dialogue(ROAD.terrace, () => (this.busy = false));
+    }, 500);
+  }
+
+  private eatZamburina() {
+    if (!this.terrace) return;
+    this.eating = true;
+    this.hud.setAction(null);
+    this.terrace.eat(() => {
+      audio.fanfare();
+      dialogue(ROAD.terraceDone, () => this.finish());
+    });
+  }
+
+  private finish() {
+    this.phase = 'done';
+    const stars = 1 + (this.photos >= 30 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
+    this.onComplete({
+      stars,
+      stats: [
+        ['Fotos del viaje', `${this.photos} 📸`],
+        ['Choques', `${this.hits}`],
+        ['Zamburiñas quemadas', `${this.burnt}`],
+        ['Al volante', clock(this.driveTime)],
+      ],
+    });
   }
 
   private updateGrill(dt: number) {
@@ -946,6 +991,7 @@ export class Level2 implements Level {
           this.reset(this.legStart + LEG2 - 50);
         },
       },
+      { label: '7 · Terraza', run: () => { clean(); this.sitOnTerrace(); } },
       { label: '✓ Completar capítulo', run: () => { clean(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }
