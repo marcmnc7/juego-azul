@@ -5,7 +5,8 @@ import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { NIGHT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeDog, animatePerson, Person, Dog } from '../entities/models';
+import { G, Merger, makePerson, makeDog, makeCar, animatePerson, Person, Dog } from '../entities/models';
+import { buildStreet, STREET } from './homeStreet';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, fadeFlash, Hud, DebugItem } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
@@ -15,10 +16,12 @@ import { clock, type Level, type LevelDone } from './level';
 // Capítulo 4 · Noche de piscina y estrellas, en casa.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
 // jardín de césped con camino de losas por la derecha y la piscina al fondo.
+// Empieza en la puerta del Bar Imperi: Azul sube al coche de Gas, van a casa, entra por la
+// puerta peatonal y sale al jardín.
 // Bucle: bajar al jardín → tirarse a la piscina → recoger 6 velitas → tumbarse en las toallas →
 // unir las estrellas que forman un corazón → estrella fugaz → final.
 
-type Phase = 'intro' | 'toPool' | 'diving' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
+type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
 
 // Piscina (interior del vaso)
 const POOL = { minX: -1.5, maxX: 2.5, minZ: 8.8, maxZ: 13.6 };
@@ -26,6 +29,13 @@ const WATER_Y = -0.22;
 const SWIM_Y = -1.12;
 const TOWELS = new THREE.Vector3(-2.6, 0, 5.4);
 const PLOT = { minX: -4.1, maxX: 4.1, minZ: 0.25, maxZ: 14.1 };
+// Calle: zona del bar y zona delante de casa
+const BAR_AREA = { minX: STREET.bar.x - 12, maxX: STREET.bar.x + 14, minZ: -26.6, maxZ: STREET.bar.z - 0.4 };
+const HOME_AREA = { minX: -6, maxX: 5, minZ: -26.6, maxZ: -15.35 };
+const YARD = { minX: -4.2, maxX: 4.2, minZ: STREET.wallZ + 0.5, maxZ: -15.4 };
+const CAR_START_X = STREET.bar.x + 3.2;
+const CAR_STOP_X = -0.6;
+const DRIVE_TIME = 7;
 
 interface Candle {
   obj: THREE.Group;
@@ -71,6 +81,12 @@ export class Level4 implements Level {
   private endT = 0;
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
+  // Coche y viaje
+  private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
+  private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95 };
+  private driveT = 0;
+  private driveTalkDone = false;
+  private camLook = new THREE.Vector3();
   private onTap = (e: PointerEvent) => this.tapStar(e.clientX, e.clientY, e.target as HTMLElement);
 
   constructor(
@@ -98,19 +114,32 @@ export class Level4 implements Level {
     this.buildHouse();
     this.fx = new Particles(sc);
 
+    const street = buildStreet(sc);
+    this.colliders.push(...street.colliders, this.carBox);
+    this.car.root.rotation.y = Math.PI / 2;
+    this.car.azul.visible = false;
+    this.placeCar(CAR_START_X);
+    sc.add(this.car.root);
+    // Faros encendidos
+    const beams = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff3c0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    beams.position.set(0, 0.7, 2.3);
+    beams.scale.set(2.6, 1.2, 1);
+    this.car.root.add(beams);
+
     this.player = makePerson(MARGAUX_LOOK);
-    this.player.root.position.set(-1.2, 0, 1.2);
+    this.player.root.position.set(STREET.bar.x - 0.6, 0, STREET.bar.z - 1.1);
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
-    this.walker.facing = this.walker.yaw = 0;
+    this.walker.facing = this.walker.yaw = Math.PI / 2;
 
     this.gas = makePerson(MARC_LOOK);
     this.gas.root.position.set(1.0, 0, 7.9);
     this.gas.root.rotation.y = Math.PI;
+    this.gas.root.visible = false; // va en el coche
     sc.add(this.gas.root);
 
     this.joy = makeDog();
-    this.joy.root.position.set(0.6, 0, 2.4);
+    this.joy.root.position.set(-0.5, 0, -16.6); // espera en el patio de casa
     sc.add(this.joy.root);
 
     // Velitas flotando en la piscina
@@ -142,13 +171,15 @@ export class Level4 implements Level {
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
     this.updateHud();
-    this.camera.position.set(0, 9, -6);
+    this.camera.position.set(STREET.bar.x - 1, 2.4, -27);
+    this.camLook.set(STREET.bar.x, 2.2, STREET.bar.z);
     this.busy = true;
     setTimeout(() => {
       if (this.phase !== 'intro') return;
-      dialogue(NIGHT.intro, () => {
+      dialogue(NIGHT.bar, () => {
+        if (this.phase !== 'intro') return;
         this.busy = false;
-        this.phase = 'toPool';
+        this.phase = 'atBar';
         this.updateHud();
       });
     }, 2300);
@@ -239,8 +270,6 @@ export class Level4 implements Level {
     const lawnMesh = new THREE.Mesh(lawn.build(), toon({ vertexColors: true, map: grassTex }));
     lawnMesh.userData.noCast = true;
     sc.add(lawnMesh);
-    // Calle de atrás
-    this.ground(m, -40, 40, -40, -15, 0x3a3a44);
 
     // Terraza y borde de la piscina
     this.ground(m, -4.5, 4.5, 0, 1.5, 0xd8c7a5, 0.02);
@@ -419,6 +448,15 @@ export class Level4 implements Level {
     h.setCounters(this.phase === 'swim' ? `<span class="chip">${NIGHT.candle(this.collected)}</span>` : '');
     switch (this.phase) {
       case 'intro':
+      case 'atBar':
+        h.setObjective('Sube al coche de Gas');
+        break;
+      case 'drive':
+        h.setObjective('De camino a casa…');
+        break;
+      case 'arrive':
+        h.setObjective('Entra en casa');
+        break;
       case 'toPool':
         h.setObjective('Baja al jardín y tírate a la piscina');
         break;
@@ -437,6 +475,8 @@ export class Level4 implements Level {
   }
 
   private target(): THREE.Vector3 | null {
+    if (this.phase === 'atBar') return this.carDoor();
+    if (this.phase === 'arrive') return STREET.door;
     if (this.phase === 'toPool') return this.v2.set(0.5, 0, POOL.minZ - 0.6);
     if (this.phase === 'toTowels') return TOWELS;
     return null;
@@ -461,17 +501,25 @@ export class Level4 implements Level {
     (this.fireflies.material as THREE.PointsMaterial).opacity = 0.6 + Math.sin(this.t * 3) * 0.3;
 
     const swimming = this.phase === 'swim';
-    const walking = !this.busy && (this.phase === 'toPool' || this.phase === 'toTowels' || swimming);
+    const onFoot = this.phase === 'atBar' || this.phase === 'arrive' || this.phase === 'toPool' || this.phase === 'toTowels';
+    const walking = !this.busy && (onFoot || swimming);
     this.walker.turn(this.input.consumeCam());
     const pp = this.player.root.position;
 
     if (this.phase === 'diving') this.updateDive(dt);
+    else if (this.phase === 'drive') this.updateDrive(dt);
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
       this.walker.speed = swimming ? 3.0 : 5.0;
       this.solids.length = 0;
       if (swimming) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       else this.solids.push({ x: this.joy.root.position.x, z: this.joy.root.position.z, r: 0.3 }, { x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
-      const bounds = swimming ? { minX: POOL.minX + 0.4, maxX: POOL.maxX - 0.4, minZ: POOL.minZ + 0.4, maxZ: POOL.maxZ - 0.4 } : PLOT;
+      const bounds = swimming
+        ? { minX: POOL.minX + 0.4, maxX: POOL.maxX - 0.4, minZ: POOL.minZ + 0.4, maxZ: POOL.maxZ - 0.4 }
+        : this.phase === 'intro' || this.phase === 'atBar'
+          ? BAR_AREA
+          : this.phase === 'arrive'
+            ? HOME_AREA
+            : PLOT;
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
       this.player.root.rotation.y = this.walker.facing;
       if (swimming) {
@@ -503,7 +551,13 @@ export class Level4 implements Level {
     // Acción contextual
     let label: string | null = null;
     let action: (() => void) | null = null;
-    if (!this.busy && this.phase === 'toPool' && this.nearPoolEdge()) {
+    if (!this.busy && this.phase === 'atBar' && pp.distanceTo(this.carDoor()) < 1.5) {
+      label = '🚗 Subir al coche';
+      action = () => this.boardCar();
+    } else if (!this.busy && this.phase === 'arrive' && pp.distanceTo(STREET.door) < 1.5) {
+      label = '🔑 Entrar en casa';
+      action = () => this.enterHome();
+    } else if (!this.busy && this.phase === 'toPool' && this.nearPoolEdge()) {
       label = '🏊 Tirarse al agua';
       action = () => this.startDive();
     } else if (!this.busy && this.phase === 'toTowels' && pp.distanceTo(TOWELS) < 1.8) {
@@ -525,8 +579,17 @@ export class Level4 implements Level {
 
     this.updateShooting(dt);
     if (this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') this.updateStars(dt);
-    else this.walker.camera(this.camera, this.phase === 'intro' ? dt * 0.4 : dt, this.colliders, swimming ? 5.5 : 6.5, swimming ? 3.2 : 3.6);
-    this.sun.follow(pp);
+    else if (this.phase === 'intro') {
+      // Plano fijo de la fachada del bar mientras se presenta la escena
+      this.camera.lookAt(this.camLook);
+    } else if (this.phase === 'drive') {
+      const c = this.car.root.position;
+      this.v1.set(c.x - 7.5, 3.2, c.z - 4.2);
+      this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
+      this.camLook.lerp(this.v2.set(c.x + 3, 1, c.z), Math.min(1, dt * 4));
+      this.camera.lookAt(this.camLook);
+    } else this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.5 : 6.5, swimming ? 3.2 : 3.6);
+    this.sun.follow(this.phase === 'drive' ? this.car.root.position : pp);
     this.sky.update(this.camera, dt);
   }
 
@@ -553,6 +616,7 @@ export class Level4 implements Level {
 
   private updateGas(dt: number) {
     const g = this.gas;
+    if (!g.root.visible) return;
     if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
       const a = this.t * 0.35;
@@ -576,6 +640,9 @@ export class Level4 implements Level {
   /** Joy sigue a Azul (sin meterse en la piscina), mueve la cola y ladra de vez en cuando. */
   private updateJoy(dt: number) {
     const j = this.joy.root;
+    const street = this.phase === 'intro' || this.phase === 'atBar' || this.phase === 'drive' || this.phase === 'arrive';
+    // Mientras Azul está fuera, Joy espera en el patio y no sale a la calle
+    const area = street ? YARD : PLOT;
     const p = this.player.root.position;
     let tx = p.x - 1.0;
     let tz = p.z - 0.9;
@@ -602,8 +669,8 @@ export class Level4 implements Level {
       j.position.z += (dz / d) * speed * dt;
       j.rotation.y = Math.atan2(dx, dz);
     }
-    j.position.x = Math.max(PLOT.minX, Math.min(PLOT.maxX, j.position.x));
-    j.position.z = Math.max(PLOT.minZ, Math.min(PLOT.maxZ, j.position.z));
+    j.position.x = Math.max(area.minX, Math.min(area.maxX, j.position.x));
+    j.position.z = Math.max(area.minZ, Math.min(area.maxZ, j.position.z));
     this.joyWalk += dt * speed * 3;
     const w = Math.sin(this.joyWalk) * 0.6 * Math.min(1, speed / 2);
     this.joy.legs[0].rotation.x = this.joy.legs[3].rotation.x = w;
@@ -611,11 +678,107 @@ export class Level4 implements Level {
     this.joy.tail.rotation.z = Math.sin(this.t * 14) * 0.6;
     if (this.phase === 'stars' || this.phase === 'ending') j.rotation.y = Math.PI / 2;
     this.barkT -= dt;
-    if (this.barkT <= 0 && this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
+    if (this.barkT <= 0 && (!street || this.phase === 'arrive') && this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
       this.barkT = 5 + Math.random() * 6;
       audio.bark();
       this.fx.burst(this.v1.copy(j.position).setY(1.2), '🐾', 2, 0.8, 0.6);
     }
+  }
+
+  // ---------------- Bar Imperi y viaje a casa ----------------
+
+  private placeCar(x: number) {
+    this.car.root.position.set(x, 0, STREET.laneZ);
+    this.carBox.minX = x - 2.0;
+    this.carBox.maxX = x + 2.0;
+  }
+
+  /** Puerta del copiloto, del lado de la acera. */
+  private carDoor() {
+    return this.v2.set(this.car.root.position.x + 0.2, 0, STREET.laneZ + 1.35);
+  }
+
+  private boardCar() {
+    this.busy = true;
+    this.hud.setAction(null);
+    this.input.reset();
+    audio.pop();
+    fadeFlash(() => {
+      this.player.root.visible = false;
+      this.car.azul.visible = true;
+      this.phase = 'drive';
+      this.driveT = 0;
+      this.driveTalkDone = false;
+      this.camLook.copy(this.car.root.position);
+      this.updateHud();
+      setTimeout(() => dialogue(NIGHT.drive, () => (this.driveTalkDone = true)), 900);
+    }, 250);
+  }
+
+  private updateDrive(dt: number) {
+    this.driveT += dt;
+    const k = Math.min(1, this.driveT / DRIVE_TIME);
+    const e = k * k * (3 - 2 * k);
+    const prev = this.car.root.position.x;
+    this.placeCar(THREE.MathUtils.lerp(CAR_START_X, CAR_STOP_X, e));
+    const dx = this.car.root.position.x - prev;
+    this.car.wheels.forEach((w) => (w.rotation.x += dx / 0.34));
+    this.car.body.position.y = Math.abs(Math.sin(this.t * 14)) * 0.02 * Math.min(1, Math.abs(dx) / dt / 6);
+    if (k >= 1 && this.driveTalkDone && this.busy && this.phase === 'drive') {
+      this.phase = 'arrive';
+      fadeFlash(() => this.arriveHome());
+    }
+  }
+
+  /** Bajan del coche delante de casa; Gas abre la puerta peatonal y Joy espera en el patio. */
+  private arriveHome() {
+    this.phase = 'arrive';
+    this.placeCar(CAR_STOP_X);
+    this.car.azul.visible = false;
+    this.player.root.visible = true;
+    this.player.root.position.set(CAR_STOP_X - 1.2, 0, STREET.laneZ + 1.6);
+    this.walker.yaw = this.walker.facing = 0;
+    this.camera.position.set(this.player.root.position.x, 3.6, this.player.root.position.z - 6.5);
+    this.gas.root.visible = true;
+    this.gas.root.position.set(-1.9, 0, STREET.wallZ + 1.0);
+    this.gas.root.rotation.set(0, Math.PI, 0);
+    this.joy.root.visible = true;
+    this.joy.root.position.set(-0.8, 0, -16.6);
+    this.updateHud();
+    dialogue(NIGHT.arrive, () => {
+      this.busy = false;
+    });
+  }
+
+  private enterHome() {
+    this.busy = true;
+    this.hud.setAction(null);
+    this.input.reset();
+    fadeFlash(() => {
+      this.toGarden();
+      this.phase = 'toPool';
+      this.updateHud();
+      audio.bark();
+      this.fx.burst(this.v1.copy(this.joy.root.position).setY(1.2), '🐾', 3, 0.8, 0.6);
+      dialogue(NIGHT.intro, () => {
+        this.busy = false;
+      });
+    }, 400);
+  }
+
+  /** Coloca a todos en el jardín, saliendo por la cristalera. */
+  private toGarden() {
+    this.player.root.visible = true;
+    this.player.root.position.set(-1.2, 0, 1.2);
+    this.walker.yaw = this.walker.facing = 0;
+    this.camera.position.set(-1.2, 9, -6);
+    this.car.azul.visible = false;
+    this.placeCar(CAR_STOP_X);
+    this.gas.root.visible = true;
+    this.gas.root.position.set(1.0, 0, 7.9);
+    this.gas.root.rotation.set(0, Math.PI, 0);
+    this.joy.root.visible = true;
+    this.joy.root.position.set(0.6, 0, 2.4);
   }
 
   // ---------------- Piscina ----------------
@@ -798,12 +961,37 @@ export class Level4 implements Level {
       this.input.reset();
       this.player.root.rotation.set(0, 0, 0);
       this.gas.root.rotation.set(0, Math.PI, 0);
+      this.player.root.visible = this.gas.root.visible = this.joy.root.visible = true;
+      this.car.azul.visible = false;
     };
     return [
+      {
+        label: 'A · Bar Imperi',
+        run: () => {
+          reset();
+          this.phase = 'atBar';
+          this.placeCar(CAR_START_X);
+          this.car.azul.visible = false;
+          this.player.root.visible = true;
+          this.gas.root.visible = false;
+          this.player.root.position.set(STREET.bar.x - 0.6, 0, STREET.bar.z - 1.1);
+          this.walker.yaw = this.walker.facing = Math.PI / 2;
+          this.updateHud();
+        },
+      },
+      {
+        label: 'B · Llegar a casa',
+        run: () => {
+          reset();
+          this.busy = true;
+          this.arriveHome();
+        },
+      },
       {
         label: '1 · Ir a la piscina',
         run: () => {
           reset();
+          this.toGarden();
           this.phase = 'toPool';
           this.player.root.position.set(0.5, 0, 7.2);
           this.gas.root.position.set(1.0, 0, 7.9);

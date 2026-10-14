@@ -469,7 +469,8 @@ export function makeDog(): Dog {
 }
 
 /** Coche del viaje con Azul, Gas y Joy asomada por la ventanilla. Mira hacia +Z. */
-export function makeCar(color = 0xd7263d) {
+export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean } = {}) {
+  const { luggage = true, joy: withJoy = true } = opts;
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
@@ -486,14 +487,21 @@ export function makeCar(color = 0xd7263d) {
   m.add(G.box, 0xff3030, 0.65, 0.72, -1.91, 0, 0, 0, 0.3, 0.14, 0.04);
   m.add(G.box, 0x333333, 0, 0.42, 1.92, 0, 0, 0, 1.7, 0.18, 0.06);
   m.add(G.box, 0x333333, 0, 0.42, -1.92, 0, 0, 0, 1.7, 0.18, 0.06);
-  // Equipaje en la baca
-  m.add(G.box, 0x6b4428, 0, 1.55, -0.4, 0, 0, 0, 1.1, 0.25, 1.2);
-  m.add(G.box, 0x2f6b46, 0.1, 1.78, -0.3, 0, 0.2, 0, 0.7, 0.22, 0.6);
-  // Azul (rubia) conduce a la izquierda, Gas de copiloto
-  m.add(G.sphere, 0xf4d0b0, -0.4, 1.25, 0.2, 0, 0, 0, 0.32, 0.36, 0.32);
-  m.add(G.sphere, 0xf2d27a, -0.4, 1.33, 0.17, 0, 0, 0, 0.36, 0.3, 0.36);
-  m.add(G.sphere, 0xe8b894, 0.4, 1.25, 0.2, 0, 0, 0, 0.32, 0.36, 0.32);
-  m.add(G.sphere, 0x2b1d14, 0.4, 1.36, 0.17, 0, 0, 0, 0.34, 0.22, 0.34);
+  if (luggage) {
+    // Equipaje en la baca
+    m.add(G.box, 0x6b4428, 0, 1.55, -0.4, 0, 0, 0, 1.1, 0.25, 1.2);
+    m.add(G.box, 0x2f6b46, 0.1, 1.78, -0.3, 0, 0.2, 0, 0.7, 0.22, 0.6);
+  }
+  // Cabezas en los asientos: Azul (rubia) a la derecha y Gas a la izquierda, al volante en el capítulo 4.
+  const azulX = -0.4;
+  const gasX = 0.4;
+  const a = new Merger();
+  a.add(G.sphere, 0xf4d0b0, azulX, 1.18, 0.2, 0, 0, 0, 0.32, 0.36, 0.32);
+  a.add(G.sphere, 0xf2d27a, azulX, 1.25, 0.17, 0, 0, 0, 0.36, 0.3, 0.36);
+  const azul = a.mesh();
+  body.add(azul);
+  m.add(G.sphere, 0xe8b894, gasX, 1.18, 0.2, 0, 0, 0, 0.32, 0.36, 0.32);
+  m.add(G.sphere, 0x2b1d14, gasX, 1.28, 0.17, 0, 0, 0, 0.34, 0.22, 0.34);
   body.add(m.mesh());
   // Joy asomada por la ventanilla trasera
   const joy = new THREE.Group();
@@ -504,7 +512,7 @@ export function makeCar(color = 0xd7263d) {
   j.add(G.box, 0x1d1b1f, 0, 0.14, -0.15, 0.9, 0, 0, 0.1, 0.24, 0.12); // oreja al viento
   j.add(G.box, 0xff7aa2, 0.08, -0.12, 0.26, 0.4, 0, 0, 0.06, 0.02, 0.12);
   joy.add(j.mesh());
-  body.add(joy);
+  if (withJoy) body.add(joy);
   const wheels: THREE.Object3D[] = [];
   const wGeo = new Merger().add(G.cyl, 0x1a1a1a, 0, 0, 0, 0, 0, Math.PI / 2, 0.68, 0.32, 0.68).add(G.cyl, 0xbbbbbb, 0, 0, 0, 0, 0, Math.PI / 2, 0.34, 0.34, 0.34).build();
   for (const [x, z] of [[-0.85, 1.25], [0.85, 1.25], [-0.85, -1.25], [0.85, -1.25]]) {
@@ -515,7 +523,7 @@ export function makeCar(color = 0xd7263d) {
   }
   addOutline(root, 0.03);
   root.add(blobShadow(4));
-  return { root, body, joy, wheels };
+  return { root, body, joy, wheels, azul };
 }
 
 /** Zamburiña en su concha. Devuelve la concha y la carne (cuyo color cambia al cocinarse). */

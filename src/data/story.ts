@@ -131,8 +131,24 @@ export const CONCERT = {
 };
 
 export const NIGHT = {
+  bar: [
+    { who: 'Narrador', text: 'Una noche de verano. Azul sale del Bar Imperi y, en la calle, la espera un coche con las luces puestas.' },
+    { who: 'Gas', text: '¡Azul! Sube, que te llevo.' },
+    { who: 'Azul', text: '¿A dónde?' },
+    { who: 'Gas', text: 'A casa. Tengo piscina.' },
+    { who: 'Azul', text: 'Buu. …Vale.' },
+  ] as Line[],
+  drive: [
+    { who: 'Gas', text: '¿Te has dejado el tabaco en el bar? Dime que sí, porfa.' },
+    { who: 'Azul', text: 'Conduce y calla, Gas.' },
+    { who: 'Narrador', text: 'Ventanillas bajadas, la música bajita y olor a verano.' },
+  ] as Line[],
+  arrive: [
+    { who: 'Gas', text: 'Ya estamos. Pasa, que Joy lleva toda la noche esperándote.' },
+    { who: 'Joy', text: '¡Guau! ¡Guau! (detrás de la puerta, moviendo la cola)' },
+  ] as Line[],
   intro: [
-    { who: 'Narrador', text: 'Una noche de verano, en casa. Hace calor, la piscina está iluminada y Joy no deja de dar vueltas.' },
+    { who: 'Narrador', text: 'Ya en casa. Hace calor, la piscina está iluminada y Joy no deja de dar vueltas.' },
     { who: 'Gas', text: 'Azul, he puesto velitas flotando en la piscina. ¿Te bañas?' },
     { who: 'Azul', text: '¿Velitas? ¿Tú? ¿Quién eres y qué has hecho con Gas?' },
     { who: 'Narrador', text: 'Baja al jardín y tírate a la piscina.' },
