@@ -65,7 +65,8 @@ setEnvRenderer(renderer);
  * imagen diminuta y mira si de verdad sale verde. Si en este dispositivo no se ve (hay GPUs que no
  * dan error pero no pintan), se van quitando efectos hasta que se vea.
  */
-function gfxSelfTest(): boolean {
+const gfxLog: string[] = [];
+function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
   const sc = new THREE.Scene();
   const sky = new Sky({ top: 0x4060ff, mid: 0x6080ff, bottom: 0x8090ff });
   sc.add(sky.group);
@@ -77,11 +78,11 @@ function gfxSelfTest(): boolean {
   sc.fog = new THREE.Fog(0x8090ff, 30, 200);
   // Igual que el decorado del juego: geometría sin UV y con colores por vértice
   const geo = new THREE.BoxGeometry(2, 2, 2);
-  geo.deleteAttribute('uv');
+  if (mode !== 'uv') geo.deleteAttribute('uv');
   const col = new Float32Array(geo.attributes.position.count * 3);
   for (let i = 0; i < col.length; i += 3) col.set([0.19, 0.75, 0.31], i);
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = toon({ vertexColors: true });
+  const mat = mode === 'basic' ? new THREE.MeshBasicMaterial({ vertexColors: true }) : mode === 'uv' ? toon({ color: 0x30c050 }) : toon({ vertexColors: true });
   const box = new THREE.Mesh(geo, mat);
   box.castShadow = box.receiveShadow = true;
   sc.add(box);
@@ -104,6 +105,7 @@ function gfxSelfTest(): boolean {
   mat.dispose();
   sc.environment?.dispose();
   const ok = px[1] > px[0] + 25 && px[1] > px[2] + 10;
+  gfxLog.push(`${mode === 'game' ? (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + (quality.lambert ? 'L' : '') : mode}:${px[0]},${px[1]},${px[2]}`);
   if (!ok) console.warn('[gfx] autocomprobación falla', Array.from(px), JSON.stringify(quality));
   return ok;
 }
@@ -116,6 +118,9 @@ if (!gfxFirstOk) {
       quality.shadows = false;
       renderer.shadowMap.enabled = false;
       if (!gfxSelfTest()) {
+        // ¿Falla de verdad el PBR o falla la propia prueba? Lo apuntamos para el diagnóstico
+        gfxSelfTest('uv');
+        gfxSelfTest('basic');
         quality.lambert = true;
         gfxSelfTest();
       }
@@ -123,10 +128,13 @@ if (!gfxFirstOk) {
   }
   // Nota discreta unos segundos para saber qué ha pasado si alguien manda una captura
   const note = document.createElement('div');
-  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.lambert ? 'L' : ''}`;
-  note.style.cssText = 'position:fixed;left:8px;bottom:6px;font:11px monospace;color:#fff;opacity:.6;z-index:99;pointer-events:none;text-shadow:0 1px 2px #000';
+  const gl = renderer.getContext();
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '?';
+  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.lambert ? 'L' : ''} · ${gfxLog.join(' ')} · ${gpu.slice(0, 60)}`;
+  note.style.cssText = 'position:fixed;left:8px;bottom:6px;font:11px monospace;color:#fff;opacity:.75;right:8px;word-break:break-all;z-index:99;pointer-events:none;text-shadow:0 1px 2px #000';
   document.body.appendChild(note);
-  setTimeout(() => note.remove(), 12000);
+  setTimeout(() => note.remove(), 25000);
 }
 renderer.info.autoReset = false;
 
