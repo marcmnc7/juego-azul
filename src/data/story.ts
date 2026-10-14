@@ -51,6 +51,9 @@ export const FERRERIES = {
     luck: '¡Toque de suerte! 🍀',
     dropped: '¡Buu! Un ase te ha pillado y se te ha caído la pomada',
     rear: '¡Ahora! Tócalo',
+    perfect: '¡Toque perfecto! ✨🍀',
+    late: 'Uy, por los pelos 🍀',
+    allLuck: '¡Tres toques de suerte! La plaza entera te aplaude 👏',
   },
 };
 
@@ -59,7 +62,8 @@ export const ROAD = {
     { who: 'Narrador', text: 'Unos meses después. Madrid, primera hora de la mañana.' },
     { who: 'Gas', text: 'Coche cargado, Joy en el asiento de atrás y 400 kilómetros hasta el mar. ¿Lista, Azul?' },
     { who: 'Azul', text: 'Lista. Pero conduzco yo, que tú te pierdes.' },
-    { who: 'Narrador', text: 'Cambia de carril para recoger fotos del viaje 📸 y esquiva lo que se cruce.' },
+    { who: 'Narrador', text: 'Desliza el dedo (o toca ◀ ▶) para cambiar de carril. Recoge fotos del viaje 📸 y esquiva lo que se cruce.' },
+    { who: 'Gas', text: 'Los ⛽ dan turbo. Y si ves tabaco 🚬 por la carretera… ni se te ocurra, Azul.' },
   ] as Line[],
   regions: {
     madrid: 'Saliendo de Madrid',
@@ -84,6 +88,11 @@ export const ROAD = {
     { who: 'Joy', text: '¡Guau!' },
   ] as Line[],
   hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!'],
+  smoke: ['Gas: «Azul, ¿otra vez? ¡Que lo tienes que dejar!» 🚭', 'Gas: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Gas: «Te lo requisó. Por tu bien.» 🚭'],
+  turbo: '¡Gasolina! ⛽ Turbo',
+  nearMiss: '¡Por los pelos! +1 📸',
+  combo: (n: number) => `¡Racha de ${n} fotos! Joy está flipando 🐶`,
+  stops: ['Madrid', 'San Vicente', 'Logroño'],
   zamb: { served: '¡Al plato! 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
 };
 

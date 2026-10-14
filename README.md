@@ -10,6 +10,13 @@ Juego 3D para el móvil (Three.js + Vite + TypeScript) para el cumpleaños de Ma
 | 3 | **Fito bajo las estrellas** · Canarias | Buscar a Gas, que se ha perdido pidiendo cervezas en "inglés". Opcional: tirar el tabaco a la papelera (Gas lo comenta). Concierto con minijuego de ritmo y fuegos artificiales. | Billetes al Carnaval de Tenerife |
 | 💌 | **Sorpresa final** | Carta de Gas (y Joy) al terminar los tres capítulos. | — |
 
+## Cómo se ve y se juega
+- Estilo dibujo animado: sombreado "cel", contornos, sombras reales, cielo con nubes (atardecer en Ferreries, días por regiones en la ruta, estrellas en Canarias). Si el móvil va justo, baja la resolución y luego quita las sombras solo.
+- Cap. 1: los ases avisan con un **!** antes de ponerse de manos; tocarlos en lo más alto (aro dorado) es un toque perfecto. Azul lleva la pomada en la mano; confeti y ovación al final.
+- Cap. 2: carril deslizando el dedo o con ◀ ▶, barra de ruta, ⛽ turbo, 🚬 que Gas confisca, adelantamientos "por los pelos" y rachas de fotos con Joy ladrando.
+- Cap. 3: pantallas con ecualizador, láseres, mecheros en el público, chispas y fuegos con las rachas del minijuego.
+- Cada capítulo empieza con un rótulo y acaba con una caja regalo que se abre con confeti, 1-3 estrellas y datos de la partida.
+
 Guiños: Azul y Gas, los "Buu", el inglés de Gas, dejar de fumar, Joy.
 
 ## Modo prueba

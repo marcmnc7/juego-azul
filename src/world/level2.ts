@@ -3,9 +3,10 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
 import { G, Merger, makeCar, makeScallop, vertexMat } from '../entities/models';
+import { Sky, Sun, toon, vibrate, addOutline } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
-import type { Level } from './level';
+import { clock, type Level, type LevelDone } from './level';
 
 // Capítulo 2 · La ruta de las zamburiñas.
 // Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
@@ -20,12 +21,13 @@ const LEG2 = 650; // metros de San Vicente a Logroño
 const MAX_SPEED = 26;
 const NEED_ZAMB = 8;
 
-const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number }> = {
-  madrid: { ground: 0xb9a27a, fog: 0xf3d9b0, sky: 0x9cc9ec },
-  meseta: { ground: 0xd9b75e, fog: 0xf4e1b0, sky: 0x8fc3ef },
-  cantabria: { ground: 0x5f9e4c, fog: 0xcfe3e8, sky: 0x9fc6e0 },
-  rioja: { ground: 0x9a7a4a, fog: 0xf6c9a0, sky: 0xf2a77d },
+const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; top: number }> = {
+  madrid: { ground: 0xb9a27a, fog: 0xf3d9b0, sky: 0x9cc9ec, top: 0x3f7fd0 },
+  meseta: { ground: 0xd9b75e, fog: 0xf4e1b0, sky: 0x8fc3ef, top: 0x2f72cc },
+  cantabria: { ground: 0x5f9e4c, fog: 0xcfe3e8, sky: 0x9fc6e0, top: 0x5a8fc0 },
+  rioja: { ground: 0x9a7a4a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
 };
+const TURBO = 1.45;
 
 function canvasTex(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 256, h = 256) {
   const c = document.createElement('canvas');
@@ -119,7 +121,8 @@ class Scatter {
 
 interface Thing {
   obj: THREE.Object3D;
-  kind: 'photo' | 'obstacle';
+  kind: 'photo' | 'obstacle' | 'turbo' | 'smoke';
+  passed?: boolean;
   lane: number;
   z: number;
   speed: number; // los coches del carril se mueven
@@ -151,7 +154,34 @@ export class Level2 implements Level {
   private groundTex: THREE.Texture;
   private sea: THREE.Mesh;
   private sky: THREE.Color;
-  private sun: THREE.DirectionalLight;
+  private skyTop: THREE.Color;
+  private skyDome: Sky;
+  private skyTimer = 0;
+  private sun: Sun;
+  private turboT = 0;
+  private steerT = -9;
+  private combo = 0;
+  private hits = 0;
+  private burnt = 0;
+  private nearMisses = 0;
+  private driveTime = 0;
+  private shakeT = 0;
+  private baseFov = 60;
+  private route: HTMLElement;
+  private routeCar: HTMLElement;
+  private turboTex: THREE.Texture;
+  private smokeTex: THREE.Texture;
+  private swipeX: number | null = null;
+  private onDown = (e: PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button, .dialogue')) return;
+    this.swipeX = e.clientX;
+  };
+  private onUp = (e: PointerEvent) => {
+    if (this.swipeX === null) return;
+    const dx = e.clientX - this.swipeX;
+    this.swipeX = null;
+    if (Math.abs(dx) > 35) this.steer(Math.sign(dx));
+  };
   private svTown: THREE.Group;
   private logSign: THREE.Group;
   private grill: THREE.Group;
@@ -170,17 +200,23 @@ export class Level2 implements Level {
   constructor(
     private camera: THREE.PerspectiveCamera,
     private input: Input,
-    private onComplete: () => void,
+    private onComplete: LevelDone,
     onMenu: () => void,
   ) {
     const sc = this.scene;
     this.sky = new THREE.Color(REGION_STYLE.madrid.sky);
-    sc.background = this.sky;
-    sc.fog = new THREE.Fog(REGION_STYLE.madrid.fog, 60, 180);
-    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 2.0));
-    this.sun = new THREE.DirectionalLight(0xfff1d6, 1.5);
-    this.sun.position.set(20, 30, 10);
-    sc.add(this.sun);
+    this.skyTop = new THREE.Color(REGION_STYLE.madrid.top);
+    sc.fog = new THREE.Fog(REGION_STYLE.madrid.fog, 60, 190);
+    this.skyDome = new Sky({
+      top: REGION_STYLE.madrid.top,
+      mid: REGION_STYLE.madrid.sky,
+      bottom: REGION_STYLE.madrid.fog,
+      sun: { color: 0xfff0c0, dir: new THREE.Vector3(0.4, 0.5, 1), size: 110 },
+      clouds: { count: 14, tint: 0xffffff },
+    });
+    sc.add(this.skyDome.group);
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.6));
+    this.sun = new Sun(sc, 0xfff1d6, 2.3, new THREE.Vector3(0.5, 1, 0.4), 26);
 
     this.groundTex = canvasTex((ctx, w, h) => {
       ctx.fillStyle = '#fff';
@@ -193,7 +229,7 @@ export class Level2 implements Level {
     });
     this.groundTex.wrapS = this.groundTex.wrapT = THREE.RepeatWrapping;
     this.groundTex.repeat.set(20, 20);
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: this.groundTex, color: REGION_STYLE.madrid.ground }));
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), toon({ map: this.groundTex, color: REGION_STYLE.madrid.ground }));
     sc.add(this.ground);
 
     this.roadTex = canvasTex((ctx, w, h) => {
@@ -211,11 +247,12 @@ export class Level2 implements Level {
     });
     this.roadTex.wrapS = this.roadTex.wrapT = THREE.RepeatWrapping;
     this.roadTex.repeat.set(1, 400 / 8);
-    this.road = new THREE.Mesh(new THREE.PlaneGeometry(9, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: this.roadTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    this.road = new THREE.Mesh(new THREE.PlaneGeometry(9, 400).rotateX(-Math.PI / 2), toon({ map: this.roadTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     this.road.position.y = 0.02;
+    this.ground.userData.noCast = this.road.userData.noCast = true;
     sc.add(this.road);
 
-    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 400).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 }));
+    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 400).rotateX(-Math.PI / 2), toon({ color: 0x2f7fb5 }));
     this.sea.position.set(170, 0.05, 0);
     this.sea.visible = false;
     sc.add(this.sea);
@@ -228,6 +265,15 @@ export class Level2 implements Level {
       ctx.textBaseline = 'middle';
       ctx.fillText('📸', 128, 140);
     });
+    const emojiTex = (e: string) =>
+      canvasTex((ctx) => {
+        ctx.font = '200px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(e, 128, 140);
+      });
+    this.turboTex = emojiTex('⛽');
+    this.smokeTex = emojiTex('🚬');
 
     sc.add(this.car.root);
     this.fx = new Particles(sc);
@@ -250,8 +296,20 @@ export class Level2 implements Level {
     a1.position.set(6, 0, 80);
     sc.add(a1);
 
-    this.hud = hud(() => this.input.queueAction(), onMenu, 'Toca ◀ ▶ para cambiar de carril');
+    this.hud = hud(() => this.input.queueAction(), onMenu, 'Desliza o toca ◀ ▶ para cambiar de carril');
     this.makeLaneButtons();
+    // Barra de ruta: Madrid → San Vicente → Logroño
+    this.route = document.createElement('div');
+    this.route.className = 'route';
+    this.route.innerHTML = `<div class="track"><div class="fill"></div></div>${ROAD.stops.map((n, i) => `<span class="stop s${i}">${n}</span>`).join('')}`;
+    this.routeCar = document.createElement('div');
+    this.routeCar.className = 'route-car';
+    this.routeCar.textContent = '🚗';
+    this.route.append(this.routeCar);
+    document.getElementById('ui')!.append(this.route);
+    window.addEventListener('pointerdown', this.onDown);
+    window.addEventListener('pointerup', this.onUp);
+    this.baseFov = this.camera.fov;
     this.camera.position.set(0, 5, -10);
     this.reset(0);
     this.updateHud();
@@ -452,7 +510,9 @@ export class Level2 implements Level {
   private steer(dir: number) {
     if (this.phase !== 'drive1' && this.phase !== 'drive2') return;
     // El carril 0 queda a la izquierda del conductor (x positiva mirando a +Z)
+    const before = this.lane;
     this.lane = Math.max(0, Math.min(2, this.lane - dir));
+    if (this.lane !== before) this.steerT = this.t;
   }
 
   private updateHud() {
@@ -464,7 +524,7 @@ export class Level2 implements Level {
     if (drive) {
       const total = this.phase === 'drive1' ? LEG1 : LEG2;
       const left = Math.max(0, Math.round((total - this.dist) / 10));
-      h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} a ${left} km · cambia de carril con ◀ ▶`);
+      h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} a ${left} km`);
       h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
     } else if (this.phase === 'grill') {
       h.setObjective('Toca cada zamburiña cuando esté dorada');
@@ -473,6 +533,19 @@ export class Level2 implements Level {
       h.setObjective('Madrid → San Vicente → Logroño');
       h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
     }
+  }
+
+  private updateRoute() {
+    let k = 0;
+    if (this.phase === 'drive1' || this.phase === 'intro') k = (this.dist / LEG1) * 0.55;
+    else if (this.phase === 'arriveSV' || this.phase === 'grill' || this.phase === 'zambDone') k = 0.55;
+    else if (this.phase === 'drive2') k = 0.55 + (this.dist / LEG2) * 0.45;
+    else k = 1;
+    k = Math.max(0, Math.min(1, k));
+    const pct = `${(k * 100).toFixed(1)}%`;
+    this.routeCar.style.left = pct;
+    (this.route.firstElementChild!.firstElementChild as HTMLElement).style.width = pct;
+    this.route.classList.toggle('turbo', this.turboT > 0);
   }
 
   private reset(z: number) {
@@ -495,6 +568,8 @@ export class Level2 implements Level {
       const defs = this.obstacleGeos[reg];
       const d = defs[Math.floor(Math.random() * defs.length)];
       const o = new THREE.Mesh(d.geo, vertexMat);
+      o.castShadow = true;
+      addOutline(o, 0.03);
       o.position.set(LANES[lanes[0]], 0, z);
       this.scene.add(o);
       this.things.push({ obj: o, kind: 'obstacle', lane: lanes[0], z, speed: d.speed, alive: true });
@@ -507,6 +582,18 @@ export class Level2 implements Level {
       s.position.set(LANES[lanes[1 + (k % 2)]], 1.2, pz);
       this.scene.add(s);
       this.things.push({ obj: s, kind: 'photo', lane: lanes[1 + (k % 2)], z: pz, speed: 0, alive: true });
+    }
+    // De vez en cuando, gasolina para el turbo o un paquete de tabaco (que Gas confisca)
+    const extra = Math.random();
+    if (extra < 0.16 || extra > 0.9) {
+      const turbo = extra < 0.16;
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: turbo ? this.turboTex : this.smokeTex, transparent: true }));
+      s.scale.setScalar(turbo ? 1.6 : 1.3);
+      const lane = obstacle ? lanes[1 + Math.floor(Math.random() * 2)] : lanes[0];
+      const pz = z + 13;
+      s.position.set(LANES[lane], 1.2, pz);
+      this.scene.add(s);
+      this.things.push({ obj: s, kind: turbo ? 'turbo' : 'smoke', lane, z: pz, speed: 0, alive: true });
     }
     this.nextSpawn += 22 + Math.random() * 14;
   }
@@ -527,9 +614,19 @@ export class Level2 implements Level {
     this.input.consumeCam();
 
     // Velocidad
-    const target = drive ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED) : 0;
-    this.speed += (target - this.speed) * Math.min(1, dt * (drive ? 1.2 : 2.5));
+    this.turboT -= dt;
+    const turbo = drive && this.turboT > 0 && this.hitT <= 0;
+    const target = drive ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    this.speed += (target - this.speed) * Math.min(1, dt * (drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
+    if (drive) this.driveTime += dt;
+    // Sensación de velocidad: el plano se abre con el turbo
+    const fov = this.baseFov + Math.max(0, this.speed - MAX_SPEED) * 0.9;
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 4);
+      this.camera.updateProjectionMatrix();
+    }
+    if (turbo && Math.random() < dt * 20) this.fx.burst(this.car.root.position.clone().setY(0.3).setZ(this.carZ - 2), 'dust', 1, 0.8, 0.2);
     this.carZ += this.speed * dt;
     if (drive) this.dist = this.carZ - this.legStart;
     this.carX += (LANES[this.lane] - this.carX) * Math.min(1, dt * 8);
@@ -541,7 +638,7 @@ export class Level2 implements Level {
     car.body.rotation.z = this.hitT > 0 ? Math.sin(this.t * 30) * 0.06 : 0;
     car.wheels.forEach((w) => (w.rotation.x += (this.speed * dt) / 0.34));
     car.joy.rotation.y = Math.sin(this.t * 3) * 0.3;
-    car.joy.position.y = 1.18 + Math.sin(this.t * 6) * 0.03;
+    car.joy.position.y = 1.18 + Math.sin(this.t * 6) * 0.03 + (this.combo % 5 === 0 && this.combo > 0 ? Math.abs(Math.sin(this.t * 14)) * 0.12 : 0);
 
     // Mundo que sigue al coche
     this.ground.position.z = this.carZ;
@@ -549,9 +646,7 @@ export class Level2 implements Level {
     this.road.position.z = this.carZ + 100;
     this.roadTex.offset.y = (this.carZ + 100) / 8;
     this.sea.position.z = this.carZ;
-    this.sun.position.set(this.carX + 20, 30, this.carZ + 10);
-    this.sun.target.position.set(this.carX, 0, this.carZ);
-    this.sun.target.updateMatrixWorld();
+    this.sun.follow(this.car.root.position);
     for (const s of this.scatters) s.update(this.carZ, this.regionAt);
 
     // Región: colores de cielo, suelo y niebla
@@ -563,8 +658,14 @@ export class Level2 implements Level {
     const st = REGION_STYLE[this.region];
     const k = Math.min(1, dt * 0.8);
     this.sky.lerp(this.tmpColor.set(st.sky), k);
+    this.skyTop.lerp(this.tmpColor.set(st.top), k);
+    this.skyTimer -= dt;
+    if (this.skyTimer <= 0) {
+      this.skyTimer = 0.15;
+      this.skyDome.setColors(this.skyTop.getHex(), this.sky.getHex(), (this.scene.fog as THREE.Fog).color.getHex());
+    }
     (this.scene.fog as THREE.Fog).color.lerp(this.tmpColor.set(st.fog), k);
-    (this.ground.material as THREE.MeshLambertMaterial).color.lerp(this.tmpColor.set(st.ground), k);
+    (this.ground.material as THREE.MeshToonMaterial).color.lerp(this.tmpColor.set(st.ground), k);
     this.sea.visible = this.region === 'cantabria';
 
     // Fotos y obstáculos
@@ -584,21 +685,57 @@ export class Level2 implements Level {
       }
       const dz = Math.abs(th.z - this.carZ);
       const dx = Math.abs(LANES[th.lane] - this.carX);
-      if (drive && dz < (th.kind === 'photo' ? 2.2 : 3.4) && dx < 1.5) {
+      const pickup = th.kind !== 'obstacle';
+      if (drive && dz < (pickup ? 2.2 : 3.4) && dx < 1.5) {
         th.alive = false;
         this.scene.remove(th.obj);
+        const at = this.car.root.position.clone().setY(2);
         if (th.kind === 'photo') {
           this.photos++;
+          this.combo++;
           audio.pickup();
-          this.fx.burst(this.car.root.position.clone().setY(2), '✨', 4, 1.5);
+          this.fx.burst(at, '✨', 4, 1.5);
+          if (this.combo % 5 === 0) {
+            toast(ROAD.combo(this.combo));
+            audio.bark();
+            this.fx.burst(at, '🐾', 5, 1.8);
+          }
+        } else if (th.kind === 'turbo') {
+          this.turboT = 3;
+          audio.whoosh();
+          audio.perfect();
+          vibrate(30);
+          toast(ROAD.turbo);
+          this.fx.burst(at, '⚡', 6, 2);
+        } else if (th.kind === 'smoke') {
+          this.photos = Math.max(0, this.photos - 1);
+          audio.boo();
+          toast(ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)]);
+          this.fx.burst(at, '💨', 5, 1.5);
         } else if (this.hitT <= 0) {
           this.hitT = 1.2;
+          this.turboT = 0;
+          this.hits++;
+          this.combo = 0;
+          this.shakeT = 0.45;
           this.photos = Math.max(0, this.photos - 2);
           audio.hit();
           audio.boo();
+          vibrate(120);
+          this.fx.burst(at, '💥', 4, 1.6);
           toast(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)]);
         }
         this.updateHud();
+      } else if (drive && th.kind === 'obstacle' && !th.passed && th.z < this.carZ - 2.5) {
+        th.passed = true;
+        // Adelantamiento ajustado por el carril de al lado
+        if (dx < 3.2 && this.hitT <= 0 && this.t - this.steerT < 0.8) {
+          this.nearMisses++;
+          this.photos++;
+          audio.whoosh();
+          toast(ROAD.nearMiss);
+          this.updateHud();
+        }
       }
       if (th.z < this.carZ - 20) {
         th.alive = false;
@@ -613,7 +750,9 @@ export class Level2 implements Level {
     if (drive && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
 
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
+    this.updateRoute();
     this.updateCamera(dt);
+    this.skyDome.update(this.camera, dt);
   }
 
   private arriveSV() {
@@ -688,7 +827,16 @@ export class Level2 implements Level {
     setTimeout(() => {
       dialogue(ROAD.arriveLogrono, () => {
         this.phase = 'done';
-        this.onComplete();
+        const stars = 1 + (this.photos >= 30 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
+        this.onComplete({
+          stars,
+          stats: [
+            ['Fotos del viaje', `${this.photos} 📸`],
+            ['Choques', `${this.hits}`],
+            ['Zamburiñas quemadas', `${this.burnt}`],
+            ['Al volante', clock(this.driveTime)],
+          ],
+        });
       });
     }, 1500);
   }
@@ -713,6 +861,7 @@ export class Level2 implements Level {
       s.root.scale.setScalar(s.p >= 0.62 && s.p <= 1 ? 1 + Math.sin(this.t * 12) * 0.06 : 1);
       if (s.p > 1.35) {
         audio.boo();
+        this.burnt++;
         toast(ROAD.zamb.burnt);
         s.p = 0;
         s.wait = 0.8;
@@ -734,6 +883,11 @@ export class Level2 implements Level {
     }
     this.camera.position.lerp(this.camTarget, 1 - Math.exp(-dt * 4));
     this.camera.lookAt(this.camLook);
+    if (this.shakeT > 0) {
+      this.shakeT -= dt;
+      this.camera.position.x += (Math.random() - 0.5) * this.shakeT * 0.6;
+      this.camera.position.y += (Math.random() - 0.5) * this.shakeT * 0.6;
+    }
   }
 
   debug(): DebugItem[] {
@@ -792,14 +946,19 @@ export class Level2 implements Level {
           this.reset(this.legStart + LEG2 - 50);
         },
       },
-      { label: '✓ Completar capítulo', run: () => { clean(); this.phase = 'done'; this.onComplete(); } },
+      { label: '✓ Completar capítulo', run: () => { clean(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }
 
   dispose() {
     window.removeEventListener('pointerdown', this.onTap);
+    window.removeEventListener('pointerdown', this.onDown);
+    window.removeEventListener('pointerup', this.onUp);
     this.input.enabled = true;
     this.hud.remove();
+    this.route.remove();
+    this.camera.fov = this.baseFov;
+    this.camera.updateProjectionMatrix();
     this.laneBtns.forEach((b) => b.remove());
     audio.stopMusic();
     this.scene.traverse((o) => {

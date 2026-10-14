@@ -191,6 +191,81 @@ export class Audio {
     this.sfx([-12, -17], 0.08, 'sawtooth', 0.12);
   }
   fanfare() { this.sfx([7, 12, 16, 19, 24, 19, 24, 28], 0.11, 'triangle', 0.3); }
+  perfect() { this.sfx([24, 28, 31, 36], 0.04, 'square', 0.08); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
+  warn() { this.sfx([5, 5], 0.1, 'square', 0.06); }
+  whoosh() { if (this.ctx) this.noiseSwell(0.5, 0.35, 600, 2400); }
+  pop() { this.sfx([24, 31], 0.03, 'sine', 0.25); }
+
+  /** Ovación del público: ruido filtrado que sube y baja. */
+  cheer(vol = 0.5) {
+    if (this.ctx) this.noiseSwell(1.6, vol, 900, 1400);
+  }
+
+  private noiseSwell(dur: number, vol: number, f0: number, f1: number) {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime;
+    const s = ctx.createBufferSource();
+    s.buffer = this.crowdBuffer();
+    s.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 0.8;
+    f.frequency.setValueAtTime(f0, t);
+    f.frequency.linearRampToValueAtTime(f1, t + dur * 0.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(vol, t + dur * 0.2);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f).connect(g).connect(this.master);
+    s.start(t);
+    s.stop(t + dur + 0.05);
+  }
+
+  private crowd: AudioBuffer | null = null;
+  private crowdBuffer() {
+    const ctx = this.ctx!;
+    if (this.crowd) return this.crowd;
+    const len = ctx.sampleRate * 2;
+    this.crowd = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.crowd.getChannelData(0);
+    // Ruido "rosa" aproximado con modulaciones lentas: suena a gente hablando a lo lejos
+    let b = 0;
+    for (let i = 0; i < len; i++) {
+      b = 0.97 * b + 0.03 * (Math.random() * 2 - 1);
+      const mod = 0.6 + 0.4 * Math.sin(i / 2300) * Math.sin(i / 5100);
+      d[i] = b * 6 * mod;
+    }
+    return this.crowd;
+  }
+
+  private amb: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** Murmullo de fondo (fiesta o concierto). 0 lo apaga. */
+  ambience(vol: number) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    if (!this.amb && vol > 0) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.crowdBuffer();
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 700;
+      f.Q.value = 0.6;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(f).connect(gain).connect(this.master);
+      src.start();
+      this.amb = { src, gain };
+    }
+    if (this.amb) {
+      this.amb.gain.gain.setTargetAtTime(vol, ctx.currentTime, 0.4);
+      if (vol <= 0) {
+        const a = this.amb;
+        this.amb = null;
+        a.src.stop(ctx.currentTime + 1.5);
+      }
+    }
+  }
 }
 
 export const audio = new Audio();

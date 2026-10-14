@@ -1,31 +1,38 @@
 import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
+import { Walker } from '../core/walker';
+import { Confetti, toon, vibrate } from '../core/gfx';
 import { FERRERIES, NAMES } from '../data/story';
-import { buildFerreries, animateCrowd, FerreriesWorld, Box2 } from './ferreries';
-import { makePerson, makeDonkey, Person, Donkey, Merger, G } from '../entities/models';
+import { buildFerreries, animateCrowd, FerreriesWorld } from './ferreries';
+import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
-import type { Level } from './level';
+import { clock, type Level, type LevelDone } from './level';
 
 // Nivel 1 · Jaleo d'ases (Ferreries).
 // Bucle: hablar con Tòfol → 3 pomadas + 3 toques de suerte esquivando ases → volver a Tòfol → encontrar a Marc → bailar → regalo.
+// Los ases avisan con un "!" antes de ponerse de manos; tocarlos en lo más alto da un toque perfecto.
 
 type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'ending' | 'done';
 
-const PLAYER_R = 0.4;
-const SPEED = 5.5;
+const WARN = 0.8;
+const REAR = 1.8;
+const TOUCH_R = 3.2;
 
 interface DonkeyState {
   d: Donkey;
   mode: 'circle' | 'street';
   angle: number; // para el círculo
   dir: number; // para la calle
+  warnT: number; // aviso antes de encabritarse
   rearT: number; // tiempo restante encabritado
   nextRear: number;
   touched: boolean;
   walkPhase: number;
+  alert: THREE.Sprite;
+  ring: THREE.Mesh;
 }
 
 interface Pomada {
@@ -34,25 +41,49 @@ interface Pomada {
   taken: boolean;
 }
 
+let alertTex: THREE.Texture | null = null;
+function alertTexture() {
+  if (alertTex) return alertTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#ffd23f';
+  ctx.strokeStyle = '#2a1a2e';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(64, 64, 54, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#2a1a2e';
+  ctx.font = 'bold 92px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', 64, 70);
+  alertTex = new THREE.CanvasTexture(c);
+  alertTex.colorSpace = THREE.SRGBColorSpace;
+  return alertTex;
+}
 
 export class Level1 implements Level {
   private scene = new THREE.Scene();
   private world: FerreriesWorld;
   private player: Person;
+  private walker: Walker;
   private tofol: Person;
   private marc: Person;
   private donkeys: DonkeyState[] = [];
   private pomadas: Pomada[] = [];
+  private inHand: THREE.Object3D;
   private fx: Particles;
-  private marker: THREE.Mesh;
+  private confetti = new Confetti(180, 12, 10);
+  private marker: THREE.Group;
   private hud: Hud;
   private stage: Stage = 'intro';
   private pomadaCount = 0;
   private luckCount = 0;
-  private yaw = 0; // dirección de la cámara
-  private facing = 0;
-  private walk = 0;
-  private knock = new THREE.Vector3();
+  private perfects = 0;
+  private hits = 0;
+  private playTime = 0;
   private invuln = 0;
   private t = 0;
   private busy = false; // diálogo abierto
@@ -62,13 +93,11 @@ export class Level1 implements Level {
   // temporales reutilizables
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
-  private camPos = new THREE.Vector3();
-  private camLook = new THREE.Vector3();
 
   constructor(
     private camera: THREE.PerspectiveCamera,
     private input: Input,
-    private onComplete: () => void,
+    private onComplete: LevelDone,
     onMenu: () => void,
   ) {
     this.world = buildFerreries(this.scene);
@@ -76,15 +105,14 @@ export class Level1 implements Level {
 
     this.player = makePerson(MARGAUX_LOOK);
     this.player.root.position.copy(this.world.spawn);
-    this.facing = Math.PI / 2;
-    this.yaw = Math.PI / 2;
     this.scene.add(this.player.root);
+    this.walker = new Walker(this.player.root.position);
+    this.walker.facing = this.walker.yaw = Math.PI / 2;
 
-    this.tofol = makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x888888, hairStyle: 'short' });
+    this.tofol = makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
     this.tofol.root.position.copy(this.world.tofolPos);
-    this.tofol.root.rotation.y = 0;
     // Delantal de Tòfol
-    this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.95, 0.2, 0, 0, 0, 0.5, 0.6, 0.05).mesh());
+    this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
     this.scene.add(this.tofol.root);
 
     this.marc = makePerson(MARC_LOOK);
@@ -97,56 +125,90 @@ export class Level1 implements Level {
 
     // Ases: 3 dando vueltas en la plaza y 1 paseando por la calle
     const coats = [0x7d6b5d, 0x5e4f45, 0x8f8379, 0x6d5a4a];
+    const ringGeo = new THREE.RingGeometry(TOUCH_R - 0.25, TOUCH_R, 40).rotateX(-Math.PI / 2);
     for (let i = 0; i < 4; i++) {
       const d = makeDonkey(coats[i]);
       this.scene.add(d.root);
+      const alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: alertTexture(), depthTest: false, transparent: true }));
+      alert.position.y = 3.6;
+      alert.scale.setScalar(0.9);
+      alert.visible = false;
+      alert.renderOrder = 5;
+      d.root.add(alert);
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x5cff8a, transparent: true, opacity: 0.7, depthWrite: false }));
+      ring.position.y = 0.04;
+      ring.visible = false;
+      d.root.add(ring);
       this.donkeys.push({
         d,
         mode: i < 3 ? 'circle' : 'street',
         angle: (i / 3) * Math.PI * 2,
         dir: 1,
+        warnT: 0,
         rearT: 0,
         nextRear: 2 + i * 1.7,
         touched: false,
         walkPhase: i,
+        alert,
+        ring,
       });
       if (i === 3) d.root.position.set(-20, 0, 0);
     }
 
-    // Pomadas: vaso con limonada y rodaja de limón
+    // Pomadas: vaso con limonada y rodaja de limón, con un haz de luz para verlas de lejos
     const glassGeo = new Merger()
-      .add(new THREE.CylinderGeometry(0.16, 0.12, 0.38, 10), 0xfff4b0, 0, 0.19, 0)
+      .add(new THREE.CylinderGeometry(0.16, 0.12, 0.38, 12), 0xfff4b0, 0, 0.19, 0)
       .add(G.cyl, 0xf9e04b, 0.1, 0.4, 0, 0, 0, Math.PI / 2, 0.18, 0.03, 0.18)
-      .add(G.cyl, 0xffffff, -0.05, 0.42, 0, 0.3, 0, 0.2, 0.03, 0.35, 0.03)
+      .add(G.cyl, 0x7fd36b, -0.05, 0.42, 0, 0.3, 0, 0.2, 0.03, 0.35, 0.03)
       .build();
+    const glassMat = toon({ vertexColors: true, emissive: 0x4a3a00 });
+    const beamGeo = new THREE.CylinderGeometry(0.35, 0.5, 7, 16, 1, true).translate(0, 3.5, 0);
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     for (const home of this.world.pomadaSpots) {
       const g = new THREE.Group();
-      g.add(new THREE.Mesh(glassGeo, new THREE.MeshBasicMaterial({ color: 0xfff1a0 })));
+      g.add(new THREE.Mesh(glassGeo, glassMat));
       const glow = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.6, depthWrite: false }));
       glow.position.y = 0.02;
-      g.add(glow);
+      g.add(glow, new THREE.Mesh(beamGeo, beamMat));
       g.position.copy(home);
       g.visible = false;
       this.scene.add(g);
       this.pomadas.push({ mesh: g, home: home.clone(), taken: false });
     }
+    // La pomada que lleva en la mano
+    this.inHand = new THREE.Mesh(glassGeo, glassMat);
+    this.inHand.scale.setScalar(0.7);
+    this.inHand.position.set(0, -0.2, 0.02);
+    this.inHand.visible = false;
+    this.player.handR.add(this.inHand);
 
-    this.marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.35), new THREE.MeshBasicMaterial({ color: 0xffd23f }));
+    // Marcador de objetivo: flecha dorada que flota
+    this.marker = new THREE.Group();
+    const arrowMat = toon({ color: 0xffd23f, emissive: 0x7a5200 });
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 16).rotateX(Math.PI), arrowMat);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 12).translate(0, 0.45, 0), arrowMat);
+    this.marker.add(cone, stem);
     this.scene.add(this.marker);
+
+    this.confetti.mesh.visible = false;
+    this.confetti.active = false;
+    this.scene.add(this.confetti.mesh);
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
     this.updateHud();
 
-    this.camera.position.set(-44, 4, 0);
+    this.camera.position.set(-50, 9, 4);
     this.busy = true;
     setTimeout(() => {
+      if (this.stage !== 'intro') return;
       dialogue(FERRERIES.intro, () => {
         this.busy = false;
         this.stage = 'talkTofol';
         this.updateHud();
       });
-    }, 600);
+    }, 2300);
     audio.startMusic();
+    audio.ambience(0.1);
   }
 
   get threeScene() {
@@ -163,10 +225,9 @@ export class Level1 implements Level {
         h.setCounters('');
         break;
       case 'collect':
-        h.setObjective(
-          this.pomadaCount < 3 ? 'Consigue pomadas en los bares y toca a los ases cuando se pongan de manos' : 'Toca a los ases de la plaza cuando se pongan de manos',
-        );
         if (this.luckCount >= 3) h.setObjective('Recoge las pomadas que faltan en los bares');
+        else if (this.pomadaCount >= 3) h.setObjective('Toca a los ases cuando se pongan de manos');
+        else h.setObjective('Pomadas en los bares y toques a los ases cuando se pongan de manos');
         h.setCounters(counters);
         break;
       case 'returnTofol':
@@ -211,65 +272,51 @@ export class Level1 implements Level {
     }
   }
 
-  private collide(p: THREE.Vector3, boxes: Box2[], b: Box2) {
-    for (const c of boxes) {
-      const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
-      const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
-      const dx = p.x - cx;
-      const dz = p.z - cz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < PLAYER_R * PLAYER_R) {
-        if (d2 > 1e-6) {
-          const d = Math.sqrt(d2);
-          p.x = cx + (dx / d) * PLAYER_R;
-          p.z = cz + (dz / d) * PLAYER_R;
-        } else {
-          // dentro de la caja: salir por el lado más cercano
-          const opts = [p.x - c.minX, c.maxX - p.x, p.z - c.minZ, c.maxZ - p.z];
-          const i = opts.indexOf(Math.min(...opts));
-          if (i === 0) p.x = c.minX - PLAYER_R;
-          else if (i === 1) p.x = c.maxX + PLAYER_R;
-          else if (i === 2) p.z = c.minZ - PLAYER_R;
-          else p.z = c.maxZ + PLAYER_R;
-        }
-      }
-    }
-    p.x = Math.max(b.minX, Math.min(b.maxX, p.x));
-    p.z = Math.max(b.minZ, Math.min(b.maxZ, p.z));
-  }
-
-  private animatePerson(p: Person, speed01: number, phase: number, dance = false) {
-    const s = Math.sin(phase);
-    if (dance) {
-      p.body.position.y = Math.abs(Math.sin(phase * 0.5)) * 0.3;
-      p.armL.rotation.z = -2.4 + Math.sin(phase) * 0.4;
-      p.armR.rotation.z = 2.4 - Math.sin(phase) * 0.4;
-      p.legL.rotation.x = s * 0.3;
-      p.legR.rotation.x = -s * 0.3;
-      return;
-    }
-    p.body.position.y = Math.abs(s) * 0.08 * speed01;
-    p.legL.rotation.x = s * 0.7 * speed01;
-    p.legR.rotation.x = -s * 0.7 * speed01;
-    p.armL.rotation.x = -s * 0.6 * speed01;
-    p.armR.rotation.x = s * 0.6 * speed01;
-    p.armL.rotation.z = -0.1;
-    p.armR.rotation.z = 0.1;
-  }
-
   private updateDonkeys(dt: number) {
     const pp = this.player.root.position;
     let rearingNear: DonkeyState | null = null;
+    let nearest = Infinity;
     for (const s of this.donkeys) {
       const r = s.d.root;
+      const dist = r.position.distanceTo(pp);
       if (s.rearT > 0) {
+        const before = s.rearT;
         s.rearT -= dt;
-        const k = Math.sin(Math.min(1, (1.8 - s.rearT) / 1.8) * Math.PI);
-        s.d.pivot.rotation.x = -k * 0.75;
-        s.d.legs[0].rotation.x = s.d.legs[1].rotation.x = -k * 1.1 + Math.sin(this.t * 14) * 0.3 * k;
+        const prog = Math.min(1, 1 - s.rearT / REAR);
+        const k = Math.sin(prog * Math.PI);
+        s.d.pivot.rotation.x = -k * 0.8;
+        s.d.legs[0].rotation.x = s.d.legs[1].rotation.x = -k * 1.2 + Math.sin(this.t * 16) * 0.35 * k;
+        s.d.head.rotation.x = -k * 0.4;
+        // Aterriza: polvo y temblor
+        if (before > 0.3 && s.rearT <= 0.3) {
+          r.localToWorld(this.v1.set(0, 0.1, 0.9));
+          this.fx.burst(this.v1, 'dust', 6, 1.6, 0.4);
+          if (dist < 7) this.walker.shake(0.18);
+        }
+        const touchable = !s.touched && s.rearT > 0.2 && this.stage === 'collect';
+        s.ring.visible = touchable;
+        if (touchable) {
+          const perfect = k > 0.85;
+          (s.ring.material as THREE.MeshBasicMaterial).color.set(perfect ? 0xffd23f : 0x5cff8a);
+          s.ring.scale.setScalar(perfect ? 1 + Math.sin(this.t * 20) * 0.03 : 1);
+        }
         if (s.rearT <= 0) {
           s.d.pivot.rotation.x = 0;
+          s.ring.visible = false;
           s.nextRear = 3 + Math.random() * 4;
+        }
+      } else if (s.warnT > 0) {
+        // Aviso: se para, sacude la cabeza y aparece el "!"
+        s.warnT -= dt;
+        s.alert.visible = true;
+        s.alert.scale.setScalar(0.9 + Math.abs(Math.sin(this.t * 12)) * 0.25);
+        s.d.head.rotation.y = Math.sin(this.t * 25) * 0.25;
+        s.d.pivot.rotation.x = -Math.sin(this.t * 25) * 0.04;
+        if (s.warnT <= 0) {
+          s.alert.visible = false;
+          s.d.head.rotation.y = 0;
+          s.rearT = REAR;
+          if (dist < 12) audio.whoosh();
         }
       } else {
         const spd = s.mode === 'circle' ? 0.32 : 2.6;
@@ -291,21 +338,30 @@ export class Level1 implements Level {
         s.d.legs[1].rotation.x = -w;
         s.d.legs[2].rotation.x = -w;
         s.d.head.rotation.x = Math.sin(s.walkPhase * 0.5) * 0.08;
+        s.d.pivot.rotation.x = Math.sin(s.walkPhase * 2) * 0.015;
         s.nextRear -= dt;
-        // En la calle se encabrita menos; en la plaza más cuando estás cerca
-        const close = r.position.distanceTo(pp) < 7;
-        if (s.nextRear <= 0 && (s.mode === 'circle' || close)) s.rearT = 1.8;
+        // En la calle solo se encabrita si estás cerca; en la plaza, siempre
+        if (s.nextRear <= 0 && (s.mode === 'circle' || dist < 7)) {
+          s.warnT = WARN;
+          if (dist < 12) audio.warn();
+        }
       }
 
-      const dist = r.position.distanceTo(pp);
-      if (s.rearT > 0.2 && dist < 3.2 && !s.touched) rearingNear = s;
+      if (!s.touched && s.rearT > 0.2 && dist < TOUCH_R && dist < nearest) {
+        rearingNear = s;
+        nearest = dist;
+      }
 
       // Choque: el ase te empuja (solo si no está de manos)
-      if (s.rearT <= 0 && dist < 1.3 && this.invuln <= 0 && !this.busy) {
-        this.v1.subVectors(pp, r.position).setY(0).normalize().multiplyScalar(9);
-        this.knock.copy(this.v1);
+      if (s.rearT <= 0 && dist < 1.35 && this.invuln <= 0 && !this.busy && this.stage !== 'ending') {
+        this.v1.subVectors(pp, r.position).setY(0).normalize().multiplyScalar(10);
+        this.walker.knock.copy(this.v1);
+        this.walker.shake(0.4);
         this.invuln = 1.5;
+        this.hits++;
         audio.hit();
+        vibrate(90);
+        this.fx.burst(this.v2.copy(pp).setY(0.1), 'dust', 5, 1.5, 0.3);
         if (this.stage === 'collect' && this.pomadaCount > 0) {
           this.pomadaCount--;
           const lost = this.pomadas.find((p) => p.taken);
@@ -324,45 +380,58 @@ export class Level1 implements Level {
     return rearingNear;
   }
 
+  private touchDonkey(s: DonkeyState) {
+    const k = Math.sin(Math.min(1, 1 - s.rearT / REAR) * Math.PI);
+    const perfect = k > 0.85;
+    s.touched = true;
+    s.ring.visible = false;
+    this.luckCount++;
+    const at = this.v1.copy(s.d.root.position).setY(2.4);
+    if (perfect) {
+      this.perfects++;
+      audio.perfect();
+      toast(FERRERIES.hints.perfect);
+      this.fx.burst(at, '✨', 10, 3.5, 1.4);
+      vibrate([20, 30, 20]);
+    } else {
+      audio.luck();
+      toast(k < 0.4 ? FERRERIES.hints.late : FERRERIES.hints.luck);
+      vibrate(25);
+    }
+    this.fx.burst(at, '🍀', perfect ? 12 : 8);
+    audio.cheer(perfect ? 0.45 : 0.3);
+    if (this.luckCount === 3) setTimeout(() => toast(FERRERIES.hints.allLuck), 1200);
+    this.checkCollectDone();
+  }
+
   update(dt: number) {
     this.t += dt;
-    animateCrowd(this.world.crowds, this.t);
+    const ending = this.stage === 'ending' || this.stage === 'done';
+    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1);
     this.fx.update(dt);
+    (this.world.lights.material as THREE.PointsMaterial).size = 0.9 + Math.sin(this.t * 3) * 0.08;
+    if (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc') this.playTime += dt;
 
     const pp = this.player.root.position;
-    // Movimiento relativo a la cámara
-    this.yaw -= this.input.consumeCam();
-    const ax = this.busy || this.stage === 'ending' ? { x: 0, y: 0 } : this.input.axes();
-    const mag = Math.min(1, Math.hypot(ax.x, ax.y));
-    if (mag > 0.1) {
-      const fx = Math.sin(this.yaw);
-      const fz = Math.cos(this.yaw);
-      // adelante = (fx, fz); derecha = (-fz, fx)
-      const mx = fx * ax.y - fz * ax.x;
-      const mz = fz * ax.y + fx * ax.x;
-      const len = Math.hypot(mx, mz) || 1;
-      pp.x += (mx / len) * SPEED * mag * dt;
-      pp.z += (mz / len) * SPEED * mag * dt;
-      const targetFacing = Math.atan2(mx, mz);
-      let diff = targetFacing - this.facing;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      this.facing += diff * Math.min(1, dt * 12);
-      this.walk += dt * 11 * mag;
-    }
-    if (this.knock.lengthSq() > 0.01) {
-      pp.addScaledVector(this.knock, dt);
-      this.knock.multiplyScalar(Math.max(0, 1 - dt * 6));
-    }
-    this.collide(pp, this.world.colliders, this.world.bounds);
+    this.walker.turn(this.input.consumeCam());
+    const ax = this.busy || ending ? { x: 0, y: 0 } : this.input.axes();
+    const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds);
     this.invuln -= dt;
-    this.player.root.rotation.y = this.facing;
+    this.player.root.rotation.y = this.walker.facing;
     this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
 
-    if (this.stage === 'ending') this.animatePerson(this.player, 0, this.t * 8, true);
-    else this.animatePerson(this.player, mag, this.walk);
-    this.animatePerson(this.tofol, 0, this.t * 2);
-    this.tofol.body.rotation.y = Math.sin(this.t * 0.7) * 0.3;
-    this.animatePerson(this.marc, 0, this.t * 8 + 1, true);
+    if (ending) animatePerson(this.player, dt, 'dance', 0, this.t * 8);
+    else animatePerson(this.player, dt, move > 0.05 ? 'walk' : 'idle', move, this.walker.walk);
+    // Con una pomada en la mano, el brazo va un poco adelantado
+    const carrying = this.pomadaCount > 0 && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc');
+    this.inHand.visible = carrying;
+    if (carrying && !ending) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+
+    const dT = pp.distanceTo(this.world.tofolPos);
+    const dM = pp.distanceTo(this.world.marcPos);
+    animatePerson(this.tofol, dt, dT < 5 && !ending ? 'wave' : 'idle');
+    if (dT < 8) this.tofol.root.rotation.y = Math.atan2(pp.x - this.world.tofolPos.x, pp.z - this.world.tofolPos.z);
+    animatePerson(this.marc, dt, 'dance', 0, this.t * 8 + 1);
 
     const rearingNear = this.updateDonkeys(dt);
 
@@ -379,6 +448,7 @@ export class Level1 implements Level {
           p.mesh.visible = false;
           this.pomadaCount++;
           audio.pickup();
+          vibrate(20);
           toast(FERRERIES.hints.pomada);
           this.fx.burst(this.v1.copy(p.home), '✨', 8);
           this.checkCollectDone();
@@ -390,26 +460,17 @@ export class Level1 implements Level {
     this.pendingAction = null;
     let label: string | null = null;
     let pulse = false;
-    if (!this.busy && this.stage !== 'ending' && this.stage !== 'done') {
-      const dT = pp.distanceTo(this.world.tofolPos);
-      const dM = pp.distanceTo(this.world.marcPos);
+    if (!this.busy && !ending) {
       if (this.stage === 'collect' && rearingNear) {
         label = FERRERIES.hints.rear;
         pulse = true;
         const s = rearingNear;
-        this.pendingAction = () => {
-          s.touched = true;
-          this.luckCount++;
-          audio.luck();
-          toast(FERRERIES.hints.luck);
-          this.fx.burst(this.v1.copy(s.d.root.position).setY(2), '🍀', 10);
-          this.checkCollectDone();
-        };
+        this.pendingAction = () => this.touchDonkey(s);
       } else if (dT < 3.5) {
         label = 'Hablar';
         this.pendingAction = () => this.talkTofol();
       } else if (dM < 3.5) {
-        label = 'Hablar';
+        label = this.stage === 'findMarc' ? 'Darle la pomada' : 'Hablar';
         this.pendingAction = () => this.talkMarc();
       }
     }
@@ -420,31 +481,47 @@ export class Level1 implements Level {
     const tgt = this.target();
     this.marker.visible = !!tgt && !this.busy;
     if (tgt) {
-      this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 0.9 : 3.9) + Math.sin(this.t * 3) * 0.15, tgt.z);
+      this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 1.0 : 3.9) + Math.sin(this.t * 3) * 0.18, tgt.z);
       this.marker.rotation.y += dt * 2;
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
-      const rel = Math.atan2(Math.sin(ang - this.yaw), Math.cos(ang - this.yaw));
+      const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 3 ? null : -rel);
     } else this.hud.setArrow(null);
 
-    // Final: cámara que gira alrededor de la pareja
+    // Final: la pareja baila, confeti y la cámara gira alrededor
     if (this.stage === 'ending') {
       this.endingT += dt;
-      this.yaw += dt * 0.6;
-      if (Math.random() < dt * 6) this.fx.burst(this.v1.copy(pp).lerp(this.world.marcPos, 0.5).setY(2.2), '❤️', 2, 1.5);
-      if (this.endingT > 5 && this.stage === 'ending') {
+      this.walker.yaw += dt * 0.5;
+      if (Math.random() < dt * 6) this.fx.burst(this.v1.copy(pp).lerp(this.world.marcPos, 0.5).setY(2.4), '❤️', 2, 1.5);
+      if (this.endingT > 6.5) {
         this.stage = 'done';
-        this.onComplete();
+        this.confetti.active = false;
+        audio.ambience(0);
+        const stars = 1 + (this.hits <= 2 ? 1 : 0) + (this.perfects >= 2 ? 1 : 0);
+        this.onComplete({
+          stars,
+          stats: [
+            ['Toques perfectos', `${this.perfects}/3`],
+            ['Empujones de ases', `${this.hits}`],
+            ['Tiempo', clock(this.playTime)],
+          ],
+        });
       }
     }
+    if (this.confetti.mesh.visible) this.confetti.update(dt, this.world.marcPos, this.t);
 
-    this.updateCamera(dt);
+    const intro = this.stage === 'intro';
+    this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, ending ? 6.5 : intro ? 11 : 7.5, ending ? 4.2 : intro ? 6 : 3.8);
+    this.world.sun.follow(pp);
+    this.world.sky.update(this.camera, dt);
   }
 
   private checkCollectDone() {
     if (this.pomadaCount >= 3 && this.luckCount >= 3) {
       this.stage = 'returnTofol';
       this.pomadas.forEach((p) => (p.mesh.visible = false));
+      this.donkeys.forEach((d) => (d.ring.visible = false));
+      audio.fanfare();
     }
     this.updateHud();
   }
@@ -473,41 +550,26 @@ export class Level1 implements Level {
     // Ponerse frente a frente
     const pp = this.player.root.position;
     const mp = this.world.marcPos;
-    this.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
+    this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
     this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
     dialogue(FERRERIES.marcMeet, () => {
       this.busy = false;
       this.stage = 'ending';
       this.endingT = 0;
+      this.pomadaCount = 0;
+      this.confetti.mesh.visible = true;
+      this.confetti.active = true;
       audio.fanfare();
+      audio.cheer(0.6);
+      vibrate([40, 60, 40]);
       this.updateHud();
     });
-  }
-
-  private updateCamera(dt: number) {
-    const pp = this.player.root.position;
-    const dist = this.stage === 'ending' ? 6.5 : 7.5;
-    const h = this.stage === 'ending' ? 4.6 : 4;
-    // Acercar la cámara si una casa se interpone
-    const sx = -Math.sin(this.yaw);
-    const sz = -Math.cos(this.yaw);
-    let d = 1;
-    for (; d < dist; d += 0.25) {
-      const x = pp.x + sx * d;
-      const z = pp.z + sz * d;
-      if (this.world.colliders.some((c) => c.maxX - c.minX > 2 && c.maxZ - c.minZ > 2 && x > c.minX - 0.3 && x < c.maxX + 0.3 && z > c.minZ - 0.3 && z < c.maxZ + 0.3)) break;
-    }
-    this.camPos.set(pp.x + sx * d, h + (dist - d) * 0.35, pp.z + sz * d);
-    const k = 1 - Math.exp(-dt * 6);
-    this.camera.position.lerp(this.camPos, k);
-    this.camLook.set(pp.x, 1.4, pp.z);
-    this.camera.lookAt(this.camLook);
   }
 
   debug(): DebugItem[] {
     const tp = (x: number, z: number) => {
       this.player.root.position.set(x, 0, z);
-      this.knock.set(0, 0, 0);
+      this.walker.knock.set(0, 0, 0);
     };
     const go = (stage: Stage, setup?: () => void) => () => {
       this.busy = false;
@@ -522,18 +584,18 @@ export class Level1 implements Level {
       {
         label: '2 · Pomadas y ases',
         run: go('collect', () => {
-          this.pomadaCount = this.luckCount = 0;
+          this.pomadaCount = this.luckCount = this.perfects = this.hits = 0;
           this.pomadas.forEach((p) => (p.taken = false));
           this.donkeys.forEach((d) => (d.touched = false));
           tp(0, 6);
         }),
       },
       { label: '3 · Volver a Tòfol', run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(9, 9.6); }) },
-      { label: '4 · Encontrar a Marc', run: go('findMarc', () => tp(1.5, 19.6)) },
+      { label: '4 · Encontrar a Marc', run: go('findMarc', () => { this.pomadaCount = 1; tp(1.5, 19.6); }) },
       {
         label: '5 · Ver el final',
         run: () => {
-          go('findMarc', () => tp(1.5, 19.6))();
+          go('findMarc', () => { this.pomadaCount = 1; tp(1.5, 19.6); })();
           this.talkMarc();
         },
       },
@@ -541,7 +603,7 @@ export class Level1 implements Level {
         label: '✓ Completar capítulo',
         run: () => {
           this.stage = 'done';
-          this.onComplete();
+          this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] });
         },
       },
     ];
@@ -550,6 +612,7 @@ export class Level1 implements Level {
   dispose() {
     this.hud.remove();
     audio.stopMusic();
+    audio.ambience(0);
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();

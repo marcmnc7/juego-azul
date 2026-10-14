@@ -4,11 +4,12 @@ import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
+import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
 import type { Box2 } from './ferreries';
-import type { Level } from './level';
+import type { Level, LevelDone } from './level';
 
 // Capítulo 3 · Fito bajo las estrellas (Canarias).
 // Buscar a Gas (pista en la barra, tabaco opcional a la papelera) → minijuego de ritmo → fuegos artificiales → regalo.
@@ -50,7 +51,7 @@ class Fireworks {
     this.base = new Float32Array(this.N * 3);
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
-    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.9, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     this.points.frustumCulled = false;
   }
 
@@ -113,6 +114,10 @@ class Rhythm {
   private labelT = 0;
   hits = 0;
   combo = 0;
+  maxCombo = 0;
+  perfects = 0;
+  onHit: (lane: number, perfect: boolean, combo: number) => void = () => {};
+  private rings: { lane: number; t: number; perfect: boolean }[] = [];
   total = 0;
   finished = false;
   beat = 0; // para animar el público
@@ -179,9 +184,14 @@ class Rhythm {
     best.done = true;
     this.hits++;
     this.combo++;
-    this.label = bd < 0.11 ? '¡Perfecto!' : '¡Bien!';
+    this.maxCombo = Math.max(this.maxCombo, this.combo);
+    const perfect = bd < 0.09;
+    if (perfect) this.perfects++;
+    this.label = perfect ? '¡Perfecto!' : '¡Bien!';
     if (this.combo > 0 && this.combo % 10 === 0) this.label = `¡${this.combo} seguidas! 🔥`;
     this.labelT = 0.6;
+    this.rings.push({ lane, t: 0, perfect });
+    this.onHit(lane, perfect, this.combo);
   }
 
   update(dt: number) {
@@ -194,6 +204,10 @@ class Rhythm {
       }
       if (!n.done && now - n.t > 0.24) {
         n.done = true;
+        if (this.combo >= 5) {
+          this.label = 'Buu…';
+          this.labelT = 0.5;
+        }
         this.combo = 0;
       }
     }
@@ -207,6 +221,8 @@ class Rhythm {
     if (now > this.end + 0.8) this.finished = true;
     this.labelT -= dt;
     for (let i = 0; i < 3; i++) this.flash[i] = Math.max(0, this.flash[i] - dt * 4);
+    for (const r of this.rings) r.t += dt;
+    this.rings = this.rings.filter((r) => r.t < 0.35);
     this.draw(now);
   }
 
@@ -225,20 +241,48 @@ class Rhythm {
     const lw = w / 3;
     const hitY = h - 18;
     for (let i = 0; i < 3; i++) {
-      x.fillStyle = `rgba(20,10,30,${0.45 + this.flash[i] * 0.3})`;
+      const g = x.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, 'rgba(20,10,30,0.15)');
+      g.addColorStop(1, `rgba(20,10,30,${0.6 + this.flash[i] * 0.2})`);
+      x.fillStyle = g;
       x.fillRect(i * lw + 2, 0, lw - 4, h);
+      if (this.flash[i] > 0) {
+        x.fillStyle = this.colors[i];
+        x.globalAlpha = this.flash[i] * 0.35;
+        x.fillRect(i * lw + 2, hitY - 40, lw - 4, 40);
+        x.globalAlpha = 1;
+      }
+      // Diana de cada carril
+      x.strokeStyle = this.colors[i];
+      x.lineWidth = 3;
+      x.beginPath();
+      x.arc(i * lw + lw / 2, hitY, Math.min(lw * 0.32, 20) + 3, 0, Math.PI * 2);
+      x.stroke();
     }
     x.fillStyle = 'rgba(255,255,255,.9)';
-    x.fillRect(0, hitY - 2, w, 4);
+    x.fillRect(0, hitY - 1, w, 2);
+    for (const r of this.rings) {
+      const k = r.t / 0.35;
+      x.strokeStyle = r.perfect ? '#fff4a0' : this.colors[r.lane];
+      x.globalAlpha = 1 - k;
+      x.lineWidth = 5;
+      x.beginPath();
+      x.arc(r.lane * lw + lw / 2, hitY, 20 + k * 30, 0, Math.PI * 2);
+      x.stroke();
+      x.globalAlpha = 1;
+    }
     for (const n of this.notes) {
       if (n.done) continue;
       const k = 1 - (n.t - now) / TRAVEL;
       if (k < 0 || k > 1.2) continue;
       const y = k * hitY;
       x.fillStyle = this.colors[n.lane];
+      x.shadowColor = this.colors[n.lane];
+      x.shadowBlur = 14;
       x.beginPath();
       x.arc(n.lane * lw + lw / 2, y, Math.min(lw * 0.32, 20), 0, Math.PI * 2);
       x.fill();
+      x.shadowBlur = 0;
       x.strokeStyle = 'white';
       x.lineWidth = 3;
       x.stroke();
@@ -259,6 +303,11 @@ class Rhythm {
     x.font = '600 14px Fredoka, sans-serif';
     x.textAlign = 'left';
     x.fillText(`🎵 ${this.hits}/${this.total}`, 6, 18);
+    if (this.combo >= 3) {
+      x.textAlign = 'right';
+      x.fillStyle = '#f4d35e';
+      x.fillText(`x${this.combo}`, w - 6, 18);
+    }
   }
 
   dispose() {
@@ -286,6 +335,14 @@ export class Level3 implements Level {
   private band: Person[] = [];
   private marker: THREE.Mesh;
   private rhythm: Rhythm | null = null;
+  private sky: Sky;
+  private sun: Sun;
+  private screenCtx: CanvasRenderingContext2D[] = [];
+  private screenTex: THREE.CanvasTexture[] = [];
+  private screenT = 0;
+  private lasers: THREE.Group = new THREE.Group();
+  private lighters!: THREE.Points;
+  private result = { hits: 0, total: 0, perfects: 0, maxCombo: 0 };
   private t = 0;
   private busy = false;
   private endT = 0;
@@ -300,16 +357,16 @@ export class Level3 implements Level {
   constructor(
     private camera: THREE.PerspectiveCamera,
     private input: Input,
-    private onComplete: () => void,
+    private onComplete: LevelDone,
     onMenu: () => void,
   ) {
     const sc = this.scene;
-    sc.background = new THREE.Color(0x0d0b26);
     sc.fog = new THREE.Fog(0x1a1340, 40, 260);
-    sc.add(new THREE.HemisphereLight(0x9a8cff, 0x4a3a50, 1.9));
-    const key = new THREE.DirectionalLight(0xffc9e0, 1.0);
-    key.position.set(0, 20, 40);
-    sc.add(key);
+    this.sky = new Sky({ top: 0x05041a, mid: 0x1a1446, bottom: 0x3a2050, stars: 900 });
+    sc.add(this.sky.group);
+    sc.add(new THREE.HemisphereLight(0x9a8cff, 0x4a3a50, 1.5));
+    // Luz principal desde el escenario (rosa), con sombras que siguen a Azul
+    this.sun = new Sun(sc, 0xffc0e0, 1.6, new THREE.Vector3(0.3, 0.9, 1), 22);
 
     this.buildWorld();
     this.fx = new Particles(sc);
@@ -348,6 +405,7 @@ export class Level3 implements Level {
     this.camera.position.set(0, 5, -27);
     this.updateHud();
     audio.startMusic('road');
+    audio.ambience(0.12);
     this.busy = true;
     setTimeout(() => {
       if (this.phase !== 'intro') return;
@@ -377,19 +435,11 @@ export class Level3 implements Level {
     }, 256, 256);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(40, 40);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ map: tex }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500).rotateX(-Math.PI / 2), toon({ map: tex }));
+    ground.userData.noCast = true;
     sc.add(ground);
 
-    // Estrellas y luna
-    const starPos = new Float32Array(900 * 3);
-    for (let i = 0; i < 900; i++) {
-      const th = Math.random() * Math.PI * 2;
-      const ph = Math.random() * Math.PI * 0.45;
-      starPos.set([Math.sin(ph) * Math.cos(th) * 300, Math.cos(ph) * 300 + 10, Math.sin(ph) * Math.sin(th) * 300], i * 3);
-    }
-    const sg = new THREE.BufferGeometry();
-    sg.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    sc.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
+    // Luna
     const moon = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfff6d8, fog: false }));
     moon.position.set(-90, 110, 220);
     sc.add(moon);
@@ -439,28 +489,35 @@ export class Level3 implements Level {
     for (const [x, z, h] of [[-21, -16, 8], [21, -14, 9], [-21, 6, 9], [21, 8, 7.5], [-20, 22, 8.5], [20, 22, 9], [-28, 30, 10], [28, 30, 10]]) palm(x, z, h);
     sc.add(m.mesh());
 
-    // Pantallas
-    const screenTex = canvasTex((ctx, w, h) => {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, '#2b1840');
-      g.addColorStop(1, '#e2547a');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 110px sans-serif';
-      ctx.fillText('FITO', w / 2, h / 2 + 10);
-      ctx.font = 'bold 34px sans-serif';
-      ctx.fillText('& Fitipaldis · Canarias', w / 2, h / 2 + 70);
-    });
+    // Pantallas animadas: ecualizador al ritmo de la música
     for (const x of [-18.5, 18.5]) {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 4.5), new THREE.MeshBasicMaterial({ map: screenTex, fog: false }));
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.screenCtx.push(c.getContext('2d')!);
+      this.screenTex.push(tex);
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 4.5), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
       s.position.set(x, 7, 30);
       s.rotation.y = Math.PI + (x > 0 ? 0.25 : -0.25);
       sc.add(s);
       const p = new Merger().add(G.box, 0x222228, x, 2.4, 30.2, 0, 0, 0, 0.3, 4.8, 0.3).mesh();
       sc.add(p);
     }
+    this.drawScreens(0, 0);
+
+    // Láseres que barren el cielo durante el concierto
+    const laserGeo = new THREE.BoxGeometry(0.08, 0.08, 60).translate(0, 0, -30);
+    const laserColors = [0x3cc6b0, 0xe2547a, 0xf4d35e, 0x7a5cff];
+    for (let i = 0; i < 8; i++) {
+      const l = new THREE.Mesh(laserGeo, new THREE.MeshBasicMaterial({ color: laserColors[i % 4], transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      l.position.set(-12 + (i % 4) * 8, 11, 31);
+      l.userData.ph = i * 0.8;
+      this.lasers.add(l);
+    }
+    this.lasers.visible = false;
+    sc.add(this.lasers);
 
     // Focos (conos aditivos que barren el público)
     const spotGeo = new THREE.ConeGeometry(2.4, 14, 16, 1, true).translate(0, -7, 0);
@@ -512,6 +569,19 @@ export class Level3 implements Level {
       sc.add(mesh);
       this.crowds.push({ mesh, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });
     });
+    // Mecheros (y móviles) en alto entre el público
+    const lp = new Float32Array(pts.length * 3);
+    let n = 0;
+    pts.forEach((p, i) => {
+      if (i % 3) return;
+      lp.set([p.x + 0.3, 2.15, p.z], n * 3);
+      n++;
+    });
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(lp.slice(0, n * 3), 3));
+    this.lighters = new THREE.Points(lg, new THREE.PointsMaterial({ map: glowTexture(), color: 0xffc070, size: 0.7, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.lighters.visible = false;
+    sc.add(this.lighters);
   }
 
   private updateHud() {
@@ -539,22 +609,37 @@ export class Level3 implements Level {
     return null;
   }
 
-  private animatePerson(p: Person, speed01: number, phase: number, dance = false) {
-    const s = Math.sin(phase);
-    if (dance) {
-      p.body.position.y = Math.abs(Math.sin(phase * 0.5)) * 0.3;
-      p.armL.rotation.z = -2.4 + s * 0.4;
-      p.armR.rotation.z = 2.4 - s * 0.4;
-      p.legL.rotation.x = p.legR.rotation.x = 0;
-      return;
+  /** Pantallas del escenario: ecualizador, nombre y luces al ritmo. */
+  private drawScreens(beat: number, pulse: number) {
+    const live = this.phase === 'rhythm' || this.phase === 'ending';
+    for (const ctx of this.screenCtx) {
+      const w = 512;
+      const h = 256;
+      const hue = (Math.floor(beat / 4) * 40) % 360;
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, `hsl(${hue + 260}, 60%, ${12 + pulse * 8}%)`);
+      g.addColorStop(1, `hsl(${hue + 330}, 70%, ${30 + pulse * 15}%)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      // Barras del ecualizador
+      const bars = 24;
+      for (let i = 0; i < bars; i++) {
+        const v = live ? 0.25 + 0.75 * Math.abs(Math.sin(beat * 1.7 + i * 0.7) * Math.cos(beat * 0.6 + i * 0.31)) * (0.6 + pulse * 0.4) : 0.08 + 0.05 * Math.sin(this.t * 2 + i);
+        const bh = v * h * 0.55;
+        ctx.fillStyle = `hsla(${(hue + i * 8) % 360}, 90%, 65%, 0.75)`;
+        ctx.fillRect(8 + i * ((w - 16) / bars), h - bh, (w - 16) / bars - 4, bh);
+      }
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#ff7ab0';
+      ctx.shadowBlur = 20 + pulse * 20;
+      ctx.font = `bold ${100 + pulse * 12}px sans-serif`;
+      ctx.fillText('FITO', w / 2, h / 2 - 4);
+      ctx.shadowBlur = 0;
+      ctx.font = 'bold 30px sans-serif';
+      ctx.fillText('& Fitipaldis · Canarias', w / 2, h / 2 + 44);
     }
-    p.body.position.y = Math.abs(s) * 0.08 * speed01;
-    p.legL.rotation.x = s * 0.7 * speed01;
-    p.legR.rotation.x = -s * 0.7 * speed01;
-    p.armL.rotation.x = -s * 0.6 * speed01;
-    p.armR.rotation.x = s * 0.6 * speed01;
-    p.armL.rotation.z = -0.1;
-    p.armR.rotation.z = 0.1;
+    this.screenTex.forEach((t) => (t.needsUpdate = true));
   }
 
   update(dt: number) {
@@ -592,17 +677,33 @@ export class Level3 implements Level {
 
     // Jugadora
     const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'findGas');
-    this.walker.yaw -= this.input.consumeCam();
+    this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds);
     this.player.root.rotation.y = this.walker.facing;
-    if (this.phase === 'rhythm' || this.phase === 'ending') this.animatePerson(this.player, 0, beat * Math.PI, true);
-    else this.animatePerson(this.player, mag, this.walker.walk);
-    if (this.phase === 'rhythm' || this.phase === 'ending') this.animatePerson(this.gas, 0, beat * Math.PI + 1, true);
-    else {
-      this.animatePerson(this.gas, 0, 0);
-      this.gas.armR.rotation.z = 2.6 + Math.sin(this.t * 6) * 0.3; // saluda
+    const live = this.phase === 'rhythm' || this.phase === 'ending';
+    if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
+    else animatePerson(this.player, dt, mag > 0.05 ? 'walk' : 'idle', mag, this.walker.walk);
+    if (live) animatePerson(this.gas, dt, 'dance', 0, beat * Math.PI + 1);
+    else animatePerson(this.gas, dt, 'wave');
+    animatePerson(this.barman, dt, this.player.root.position.distanceTo(BAR_POS) < 4 ? 'talk' : 'idle');
+
+    // Escenario vivo: pantallas, láseres y mecheros
+    this.screenT -= dt;
+    if (this.screenT <= 0) {
+      this.screenT = 1 / 15;
+      this.drawScreens(beat, pulse);
     }
-    this.animatePerson(this.barman, 0, 0);
+    this.lasers.visible = live;
+    if (live) {
+      this.lasers.children.forEach((l) => {
+        const ph = l.userData.ph as number;
+        l.rotation.set(-0.5 + Math.sin(this.t * 0.9 + ph) * 0.35, Math.PI + Math.sin(this.t * 0.7 + ph * 1.3) * 0.7, 0);
+        ((l as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.6;
+      });
+    }
+    this.lighters.visible = live || this.phase === 'findGas';
+    (this.lighters.material as THREE.PointsMaterial).size = 0.6 + Math.sin(this.t * 13) * 0.08;
+    this.lighters.position.x = Math.sin(this.t * 1.2) * 0.25;
 
     // Tabaco
     this.smoke.visible = !this.smokeThrown;
@@ -652,6 +753,8 @@ export class Level3 implements Level {
     }
 
     this.updateCamera(dt);
+    this.sun.follow(this.player.root.position);
+    this.sky.update(this.camera, dt);
   }
 
   private talk(lines: { who: string; text: string }[], next: () => Phase) {
@@ -683,11 +786,23 @@ export class Level3 implements Level {
     this.updateHud();
     audio.stopMusic();
     this.rhythm = new Rhythm();
+    this.rhythm.onHit = (lane, perfect, combo) => {
+      const x = [-6, 0, 6][lane];
+      this.fx.burst(new THREE.Vector3(x, 4.5, 30), perfect ? '✨' : '🎵', perfect ? 3 : 2, 2, 1.2);
+      if (combo > 0 && combo % 10 === 0) {
+        this.fireworks.burst(new THREE.Vector3(-15 + Math.random() * 30, 18 + Math.random() * 6, 40));
+        audio.cheer(0.4);
+        vibrate(40);
+      } else if (perfect) vibrate(12);
+    };
   }
 
   private finishRhythm() {
     const r = this.rhythm!;
+    this.result = { hits: r.hits, total: r.total, perfects: r.perfects, maxCombo: r.maxCombo };
     toast(`¡Has clavado ${r.hits} de ${r.total} notas! 🎸`);
+    audio.cheer(0.7);
+    audio.ambience(0.2);
     r.dispose();
     this.rhythm = null;
     this.phase = 'ending';
@@ -700,7 +815,18 @@ export class Level3 implements Level {
         setTimeout(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
-          this.onComplete();
+          audio.ambience(0);
+          const { hits, total, perfects, maxCombo } = this.result;
+          const acc = total ? hits / total : 1;
+          this.onComplete({
+            stars: acc >= 0.9 ? 3 : acc >= 0.65 ? 2 : 1,
+            stats: [
+              ['Notas', `${hits}/${total}`],
+              ['Perfectas', `${perfects}`],
+              ['Mejor racha', `x${maxCombo}`],
+              ['Tabaco', this.smokeThrown ? 'a la papelera 🚭' : 'sigue ahí… 🚬'],
+            ],
+          });
         }, 2500);
       });
     }, 2500);
@@ -743,7 +869,7 @@ export class Level3 implements Level {
           this.finishRhythm();
         },
       },
-      { label: '✓ Completar capítulo', run: () => { stop(); this.phase = 'done'; this.onComplete(); } },
+      { label: '✓ Completar capítulo', run: () => { stop(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }
 
@@ -751,6 +877,7 @@ export class Level3 implements Level {
     this.rhythm?.dispose();
     this.hud.remove();
     audio.stopMusic();
+    audio.ambience(0);
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();

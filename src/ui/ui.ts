@@ -2,6 +2,8 @@ import { GIFTS, Gift } from '../data/gifts';
 import { LEVELS, Line, FINAL_LETTER } from '../data/story';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
+import type { LevelResult } from '../world/level';
+import { vibrate } from '../core/gfx';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -97,19 +99,94 @@ function voucher(g: Gift, locked = false) {
   return v;
 }
 
-export function showGift(g: Gift, onClose: () => void) {
+/** Confeti de papel por CSS sobre la interfaz. */
+function cssConfetti(parent: HTMLElement, n = 70) {
+  const colors = ['#d7263d', '#f4d35e', '#1b998b', '#2e86ab', '#ffffff', '#e2547a'];
+  for (let i = 0; i < n; i++) {
+    const c = el('i', 'confetto');
+    c.style.left = `${50 + (Math.random() - 0.5) * 30}%`;
+    c.style.background = colors[i % colors.length];
+    c.style.setProperty('--dx', `${(Math.random() - 0.5) * 110}vw`);
+    c.style.setProperty('--dy', `${-30 - Math.random() * 45}vh`);
+    c.style.setProperty('--r', `${Math.random() * 1080 - 540}deg`);
+    c.style.animationDelay = `${Math.random() * 0.15}s`;
+    c.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
+    parent.append(c);
+  }
+}
+
+/** Regalo: primero una caja que tiembla, al tocarla se abre con confeti y aparece el vale. */
+export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
   clearScreens();
-  audio.fanfare();
   const o = el('div', 'gift-overlay');
-  const v = voucher(g);
-  const b = el('button', 'big-btn', 'Guardar y seguir');
-  b.onclick = () => {
-    o.remove();
-    onClose();
-  };
-  v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano 📸'), b);
-  o.append(el('h1', '', '<span style="color:white;font-size:28px">¡Regalo desbloqueado!</span>'), v);
+  const title = el('h1', 'gift-title', 'Tienes un regalo');
+  const box = el('button', 'giftbox');
+  box.append(el('div', 'lid'), el('div', 'base'), el('div', 'ribbon'));
+  const tapHint = el('p', 'gift-hint', 'Toca la caja para abrirla');
+  if (result) {
+    const stars = el('div', 'stars');
+    for (let i = 0; i < 3; i++) {
+      const st = el('span', i < result.stars ? 'on' : '', '★');
+      st.style.animationDelay = `${0.3 + i * 0.25}s`;
+      stars.append(st);
+    }
+    const st = el('div', 'result-stats');
+    for (const [k, v] of result.stats) st.append(el('div', '', `<span>${k}</span><b>${v}</b>`));
+    o.append(el('div', 'result', ''), title);
+    o.querySelector('.result')!.append(stars, st);
+    setTimeout(() => result.stars > 0 && audio.pickup(), 300);
+  } else o.append(title);
+  o.append(box, tapHint);
   root.append(o);
+  audio.fanfare();
+  let opened = false;
+  box.onclick = () => {
+    if (opened) return;
+    opened = true;
+    box.classList.add('open');
+    o.classList.add('opened');
+    tapHint.remove();
+    audio.pop();
+    audio.cheer(0.35);
+    vibrate([30, 40, 60]);
+    cssConfetti(o);
+    setTimeout(() => {
+      box.remove();
+      title.innerHTML = '¡Regalo desbloqueado!';
+      const v = voucher(g);
+      const b = el('button', 'big-btn', 'Guardar y seguir');
+      b.onclick = () => {
+        o.remove();
+        onClose();
+      };
+      v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano 📸'), b);
+      o.append(v);
+    }, 650);
+  };
+}
+
+/** Rótulo de capítulo a pantalla completa que se desvanece (tapa también la carga de la escena). */
+export function chapterCard(n: number) {
+  const lv = LEVELS[n - 1];
+  const c = el('div', 'chapter-card');
+  c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place));
+  root.append(c);
+  setTimeout(() => c.classList.add('out'), 2100);
+  setTimeout(() => c.remove(), 3000);
+}
+
+/** Fundido a negro y vuelta (transiciones entre momentos de la historia). */
+export function fadeFlash(mid: () => void, hold = 300) {
+  const f = el('div', 'fade');
+  root.append(f);
+  requestAnimationFrame(() => f.classList.add('on'));
+  setTimeout(() => {
+    mid();
+    setTimeout(() => {
+      f.classList.remove('on');
+      setTimeout(() => f.remove(), 500);
+    }, hold);
+  }, 450);
 }
 
 export function giftList(save: SaveData, onClose: () => void) {
