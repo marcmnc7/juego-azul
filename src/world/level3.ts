@@ -7,19 +7,39 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 
 // Capítulo 3 · Fito bajo las estrellas (Canarias).
-// Buscar a Gas (pista en la barra, tabaco opcional a la papelera) → minijuego de ritmo → fuegos artificiales → regalo.
+// Pista en la barra (tabaco opcional a la papelera) → ir 4 veces a los WC portátiles (uno libre cada vez)
+// → abrirse paso entre la multitud hasta Gas → minijuego de ritmo → fuegos artificiales → regalo.
 
-type Phase = 'intro' | 'findBar' | 'findGas' | 'rhythm' | 'ending' | 'done';
+type Phase = 'intro' | 'findBar' | 'wc' | 'back' | 'findGas' | 'rhythm' | 'ending' | 'done';
 
 const BAR_POS = new THREE.Vector3(-17, 0, -8);
 const GAS_POS = new THREE.Vector3(-8.5, 0, 24.2);
 const SMOKE_POS = new THREE.Vector3(-12.5, 0, 2);
 const AISLE_X = -8.5;
+// WC portátiles a la derecha, con la puerta mirando al recinto
+const WC_X = 17;
+const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
+const WC_NEED = 4;
+const CONCERT_SPOT = new THREE.Vector3(0, 0, 2);
+// Camino serpenteante entre el público hasta Gas
+const CROWD_PATH: [number, number][] = [[-8.5, 4], [-5.5, 9], [-10, 13.5], [-6, 18], [-9.5, 21.5], [GAS_POS.x, GAS_POS.z]];
+function distToPath(x: number, z: number) {
+  let best = Infinity;
+  for (let i = 0; i < CROWD_PATH.length - 1; i++) {
+    const [ax, az] = CROWD_PATH[i];
+    const [bx, bz] = CROWD_PATH[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
 
 function canvasTex(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 512, h = 256) {
   const c = document.createElement('canvas');
@@ -274,6 +294,11 @@ export class Level3 implements Level {
   private smokeThrown = false;
   private colliders: Box2[] = [];
   private people: Circle[] = [];
+  private wcVisits = 0;
+  private wcFree = [false, true, false, false, true, false];
+  private wcLights: THREE.MeshBasicMaterial[] = [];
+  private pushT = 0;
+  private v1 = new THREE.Vector3();
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
   private crowds: { mesh: THREE.InstancedMesh; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private spots: { mesh: THREE.Mesh; ph: number }[] = [];
@@ -434,7 +459,8 @@ export class Level3 implements Level {
       }
       this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
     };
-    for (const [x, z, h] of [[-21, -16, 8], [21, -14, 9], [-21, 6, 9], [21, 8, 7.5], [-20, 22, 8.5], [20, 22, 9], [-28, 30, 10], [28, 30, 10]]) palm(x, z, h);
+    for (const [x, z, h] of [[-21, -16, 8], [21, -4, 9], [-21, 6, 9], [21, 8, 7.5], [-20, 22, 8.5], [20, 22, 9], [-28, 30, 10], [28, 30, 10]]) palm(x, z, h);
+    this.buildToilets(m);
     sc.add(m.mesh());
 
     // Pantallas animadas: ecualizador al ritmo de la música
@@ -502,12 +528,12 @@ export class Level3 implements Level {
       { skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'bun' },
     ];
     const pts: { x: number; z: number }[] = [];
-    for (let i = 0; i < 2000 && pts.length < 150; i++) {
+    for (let i = 0; i < 6000 && pts.length < 230; i++) {
       const x = -13 + Math.random() * 26;
       const z = 6 + Math.random() * 21.5;
-      if (Math.abs(x - AISLE_X) < 1.4) continue;
-      if (Math.hypot(x - GAS_POS.x, z - GAS_POS.z) < 2) continue;
-      if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < 1)) continue;
+      if (distToPath(x, z) < 0.85) continue;
+      if (Math.hypot(x - GAS_POS.x, z - GAS_POS.z) < 1.6) continue;
+      if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.92)) continue;
       pts.push({ x, z });
     }
     looks.forEach((lk, li) => {
@@ -532,16 +558,143 @@ export class Level3 implements Level {
     sc.add(this.lighters);
   }
 
+  /** Fila de WC portátiles azules, con la luz de libre/ocupado en cada puerta. */
+  private buildToilets(m: Merger) {
+    const sc = this.scene;
+    const sign = canvasTex((ctx, w, h) => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#1f4fa8';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 120px Arial, sans-serif';
+      ctx.fillText('WC', w / 2, h * 0.36);
+      // Hombre y mujer
+      for (const [cx, skirt] of [[w * 0.33, false], [w * 0.67, true]] as const) {
+        ctx.beginPath();
+        ctx.arc(cx, h * 0.66, 14, 0, Math.PI * 2);
+        ctx.fill();
+        if (skirt) {
+          ctx.beginPath();
+          ctx.moveTo(cx, h * 0.72);
+          ctx.lineTo(cx - 22, h * 0.95);
+          ctx.lineTo(cx + 22, h * 0.95);
+          ctx.fill();
+        } else ctx.fillRect(cx - 12, h * 0.72, 24, h * 0.23);
+      }
+    }, 256, 256);
+    const signMat = new THREE.MeshBasicMaterial({ map: sign, color: 0xcfd6e6 });
+    for (let i = 0; i < WC_Z.length; i++) {
+      const z = WC_Z[i];
+      const fx = WC_X - 0.62; // cara de la puerta
+      m.add(G.box, 0x2a63c4, WC_X, 1.15, z, 0, 0, 0, 1.2, 2.3, 1.3); // cabina de plástico
+      m.add(G.cyl, 0xe9eef5, WC_X, 2.36, z, 0, 0, 0, 1.45, 0.14, 1.45); // techo blanco
+      m.add(G.box, 0xe9eef5, WC_X, 0.04, z, 0, 0, 0, 1.3, 0.08, 1.4); // base
+      m.add(G.box, 0x2457b3, fx - 0.02, 1.08, z, 0, 0, 0, 0.04, 2.0, 1.0); // puerta
+      for (let k = 0; k < 4; k++) m.add(G.box, 0x1b3f80, fx - 0.05, 1.9 + k * 0.07, z, 0, 0, 0, 0.02, 0.025, 0.6); // rejilla
+      m.add(G.box, 0xc0c4cc, fx - 0.06, 1.05, z - 0.36, 0, 0, 0, 0.05, 0.22, 0.06); // tirador
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), signMat);
+      pl.position.set(fx - 0.05, 1.45, z + 0.1);
+      pl.rotation.y = -Math.PI / 2;
+      sc.add(pl);
+      // Indicador libre / ocupado
+      const mat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
+      const ind = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.22), mat);
+      ind.position.set(fx - 0.06, 1.2, z - 0.36);
+      // Piloto grande encima de la puerta, visible desde lejos
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat);
+      lamp.position.set(fx - 0.05, 2.15, z);
+      sc.add(ind, lamp);
+      this.wcLights.push(mat);
+    }
+    this.colliders.push({ minX: WC_X - 0.65, maxX: WC_X + 0.65, minZ: WC_Z[0] - 0.7, maxZ: WC_Z[WC_Z.length - 1] + 0.7 });
+    // Foco que ilumina la zona de baños
+    m.add(G.cyl, 0x3a3a44, WC_X + 1.5, 3, WC_Z[2] + 0.75, 0, 0, 0, 0.12, 6, 0.12);
+    m.add(G.box, 0x3a3a44, WC_X + 1.2, 6, WC_Z[2] + 0.75, 0, 0, 0.5, 0.6, 0.3, 0.9);
+    const flood = new THREE.PointLight(0xdfe8ff, 22, 16, 1.6);
+    flood.position.set(WC_X - 1, 5.6, WC_Z[2] + 0.75);
+    sc.add(flood);
+    this.paintToilets();
+  }
+
+  private paintToilets() {
+    this.wcLights.forEach((m, i) => m.color.set(this.wcFree[i] ? 0x2ecc71 : 0xe74c3c));
+  }
+
+  /** Índice del WC más cercano a la puerta (si Azul está delante de alguno). */
+  private toiletAt(p: THREE.Vector3) {
+    for (let i = 0; i < WC_Z.length; i++) if (Math.abs(p.x - (WC_X - 1.3)) < 1.1 && Math.abs(p.z - WC_Z[i]) < 0.65) return i;
+    return -1;
+  }
+
+  private nearestFreeToilet() {
+    const p = this.player.root.position;
+    let best = -1;
+    let bd = Infinity;
+    this.wcFree.forEach((f, i) => {
+      const d = Math.abs(p.z - WC_Z[i]);
+      if (f && d < bd) {
+        bd = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  private useToilet(i: number) {
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    this.wcFree[i] = false;
+    this.paintToilets();
+    audio.pop();
+    fadeFlash(() => {
+      this.wcVisits++;
+      audio.splash();
+      // Otra persona se mete en ese y se libera otro
+      const others = this.wcFree.map((f, k) => (!f && k !== i ? k : -1)).filter((k) => k >= 0);
+      this.wcFree.fill(false);
+      this.wcFree[others[Math.floor(Math.random() * others.length)]] = true;
+      if (Math.random() < 0.5) this.wcFree[others[Math.floor(Math.random() * others.length)]] = true;
+      this.paintToilets();
+      this.player.root.position.set(WC_X - 1.6, 0, WC_Z[i]);
+      this.walker.facing = this.walker.yaw = -Math.PI / 2;
+      this.updateHud();
+    }, 900);
+    setTimeout(() => {
+      this.fx.burst(this.player.root.position.clone().setY(2.2), '🧻', 2, 0.8, 0.6);
+      if (this.wcVisits >= WC_NEED) {
+        dialogue(CONCERT.wcDone, () => {
+          this.busy = false;
+          this.phase = 'findGas';
+          this.updateHud();
+        });
+      } else {
+        toast(CONCERT.wcBack[this.wcVisits - 1]);
+        this.busy = false;
+        this.phase = 'back';
+        this.updateHud();
+      }
+    }, 1700);
+  }
+
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.smokeThrown ? '<span class="chip">🚭</span>' : '');
+    const wcChip = this.wcVisits > 0 || this.phase === 'wc' || this.phase === 'back' ? `<span class="chip">🚻 ${this.wcVisits}/${WC_NEED}</span>` : '';
+    h.setCounters(wcChip + (this.smokeThrown ? '<span class="chip">🚭</span>' : ''));
     switch (this.phase) {
       case 'intro':
       case 'findBar':
         h.setObjective('Pregunta por Gas en la barra');
         break;
+      case 'wc':
+        h.setObjective(`Ve a un WC portátil libre (luz verde) · ${this.wcVisits + 1}ª vez`);
+        break;
+      case 'back':
+        h.setObjective('Vuelve al concierto');
+        break;
       case 'findGas':
-        h.setObjective('Busca a Gas cerca del escenario, por la izquierda');
+        h.setObjective('Ábrete paso entre la multitud hasta Gas');
         break;
       case 'rhythm':
         h.setObjective(CONCERT.rhythm);
@@ -554,6 +707,11 @@ export class Level3 implements Level {
   private target(): THREE.Vector3 | null {
     if (this.phase === 'findBar') return BAR_POS;
     if (this.phase === 'findGas') return GAS_POS;
+    if (this.phase === 'back') return CONCERT_SPOT;
+    if (this.phase === 'wc') {
+      const i = this.nearestFreeToilet();
+      return i >= 0 ? this.v1.set(WC_X - 1.3, 0, WC_Z[i]) : null;
+    }
     return null;
   }
 
@@ -624,7 +782,7 @@ export class Level3 implements Level {
     });
 
     // Jugadora
-    const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'findGas');
+    const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'wc' || this.phase === 'back' || this.phase === 'findGas');
     this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
     this.player.root.rotation.y = this.walker.facing;
@@ -671,16 +829,54 @@ export class Level3 implements Level {
           this.fx.burst(SMOKE_POS.clone().setY(1), '✨', 8);
           this.updateHud();
         };
+      } else if (this.phase === 'wc' && this.toiletAt(pp) >= 0) {
+        const i = this.toiletAt(pp);
+        if (this.wcFree[i]) {
+          label = '🚻 Entrar';
+          action = () => this.useToilet(i);
+        } else {
+          label = '🚫 Ocupado';
+          action = () => {
+            audio.warn();
+            toast(CONCERT.wcBusy[Math.floor(Math.random() * CONCERT.wcBusy.length)]);
+          };
+        }
       } else if (pp.distanceTo(BAR_POS) < 3.2) {
         label = 'Hablar';
-        action = () => this.talk(CONCERT.barman, () => (this.phase === 'findBar' ? 'findGas' : this.phase));
+        action = () => this.talk(this.phase === 'findBar' ? CONCERT.barman : CONCERT.barmanAgain, () => (this.phase === 'findBar' ? 'wc' : this.phase));
       } else if (this.phase === 'findGas' && pp.distanceTo(GAS_POS) < 3) {
         label = 'Hablar';
         action = () => this.meetGas();
       }
     }
-    this.hud.setAction(label, label === 'Tirar 🚭');
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '🚻 Entrar');
     if (this.input.consumeAction() && action) action();
+
+    // Vuelta al concierto entre visita y visita al baño
+    if (this.phase === 'back' && !this.busy && pp.distanceTo(CONCERT_SPOT) < 3) {
+      this.phase = 'wc';
+      audio.warn();
+      toast(CONCERT.wcAgain[Math.min(CONCERT.wcAgain.length - 1, this.wcVisits - 1)]);
+      this.updateHud();
+    }
+
+    // Entre la multitud: empujones de vez en cuando
+    this.pushT -= dt;
+    if (this.phase === 'findGas' && walking && this.pushT <= 0) {
+      const near = this.people.find((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 1.0);
+      if (near && Math.random() < dt * 2.5) {
+        const dx = pp.x - near.x;
+        const dz = pp.z - near.z;
+        const d = Math.hypot(dx, dz) || 1;
+        this.walker.knock.set((dx / d) * 4, 0, (dz / d) * 4 - 2.5);
+        this.walker.shake(0.25);
+        vibrate(25);
+        audio.hit();
+        toast(CONCERT.pushes[Math.floor(Math.random() * CONCERT.pushes.length)]);
+        this.fx.burst(pp.clone().setY(2.2), '💥', 1, 0.6, 0.5);
+        this.pushT = 2.2;
+      }
+    }
 
     // Marcador y flecha
     const tgt = this.target();
@@ -807,10 +1003,11 @@ export class Level3 implements Level {
     };
     return [
       { label: '1 · Buscar la barra', run: () => { stop(); this.phase = 'findBar'; tp(0, -18); this.updateHud(); } },
-      { label: '2 · Buscar a Gas', run: () => { stop(); this.phase = 'findGas'; tp(AISLE_X, 4); this.updateHud(); } },
-      { label: '3 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
+      { label: '2 · WC portátiles', run: () => { stop(); this.phase = 'wc'; tp(WC_X - 4, -13, Math.PI / 2); this.updateHud(); } },
+      { label: '3 · Buscar a Gas', run: () => { stop(); this.wcVisits = WC_NEED; this.phase = 'findGas'; tp(AISLE_X, 3); this.updateHud(); } },
+      { label: '4 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
       {
-        label: '4 · Final con fuegos',
+        label: '5 · Final con fuegos',
         run: () => {
           stop();
           this.startRhythm();

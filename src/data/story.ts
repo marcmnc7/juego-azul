@@ -122,7 +122,18 @@ export const CONCERT = {
     { who: 'Camarero', text: '¿Un chico moreno? Ha estado aquí intentando pedir a una pareja de ingleses…' },
     { who: 'Camarero', text: 'Les ha dicho “Uan bir, plis, and tu for mai guaif”. Los ingleses todavía se están riendo.' },
     { who: 'Camarero', text: 'Se fue hacia el escenario, por la izquierda.' },
+    { who: 'Azul', text: 'Vale. Pero antes… baño. Con tanta cerveza no llego a la primera fila.' },
+    { who: 'Narrador', text: 'Los WC portátiles están a la derecha. Busca uno con la luz verde.' },
   ] as Line[],
+  barmanAgain: [{ who: 'Camarero', text: '¿Otra vez tú? Los baños, a la derecha. Y Gas, hacia el escenario.' }] as Line[],
+  wcBusy: ['🚫 Ocupado. Alguien canta «Soldadito marinero» dentro…', '🚫 Ocupado. Busca la luz verde', '🚫 Toc, toc… «¡Ocupadooo!»'],
+  wcBack: ['🚻 1/4 · Uf, qué alivio. Vuelve al concierto', '🚻 2/4 · Vuelve al concierto, que te lo pierdes', '🚻 3/4 · El de seguridad ya te saluda. Al concierto'],
+  wcAgain: ['¡Otra vez al baño! 🚻 Las cervezas de Gas…', '¿Otra vez? 🚻 Esto es culpa de Gas', 'La última, prometido 🚻'],
+  wcDone: [
+    { who: 'Azul', text: 'Cuatro veces. Récord personal. Ahora sí: ¿dónde se ha metido este hombre?' },
+    { who: 'Narrador', text: 'Gas está en primera fila, a la izquierda. Ábrete paso entre la multitud… y cuidado con los empujones.' },
+  ] as Line[],
+  pushes: ['¡Empujón! 😵', '¡Perdona, perdona!', '¡Uy, un pogo! 🤘', '¡Que no veo a Fito!', '¡Sin empujar, eh!'],
   smokeFound: '🚭 ¡A la papelera! Gas va a estar orgulloso',
   gasFound: [
     { who: 'Gas', text: '¡Azul! Te he guardado sitio en primera fila. Las cervezas… es una historia larga.' },
