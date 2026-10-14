@@ -4,6 +4,13 @@ import type { Box2 } from '../world/ferreries';
 // Movimiento en tercera persona relativo a la cámara, con colisión círculo-contra-cajas,
 // empujones, y una cámara que se coloca sola detrás al andar y se acerca si hay una pared.
 const R = 0.4;
+
+/** Obstáculo redondo (personas, ases): x, z y radio. */
+export interface Circle {
+  x: number;
+  z: number;
+  r: number;
+}
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class Walker {
@@ -33,7 +40,7 @@ export class Walker {
   }
 
   /** Devuelve la intensidad del movimiento (0..1) para animar. */
-  move(dt: number, ax: { x: number; y: number }, boxes: Box2[], b: Box2) {
+  move(dt: number, ax: { x: number; y: number }, boxes: Box2[], b: Box2, circles: readonly Circle[] = []) {
     const mag = Math.min(1, Math.hypot(ax.x, ax.y));
     const p = this.pos;
     let tx = 0;
@@ -81,6 +88,18 @@ export class Walker {
           else if (i === 2) p.z = c.minZ - R;
           else p.z = c.maxZ + R;
         }
+      }
+    }
+    // Personas y animales: empujar hacia fuera del círculo
+    for (const c of circles) {
+      const dx = p.x - c.x;
+      const dz = p.z - c.z;
+      const rr = c.r + R;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < rr * rr) {
+        const d = Math.sqrt(d2) || 1e-3;
+        p.x = c.x + (dx / d) * rr;
+        p.z = c.z + (dz / d) * rr;
       }
     }
     p.x = Math.max(b.minX, Math.min(b.maxX, p.x));

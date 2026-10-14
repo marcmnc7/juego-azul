@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Walker } from '../core/walker';
+import { Walker, type Circle } from '../core/walker';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
@@ -329,6 +329,7 @@ export class Level3 implements Level {
   private smoke: THREE.Group;
   private smokeThrown = false;
   private colliders: Box2[] = [];
+  private people: Circle[] = [];
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
   private crowds: { mesh: THREE.InstancedMesh; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private spots: { mesh: THREE.Mesh; ph: number }[] = [];
@@ -381,6 +382,9 @@ export class Level3 implements Level {
     this.gas.root.position.copy(GAS_POS);
     this.gas.root.rotation.y = Math.PI;
     sc.add(this.gas.root);
+    // El público y Gas no se pueden atravesar
+    this.people = this.crowds.flatMap((c) => c.base.map((b) => ({ x: b.x, z: b.z, r: 0.35 })));
+    this.people.push({ x: GAS_POS.x, z: GAS_POS.z, r: 0.35 });
 
     this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short' });
     this.barman.root.position.set(BAR_POS.x - 1.6, 0, BAR_POS.z);
@@ -678,7 +682,7 @@ export class Level3 implements Level {
     // Jugadora
     const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'findGas');
     this.walker.turn(this.input.consumeCam());
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds);
+    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
     this.player.root.rotation.y = this.walker.facing;
     const live = this.phase === 'rhythm' || this.phase === 'ending';
     if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);

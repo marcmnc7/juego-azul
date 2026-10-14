@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G, Merger, personGeometry, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture } from '../core/gfx';
+import type { Circle } from '../core/walker';
 
 // Ferreries en fiestas al atardecer: calle mayor de este a oeste, plaza con la iglesia al norte,
 // casas encaladas con persianas verdes, macetas, farolillos, banderines y bares llenos.
@@ -27,6 +28,8 @@ export interface FerreriesWorld {
   marcPos: THREE.Vector3;
   plazaCenter: THREE.Vector3;
   crowds: Crowd[];
+  /** Gente del público como obstáculos redondos. */
+  people: Circle[];
   lights: THREE.Points;
   sky: Sky;
   sun: Sun;
@@ -174,7 +177,9 @@ function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, co
   // Barra
   m.add(G.rbox, 0x8a5a36, x, 0.55, z, 0, 0, 0, 4, 1.1, 0.8);
   m.add(G.box, 0xd9c7a5, x, 1.13, z, 0, 0, 0, 4.2, 0.06, 1);
-  colliders.push({ minX: x - 2, maxX: x + 2, minZ: z - 0.45, maxZ: z + 0.45 });
+  colliders.push({ minX: x - 2, maxX: x + 3.05, minZ: z - 0.45, maxZ: z + 0.45 });
+  // Postes del toldo
+  for (const sx of [-3, 3]) colliders.push({ minX: x + sx - 0.12, maxX: x + sx + 0.12, minZ: z + facing * 0.85 - 0.12, maxZ: z + facing * 0.85 + 0.12 });
   // Botellas y vasos
   for (let i = 0; i < 7; i++) m.add(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], x - 1.6 + i * 0.52, 1.36, z - facing * 0.25, 0, 0, 0, 0.11, 0.42, 0.11);
   for (let i = 0; i < 4; i++) m.add(G.cyl, 0xfff4b0, x - 1 + i * 0.6, 1.24, z + facing * 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
@@ -215,7 +220,8 @@ function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => numb
     for (const [dx, dz] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) m.add(G.box, 0x9a6a3a, cx + dx, 0.22, cz + dz, 0, 0, 0, 0.04, 0.45, 0.04);
   }
   if (r() < 0.8) m.add(G.cyl, 0xe9e2b8, x + 0.25, 0.86, z - 0.1, 0, 0, 0, 0.12, 0.18, 0.12);
-  colliders.push({ minX: x - 0.55, maxX: x + 0.55, minZ: z - 0.55, maxZ: z + 0.55 });
+  // Mesa y las dos sillas a los lados
+  colliders.push({ minX: x - 1.2, maxX: x + 1.2, minZ: z - 0.55, maxZ: z + 0.55 });
 }
 
 export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
@@ -333,6 +339,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
       m.add(G.box, 0x8a5a36, bx + sx * 0.22, 0.75, bz, 0, 0, 0, 0.06, 0.5, 2);
       m.add(G.box, 0x333333, bx, 0.22, bz - 0.8, 0, 0, 0, 0.45, 0.45, 0.06);
       m.add(G.box, 0x333333, bx, 0.22, bz + 0.8, 0, 0, 0, 0.45, 0.45, 0.06);
+      colliders.push({ minX: bx - 0.3, maxX: bx + 0.3, minZ: bz - 1, maxZ: bz + 1 });
     }
   }
   // Arena en la plaza, donde saltan los ases
@@ -418,6 +425,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     marcPos: new THREE.Vector3(1.5, 0, 22),
     plazaCenter: new THREE.Vector3(0, 0, 14),
     crowds,
+    people: spots.map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
     lights,
     sky,
     sun,

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Walker } from '../core/walker';
+import { Walker, type Circle } from '../core/walker';
 import { Confetti, toon, vibrate } from '../core/gfx';
 import { FERRERIES, NAMES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld } from './ferreries';
@@ -89,6 +89,7 @@ export class Level1 implements Level {
   private busy = false; // diálogo abierto
   private endingT = 0;
   private pendingAction: (() => void) | null = null;
+  private solids: Circle[] = [];
 
   // temporales reutilizables
   private v1 = new THREE.Vector3();
@@ -108,6 +109,7 @@ export class Level1 implements Level {
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI / 2;
+    this.solids.push(...this.world.people);
 
     this.tofol = makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
     this.tofol.root.position.copy(this.world.tofolPos);
@@ -415,7 +417,16 @@ export class Level1 implements Level {
     const pp = this.player.root.position;
     this.walker.turn(this.input.consumeCam());
     const ax = this.busy || ending ? { x: 0, y: 0 } : this.input.axes();
-    const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds);
+    // Obstáculos redondos: el público y los ases (dos círculos a lo largo del cuerpo)
+    this.solids.length = this.world.people.length;
+    let k = this.solids.length;
+    for (const s of this.donkeys) {
+      const r = s.d.root;
+      const fx = Math.sin(r.rotation.y);
+      const fz = Math.cos(r.rotation.y);
+      for (const o of [0.55, -0.5]) this.solids[k++] = { x: r.position.x + fx * o, z: r.position.z + fz * o, r: 0.5 };
+    }
+    const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds, this.solids);
     this.invuln -= dt;
     this.player.root.rotation.y = this.walker.facing;
     this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
@@ -443,7 +454,7 @@ export class Level1 implements Level {
         p.mesh.rotation.y += dt * 2;
         p.mesh.position.y = p.home.y + Math.sin(this.t * 3) * 0.08;
         this.v1.copy(p.home).setY(0);
-        if (this.v1.distanceTo(this.v2.copy(pp).setY(0)) < 1.6) {
+        if (this.v1.distanceTo(this.v2.copy(pp).setY(0)) < 1.9) {
           p.taken = true;
           p.mesh.visible = false;
           this.pomadaCount++;
