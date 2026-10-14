@@ -13,10 +13,17 @@ export const quality = {
   grain: true,
   /** Luz de entorno a partir del cielo (PMREM). */
   env: true,
+  /** Último recurso si el PBR no se dibuja en el dispositivo: materiales Lambert, más simples. */
+  lambert: false,
 };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
 export function toon(params: THREE.MeshStandardMaterialParameters) {
+  if (quality.lambert) {
+    const { roughness: _r, metalness: _m, envMapIntensity: _e, ...rest } = params;
+    void _r, void _m, void _e;
+    return new THREE.MeshLambertMaterial(rest as THREE.MeshLambertMaterialParameters) as unknown as THREE.MeshStandardMaterial;
+  }
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
   addGrain(m);
   return m;

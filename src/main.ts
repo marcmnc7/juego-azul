@@ -8,7 +8,7 @@ import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import type { Level, LevelResult } from './world/level';
-import { applyShadows, quality, removeEnvironment, setEnvRenderer } from './core/gfx';
+import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -59,6 +59,61 @@ renderer.setPixelRatio(ratio);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
 setEnvRenderer(renderer);
+
+/**
+ * Autocomprobación al arrancar: dibuja un cubo verde con los mismos efectos que el juego en una
+ * imagen diminuta y mira si de verdad sale verde. Si en este dispositivo no se ve (hay GPUs que no
+ * dan error pero no pintan), se van quitando efectos hasta que se vea.
+ */
+function gfxSelfTest(): boolean {
+  const sc = new THREE.Scene();
+  const sky = new Sky({ top: 0x4060ff, mid: 0x6080ff, bottom: 0x8090ff });
+  sc.add(sky.group);
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+  const sun = new THREE.DirectionalLight(0xffffff, 2);
+  sun.position.set(1, 3, 2);
+  sun.castShadow = quality.shadows;
+  sc.add(sun);
+  const mat = toon({ color: 0x30c050 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat);
+  box.castShadow = box.receiveShadow = true;
+  sc.add(box);
+  applyEnvironment(sc);
+  const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
+  cam.position.set(0, 0, 5);
+  cam.lookAt(0, 0, 0);
+  const rt = new THREE.WebGLRenderTarget(16, 16);
+  const px = new Uint8Array(4);
+  try {
+    renderer.setRenderTarget(rt);
+    renderer.render(sc, cam);
+    renderer.readRenderTargetPixels(rt, 8, 8, 1, 1, px);
+  } catch (e) {
+    console.warn('[gfx] autocomprobación', e);
+  }
+  renderer.setRenderTarget(null);
+  rt.dispose();
+  box.geometry.dispose();
+  mat.dispose();
+  sc.environment?.dispose();
+  const ok = px[1] > px[0] + 25 && px[1] > px[2] + 10;
+  if (!ok) console.warn('[gfx] autocomprobación falla', Array.from(px), JSON.stringify(quality));
+  return ok;
+}
+if (!gfxSelfTest()) {
+  quality.grain = false;
+  if (!gfxSelfTest()) {
+    quality.env = false;
+    if (!gfxSelfTest()) {
+      quality.shadows = false;
+      renderer.shadowMap.enabled = false;
+      if (!gfxSelfTest()) {
+        quality.lambert = true;
+        gfxSelfTest();
+      }
+    }
+  }
+}
 renderer.info.autoReset = false;
 
 // Postproceso: MSAA, bloom en las luces, viñeta y un toque de color de cine.
@@ -226,7 +281,7 @@ function frame() {
   }
   if (stats) {
     const i = renderer.info.render;
-    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}`;
+    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}${quality.grain && quality.env && !quality.lambert ? '' : ' · seguro ' + (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + (quality.lambert ? 'L' : '')}`;
   }
 }
 renderer.setAnimationLoop(frame);
