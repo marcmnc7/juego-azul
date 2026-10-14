@@ -788,7 +788,7 @@ export class Level3 implements Level {
     this.player.root.rotation.y = this.walker.facing;
     const live = this.phase === 'rhythm' || this.phase === 'ending';
     if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
-    else animatePerson(this.player, dt, mag > 0.05 ? 'walk' : 'idle', mag, this.walker.walk);
+    else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
     if (live) animatePerson(this.gas, dt, 'dance', 0, beat * Math.PI + 1);
     else animatePerson(this.gas, dt, 'wave');
     animatePerson(this.barman, dt, this.player.root.position.distanceTo(BAR_POS) < 4 ? 'talk' : 'idle');

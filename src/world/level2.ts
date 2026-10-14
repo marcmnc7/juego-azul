@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
-import { G, Merger, makeCar, makeScallop, vertexMat } from '../entities/models';
+import { G, Merger, makeCar, makeScallop, vertexMat, CarRig } from '../entities/models';
+import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, addOutline, applyShadows } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
@@ -141,6 +142,8 @@ export class Level2 implements Level {
   private car = makeCar(0xd7263d);
   private carZ = 0;
   private carX = 0;
+  private carVX = 0;
+  private rig: CarRig | null = null;
   private lane = 1;
   private speed = 0;
   private hitT = 0;
@@ -644,14 +647,18 @@ export class Level2 implements Level {
     if (turbo && Math.random() < dt * 20) this.fx.burst(this.car.root.position.clone().setY(0.3).setZ(this.carZ - 2), 'dust', 1, 0.8, 0.2);
     this.carZ += this.speed * dt;
     if (drive) this.dist = this.carZ - this.legStart;
-    this.carX += (LANES[this.lane] - this.carX) * Math.min(1, dt * 8);
+    // Cambio de carril con volante y masa: el coche se desplaza con un muelle, no de golpe
+    const prevVX = this.carVX;
+    [this.carX, this.carVX] = spring(this.carX, this.carVX, LANES[this.lane], 9, dt);
+    const latAccel = dt > 0 ? (this.carVX - prevVX) / dt : 0;
 
     const car = this.car;
     car.root.position.set(this.carX, 0, this.carZ);
-    car.root.rotation.y = (LANES[this.lane] - this.carX) * 0.08;
-    car.body.position.y = Math.abs(Math.sin(this.t * 18)) * 0.03 * (this.speed / MAX_SPEED);
-    car.body.rotation.z = this.hitT > 0 ? Math.sin(this.t * 30) * 0.06 : 0;
-    car.wheels.forEach((w) => (w.rotation.x += (this.speed * dt) / 0.34));
+    // El morro apunta hacia donde va el coche
+    car.root.rotation.y = Math.atan2(this.carVX, Math.max(this.speed, 3));
+    if (!this.rig) this.rig = new CarRig(car);
+    this.rig.update(dt, this.speed, latAccel);
+    if (this.hitT > 0) car.body.rotation.z += Math.sin(this.t * 30) * 0.05 * Math.min(1, this.hitT * 2);
     car.joy.rotation.y = Math.sin(this.t * 3) * 0.3;
     car.joy.position.y = 1.18 + Math.sin(this.t * 6) * 0.03 + (this.combo % 5 === 0 && this.combo > 0 ? Math.abs(Math.sin(this.t * 14)) * 0.12 : 0);
 
@@ -831,6 +838,7 @@ export class Level2 implements Level {
     this.speed = 0;
     this.lane = 1;
     this.carX = 0;
+    this.carVX = 0;
     this.phase = 'drive2';
     this.updateHud();
   }

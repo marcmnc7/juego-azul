@@ -5,7 +5,7 @@ import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { NIGHT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeDog, makeCar, animatePerson, Person, Dog } from '../entities/models';
+import { CarRig, G, Merger, makePerson, makeDog, makeCar, animatePerson, Person, Dog } from '../entities/models';
 import { buildStreet, STREET } from './homeStreet';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, fadeFlash, Hud, DebugItem } from '../ui/ui';
@@ -83,6 +83,8 @@ export class Level4 implements Level {
   private v2 = new THREE.Vector3();
   // Coche y viaje
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
+  private rig: CarRig | null = null;
+  private joyVel = new THREE.Vector2();
   private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95 };
   private driveT = 0;
   private driveTalkDone = false;
@@ -525,7 +527,7 @@ export class Level4 implements Level {
       if (swimming) {
         this.swimPose(this.player, move);
         if (move > 0.3 && Math.random() < dt * 6) this.fx.burst(this.v1.copy(pp).setY(WATER_Y + 0.2), '💦', 1, 1, 0.4);
-      } else animatePerson(this.player, dt, move > 0.05 ? 'walk' : 'idle', move, this.walker.walk);
+      } else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     }
 
     this.updateGas(dt);
@@ -662,19 +664,40 @@ export class Level4 implements Level {
     const dx = tx - j.position.x;
     const dz = tz - j.position.z;
     const d = Math.hypot(dx, dz);
-    let speed = 0;
-    if (d > 0.5) {
-      speed = Math.min(5.5, d * 3);
-      j.position.x += (dx / d) * speed * dt;
-      j.position.z += (dz / d) * speed * dt;
-      j.rotation.y = Math.atan2(dx, dz);
+    // Joy tiene inercia: arranca al trote, frena con las patas y gira en curva, no en el sitio
+    const want = d > 0.6 ? Math.min(6, (d - 0.5) * 3) : 0;
+    const v = this.joyVel;
+    const wx = d > 1e-3 ? (dx / d) * want : 0;
+    const wz = d > 1e-3 ? (dz / d) * want : 0;
+    const ex = wx - v.x;
+    const ey = wz - v.y;
+    const el = Math.hypot(ex, ey);
+    if (el > 1e-4) {
+      const step = Math.min(el, (want > v.length() ? 14 : 20) * dt);
+      v.x += (ex / el) * step;
+      v.y += (ey / el) * step;
     }
+    const ox = j.position.x;
+    const oz = j.position.z;
+    j.position.x += v.x * dt;
+    j.position.z += v.y * dt;
     j.position.x = Math.max(area.minX, Math.min(area.maxX, j.position.x));
     j.position.z = Math.max(area.minZ, Math.min(area.maxZ, j.position.z));
-    this.joyWalk += dt * speed * 3;
-    const w = Math.sin(this.joyWalk) * 0.6 * Math.min(1, speed / 2);
-    this.joy.legs[0].rotation.x = this.joy.legs[3].rotation.x = w;
-    this.joy.legs[1].rotation.x = this.joy.legs[2].rotation.x = -w;
+    const moved = Math.hypot(j.position.x - ox, j.position.z - oz);
+    const speed = dt > 0 ? moved / dt : 0;
+    if (speed > 0.3) {
+      const turn = Math.atan2(Math.sin(Math.atan2(v.x, v.y) - j.rotation.y), Math.cos(Math.atan2(v.x, v.y) - j.rotation.y));
+      j.rotation.y += Math.sign(turn) * Math.min(Math.abs(turn), dt * 10);
+    }
+    // Zancada de perro: ciclo ligado a la distancia; al correr, galope (patas de cada par juntas)
+    this.joyWalk += moved / 0.16;
+    const gallop = THREE.MathUtils.smoothstep(speed, 2.5, 4.5);
+    const w = Math.sin(this.joyWalk) * (0.35 + 0.35 * gallop) * Math.min(1, speed / 1.5);
+    const pair = 1 - 2 * gallop; // 1 = trote (diagonales), -1 = galope (pares juntos)
+    this.joy.legs[0].rotation.x = w;
+    this.joy.legs[2].rotation.x = -w;
+    this.joy.legs[1].rotation.x = -w * pair;
+    this.joy.legs[3].rotation.x = w * pair;
     this.joy.tail.rotation.z = Math.sin(this.t * 14) * 0.6;
     if (this.phase === 'stars' || this.phase === 'ending') j.rotation.y = Math.PI / 2;
     this.barkT -= dt;
@@ -722,8 +745,8 @@ export class Level4 implements Level {
     const prev = this.car.root.position.x;
     this.placeCar(THREE.MathUtils.lerp(CAR_START_X, CAR_STOP_X, e));
     const dx = this.car.root.position.x - prev;
-    this.car.wheels.forEach((w) => (w.rotation.x += dx / 0.34));
-    this.car.body.position.y = Math.abs(Math.sin(this.t * 14)) * 0.02 * Math.min(1, Math.abs(dx) / dt / 6);
+    if (!this.rig) this.rig = new CarRig(this.car);
+    this.rig.update(dt, dt > 0 ? dx / dt : 0, 0, 1.4); // calle de pueblo: algo más de bache
     if (k >= 1 && this.driveTalkDone && this.busy && this.phase === 'drive') {
       this.phase = 'arrive';
       fadeFlash(() => this.arriveHome());

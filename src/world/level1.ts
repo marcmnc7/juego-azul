@@ -480,7 +480,7 @@ export class Level1 implements Level {
 
     if (ending) animatePerson(this.player, dt, 'dance', 0, this.t * 8);
     else if (this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
-    else animatePerson(this.player, dt, move > 0.05 ? 'walk' : 'idle', move, this.walker.walk);
+    else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     // Con una pomada en la mano, el brazo va un poco adelantado
     const carrying = this.pomadaCount > 0 && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc');
     this.inHand.visible = carrying;

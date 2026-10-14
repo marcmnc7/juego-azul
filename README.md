@@ -18,6 +18,7 @@ Juego 3D para el móvil (Three.js + Vite + TypeScript) para el cumpleaños de Ma
 - Cap. 2: carril deslizando el dedo o con ◀ ▶, barra de ruta, ⛽ turbo, 🚬 que Gas confisca, adelantamientos "por los pelos" y rachas de fotos con Joy ladrando.
 - Cap. 3: seis cabinas azules de WC con luz libre/ocupado, multitud de más de 200 personas con un pasillo serpenteante; pantallas con ecualizador, láseres, mecheros en el público, chispas y fuegos con las rachas del minijuego.
 - Cap. 4: casa adosada con placas solares, camino de losas, sombrilla azul, piscina con luz y Joy siguiéndola; de noche con vía láctea, luna y luciérnagas.
+- Física y movimiento: Azul tiene masa (arranca en ~0,35 s, frena antes, girar en seco la frena), el paso va ligado a la distancia para que los pies no patinen, pasa de andar a correr con brazos doblados y tronco girando, se inclina al acelerar y hacia dentro en las curvas, los empujones la desplazan y le quitan el control un momento, y contra una pared se para en vez de resbalar. Cámara con muelle tipo steadicam y un leve balanceo al correr. El coche tiene suspensión (cabecea al acelerar y frenar, se inclina en las curvas, vibra con el asfalto) y cambia de carril con volante. Joy acelera, frena, gira en curva y pasa de trote a galope.
 - Cada capítulo empieza con un rótulo y acaba con una caja regalo que se abre con confeti, 1-3 estrellas y datos de la partida.
 
 Guiños: Azul y Gas, los "Buu", el inglés de Gas, dejar de fumar, Joy.

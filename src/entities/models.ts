@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toon, addOutline } from '../core/gfx';
+import { spring } from '../core/walker';
 
 // Personajes y decorado hechos con primitivas low-poly y sombreado "cel":
 // no hay que descargar modelos y el juego entero cabe en un único archivo.
@@ -278,7 +279,18 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
 }
 
 /** Anima un personaje: andar, bailar, saludar, celebrar, hablar o reposo (respira y parpadea). */
-export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0, phase?: number) {
+export interface Lean {
+  leanFwd: number;
+  leanSide: number;
+}
+
+/**
+ * Animación procedural del cuerpo. En 'walk', phase es la fase del paso (ligada a la distancia
+ * recorrida) y move la velocidad 0..1: andando los brazos van sueltos y el paso es corto; corriendo
+ * la zancada se alarga, los brazos se doblan y bombean, el tronco gira contra las caderas y la
+ * cabeza se mantiene estable. Con lean, todo el cuerpo se inclina al acelerar y hacia dentro en las curvas.
+ */
+export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0, phase?: number, lean?: Lean) {
   p.t += dt;
   const t = phase ?? p.t;
   // Parpadeo
@@ -297,14 +309,28 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
   switch (mode) {
     case 'walk': {
       const s = Math.sin(t);
+      const c = Math.cos(t);
       const k = Math.min(1, move);
-      p.body.position.y = Math.abs(Math.cos(t)) * 0.07 * k;
-      p.body.rotation.z = s * 0.04 * k;
-      p.legL.rotation.x = s * 0.8 * k;
-      p.legR.rotation.x = -s * 0.8 * k;
-      p.armL.rotation.x = -s * 0.7 * k;
-      p.armR.rotation.x = s * 0.7 * k;
-      p.head.rotation.x = 0.05 * k;
+      const run = THREE.MathUtils.smoothstep(k, 0.45, 0.9); // de andar a correr
+      const legAmp = 0.35 + 0.45 * k + 0.15 * run;
+      const armAmp = 0.25 + 0.35 * k;
+      // Altura: dos rebotes por ciclo, más marcados corriendo (fase de vuelo)
+      p.body.position.y = (Math.abs(c) * (0.025 + 0.06 * run) - 0.02 * run) * Math.max(k, 0.3);
+      // Caderas y hombros en contra: el tronco gira con el brazo que va delante
+      p.body.rotation.y = -s * (0.06 + 0.1 * run) * k;
+      p.body.rotation.z = s * 0.035 * k;
+      // Pierna que avanza un poco más que la que empuja (la de atrás se recoge)
+      p.legL.rotation.x = (s > 0 ? s : s * 0.8) * legAmp;
+      p.legR.rotation.x = (s < 0 ? -s : -s * 0.8) * legAmp;
+      // Brazos: sueltos andando, doblados y bombeando corriendo
+      p.armL.rotation.x = -s * armAmp - 0.35 * run;
+      p.armR.rotation.x = s * armAmp - 0.35 * run;
+      p.armL.rotation.z = -0.1 - 0.12 * run;
+      p.armR.rotation.z = 0.1 + 0.12 * run;
+      // La cabeza compensa el giro del tronco y mira al frente
+      p.head.rotation.y = -p.body.rotation.y * 0.85;
+      p.head.rotation.x = 0.04 * k - Math.abs(c) * 0.03 * run;
+      p.head.rotation.z = -p.body.rotation.z * 0.7;
       break;
     }
     case 'dance': {
@@ -339,10 +365,18 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
     default: {
       // Respiración
       p.body.position.y = Math.sin(t * 2) * 0.012;
+      // Cambio de peso de una pierna a otra, muy lento
+      p.body.rotation.z = Math.sin(t * 0.37) * 0.018;
+      p.head.rotation.z = -p.body.rotation.z * 0.6;
       p.head.rotation.y = Math.sin(t * 0.5) * 0.15;
       p.armL.rotation.z = -0.12 - Math.sin(t * 2) * 0.02;
       p.armR.rotation.z = 0.12 + Math.sin(t * 2) * 0.02;
     }
+  }
+  if (lean) {
+    // Inclinación del cuerpo entero desde los pies
+    p.body.rotation.x += lean.leanFwd;
+    p.body.rotation.z += lean.leanSide;
   }
 }
 
@@ -542,4 +576,53 @@ export function makeScallop() {
   meat.position.y = 0.16;
   g.add(shell, rim, meat);
   return { root: g, meat };
+}
+
+/**
+ * Suspensión de coche: la carrocería cabecea al acelerar y frenar, se inclina hacia fuera en las
+ * curvas y vibra con el asfalto, con muelles poco amortiguados (rebota un poco y se asienta). Las
+ * ruedas giran según la distancia recorrida.
+ */
+export class CarRig {
+  private pitch = 0;
+  private pitchV = 0;
+  private roll = 0;
+  private rollV = 0;
+  private bounce = 0;
+  private bounceV = 0;
+  private prevSpeed = 0;
+  private accelF = 0;
+  private t = 0;
+  constructor(private car: { body: THREE.Object3D; wheels: THREE.Object3D[] }) {}
+
+  private static osc(x: number, v: number, target: number, omega: number, zeta: number, dt: number): [number, number] {
+    v += (omega * omega * (target - x) - 2 * zeta * omega * v) * dt;
+    return [x + v * dt, v];
+  }
+
+  /** Golpe seco (bache, roce): un empujón a la suspensión. */
+  kick(roll: number, bounce = 0) {
+    this.rollV += roll;
+    this.bounceV += bounce;
+  }
+
+  /** speed: m/s hacia delante; lateral: aceleración lateral en m/s² (+ = hacia la izquierda del coche, eje x local). */
+  update(dt: number, speed: number, lateral = 0, rough = 1) {
+    if (dt <= 0) return;
+    const h = Math.min(dt, 1 / 30);
+    this.t += dt;
+    const raw = (speed - this.prevSpeed) / dt;
+    this.prevSpeed = speed;
+    [this.accelF] = spring(this.accelF, 0, raw, 12, dt);
+    const sp = Math.min(1, Math.abs(speed) / 10);
+    const road = (Math.sin(this.t * 23.0) * 0.5 + Math.sin(this.t * 37.0 + 1.3) * 0.3 + Math.sin(this.t * 7.1) * 0.6) * 0.008 * sp * rough;
+    [this.bounce, this.bounceV] = CarRig.osc(this.bounce, this.bounceV, road, 16, 0.35, h);
+    [this.pitch, this.pitchV] = CarRig.osc(this.pitch, this.pitchV, THREE.MathUtils.clamp(-this.accelF * 0.007, -0.06, 0.06), 8, 0.4, h);
+    [this.roll, this.rollV] = CarRig.osc(this.roll, this.rollV, THREE.MathUtils.clamp(lateral * 0.009, -0.07, 0.07), 8, 0.38, h);
+    const b = this.car.body;
+    b.position.y = this.bounce + Math.abs(this.pitch) * 0.3;
+    b.rotation.x = this.pitch;
+    b.rotation.z = this.roll;
+    for (const w of this.car.wheels) w.rotation.x += (speed * dt) / 0.34;
+  }
 }
