@@ -8,7 +8,12 @@ import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import type { Level, LevelResult } from './world/level';
-import { applyShadows, quality } from './core/gfx';
+import { applyShadows, quality, setEnvRenderer } from './core/gfx';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, debugPanel, closeDialogue, chapterCard } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -16,7 +21,7 @@ const uiRoot = document.getElementById('ui')!;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = quality.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -24,6 +29,39 @@ let ratio = Math.min(maxRatio, 1.5);
 renderer.setPixelRatio(ratio);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
+setEnvRenderer(renderer);
+renderer.info.autoReset = false;
+
+// Postproceso: MSAA, bloom en las luces, viñeta y un toque de color de cine.
+const GRADE = {
+  uniforms: { tDiffuse: { value: null }, amount: { value: 0.32 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float amount; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      c.rgb = mix(vec3(l), c.rgb, 1.08);                       // un poco más de saturación
+      c.rgb *= mix(vec3(0.96, 0.98, 1.04), vec3(1.04, 1.0, 0.95), smoothstep(0.0, 0.6, l)); // sombras frías, luces cálidas
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - amount * smoothstep(0.25, 0.8, dot(d, d) * 2.2);  // viñeta
+      gl_FragColor = c;
+    }`,
+};
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+const renderPass = new RenderPass(new THREE.Scene(), camera);
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.38, 0.55, 0.88);
+composer.addPass(renderPass);
+composer.addPass(bloom);
+composer.addPass(new ShaderPass(GRADE));
+composer.addPass(new OutputPass());
+function draw(scene: THREE.Scene) {
+  if (!quality.post) {
+    renderer.render(scene, camera);
+    return;
+  }
+  renderPass.scene = scene;
+  composer.render();
+}
 const input = new Input(canvas, uiRoot);
 let data = load();
 
@@ -34,12 +72,17 @@ const idle = new THREE.Scene();
 idle.background = new THREE.Color(0x2b1840);
 
 // Modo prueba: abrir el enlace terminado en #test (o ?debug en local).
+// ?hq desactiva la bajada automática de calidad (para capturas)
+const HQ = new URLSearchParams(location.search).has('hq');
 const TEST = location.hash === '#test' || new URLSearchParams(location.search).has('debug');
 
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(w, h);
+  bloom.resolution.set(w / 2, h / 2);
   camera.aspect = w / h;
   // En vertical abrimos más el plano para que se vea algo de calle
   camera.fov = w < h ? 75 : 60;
@@ -131,18 +174,20 @@ if (stats) {
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
+  renderer.info.reset();
   if (level) {
     level.update(dt);
-    renderer.render(level.threeScene, camera);
+    draw(level.threeScene);
   } else {
-    renderer.render(idle, camera);
+    draw(idle);
   }
   avg = avg * 0.95 + dt * 1000 * 0.05;
   const now = clock.elapsedTime;
-  if (level && now - lastAdjust > 2 && performance.now() - levelAt > 4000) {
+  if (level && !HQ && now - lastAdjust > 2 && performance.now() - levelAt > 4000) {
     lastAdjust = now;
     if (avg > 24 && ratio > 1) ratio = Math.max(1, ratio - 0.25);
-    else if (avg > 28 && quality.shadows) dropShadows();
+    else if (avg > 28 && quality.post) quality.post = false; // primero fuera el postproceso
+    else if (avg > 30 && quality.shadows) dropShadows();
     else if (avg < 15 && ratio < maxRatio) ratio = Math.min(maxRatio, ratio + 0.25);
     if (renderer.getPixelRatio() !== ratio) {
       renderer.setPixelRatio(ratio);

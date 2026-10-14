@@ -5,7 +5,7 @@ import { toon, addOutline } from '../core/gfx';
 // Personajes y decorado hechos con primitivas low-poly y sombreado "cel":
 // no hay que descargar modelos y el juego entero cabe en un único archivo.
 
-const matCache = new Map<number, THREE.MeshToonMaterial>();
+const matCache = new Map<number, THREE.MeshStandardMaterial>();
 export function mat(color: number) {
   let m = matCache.get(color);
   if (!m) {

@@ -256,7 +256,7 @@ export class Level2 implements Level {
     this.ground.userData.noCast = this.road.userData.noCast = true;
     sc.add(this.road);
 
-    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 400).rotateX(-Math.PI / 2), toon({ color: 0x2f7fb5 }));
+    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 400).rotateX(-Math.PI / 2), toon({ color: 0x2f7fb5, roughness: 0.18, metalness: 0.05 }));
     this.sea.position.set(170, 0.05, 0);
     this.sea.visible = false;
     sc.add(this.sea);

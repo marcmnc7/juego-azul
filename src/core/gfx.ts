@@ -1,26 +1,96 @@
 import * as THREE from 'three';
 
-// Aspecto visual común: sombreado "cel" (toon), contornos de dibujo animado, sombras reales,
-// cielo con nubes y un ajuste de calidad que baja solo si el móvil no llega.
+// Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
+// sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
+// móvil no llega. (El antiguo estilo "dibujo animado" con contornos se puede recuperar con
+// quality.outlines = true.)
 
 export const quality = {
   shadows: true,
-  outlines: true,
+  outlines: false,
+  post: true,
 };
 
-let gradient: THREE.DataTexture | null = null;
-/** Rampa de 4 tonos para MeshToonMaterial. */
-export function toonGradient() {
-  if (gradient) return gradient;
-  const data = new Uint8Array([110, 110, 110, 255, 175, 175, 175, 255, 225, 225, 225, 255, 255, 255, 255, 255]);
-  gradient = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
-  gradient.minFilter = gradient.magFilter = THREE.NearestFilter;
-  gradient.needsUpdate = true;
-  return gradient;
+/** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
+export function toon(params: THREE.MeshStandardMaterialParameters) {
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
+  addGrain(m);
+  return m;
 }
 
-export function toon(params: THREE.MeshToonMaterialParameters) {
-  return new THREE.MeshToonMaterial({ gradientMap: toonGradient(), ...params });
+/**
+ * Variación sutil de color y rugosidad según la posición en el mundo (ruido en dos escalas), para
+ * que ninguna superficie sea un color plano: paredes con manchas, suelo con desgaste, ropa con textura.
+ */
+export function addGrain(m: THREE.MeshStandardMaterial, amount = 0.14) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vGrainPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        #else
+          vGrainPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        #endif`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vGrainPos;
+        float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float gNoise(vec3 x) {
+          vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(gHash(i), gHash(i + vec3(1,0,0)), f.x), mix(gHash(i + vec3(0,1,0)), gHash(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(gHash(i + vec3(0,0,1)), gHash(i + vec3(1,0,1)), f.x), mix(gHash(i + vec3(0,1,1)), gHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+        }`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float gN = gNoise(vGrainPos * 0.6) * 0.6 + gNoise(vGrainPos * 4.0) * 0.3 + gNoise(vGrainPos * 19.0) * 0.1;
+        diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);`,
+      );
+  };
+  m.customProgramCacheKey = () => 'grain' + amount;
+}
+
+/**
+ * Luz ambiente realista: convierte el cielo del nivel (cúpula, sol, nubes, estrellas) en un mapa
+ * de entorno prefiltrado, para que cada material recoja el color del cielo de forma física.
+ */
+let pmrem: THREE.PMREMGenerator | null = null;
+export function setEnvRenderer(r: THREE.WebGLRenderer) {
+  pmrem = new THREE.PMREMGenerator(r);
+}
+export function applyEnvironment(scene: THREE.Scene) {
+  if (!pmrem || scene.userData.envDone) return;
+  scene.userData.envDone = true;
+  let sky: THREE.Object3D | null = null;
+  scene.traverse((o) => {
+    if (o.userData.sky) sky = o;
+  });
+  const tmp = new THREE.Scene();
+  if (sky) {
+    const c = (sky as THREE.Object3D).clone();
+    c.position.set(0, 0, 0);
+    tmp.add(c);
+  } else tmp.background = scene.background instanceof THREE.Color ? scene.background : new THREE.Color(0x888899);
+  const rt = pmrem.fromScene(tmp, 0.03, 0.1, 1000);
+  scene.environment = rt.texture;
+  scene.environmentIntensity = 0.9;
+  // Con el cielo aportando luz, las luces hemisféricas sobran en parte
+  scene.traverse((o) => {
+    const h = o as THREE.HemisphereLight;
+    if (h.isHemisphereLight) h.intensity *= 0.55;
+  });
 }
 
 // Contorno: se dibuja la cara trasera inflada a lo largo de la normal.
@@ -40,6 +110,7 @@ export function outlineMat(thickness = 0.025) {
 
 /** Añade contorno a todas las mallas de un objeto (personajes, animales, coche). */
 export function addOutline(obj: THREE.Object3D, thickness = 0.025) {
+  if (!quality.outlines) return obj;
   const meshes: THREE.Mesh[] = [];
   obj.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -70,6 +141,7 @@ export function applyShadows(scene: THREE.Object3D) {
     m.receiveShadow = true;
     m.castShadow = !m.userData.noCast;
   });
+  if ((scene as THREE.Scene).isScene) applyEnvironment(scene as THREE.Scene);
 }
 
 /** Sol con sombra que sigue a un punto (la jugadora o el coche). */
@@ -82,7 +154,8 @@ export class Sun {
     this.offset = dir.clone().normalize().multiplyScalar(40);
     this.light.castShadow = quality.shadows;
     const s = this.light.shadow;
-    s.mapSize.set(1024, 1024);
+    s.mapSize.set(2048, 2048);
+    s.radius = 3;
     s.camera.left = s.camera.bottom = -range;
     s.camera.right = s.camera.top = range;
     s.camera.near = 1;
@@ -168,6 +241,7 @@ export class Sky {
     for (let i = 0; i < pos.count; i++) this.ys[i] = pos.getY(i) / 420;
     this.colors = new THREE.BufferAttribute(new Float32Array(pos.count * 3), 3);
     geo.setAttribute('color', this.colors);
+    this.group.userData.sky = true;
     const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
     dome.renderOrder = -10;
     this.group.add(dome);

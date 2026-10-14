@@ -48,8 +48,8 @@ export class Terrace {
     sc.fog = new THREE.Fog(0xcfe3e8, 30, 90);
     this.sky = new Sky({ top: 0x4f86c6, mid: 0x9fc6e0, bottom: 0xdcebf0, sun: { color: 0xfff2c8, dir: new THREE.Vector3(0.5, 0.6, -1) }, clouds: { count: 10, tint: 0xffffff } });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xeaf4ff, 0x8a8070, 1.35));
-    new Sun(sc, 0xfff4e0, 1.7, new THREE.Vector3(0.6, 1, -0.8), 10);
+    sc.add(new THREE.HemisphereLight(0xeaf4ff, 0x8a8070, 0.95));
+    new Sun(sc, 0xfff4e0, 1.45, new THREE.Vector3(0.6, 1, -0.8), 10);
     this.fx = new Particles(sc);
 
     const m = new Merger();
@@ -58,7 +58,7 @@ export class Terrace {
     const STONE = 0xe6e0d2;
     const BLUE = 0x2a4fb0;
     // Suelo de la terraza (losas claras), bordillo y calle
-    m.add(G.box, 0xd9d3c6, 0, -0.05, 0.5, 0, 0, 0, 30, 0.1, 6);
+    m.add(G.box, 0xc4bcae, 0, -0.05, 0.5, 0, 0, 0, 30, 0.1, 6);
     m.add(G.box, 0xbdb6a8, 0, -0.03, -2.55, 0, 0, 0, 30, 0.12, 0.2);
     m.add(G.box, 0x6d6d72, 0, -0.08, -8, 0, 0, 0, 30, 0.1, 11);
 
