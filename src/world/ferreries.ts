@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { G, Merger, personGeometry, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture } from '../core/gfx';
 import type { Circle } from '../core/walker';
+import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
 
 // Ferreries en fiestas al atardecer: calle mayor de este a oeste, plaza con la iglesia al norte,
 // casas encaladas con persianas verdes, macetas, farolillos, banderines y bares llenos.
@@ -16,6 +17,16 @@ export interface Box2 {
 export interface Crowd {
   mesh: THREE.InstancedMesh;
   base: { x: number; z: number; ry: number; phase: number; speed: number }[];
+  /** Bailarines de los bares: segunda postura que se alterna con la primera. */
+  alt?: THREE.InstancedMesh;
+}
+
+/** Sitio de un balcón donde colgar una bandera. */
+interface Hang {
+  x: number;
+  y: number;
+  z: number;
+  facing: 1 | -1;
 }
 
 export interface FerreriesWorld {
@@ -31,6 +42,11 @@ export interface FerreriesWorld {
   /** Gente del público como obstáculos redondos. */
   people: Circle[];
   lights: THREE.Points;
+  /** Luces de colores de los bares (parpadean con la música). */
+  partyLights: THREE.Points;
+  /** Delante de cada barra: de ahí salen las notas musicales. */
+  bars: THREE.Vector3[];
+  fabioleraPos: THREE.Vector3;
   sky: Sky;
   sun: Sun;
 }
@@ -99,7 +115,7 @@ interface Lamp {
 }
 
 /** Casa menorquina: blanca, esquinas de marès, persianas, balcón con macetas, tejado de teja. */
-function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: number, facing: 1 | -1, r: () => number, colliders: Box2[], lamps: Lamp[]) {
+function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: number, facing: 1 | -1, r: () => number, colliders: Box2[], lamps: Lamp[], hangs: Hang[]) {
   const h = floors * 3 + 0.4;
   const wall = WHITE[Math.floor(r() * WHITE.length)];
   const shutter = SHUTTERS[Math.floor(r() * SHUTTERS.length)];
@@ -135,6 +151,7 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
           m.add(G.box, 0xe9dcc2, x, y - 0.85, fz + facing * 0.4, 0, 0, 0, 1.8, 0.12, 0.8);
           for (let k = -4; k <= 4; k++) m.add(G.box, 0x222222, x + k * 0.2, y - 0.5, fz + facing * 0.78, 0, 0, 0, 0.03, 0.6, 0.03);
           m.add(G.box, 0x222222, x, y - 0.2, fz + facing * 0.78, 0, 0, 0, 1.8, 0.04, 0.04);
+          hangs.push({ x, y: y - 0.2, z: fz + facing * 0.8, facing });
           for (let k = -1; k <= 1; k++) {
             m.add(G.cyl, 0xb5603b, x + k * 0.55, y - 0.65, fz + facing * 0.5, 0, 0, 0, 0.28, 0.28, 0.28);
             m.add(G.sphere, 0x3e7a3a, x + k * 0.55, y - 0.4, fz + facing * 0.5, 0, 0, 0, 0.42, 0.3, 0.42);
@@ -183,6 +200,16 @@ function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, co
   // Botellas y vasos
   for (let i = 0; i < 7; i++) m.add(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], x - 1.6 + i * 0.52, 1.36, z - facing * 0.25, 0, 0, 0, 0.11, 0.42, 0.11);
   for (let i = 0; i < 4; i++) m.add(G.cyl, 0xfff4b0, x - 1 + i * 0.6, 1.24, z + facing * 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
+  // Botella de gin de Menorca con su asa, para las pomadas
+  m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.45, z + facing * 0.15, 0, 0, 0, 0.26, 0.6, 0.26);
+  m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.85, z + facing * 0.15, 0, 0, 0, 0.1, 0.25, 0.1);
+  m.add(G.smile, 0x9fc9b0, x + 1.75, 1.6, z + facing * 0.15, 0, 0, Math.PI / 2, 0.22, 0.22, 0.3);
+  m.add(G.box, 0xf4efe2, x + 1.6, 1.45, z + facing * 0.29, 0, 0, 0, 0.18, 0.2, 0.01);
+  // Altavoz para la música del bar
+  m.add(G.box, 0x222228, x - 3.6, 0.7, z, 0, 0, 0, 0.7, 1.4, 0.6);
+  m.add(G.cyl, 0x555560, x - 3.6, 0.9, z + facing * 0.31, Math.PI / 2, 0, 0, 0.45, 0.02, 0.45);
+  m.add(G.cyl, 0x555560, x - 3.6, 0.4, z + facing * 0.31, Math.PI / 2, 0, 0, 0.25, 0.02, 0.25);
+  colliders.push({ minX: x - 3.95, maxX: x - 3.25, minZ: z - 0.3, maxZ: z + 0.3 });
   // Barril
   m.add(G.cyl, 0x7a4a2a, x + 2.6, 0.5, z, 0, 0, 0, 0.8, 1, 0.8);
   // Letrero
@@ -224,11 +251,14 @@ function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => numb
   colliders.push({ minX: x - 1.2, maxX: x + 1.2, minZ: z - 0.55, maxZ: z + 0.55 });
 }
 
+const MARC = new THREE.Vector3(-5.2, 0, 21.6);
+
 export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   const group = new THREE.Group();
   const colliders: Box2[] = [];
   const lamps: Lamp[] = [];
   const signs: THREE.Object3D[] = [];
+  const hangs: Hang[] = [];
   const r = rand(42);
 
   scene.fog = new THREE.Fog(0xf0a585, 35, 110);
@@ -255,14 +285,14 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   let x = -50;
   while (x < 50) {
     const w = 5 + Math.floor(r() * 4);
-    house(m, x + w / 2, -9, w, 8, 1 + Math.floor(r() * 3), 1, r, colliders, lamps);
+    house(m, x + w / 2, -9, w, 8, 1 + Math.floor(r() * 3), 1, r, colliders, lamps, hangs);
     x += w;
   }
   for (const [from, to] of [[-50, -12], [12, 50]]) {
     x = from;
     while (x < to) {
       const w = Math.min(to - x, 5 + Math.floor(r() * 4));
-      house(m, x + w / 2, 9, w, 8, 1 + Math.floor(r() * 3), -1, r, colliders, lamps);
+      house(m, x + w / 2, 9, w, 8, 1 + Math.floor(r() * 3), -1, r, colliders, lamps, hangs);
       x += w;
     }
   }
@@ -291,14 +321,38 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     }
   }
 
-  // Iglesia de Sant Bartomeu al fondo de la plaza
-  m.add(G.box, 0xe6d3ad, 0, 5, 30, 0, 0, 0, 14, 10, 8);
+  // Iglesia de Sant Bartomeu al fondo del Pla de l'Església: fachada con frontón y rosetón,
+  // y el campanario a la derecha con arcos, reloj y remate piramidal con cruz.
+  const STONE = 0xe6d3ad;
+  m.add(G.box, STONE, 0, 5, 30, 0, 0, 0, 14, 10, 8);
   m.add(ROOF_GEO, 0xa9573a, 0, 10, 30, 0, Math.PI / 2, 0, 8.4, 3, 14.4);
+  m.add(ROOF_GEO, STONE, 0, 10, 26.1, 0, 0, 0, 14.2, 3.2, 0.3); // frontón
+  m.add(G.box, 0xd8c39a, 0, 10.05, 25.95, 0, 0, 0, 14.4, 0.3, 0.4); // cornisa
   for (const sx of [-7, 7]) m.add(G.box, 0xd8c39a, sx, 5, 26.2, 0, 0, 0, 0.8, 10, 0.6);
-  m.add(G.box, 0xe0cba2, 5.5, 9, 26.5, 0, 0, 0, 3, 18, 3); // campanario
-  m.add(G.box, 0x3b2a20, 5.5, 15.2, 24.98, 0, 0, 0, 1.4, 2.2, 0.06);
-  m.add(G.cone, 0xd9a83a, 5.5, 15.0, 25.2, 0, 0, 0, 0.8, 0.9, 0.8); // campana
-  m.add(G.cone, 0xa9573a, 5.5, 19, 26.5, 0, Math.PI / 4, 0, 3.8, 2.6, 3.8);
+  for (const sx of [-3.6, 3.6]) m.add(G.box, 0xdcc79f, sx, 5, 26.0, 0, 0, 0, 0.5, 10, 0.3); // pilastras
+  m.add(G.box, 0xd8c39a, 0, 13.4, 26.0, 0, 0, 0, 0.15, 1.2, 0.15); // cruz del frontón
+  m.add(G.box, 0xd8c39a, 0, 13.6, 26.0, 0, 0, 0, 0.7, 0.15, 0.15);
+  // Campanario
+  const TX = 8.6;
+  const TZ = 27.4;
+  m.add(G.box, 0xe0cba2, TX, 8, TZ, 0, 0, 0, 3.6, 16, 3.6);
+  for (const y of [5.3, 10.6]) m.add(G.box, 0xd8c39a, TX, y, TZ, 0, 0, 0, 3.9, 0.3, 3.9); // impostas
+  m.add(G.box, 0xd8c39a, TX, 16.15, TZ, 0, 0, 0, 4.1, 0.35, 4.1);
+  m.add(G.box, 0xe0cba2, TX, 18, TZ, 0, 0, 0, 3.2, 3.4, 3.2); // cuerpo de campanas
+  for (const [dx, dz, ry] of [[0, -1.61, 0], [0, 1.61, 0], [-1.61, 0, Math.PI / 2], [1.61, 0, Math.PI / 2]]) {
+    m.add(G.box, 0x2a1d16, TX + dx, 17.8, TZ + dz, 0, ry, 0, 1.3, 2.2, 0.06); // hueco
+    m.add(G.cyl, 0x2a1d16, TX + dx, 18.9, TZ + dz, Math.PI / 2, ry, 0, 1.3, 0.06, 1.3); // arco
+  }
+  m.add(G.cone, 0xd9a83a, TX, 17.5, TZ - 1.0, 0, 0, 0, 0.9, 1.0, 0.9); // campana
+  m.add(G.box, 0xd8c39a, TX, 19.85, TZ, 0, 0, 0, 3.6, 0.3, 3.6);
+  m.add(G.cone, 0xb86a42, TX, 21.2, TZ, 0, Math.PI / 4, 0, 3.6, 2.5, 3.6); // chapitel
+  m.add(G.box, 0x444444, TX, 23.1, TZ, 0, 0, 0, 0.1, 1.4, 0.1);
+  m.add(G.box, 0x444444, TX, 23.3, TZ, 0, 0, 0, 0.7, 0.1, 0.1);
+  m.add(G.cyl, 0xfbf7ee, TX, 13.2, TZ - 1.82, Math.PI / 2, 0, 0, 1.8, 0.08, 1.8); // reloj
+  m.add(G.cyl, 0x2a1d16, TX, 13.2, TZ - 1.88, Math.PI / 2, 0, 0, 0.2, 0.05, 0.2);
+  m.add(G.box, 0x2a1d16, TX, 13.45, TZ - 1.9, 0, 0, 0, 0.06, 0.55, 0.03);
+  m.add(G.box, 0x2a1d16, TX + 0.17, 13.2, TZ - 1.9, 0, 0, 0, 0.38, 0.06, 0.03);
+  colliders.push({ minX: TX - 1.8, maxX: TX + 1.8, minZ: TZ - 1.8, maxZ: TZ + 1.8 });
   m.add(G.box, 0xd8c39a, 0, 2.2, 25.98, 0, 0, 0, 3.4, 4.6, 0.1); // portal
   m.add(G.box, 0x6b4428, 0, 2, 25.9, 0, 0, 0, 2.4, 4, 0.1);
   m.add(G.cyl, 0xd8c39a, 0, 4.1, 25.92, Math.PI / 2, 0, 0, 2.4, 0.1, 2.4);
@@ -307,7 +361,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   m.add(G.cyl, 0x8fb3d9, 0, 7.4, 25.9, Math.PI / 2, 0, 0, 2.2, 0.1, 2.2);
   for (let k = 0; k < 8; k++) m.add(G.box, 0xd8c39a, 0, 7.4, 25.86, 0, 0, (k * Math.PI) / 8, 0.1, 2.2, 0.05);
   for (let k = 0; k < 3; k++) m.add(G.box, 0xcab58e, 0, 0.1 + k * 0.2, 25.3 - k * 0.4, 0, 0, 0, 6 - k, 0.2, 1.2); // escalones
-  colliders.push({ minX: -7, maxX: 7, minZ: 26, maxZ: 34 }, { minX: 4, maxX: 7, minZ: 25, maxZ: 28 });
+  colliders.push({ minX: -7, maxX: 7, minZ: 26, maxZ: 34 });
 
   // Vallas al final de la calle
   for (const ex of [-46, 46]) {
@@ -321,11 +375,13 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   bar(m, 9, 8, 1, 0x2a7a50, colliders, 'Bar Es Pla', signs);
   bar(m, -28, -3.6, 1, 0xc23b3b, colliders, 'Cas Ferrer', signs);
   bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, 'Sa Penya', signs);
+  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, 'Bar Sa Plaça', signs);
+  const barFronts = [new THREE.Vector3(9, 0, 10.2), new THREE.Vector3(-28, 0, -1.6), new THREE.Vector3(30, 0, 1.6), new THREE.Vector3(-7.5, 0, 22.2)];
   const tables: [number, number][] = [[7.5, 18], [-6, 18], [-24, -1.5], [33, 1.2], [-9, 7], [-31, -1.4], [27, 1.3]];
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
 
   // Pinos en la plaza y bancos
-  for (const [px, pz] of [[-8, 21], [8.5, 23]]) {
+  for (const [px, pz] of [[-10.6, 20.4], [8.5, 23]]) {
     m.add(G.cyl, 0x6b4a30, px, 1.8, pz, 0, 0, 0.05, 0.5, 3.6, 0.5);
     m.add(G.sphere, 0x3d6b3a, px, 4.5, pz, 0, 0, 0, 4.4, 2.2, 4.4);
     m.add(G.sphere, 0x4a7d44, px + 0.6, 5.3, pz - 0.4, 0, 0, 0, 3, 1.6, 3);
@@ -370,6 +426,72 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     }
   }
   for (const l of lamps) lightPts.push(l.p.x, l.p.y, l.p.z);
+
+  // ---- Ambiente de Sant Bartomeu ----
+  // Banderas de Menorca y senyeres colgando de los balcones
+  const flagMat = (tex: THREE.Texture) => toon({ map: tex, side: THREE.DoubleSide });
+  const menorcaPlanes: Parameters<typeof mergedPlanes>[0] = [];
+  const senyeraPlanes: Parameters<typeof mergedPlanes>[0] = [];
+  hangs.forEach((h, i) => {
+    if (i % 3 === 2) return;
+    const ry = h.facing > 0 ? 0 : Math.PI;
+    if (i % 3 === 0) menorcaPlanes.push({ w: 1.5, h: 1.0, x: h.x, y: h.y - 0.6, z: h.z + h.facing * 0.03, ry });
+    else senyeraPlanes.push({ w: 0.9, h: 1.35, x: h.x, y: h.y - 0.75, z: h.z + h.facing * 0.03, ry });
+  });
+  const menorcaMat = flagMat(menorcaFlagTexture());
+  const senyeraMat = flagMat(senyeraTexture());
+  if (menorcaPlanes.length) group.add(mergedPlanes(menorcaPlanes, menorcaMat));
+  if (senyeraPlanes.length) group.add(mergedPlanes(senyeraPlanes, senyeraMat));
+
+  // Pancartas de las fiestas cruzando la calle y a la entrada del Pla de l'Església
+  const bannerMat = toon({ map: bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "Jaleo d'Ases · 23, 24 i 25 d'agost") });
+  const banners: Parameters<typeof mergedPlanes>[0] = [];
+  for (const bx of [-34, 22]) {
+    banners.push({ w: 8, h: 2, x: bx, y: 5.3, z: 0, ry: -Math.PI / 2 }, { w: 8, h: 2, x: bx + 0.03, y: 5.3, z: 0, ry: Math.PI / 2 });
+    m.add(G.box, 0x6b5a4a, bx, 6.35, 0, 0, 0, 0, 0.04, 0.04, 10);
+  }
+  banners.push({ w: 9, h: 2.25, x: 0, y: 5.6, z: 5.4, ry: Math.PI }, { w: 9, h: 2.25, x: 0, y: 5.6, z: 5.43, ry: 0 });
+  m.add(G.box, 0x6b5a4a, 0, 6.75, 5.4, 0, 0, 0, 24, 0.04, 0.04);
+  group.add(mergedPlanes(banners, bannerMat));
+
+  // Placas de calle
+  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture('Carrer de Sant Bartomeu') }));
+  sign1.position.set(-41, 3.2, -4.86);
+  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture("Pla de l'Església") }));
+  sign2.position.set(-11.86, 3.0, 14.6);
+  sign2.rotation.y = Math.PI / 2;
+  const sign3 = sign2.clone();
+  sign3.position.set(-13.5, 3.2, 4.86);
+  sign3.rotation.y = Math.PI;
+  group.add(sign1, sign2, sign3);
+
+  // Ajuntament de Ferreries en el lateral derecho de la plaza: soportales, balcón, banderas y reloj
+  const AX = 11.7;
+  m.add(G.box, 0xefe4cc, AX + 0.2, 4.1, 18, 0, 0, 0, 0.5, 8.2, 6.4);
+  m.add(G.box, 0xd8c39a, AX - 0.06, 8.25, 18, 0, 0, 0, 0.6, 0.3, 6.8);
+  m.add(ROOF_GEO, 0xd8c39a, AX, 8.4, 18, 0, Math.PI / 2, 0, 3, 1.2, 0.4); // frontón con el reloj
+  m.add(G.cyl, 0xfbf7ee, AX - 0.08, 8.9, 18, 0, 0, Math.PI / 2, 0.75, 0.06, 0.75);
+  m.add(G.box, 0x2a1d16, AX - 0.13, 9.0, 18, 0, 0, 0, 0.03, 0.3, 0.04);
+  for (const az of [15.8, 18, 20.2]) {
+    m.add(G.box, 0x3a2a20, AX - 0.06, 1.3, az, 0, 0, 0, 0.06, 2.6, 1.4); // arcos de los soportales
+    m.add(G.cyl, 0x3a2a20, AX - 0.06, 2.6, az, 0, 0, Math.PI / 2, 1.4, 0.06, 1.4);
+    m.add(G.box, 0xffffff, AX - 0.08, 5.3, az, 0, 0, 0, 0.06, 1.7, 1.2);
+    m.add(G.box, 0x2f6b46, AX - 0.11, 5.3, az, 0, 0, 0, 0.04, 1.55, 1.05);
+  }
+  m.add(G.box, 0xe9dcc2, AX - 0.5, 4.2, 18, 0, 0, 0, 0.9, 0.12, 6); // balcón corrido
+  for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.03, 0.6, 0.03);
+  m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.04, 0.04, 6);
+  colliders.push({ minX: AX - 0.2, maxX: AX + 0.5, minZ: 14.8, maxZ: 21.2 });
+  const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture('AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
+  ajLetters.position.set(AX - 0.1, 7.3, 18);
+  ajLetters.rotation.y = -Math.PI / 2;
+  group.add(ajLetters);
+  // Mástiles inclinados con la bandera de Menorca y la senyera
+  [[16.6, menorcaMat], [19.4, senyeraMat]].forEach(([fz, mat]) => {
+    m.add(G.cyl, 0xd9b45a, AX - 1.5, 5.6, fz as number, 0, 0, 0.7, 0.05, 2.6, 0.05);
+    const f = mergedPlanes([{ w: 1.3, h: 0.9, x: AX - 1.9, y: 6.1, z: fz as number, ry: -Math.PI / 2 }], mat as THREE.Material);
+    group.add(f);
+  });
   group.add(m.mesh());
   signs.forEach((s) => group.add(s));
 
@@ -377,6 +499,25 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   lg.setAttribute('position', new THREE.Float32BufferAttribute(lightPts, 3));
   const lights = new THREE.Points(lg, new THREE.PointsMaterial({ map: glowTexture(), color: 0xffd98a, size: 0.9, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   group.add(lights);
+
+  // Guirnaldas de colores bajo los toldos de los bares
+  const pp: number[] = [];
+  const pc: number[] = [];
+  const col = new THREE.Color();
+  barFronts.forEach((b, bi) => {
+    const facing = bi === 0 || bi === 1 ? 1 : -1;
+    const bz = b.z - facing * 1.25; // borde del toldo
+    for (let i = 0; i <= 14; i++) {
+      pp.push(b.x - 3.2 + i * (6.4 / 14), 2.7 - Math.sin((i / 14) * Math.PI) * 0.25, bz);
+      col.setHSL((i * 0.13 + bi * 0.3) % 1, 0.95, 0.6);
+      pc.push(col.r, col.g, col.b);
+    }
+  });
+  const pg = new THREE.BufferGeometry();
+  pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3));
+  pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3));
+  const partyLights = new THREE.Points(pg, new THREE.PointsMaterial({ map: glowTexture(), vertexColors: true, size: 0.75, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  group.add(partyLights);
 
   // Multitud (4 variantes instanciadas). Evitamos el círculo central donde van los ases.
   const looks: PersonLook[] = [
@@ -387,7 +528,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   ];
   const spots: { x: number; z: number; ry: number }[] = [];
   const near = (px: number, pz: number, cx: number, cz: number, rr: number) => Math.hypot(px - cx, pz - cz) < rr;
-  for (let i = 0; i < 600 && spots.length < 110; i++) {
+  for (let i = 0; i < 600 && spots.length < 90; i++) {
     let px: number, pz: number;
     if (r() < 0.55) {
       const a = r() * Math.PI * 2;
@@ -401,7 +542,8 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     const bad =
       colliders.some((c) => px > c.minX - 0.6 && px < c.maxX + 0.6 && pz > c.minZ - 0.6 && pz < c.maxZ + 0.6) ||
       near(px, pz, 0, 14, 8) ||
-      near(px, pz, 1.5, 22, 2.5) ||
+      near(px, pz, MARC.x, MARC.z, 2.5) ||
+      barFronts.some((b) => near(px, pz, b.x, b.z, 3.2)) ||
       near(px, pz, 9, 9.5, 2.5) ||
       spots.some((s) => near(px, pz, s.x, s.z, 1.0));
     if (!bad) spots.push({ x: px, z: pz, ry: pz > 5 ? Math.atan2(0 - px, 14 - pz) : (pz < 0 ? 0 : Math.PI) + (r() - 0.5) });
@@ -414,6 +556,42 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     return { mesh, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
   });
 
+  // Gente bailando delante de cada bar (alternan brazos arriba y abajo al ritmo)
+  const dancers: { x: number; z: number; ry: number }[] = [];
+  const pomadaAt = [[-24, -1.5], [33, 1.2], [-6, 18]];
+  barFronts.forEach((b, bi) => {
+    const facing = bi === 0 || bi === 1 ? 1 : -1;
+    for (let i = 0; i < 80 && dancers.filter((d) => near(d.x, d.z, b.x, b.z, 4)).length < 11; i++) {
+      const px = b.x + (r() - 0.5) * 6.5;
+      const pz = b.z + facing * (r() * 2.6 - 0.2);
+      const bad =
+        colliders.some((c) => px > c.minX - 0.5 && px < c.maxX + 0.5 && pz > c.minZ - 0.5 && pz < c.maxZ + 0.5) ||
+        near(px, pz, MARC.x, MARC.z, 1.4) ||
+        (bi === 3 && px > MARC.x - 0.6) ||
+        near(px, pz, 9, 7, 2) ||
+        pomadaAt.some(([qx, qz]) => near(px, pz, qx, qz, 2.2)) ||
+        pz < -4.3 || pz > 24.5 ||
+        [...spots, ...dancers].some((s) => near(px, pz, s.x, s.z, 0.95));
+      if (!bad) dancers.push({ x: px, z: pz, ry: r() * Math.PI * 2 });
+    }
+  });
+  const partyLooks: PersonLook[] = [
+    { skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x2b2b3a, hair: 0x6a4a2a, hairStyle: 'short' },
+    { skin: 0xe8b894, shirt: 0xd7263d, pants: 0xffffff, hair: 0x2b1d14, hairStyle: 'long', skirt: true },
+    { skin: 0xd9a27c, shirt: 0xf4d35e, pants: 0x2b2b3a, hair: 0x111111, hairStyle: 'bun', skirt: true },
+  ];
+  partyLooks.forEach((look, li) => {
+    const mine = dancers.filter((_, i) => i % partyLooks.length === li);
+    if (!mine.length) return;
+    const up = new THREE.InstancedMesh(personGeometry(look, true), vertexMat, mine.length);
+    const down = new THREE.InstancedMesh(personGeometry(look, false), vertexMat, mine.length);
+    for (const im of [up, down]) {
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      group.add(im);
+    }
+    crowds.push({ mesh: up, alt: down, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
+  });
+
   scene.add(group);
   return {
     group,
@@ -422,11 +600,14 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
     spawn: new THREE.Vector3(-38, 0, 0),
     pomadaSpots: [new THREE.Vector3(-24, 0.82, -1.5), new THREE.Vector3(33, 0.82, 1.2), new THREE.Vector3(-6, 0.82, 18)],
     tofolPos: new THREE.Vector3(9, 0, 7),
-    marcPos: new THREE.Vector3(1.5, 0, 22),
+    marcPos: MARC.clone(),
     plazaCenter: new THREE.Vector3(0, 0, 14),
     crowds,
-    people: spots.map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
+    people: [...spots, ...dancers].map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
     lights,
+    partyLights,
+    bars: barFronts,
+    fabioleraPos: new THREE.Vector3(3.6, 0, 23.4),
     sky,
     sun,
   };
@@ -436,15 +617,28 @@ const tm = new THREE.Matrix4();
 const tq = new THREE.Quaternion();
 const tv = new THREE.Vector3();
 const ts = new THREE.Vector3(1, 1, 1);
+const zero = new THREE.Vector3(0.0001, 0.0001, 0.0001);
 const up = new THREE.Vector3(0, 1, 0);
 export function animateCrowd(crowds: Crowd[], t: number, energy = 1) {
   for (const c of crowds) {
     c.base.forEach((b, i) => {
+      if (c.alt) {
+        // Bailarines: saltan más, giran y alternan postura
+        const ph = t * b.speed * 0.5 + b.phase;
+        const bounce = Math.abs(Math.sin(ph)) * 0.35 * energy;
+        tq.setFromAxisAngle(up, b.ry + Math.sin(t * 2 + b.phase) * 1.2);
+        tv.set(b.x, bounce, b.z);
+        const armsUp = Math.sin(ph * 0.5) > 0;
+        c.mesh.setMatrixAt(i, tm.compose(tv, tq, armsUp ? ts : zero));
+        c.alt.setMatrixAt(i, tm.compose(tv, tq, armsUp ? zero : ts));
+        return;
+      }
       const bounce = Math.abs(Math.sin(t * b.speed * 0.5 + b.phase)) * 0.22 * energy;
       tq.setFromAxisAngle(up, b.ry + Math.sin(t * 1.5 + b.phase) * 0.35);
       tv.set(b.x, bounce, b.z);
       c.mesh.setMatrixAt(i, tm.compose(tv, tq, ts));
     });
     c.mesh.instanceMatrix.needsUpdate = true;
+    if (c.alt) c.alt.instanceMatrix.needsUpdate = true;
   }
 }

@@ -17,11 +17,13 @@ export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, Menorca', emoji: '🫏' },
   { id: 2, name: 'La ruta de las zamburiñas', place: 'Madrid → San Vicente de la Barquera → Logroño', emoji: '🚗' },
   { id: 3, name: 'Fito bajo las estrellas', place: 'Canarias', emoji: '🎸' },
+  { id: 4, name: 'Noche de piscina y estrellas', place: 'En casa', emoji: '🌙' },
 ];
 
 export const FERRERIES = {
   intro: [
-    { who: 'Narrador', text: 'Ferreries, Menorca. Fiestas de Sant Bartomeu.' },
+    { who: 'Narrador', text: "Ferreries, Menorca. Finales de agosto: Festes de Sant Bartomeu." },
+    { who: 'Narrador', text: "Banderas de Menorca en los balcones, la fabiolera tocando en el Pla de l'Església y hoy toca Jaleo d'Ases." },
     { who: 'Narrador', text: 'Suenan el fabiol y el tamborí. Los ases salen a la calle con sus jinetes y los bares están a reventar.' },
     { who: 'Narrador', text: 'Esta noche va a pasar algo importante… aunque todavía no lo sabes.' },
     { who: 'Narrador', text: 'Habla con Tòfol, el del bar de la plaza. Él sabe de todo.' },
@@ -35,7 +37,7 @@ export const FERRERIES = {
   tofolNotYet: [{ who: 'Tòfol', text: 'Todavía te faltan pomadas o toques de suerte. ¡Ánimo, que la noche es joven!' }] as Line[],
   tofolDone: [
     { who: 'Tòfol', text: '¡Molt bé! Ya eres de Ferreries de toda la vida.' },
-    { who: 'Tòfol', text: '¿Ves a ese que baila fatal al fondo de la plaza, junto a la iglesia? Se llama Marc. Lleva toda la noche mirándote.' },
+    { who: 'Tòfol', text: "¿Ves a ese que baila fatal en el Bar Sa Plaça, junto a la iglesia? Se llama Marc. Lleva toda la noche mirándote." },
     { who: 'Tòfol', text: 'Llévale una pomada, anda.' },
   ] as Line[],
   marcMeet: [
@@ -43,7 +45,10 @@ export const FERRERIES = {
     { who: 'Marc', text: 'Soy Marc. Te he visto tocar a tres ases… eso es o mucha suerte o mucho valor.' },
     { who: 'Margaux', text: 'Buu… ¿y tú no tocas ninguno?' },
     { who: 'Marc', text: 'Yo soy más de bailar. Mal, pero con ganas. ¿Bailas? Prometo no pisarte. Mucho.' },
-    { who: 'Narrador', text: 'Y así, entre ases, pomada y música, empezó todo.' },
+    { who: 'Narrador', text: "Bailáis hasta que el bar Sa Plaça pone la última canción. La música baja, la plaza se queda en silencio un segundo…" },
+  ] as Line[],
+  afterKiss: [
+    { who: 'Narrador', text: 'Y así, entre ases, pomada y música, en pleno Sant Bartomeu, empezó todo.' },
     { who: 'Narrador', text: 'Él todavía no sabía que algún día sería Gas. Y ella, Azul.' },
   ] as Line[],
   hints: {
@@ -123,6 +128,36 @@ export const CONCERT = {
     { who: 'Azul', text: 'Calla, que me vas a hacer llorar. Buu.' },
     { who: 'Gas', text: 'Pues prepárate, que esto no ha terminado…' },
   ] as Line[],
+};
+
+export const NIGHT = {
+  intro: [
+    { who: 'Narrador', text: 'Una noche de verano, en casa. Hace calor, la piscina está iluminada y Joy no deja de dar vueltas.' },
+    { who: 'Gas', text: 'Azul, he puesto velitas flotando en la piscina. ¿Te bañas?' },
+    { who: 'Azul', text: '¿Velitas? ¿Tú? ¿Quién eres y qué has hecho con Gas?' },
+    { who: 'Narrador', text: 'Baja al jardín y tírate a la piscina.' },
+  ] as Line[],
+  swim: [
+    { who: 'Gas', text: '¡Recoge las seis velitas antes de que Joy se tire a por ellas!' },
+  ] as Line[],
+  swimDone: [
+    { who: 'Gas', text: 'Esta noche hay lluvia de estrellas. ¿Nos tumbamos en el césped a verlas?' },
+    { who: 'Azul', text: 'Vale, pero las toallas las pones tú.' },
+    { who: 'Joy', text: '¡Guau! (Joy ya está tumbada encima de una toalla)' },
+  ] as Line[],
+  lie: [
+    { who: 'Gas', text: 'Mira, allí… ¿ves esas estrellas? Si las unes, sale algo.' },
+    { who: 'Narrador', text: 'Toca las estrellas en orden, empezando por la que parpadea.' },
+  ] as Line[],
+  starsDone: [
+    { who: 'Azul', text: '…Es un corazón.' },
+    { who: 'Gas', text: 'Lo he dibujado yo. Bueno, el universo. Pero la idea fue mía.' },
+    { who: 'Narrador', text: 'Una estrella fugaz cruza el cielo.' },
+    { who: 'Gas', text: '¡Pide un deseo, rápido!' },
+    { who: 'Azul', text: 'Ya lo tengo todo. Bueno… que aprendas inglés.' },
+    { who: 'Gas', text: 'Buu. Feliz cumpleaños, Azul. 💙' },
+  ] as Line[],
+  candle: (n: number) => `🕯️ ${n}/6`,
 };
 
 // Carta del regalo final. Marc: reescríbela con tus palabras.

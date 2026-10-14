@@ -36,4 +36,4 @@ export const GIFTS: Gift[] = [
   },
 ];
 
-export const giftForLevel = (level: number) => GIFTS.find((g) => g.level === level)!;
+export const giftForLevel = (level: number) => GIFTS.find((g) => g.level === level);

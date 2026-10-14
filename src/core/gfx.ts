@@ -287,6 +287,62 @@ export class Confetti {
   }
 }
 
+/** Fuegos artificiales con un único THREE.Points y mezcla aditiva. */
+export class Fireworks {
+  points: THREE.Points;
+  private pos: Float32Array;
+  private col: Float32Array;
+  private vel: Float32Array;
+  private life: Float32Array;
+  private base: Float32Array;
+  private next = 0;
+  private N = 600;
+
+  constructor() {
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(this.N * 3).fill(-999);
+    this.col = new Float32Array(this.N * 3);
+    this.vel = new Float32Array(this.N * 3);
+    this.life = new Float32Array(this.N);
+    this.base = new Float32Array(this.N * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    this.points.frustumCulled = false;
+  }
+
+  burst(at: THREE.Vector3) {
+    const c = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
+    for (let k = 0; k < 80; k++) {
+      const i = this.next;
+      this.next = (this.next + 1) % this.N;
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      const sp = 9 + Math.random() * 3;
+      this.pos.set([at.x, at.y, at.z], i * 3);
+      this.vel.set([Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp], i * 3);
+      this.base.set([c.r, c.g, c.b], i * 3);
+      this.life[i] = 1.6;
+    }
+  }
+
+  update(dt: number) {
+    for (let i = 0; i < this.N; i++) {
+      if (this.life[i] <= 0) continue;
+      this.life[i] -= dt;
+      const k = Math.max(0, this.life[i] / 1.6);
+      this.vel[i * 3 + 1] -= 6 * dt;
+      for (let a = 0; a < 3; a++) {
+        this.vel[i * 3 + a] *= 1 - dt * 1.5;
+        this.pos[i * 3 + a] += this.vel[i * 3 + a] * dt;
+        this.col[i * 3 + a] = this.base[i * 3 + a] * k;
+      }
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.geometry.attributes.color.needsUpdate = true;
+  }
+}
+
 /** Vibración corta (Android). En iPhone no hace nada. */
 export function vibrate(ms: number | number[]) {
   try {

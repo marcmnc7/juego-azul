@@ -6,6 +6,7 @@ import { giftForLevel } from './data/gifts';
 import { Level1 } from './world/level1';
 import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
+import { Level4 } from './world/level4';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, quality } from './core/gfx';
 import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, debugPanel, closeDialogue, chapterCard } from './ui/ui';
@@ -73,7 +74,7 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-const LEVEL_CLASSES = [Level1, Level2, Level3];
+const LEVEL_CLASSES = [Level1, Level2, Level3, Level4];
 
 function startLevel(n: number) {
   clearScreens();
@@ -84,11 +85,9 @@ function startLevel(n: number) {
     closeDebug = null;
     const g = giftForLevel(n);
     if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
-    if (!data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
+    if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
     save(data);
-    showGift(
-      g,
-      () => {
+    const after = () => {
       // Al terminar el último capítulo, directamente a la carta
       if (n === LEVEL_CLASSES.length && LEVEL_CLASSES.every((_, i) => data.levelsDone.includes(i + 1))) {
         if (level) {
@@ -97,9 +96,10 @@ function startLevel(n: number) {
         }
         finalLetter(goMap);
       } else goMap();
-      },
-      result,
-    );
+    };
+    // El capítulo 4 no tiene vale: su premio es la carta final
+    if (g) showGift(g, after, result);
+    else after();
   };
   level = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   applyShadows(level.threeScene);

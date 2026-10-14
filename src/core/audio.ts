@@ -39,8 +39,23 @@ const ROAD: Song = {
   ],
 };
 
-export type SongName = 'jaleo' | 'road';
-const SONGS: Record<SongName, Song> = { jaleo: JALEO, road: ROAD };
+// Nana de verano para la noche en casa: lenta, suave y sin batería.
+const NIGHT: Song = {
+  eighth: 0.3,
+  wave: 'sine',
+  octave: 12,
+  bass: true,
+  drum: () => 0,
+  notes: [
+    [0, 2], [4, 2], [7, 2], [11, 4], [9, 2], [7, 4],
+    [5, 2], [9, 2], [12, 2], [14, 4], [12, 2], [9, 4],
+    [4, 2], [7, 2], [11, 2], [12, 4], [11, 2], [7, 4],
+    [5, 2], [4, 2], [2, 2], [0, 6], [null, 2],
+  ],
+};
+
+export type SongName = 'jaleo' | 'road' | 'night';
+const SONGS: Record<SongName, Song> = { jaleo: JALEO, road: ROAD, night: NIGHT };
 
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -195,6 +210,9 @@ export class Audio {
   warn() { this.sfx([5, 5], 0.1, 'square', 0.06); }
   whoosh() { if (this.ctx) this.noiseSwell(0.5, 0.35, 600, 2400); }
   pop() { this.sfx([24, 31], 0.03, 'sine', 0.25); }
+  splash() { if (this.ctx) this.noiseSwell(0.9, 0.5, 400, 3000); }
+  /** Campanita de estrella: cada una un poco más aguda. */
+  chime(step: number) { this.sfx([12 + step * 2, 19 + step * 2], 0.08, 'sine', 0.22); }
 
   /** Ovación del público: ruido filtrado que sube y baja. */
   cheer(vol = 0.5) {
