@@ -13,16 +13,28 @@ export const quality = {
   grain: true,
   /** Luz de entorno a partir del cielo (PMREM). */
   env: true,
-  /** Último recurso si el PBR no se dibuja en el dispositivo: materiales Lambert, más simples. */
-  lambert: false,
+  /**
+   * Tipo de material. 'standard' es PBR; algunos Mac con M1 (ANGLE Metal) lo pintan invisible, y
+   * entonces se usa 'phong' (con brillos) o, como último recurso, 'lambert'.
+   */
+  kind: 'standard' as 'standard' | 'phong' | 'lambert',
 };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
 export function toon(params: THREE.MeshStandardMaterialParameters) {
-  if (quality.lambert) {
-    const { roughness: _r, metalness: _m, envMapIntensity: _e, ...rest } = params;
-    void _r, void _m, void _e;
-    return new THREE.MeshLambertMaterial(rest as THREE.MeshLambertMaterialParameters) as unknown as THREE.MeshStandardMaterial;
+  if (quality.kind !== 'standard') {
+    const { roughness, metalness: _m, envMapIntensity: _e, ...rest } = params;
+    void _m, void _e;
+    if (quality.kind === 'lambert') return new THREE.MeshLambertMaterial(rest as THREE.MeshLambertMaterialParameters) as unknown as THREE.MeshStandardMaterial;
+    // Phong imitando la rugosidad: mate casi sin brillo, el agua muy brillante
+    const smooth = 1 - (roughness ?? 0.82);
+    const ph = new THREE.MeshPhongMaterial({
+      shininess: 4 + 90 * smooth * smooth,
+      specular: new THREE.Color().setScalar(0.03 + 0.3 * smooth * smooth),
+      ...(rest as THREE.MeshPhongMaterialParameters),
+    });
+    addGrain(ph);
+    return ph as unknown as THREE.MeshStandardMaterial;
   }
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
   addGrain(m);
@@ -33,7 +45,7 @@ export function toon(params: THREE.MeshStandardMaterialParameters) {
  * Variación sutil de color y rugosidad según la posición en el mundo (ruido en dos escalas), para
  * que ninguna superficie sea un color plano: paredes con manchas, suelo con desgaste, ropa con textura.
  */
-export function addGrain(m: THREE.MeshStandardMaterial, amount = 0.14) {
+export function addGrain(m: THREE.Material, amount = 0.14) {
   m.onBeforeCompile = (sh) => {
     if (!quality.grain) return;
     sh.vertexShader = sh.vertexShader

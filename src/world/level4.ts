@@ -294,7 +294,7 @@ export class Level4 implements Level {
     for (const sx of [-0.25, 0.25]) m.add(G.cyl, 0xd0d6dc, POOL.maxX - 0.6 + sx, 0.3, POOL.minZ + 0.05, 0.25, 0, 0, 0.05, 1.2, 0.05);
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(pw, pd).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ map: this.waterTex, color: 0x7fd8ee, emissive: 0x2a9fc0, emissiveMap: this.waterTex, emissiveIntensity: 0.9, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }),
+      toon({ map: this.waterTex, color: 0x7fd8ee, emissive: 0x2a9fc0, emissiveMap: this.waterTex, emissiveIntensity: 0.9, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }),
     );
     water.position.set(cx, WATER_Y, cz);
     sc.add(water);

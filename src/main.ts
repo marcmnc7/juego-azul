@@ -105,33 +105,35 @@ function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
   mat.dispose();
   sc.environment?.dispose();
   const ok = px[1] > px[0] + 25 && px[1] > px[2] + 10;
-  gfxLog.push(`${mode === 'game' ? (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + (quality.lambert ? 'L' : '') : mode}:${px[0]},${px[1]},${px[2]}`);
+  gfxLog.push(`${mode === 'game' ? (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + quality.kind[0].toUpperCase() : mode}:${px[0]},${px[1]},${px[2]}`);
   if (!ok) console.warn('[gfx] autocomprobación falla', Array.from(px), JSON.stringify(quality));
   return ok;
 }
-const gfxFirstOk = gfxSelfTest();
-if (!gfxFirstOk) {
-  quality.grain = false;
-  if (!gfxSelfTest()) {
-    quality.env = false;
-    if (!gfxSelfTest()) {
-      quality.shadows = false;
-      renderer.shadowMap.enabled = false;
-      if (!gfxSelfTest()) {
-        // ¿Falla de verdad el PBR o falla la propia prueba? Lo apuntamos para el diagnóstico
-        gfxSelfTest('uv');
-        gfxSelfTest('basic');
-        quality.lambert = true;
-        gfxSelfTest();
-      }
-    }
-  }
+// Orden de preferencia: lo más realista primero. Se queda con lo primero que se vea de verdad.
+const gfxTries: Array<Partial<typeof quality>> = [
+  { kind: 'standard', grain: true, env: true },
+  { kind: 'standard', grain: false, env: true },
+  { kind: 'standard', grain: false, env: false },
+  { kind: 'phong', grain: true, env: false },
+  { kind: 'phong', grain: false, env: false },
+  { kind: 'lambert', grain: false, env: false },
+];
+let gfxOk = false;
+for (const t of gfxTries) {
+  Object.assign(quality, t);
+  if ((gfxOk = gfxSelfTest())) break;
+}
+if (!gfxOk) {
+  quality.shadows = false;
+  renderer.shadowMap.enabled = false;
+}
+if (!gfxOk || quality.kind === 'lambert') {
   // Nota discreta unos segundos para saber qué ha pasado si alguien manda una captura
   const note = document.createElement('div');
   const gl = renderer.getContext();
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '?';
-  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.lambert ? 'L' : ''} · ${gfxLog.join(' ')} · ${gpu.slice(0, 60)}`;
+  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.kind[0].toUpperCase()} · ${gfxLog.join(' ')} · ${gpu.slice(0, 60)}`;
   note.style.cssText = 'position:fixed;left:8px;bottom:6px;font:11px monospace;color:#fff;opacity:.75;right:8px;word-break:break-all;z-index:99;pointer-events:none;text-shadow:0 1px 2px #000';
   document.body.appendChild(note);
   setTimeout(() => note.remove(), 25000);
@@ -303,7 +305,7 @@ function frame() {
   }
   if (stats) {
     const i = renderer.info.render;
-    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}${quality.grain && quality.env && !quality.lambert ? '' : ' · seguro ' + (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + (quality.lambert ? 'L' : '')}`;
+    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}${quality.grain && quality.env && quality.kind === 'standard' ? '' : ' · seguro ' + (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + quality.kind[0].toUpperCase()}`;
   }
 }
 renderer.setAnimationLoop(frame);
