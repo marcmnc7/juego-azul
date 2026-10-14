@@ -14,7 +14,12 @@ export function mat(color: number) {
   }
   return m;
 }
-export const vertexMat = toon({ vertexColors: true });
+// Se crea al primer uso (después de la autocomprobación gráfica, que puede cambiar el tipo de material).
+let vMat: THREE.MeshStandardMaterial | null = null;
+export function vertexMat() {
+  if (!vMat) vMat = toon({ vertexColors: true });
+  return vMat;
+}
 
 /** Junta muchas piezas de colores en una sola geometría (1 draw call). */
 export class Merger {
@@ -56,7 +61,7 @@ export class Merger {
   }
 
   mesh() {
-    return new THREE.Mesh(this.build(), vertexMat);
+    return new THREE.Mesh(this.build(), vertexMat());
   }
 }
 
@@ -419,7 +424,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
   for (const [x, z] of [[-0.22, 0.55], [0.22, 0.55], [-0.22, -0.55], [0.22, -0.55]]) {
     const p = new THREE.Group();
     p.position.set(x, 0.86, z);
-    p.add(new THREE.Mesh(legGeo, vertexMat));
+    p.add(new THREE.Mesh(legGeo, vertexMat()));
     inner.add(p);
     legs.push(p);
   }
@@ -459,7 +464,7 @@ export function makeDog(): Dog {
   for (const [x, z] of [[-0.12, 0.22], [0.12, 0.22], [-0.12, -0.22], [0.12, -0.22]]) {
     const p = new THREE.Group();
     p.position.set(x, 0.36, z);
-    p.add(new THREE.Mesh(legGeo, vertexMat));
+    p.add(new THREE.Mesh(legGeo, vertexMat()));
     root.add(p);
     legs.push(p);
   }
@@ -516,7 +521,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   const wheels: THREE.Object3D[] = [];
   const wGeo = new Merger().add(G.cyl, 0x1a1a1a, 0, 0, 0, 0, 0, Math.PI / 2, 0.68, 0.32, 0.68).add(G.cyl, 0xbbbbbb, 0, 0, 0, 0, 0, Math.PI / 2, 0.34, 0.34, 0.34).build();
   for (const [x, z] of [[-0.85, 1.25], [0.85, 1.25], [-0.85, -1.25], [0.85, -1.25]]) {
-    const w = new THREE.Mesh(wGeo, vertexMat);
+    const w = new THREE.Mesh(wGeo, vertexMat());
     w.position.set(x, 0.34, z);
     root.add(w);
     wheels.push(w);

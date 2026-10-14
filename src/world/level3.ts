@@ -538,7 +538,7 @@ export class Level3 implements Level {
     }
     looks.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % looks.length === li);
-      const mesh = new THREE.InstancedMesh(personGeometry(lk, li % 2 === 0), vertexMat, mine.length);
+      const mesh = new THREE.InstancedMesh(personGeometry(lk, li % 2 === 0), vertexMat(), mine.length);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       sc.add(mesh);
       this.crowds.push({ mesh, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });

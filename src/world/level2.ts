@@ -84,7 +84,7 @@ class Scatter {
     private scaleRange: [number, number] = [1, 1],
     private yawRandom = true,
   ) {
-    this.mesh = new THREE.InstancedMesh(geo, vertexMat, count);
+    this.mesh = new THREE.InstancedMesh(geo, vertexMat(), count);
     this.mesh.frustumCulled = false;
     for (let i = 0; i < count; i++) this.z.push(-40 + i * spacing);
   }
@@ -575,7 +575,7 @@ export class Level2 implements Level {
     if (obstacle) {
       const defs = this.obstacleGeos[reg];
       const d = defs[Math.floor(Math.random() * defs.length)];
-      const o = new THREE.Mesh(d.geo, vertexMat);
+      const o = new THREE.Mesh(d.geo, vertexMat());
       o.castShadow = true;
       addOutline(o, 0.03);
       o.position.set(LANES[lanes[0]], 0, z);

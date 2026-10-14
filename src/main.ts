@@ -74,8 +74,15 @@ function gfxSelfTest(): boolean {
   sun.position.set(1, 3, 2);
   sun.castShadow = quality.shadows;
   sc.add(sun);
-  const mat = toon({ color: 0x30c050 });
-  const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat);
+  sc.fog = new THREE.Fog(0x8090ff, 30, 200);
+  // Igual que el decorado del juego: geometría sin UV y con colores por vértice
+  const geo = new THREE.BoxGeometry(2, 2, 2);
+  geo.deleteAttribute('uv');
+  const col = new Float32Array(geo.attributes.position.count * 3);
+  for (let i = 0; i < col.length; i += 3) col.set([0.19, 0.75, 0.31], i);
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = toon({ vertexColors: true });
+  const box = new THREE.Mesh(geo, mat);
   box.castShadow = box.receiveShadow = true;
   sc.add(box);
   applyEnvironment(sc);
@@ -93,14 +100,15 @@ function gfxSelfTest(): boolean {
   }
   renderer.setRenderTarget(null);
   rt.dispose();
-  box.geometry.dispose();
+  geo.dispose();
   mat.dispose();
   sc.environment?.dispose();
   const ok = px[1] > px[0] + 25 && px[1] > px[2] + 10;
   if (!ok) console.warn('[gfx] autocomprobación falla', Array.from(px), JSON.stringify(quality));
   return ok;
 }
-if (!gfxSelfTest()) {
+const gfxFirstOk = gfxSelfTest();
+if (!gfxFirstOk) {
   quality.grain = false;
   if (!gfxSelfTest()) {
     quality.env = false;
@@ -113,6 +121,12 @@ if (!gfxSelfTest()) {
       }
     }
   }
+  // Nota discreta unos segundos para saber qué ha pasado si alguien manda una captura
+  const note = document.createElement('div');
+  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.lambert ? 'L' : ''}`;
+  note.style.cssText = 'position:fixed;left:8px;bottom:6px;font:11px monospace;color:#fff;opacity:.6;z-index:99;pointer-events:none;text-shadow:0 1px 2px #000';
+  document.body.appendChild(note);
+  setTimeout(() => note.remove(), 12000);
 }
 renderer.info.autoReset = false;
 

@@ -550,7 +550,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   }
   const crowds: Crowd[] = looks.map((look, li) => {
     const mine = spots.filter((_, i) => i % looks.length === li);
-    const mesh = new THREE.InstancedMesh(personGeometry(look, li % 2 === 1), vertexMat, mine.length);
+    const mesh = new THREE.InstancedMesh(personGeometry(look, li % 2 === 1), vertexMat(), mine.length);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     group.add(mesh);
     return { mesh, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
@@ -583,8 +583,8 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   partyLooks.forEach((look, li) => {
     const mine = dancers.filter((_, i) => i % partyLooks.length === li);
     if (!mine.length) return;
-    const up = new THREE.InstancedMesh(personGeometry(look, true), vertexMat, mine.length);
-    const down = new THREE.InstancedMesh(personGeometry(look, false), vertexMat, mine.length);
+    const up = new THREE.InstancedMesh(personGeometry(look, true), vertexMat(), mine.length);
+    const down = new THREE.InstancedMesh(personGeometry(look, false), vertexMat(), mine.length);
     for (const im of [up, down]) {
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       group.add(im);
