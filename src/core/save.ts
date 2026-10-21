@@ -1,6 +1,6 @@
 // Progreso guardado en el propio móvil (localStorage), con versión por si cambia el formato.
 const KEY = 'margaux-save';
-const VERSION = 1;
+const VERSION = 2; // 2: capítulos en orden real (la piscinita pasa a ser el 2)
 
 export interface SaveData {
   version: number;

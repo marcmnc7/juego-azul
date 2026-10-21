@@ -226,8 +226,8 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-// Sant Joan es de lo más reciente: va el último y después vienen el crucigrama y la carta
-const LEVEL_CLASSES = [Level1, Level2, Level3, Level4, LevelSantJoan];
+// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito y Sant Joan
+const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan];
 
 function startLevel(n: number) {
   clearScreens();
