@@ -17,8 +17,8 @@ export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, Menorca', emoji: '🫏' },
   { id: 2, name: 'La ruta de las zamburiñas', place: 'Madrid → San Vicente de la Barquera → Logroño', emoji: '🚗' },
   { id: 3, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria', emoji: '🎸' },
-  { id: 4, name: 'Sant Joan', place: 'Ciutadella, Menorca', emoji: '🐎' },
-  { id: 5, name: 'Noche de piscina y estrellas', place: 'Sa Caleta, donde empezó todo', emoji: '🌙' },
+  { id: 4, name: 'Noche de piscina y estrellas', place: 'Sa Caleta, donde empezó todo', emoji: '🌙' },
+  { id: 5, name: 'Sant Joan', place: 'Ciutadella, Menorca', emoji: '🐎' },
 ];
 
 export const FERRERIES = {
@@ -66,7 +66,7 @@ export const FERRERIES = {
   },
 };
 
-// Capítulo de Sant Joan en Ciutadella (junio). Misma forma que FERRERIES para reutilizar el nivel 1.
+// Capítulo 5 y último: Sant Joan en Ciutadella (junio). Misma forma que FERRERIES para reutilizar el nivel 1.
 export const SANTJOAN = {
   intro: [
     { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. Banderas, caballos negros, avellanes volando y el Born a reventar.' },
@@ -97,6 +97,7 @@ export const SANTJOAN = {
     { who: 'Azul', text: 'Gracias por hacer de este Sant Joan algo muy especial. Imposible de olvidar.' },
     { who: 'Gas', text: 'Y la camiseta me la quedo. La llevaré cada 24 de junio.' },
     { who: 'Azul', text: 'Más te vale. Y aún no te has ido… y ya mi manchi.' },
+    { who: 'Gas', text: 'De Ferreries a Sant Joan, un año entero. Y lo que queda. Feliz cumpleaños, Azul. 💙' },
   ] as Line[],
   hints: {
     pomada: '¡Avellanes! 🌰',
@@ -252,7 +253,7 @@ export const NIGHT = {
     { who: 'Azul', text: 'Que aprendas inglés.' },
     { who: 'Gas', text: 'Ya tengo el B2. English done. 🥴' },
     { who: 'Azul', text: '¿B2? ¡Que diuuus! Pues entonces… que terminemos Interstellar.' },
-    { who: 'Gas', text: 'Buu. Eso sí que es imposible. Feliz cumpleaños, Azul. 💙' },
+    { who: 'Gas', text: 'Buu. Eso sí que es imposible. Pero tú pídelo, que esto no ha terminado…' },
   ] as Line[],
   candle: (n: number) => `🕯️ ${n}/6`,
 };

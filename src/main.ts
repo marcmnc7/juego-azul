@@ -226,8 +226,8 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-// Sant Joan va antes de la piscina: la primera noche se guarda para el final
-const LEVEL_CLASSES = [Level1, Level2, Level3, LevelSantJoan, Level4];
+// Sant Joan es de lo más reciente: va el último y después vienen el crucigrama y la carta
+const LEVEL_CLASSES = [Level1, Level2, Level3, Level4, LevelSantJoan];
 
 function startLevel(n: number) {
   clearScreens();
