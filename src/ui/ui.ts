@@ -4,6 +4,7 @@ import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
+import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -25,6 +26,7 @@ export function titleScreen(onStart: () => void) {
   s.append(
     el('div', 'hearts', '💙 💙 💙'),
     el('h1', '', 'Feliz cumpleaños,<br>Azul'),
+    sticker(STICKERS.oso, 'title-sticker'),
     el('p', '', 'Un pequeño juego sobre nuestra historia, de Gas para ti. Cada capítulo que completes desbloquea un regalo de verdad.'),
   );
   const b = el('button', 'big-btn', 'Empezar');
@@ -66,7 +68,10 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   s.append(list);
   const g = el('button', 'link-btn', `🎁 Mis regalos (${save.giftsUnlocked.length}/${GIFTS.length})`);
   g.onclick = () => giftList(save, back);
-  s.append(g);
+  const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length;
+  const a = el('button', 'link-btn', `📷 Nuestro álbum (${seen}/${MEMORIES.length})`);
+  a.onclick = () => album(save, opts.test, back);
+  s.append(g, a);
   if (opts.test) {
     const r = el('button', 'link-btn', 'Borrar el progreso guardado');
     r.onclick = opts.onReset;
@@ -90,7 +95,7 @@ export function crossword(onSolved: () => void, onBack: () => void) {
   clearScreens();
   const o = el('div', 'screen crossword-screen');
   const card = el('div', 'letter crossword');
-  card.append(el('h2', '', CROSSWORD.title), el('p', 'cw-intro', CROSSWORD.intro));
+  card.append(sticker(STICKERS.juzgamos, 'cw-sticker'), el('h2', '', CROSSWORD.title), el('p', 'cw-intro', CROSSWORD.intro));
   const hidden = el('div', 'cw-hidden');
   const slots: HTMLElement[] = [];
   for (const ch of CROSSWORD.hidden) {
@@ -170,12 +175,78 @@ export function finalLetter(onClose: () => void) {
   audio.fanfare();
   const o = el('div', 'screen letter-screen');
   const card = el('div', 'letter');
-  card.append(el('div', 'hearts', '💙'), el('h2', '', FINAL_LETTER.title));
+  const strip = el('div', 'polaroid-strip');
+  LETTER_PHOTOS.forEach((src, i) => strip.append(polaroid({ level: 0, src, caption: '' }, [-6, 3, -2][i], false)));
+  card.append(strip, el('div', 'hearts', '💙'), el('h2', '', FINAL_LETTER.title));
   for (const p of FINAL_LETTER.paragraphs) card.append(el('p', '', p));
-  card.append(el('div', 'signature', FINAL_LETTER.signature));
+  card.append(el('div', 'signature', FINAL_LETTER.signature), sticker(STICKERS.carita, 'letter-sticker'));
   const b = el('button', 'big-btn', 'Volver');
   b.onclick = onClose;
   o.append(card, b);
+  root.append(o);
+}
+
+function sticker(src: string, cls: string) {
+  const i = el('img', 'sticker ' + cls) as HTMLImageElement;
+  i.src = src;
+  i.alt = '';
+  i.draggable = false;
+  return i;
+}
+
+/** Foto del chat como polaroid con su pie escrito a mano. */
+function polaroid(m: Memory, tilt: number, withCaption = true) {
+  const f = el('figure', 'polaroid' + (m.sticker ? ' is-sticker' : ''));
+  f.style.setProperty('--tilt', `${tilt}deg`);
+  const img = el('img') as HTMLImageElement;
+  img.src = m.src;
+  img.alt = m.caption;
+  img.draggable = false;
+  img.decoding = 'async';
+  f.append(img);
+  if (withCaption) f.append(el('figcaption', '', m.caption));
+  return f;
+}
+
+const TILTS = [-5, 4, -2, 6, -4];
+
+/** Al acabar un capítulo: sus fotos caen sobre la mesa y pasan al álbum. */
+export function memories(level: number, onClose: () => void) {
+  const list = memoriesFor(level);
+  if (!list.length) return onClose();
+  clearScreens();
+  const o = el('div', 'screen memories-screen');
+  o.append(el('h1', '', 'Recuerdo desbloqueado 📸'));
+  const table = el('div', 'polaroid-table');
+  list.forEach((m, i) => {
+    const p = polaroid(m, TILTS[i % TILTS.length]);
+    p.style.animationDelay = `${0.15 + i * 0.25}s`;
+    table.append(p);
+  });
+  const b = el('button', 'big-btn', 'Guardar en el álbum');
+  b.onclick = onClose;
+  o.append(table, b);
+  root.append(o);
+  audio.pop();
+}
+
+export function album(save: SaveData, test: boolean, onClose: () => void) {
+  clearScreens();
+  const o = el('div', 'screen memories-screen album');
+  o.append(el('h1', '', 'Nuestro álbum'));
+  const done = new Set(save.levelsDone);
+  const grid = el('div', 'polaroid-table');
+  MEMORIES.forEach((m, i) => {
+    if (test || done.has(m.level)) grid.append(polaroid(m, TILTS[i % TILTS.length]));
+    else {
+      const f = el('figure', 'polaroid locked', `<div class="ph">?</div><figcaption>Capítulo ${m.level}</figcaption>`);
+      f.style.setProperty('--tilt', `${TILTS[i % TILTS.length]}deg`);
+      grid.append(f);
+    }
+  });
+  const b = el('button', 'big-btn', 'Volver');
+  b.onclick = onClose;
+  o.append(grid, b);
   root.append(o);
 }
 

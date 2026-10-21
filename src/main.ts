@@ -15,7 +15,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -250,9 +250,10 @@ function startLevel(n: number) {
         crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
-    // Los capítulos sin vale (Sant Joan y la piscina) vuelven al mapa; el último abre la carta
-    if (g) showGift(g, after, result);
-    else after();
+    // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
+    const photos = () => memories(n, after);
+    if (g) showGift(g, photos, result);
+    else photos();
   };
   level = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   applyShadows(level.threeScene);

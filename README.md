@@ -26,6 +26,8 @@ Juego 3D para el móvil (Three.js + Vite + TypeScript) para el cumpleaños de Ma
 
 Guiños: Azul y Gas, los "Buu", el inglés de Gas (ahora B2 y con 🥴), dejar de fumar, Joy, "need esos ojos", "ya sabes dónde se quedó mi corazón", el flash en el concierto, "silencio full que duermen mis padres", Interstellar sin terminar.
 
+Fotos del chat: al acabar cada capítulo caen sus polaroids («Recuerdo desbloqueado») y quedan en **📷 Nuestro álbum** del mapa; la carta final lleva tres fotos (la primera noche, Gran Canaria y Sant Joan). También hay algunos stickers nuestros (el oso bailando en la portada, «Escuchamos y juzgamos» en el crucigrama). Están en `src/assets/recuerdos/`, comprimidas para que el HTML único no pese.
+
 ## Modo prueba
 Abrir el enlace añadiendo `#test` al final. Todo está desbloqueado, hay un botón amarillo 🛠 Prueba para saltar a cualquier fase o completar el capítulo, un contador de fps y un botón para borrar el progreso guardado.
 
