@@ -9,14 +9,47 @@ import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 
-// Capítulo 3 · Fito bajo las estrellas (Canarias).
-// Pista en la barra (tabaco opcional a la papelera) → ir 4 veces a los WC portátiles (uno libre cada vez)
-// → abrirse paso entre la multitud hasta Gas → minijuego de ritmo → fuegos artificiales → regalo.
+// Capítulo 4 · Fito en Gran Canaria.
+// Pista en la barra (tabaco opcional a la papelera) → la cola eterna del lavabo, donde la gente intenta
+// colarse (y suena un temón que grabar para Gas) → se apagan las luces entre canción y canción y Gas no
+// la encuentra: hay que encenderle el flash cuando mire hacia ella → minijuego de ritmo → fuegos.
 
-type Phase = 'intro' | 'findBar' | 'wc' | 'back' | 'findGas' | 'rhythm' | 'ending' | 'done';
+type Phase = 'airport' | 'intro' | 'queue' | 'inQueue' | 'film' | 'flash' | 'meet' | 'rhythm' | 'ending' | 'done';
+
+// Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
+const TXT = CONCERT as unknown as Record<string, unknown>;
+const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
+const T_QUEUE_INTRO = () =>
+  txt<Line[]>('queueIntro', [
+    { who: 'Narrador', text: 'Viernes 13. Estadio de Gran Canaria. Gas se va al baño justo antes del concierto.' },
+    { who: 'Gas', text: '(WhatsApp) Toy cola lavabos ya. Pfffff. Temón.' },
+    { who: 'Narrador', text: 'Ve con él a la cola y que no se le cuele nadie.' },
+  ]);
+const T_QUEUE_JOIN = () => txt<string>('queueJoin', '🧍 Con Gas en la cola. Esto va para largo…');
+const T_QUEUE_CUT_IN = () => txt<string[]>('queueCutIn', ['😤 Se os ha colado uno', '😤 «Es que voy con mi amiga, que está ahí delante»', '😤 Colado. Y encima sonríe']);
+const T_QUEUE_BLOCK = () => txt<string[]>('queueCut', ['✋ «Eh, eh. La cola empieza allí atrás»', '✋ «¿Tú también vas con tu amiga? Al final»', '✋ Se va al final, refunfuñando']);
+const T_QUEUE_DONE = () => txt<string>('queueDone', '🚻 ¡Por fin le toca! Y fuera suena un temón…');
+const T_FILM_INTRO = () =>
+  txt<Line[]>('filmIntro', [
+    { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en el baño.' },
+    { who: 'Azul', text: '(WhatsApp) Hize vídeo, don’t worry.' },
+    { who: 'Narrador', text: 'Grábale la canción: mantén a Fito dentro del encuadre aunque la gente salte delante.' },
+  ]);
+const T_FILM_DONE = () => txt<string>('filmDone', '🎥 Vídeo guardado. Gas no se lo pierde (casi)');
+const T_FLASH_INTRO = () =>
+  txt<Line[]>('flashIntro', [
+    { who: 'Narrador', text: 'Gas sale del baño. El estadio está a oscuras y hay miles de personas.' },
+    { who: 'Gas', text: '(WhatsApp) Flash. Pls. Estoy. Xo no veo.' },
+    { who: 'Narrador', text: 'Enciende el flash cuando Gas mire hacia ti.' },
+  ]);
+const T_FLASH_HIT = () => txt<string[]>('flashHit', ['📱 ¡Te ha visto! Viene hacia ti', '📱 Un poco más cerca…', '📱 «¡Ya casi!»', '📱 «¡Te veo!»']);
+const T_FLASH_MISS = () => txt<string[]>('flashWrong', ['🙈 Gas mira hacia otro lado…', '🙈 Se va hacia otro flash', '🙈 Has deslumbrado a un señor de Telde']);
+const T_FLASH_FOUND = () => txt<Line[] | undefined>('flashFound', undefined);
+const T_FLASH_HINT = () => txt<string>('flashHint', 'Enciende el flash cuando la linterna de Gas te apunte');
 
 const BAR_POS = new THREE.Vector3(-17, 0, -8);
 const GAS_POS = new THREE.Vector3(-8.5, 0, 24.2);
@@ -25,8 +58,34 @@ const AISLE_X = -8.5;
 // WC portátiles a la derecha, con la puerta mirando al recinto
 const WC_X = 17;
 const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
-const WC_NEED = 4;
-const CONCERT_SPOT = new THREE.Vector3(0, 0, 2);
+const FILM_SECS = 15;
+// Una sola cola delante de los baños, hacia el recinto
+const Q_Z = -13.25;
+const WC_BROKEN = [0, 4, 5];
+const Q_X0 = WC_X - 3.2;
+const Q_GAP = 0.85;
+const FLASH_SPOT = new THREE.Vector3(AISLE_X, 0, 4);
+const FLASH_NEED = 4;
+const wrapA = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+const LOOKS: PersonLook[] = [
+  { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'short' },
+  { skin: 0xd9a27c, shirt: 0x1b998b, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true },
+  { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x222222, hair: 0xb07a3a, hairStyle: 'cap' },
+  { skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'bun' },
+  { skin: 0xe2b08c, shirt: 0x7a5cff, pants: 0x2a2a2a, hair: 0x3a2414, hairStyle: 'pony' },
+  { skin: 0xb98060, shirt: 0x2d6a4f, pants: 0x4a4a52, hair: 0x1a1a1a, hairStyle: 'short', beard: true },
+];
+
+/** Alguien del público con vida propia: hace cola, entra al baño, sale, o intenta colarse. */
+interface Npc {
+  p: Person;
+  mode: 'free' | 'queue' | 'toWc' | 'leave' | 'cut' | 'tail';
+  tx: number;
+  tz: number;
+  wc: number;
+  walk: number;
+  circle: Circle;
+}
 // Camino serpenteante entre el público hasta Gas
 const CROWD_PATH: [number, number][] = [[-8.5, 4], [-5.5, 9], [-10, 13.5], [-6, 18], [-9.5, 21.5], [GAS_POS.x, GAS_POS.z]];
 function distToPath(x: number, z: number) {
@@ -305,10 +364,50 @@ export class Level3 implements Level {
   private cNbr: number[][] = [];
   private tiltQ = new THREE.Quaternion();
   private tiltAx = new THREE.Vector3();
-  private wcVisits = 0;
-  private wcFree = [false, true, false, false, true, false];
+  // Tres están averiados: de ahí la cola eterna
+  private wcBusyT = WC_Z.map((_, i) => (WC_BROKEN.includes(i) ? Infinity : 4 + Math.random() * 16));
+  private wcRes = WC_Z.map(() => false);
   private wcLights: THREE.MeshBasicMaterial[] = [];
-  private pushT = 0;
+  // La cola: 'azul' es ella; el resto, gente que avanza, entra, sale y se intenta colar
+  private npcs: Npc[] = [];
+  private queue: (Npc | 'azul' | 'gas')[] = [];
+  private allPeople: Circle[] = [];
+  private cutter: Npc | null = null;
+  private cutT = 4;
+  private headT = 0;
+  private joinT = 0;
+  private azWalk = { walk: 0 };
+  private gasQWalk = { walk: 0 };
+  private filmT = 0;
+  private filmIn = 0;
+  private filmYaw = 0;
+  private filmPitch = 0;
+  private filmUi: HTMLDivElement | null = null;
+  private filmDone = false;
+  private baseFov = 0;
+  private cutsBlocked = 0;
+  private cutsLost = 0;
+  private queueT = 0;
+  private recordT = 0;
+  private shoutT = 0;
+  private hudChips = '-';
+  private hudObj = '';
+  // A oscuras: Gas busca con la linterna del móvil y ella le enciende el flash
+  private hemi!: THREE.HemisphereLight;
+  private torch!: THREE.Mesh;
+  private flashLight = new THREE.PointLight(0xf4f8ff, 0, 18, 1.4);
+  private flashHits = 0;
+  private flashMiss = 0;
+  private flashCd = 0;
+  private gaze = 1.2;
+  private gazeTgt = 1.2;
+  private gazeT = 0;
+  private gasS = 0;
+  private gasTargetS = 0;
+  private gasWalk = { walk: 0 };
+  private gasPath: THREE.Vector3[] = [];
+  private gasPathLen = 0;
+  private gasCircle!: Circle;
   private v1 = new THREE.Vector3();
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
   private crowds: { mesh: THREE.InstancedMesh; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
@@ -345,7 +444,8 @@ export class Level3 implements Level {
     sc.fog = new THREE.Fog(0x1a1340, 40, 260);
     this.sky = new Sky({ top: 0x05041a, mid: 0x1a1446, bottom: 0x3a2050, stars: 900 });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0x9a8cff, 0x4a3a50, 1.5));
+    this.hemi = new THREE.HemisphereLight(0x9a8cff, 0x4a3a50, 1.5);
+    sc.add(this.hemi);
     // Luz principal desde el escenario (rosa), con sombras que siguen a Azul
     this.sun = new Sun(sc, 0xffc0e0, 1.6, new THREE.Vector3(0.3, 0.9, 1), 22);
 
@@ -367,6 +467,8 @@ export class Level3 implements Level {
     this.people.push({ x: GAS_POS.x, z: GAS_POS.z, r: 0.35 });
     this.initCrowdPhysics();
     this.buildProps();
+    this.buildQueue();
+    this.buildFlash();
 
     this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short' });
     this.barman.root.position.set(BAR_POS.x - 1.6, 0, BAR_POS.z);
@@ -395,9 +497,9 @@ export class Level3 implements Level {
     this.busy = true;
     setTimeout(() => {
       if (this.phase !== 'intro') return;
-      dialogue(CONCERT.intro, () => {
+      dialogue(T_QUEUE_INTRO(), () => {
         this.busy = false;
-        this.phase = 'findBar';
+        this.phase = 'queue';
         this.updateHud();
       });
     }, 500);
@@ -789,109 +891,545 @@ export class Level3 implements Level {
   }
 
   private paintToilets() {
-    this.wcLights.forEach((m, i) => m.color.set(this.wcFree[i] ? 0x2ecc71 : 0xe74c3c));
+    this.wcLights.forEach((m, i) => m.color.set(this.wcFree(i) ? 0x2ecc71 : 0xe74c3c));
   }
 
-  /** Índice del WC más cercano a la puerta (si Azul está delante de alguno). */
-  private toiletAt(p: THREE.Vector3) {
-    for (let i = 0; i < WC_Z.length; i++) if (Math.abs(p.x - (WC_X - 1.3)) < 1.1 && Math.abs(p.z - WC_Z[i]) < 0.65) return i;
-    return -1;
+  private wcFree(i: number) {
+    return this.wcBusyT[i] <= 0 && !this.wcRes[i];
   }
 
-  private nearestFreeToilet() {
-    const p = this.player.root.position;
-    let best = -1;
-    let bd = Infinity;
-    this.wcFree.forEach((f, i) => {
-      const d = Math.abs(p.z - WC_Z[i]);
-      if (f && d < bd) {
-        bd = d;
-        best = i;
+  private freeToilet() {
+    const free = WC_Z.map((_, i) => i).filter((i) => this.wcFree(i));
+    if (!free.length) return -1;
+    // El más cercano a la cabeza de la cola
+    return free.reduce((a, b) => (Math.abs(WC_Z[a] - Q_Z) <= Math.abs(WC_Z[b] - Q_Z) ? a : b));
+  }
+
+  private slot(k: number, out = this.v1) {
+    return out.set(Q_X0 - k * Q_GAP, 0, Q_Z);
+  }
+
+  private get azIdx() {
+    return this.queue.indexOf('azul');
+  }
+
+  private get gIdx() {
+    return this.queue.indexOf('gas');
+  }
+
+  /** Gente para la cola (Gas ya está en ella) y una reserva para entrar, salir y colarse. */
+  private buildQueue() {
+    for (let i = 0; i < 13; i++) {
+      const lk = LOOKS[i % LOOKS.length];
+      const p = makePerson({ ...lk, shirt: i < LOOKS.length ? lk.shirt : new THREE.Color().setHSL(Math.random(), 0.55, 0.5).getHex() });
+      p.root.visible = false;
+      p.root.position.set(1e4, 0, 1e4);
+      this.scene.add(p.root);
+      const n: Npc = { p, mode: 'free', tx: 0, tz: 0, wc: -1, walk: Math.random() * 6, circle: { x: 1e4, z: 1e4, r: 0.32 } };
+      this.npcs.push(n);
+    }
+    for (let k = 0; k < 9; k++) {
+      if (k === 6) {
+        this.queue.push('gas');
+        this.gas.root.position.copy(this.slot(k));
+        this.gas.root.rotation.y = Math.PI / 2;
+        continue;
       }
-    });
-    return best;
+      const n = this.spawn(this.slot(k).x, Q_Z + (Math.random() - 0.5) * 0.15);
+      n.mode = 'queue';
+      n.p.root.rotation.y = Math.PI / 2;
+      this.queue.push(n);
+    }
+    this.allPeople = [...this.people, ...this.npcs.map((n) => n.circle)];
+    this.gasCircle = this.people[this.people.length - 1];
   }
 
-  private useToilet(i: number) {
+  private spawn(x: number, z: number) {
+    const n = this.npcs.find((m) => m.mode === 'free' && !m.p.root.visible) ?? this.npcs[0];
+    n.p.root.visible = true;
+    n.p.root.position.set(x, 0, z);
+    n.tx = x;
+    n.tz = z;
+    return n;
+  }
+
+  private hide(n: Npc) {
+    n.mode = 'free';
+    n.p.root.visible = false;
+    n.p.root.position.set(1e4, 0, 1e4);
+  }
+
+  /** Paso de un personaje hacia un punto, con su ciclo de andar. Devuelve true al llegar. */
+  private stepTo(p: Person, st: { walk: number }, tx: number, tz: number, speed: number, dt: number, idleFace?: number) {
+    const r = p.root.position;
+    const dx = tx - r.x;
+    const dz = tz - r.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.06) {
+      if (idleFace !== undefined) p.root.rotation.y += wrapA(idleFace - p.root.rotation.y) * Math.min(1, dt * 6);
+      animatePerson(p, dt, 'idle');
+      return true;
+    }
+    const sp = speed * Math.min(1, d / 0.5 + 0.35);
+    const step = Math.min(d, sp * dt);
+    r.x += (dx / d) * step;
+    r.z += (dz / d) * step;
+    p.root.rotation.y += wrapA(Math.atan2(dx, dz) - p.root.rotation.y) * Math.min(1, dt * 9);
+    st.walk += step / 0.53;
+    animatePerson(p, dt, 'walk', Math.min(1, sp / 5.8), st.walk);
+    return d - step < 0.06;
+  }
+
+  /** La cola viva: los baños se ocupan y se vacían, la cabeza entra, la gente se une al final o se cuela. */
+  private stepQueue(dt: number) {
+    if (this.phase === 'film' || this.phase === 'flash' || this.phase === 'meet' || this.phase === 'rhythm' || this.phase === 'ending' || this.phase === 'done') {
+      for (const n of this.npcs) if (n.mode !== 'free') this.hide(n);
+      return;
+    }
+    const pp = this.player.root.position;
+    for (let i = 0; i < WC_Z.length; i++) {
+      if (this.wcBusyT[i] <= 0) continue;
+      this.wcBusyT[i] -= dt;
+      if (this.wcBusyT[i] <= 0 && !this.wcRes[i]) {
+        // Sale alguien y se vuelve al concierto
+        const n = this.spawn(WC_X - 0.9, WC_Z[i]);
+        n.mode = 'leave';
+        n.tx = 2 + Math.random() * 8;
+        n.tz = -2 + Math.random() * 6;
+        const d = pp.distanceTo(n.p.root.position);
+        if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 180, 0.08);
+      }
+    }
+    // La cabeza de la cola entra en cuanto se libera uno (Gas espera su turno)
+    this.headT -= dt;
+    const head = this.queue[0];
+    if (head && typeof head !== 'string' && this.headT <= 0) {
+      const i = this.freeToilet();
+      if (i >= 0) {
+        this.queue.shift();
+        head.mode = 'toWc';
+        head.wc = i;
+        head.tx = WC_X - 0.95;
+        head.tz = WC_Z[i];
+        this.wcRes[i] = true;
+        this.headT = 0.8;
+      }
+    }
+    // Siempre llega gente nueva al final
+    this.joinT -= dt;
+    const last = Math.max(this.azIdx, this.gIdx);
+    if (this.joinT <= 0 && this.queue.length < last + 3) {
+      this.joinT = this.azIdx >= 0 ? 2.5 + Math.random() * 3 : 0.8 + Math.random();
+      const n = this.spawn(6 + Math.random() * 4, -4 - Math.random() * 3);
+      n.mode = 'tail';
+    }
+    // Colarse: alguien va directo al hueco de delante de Gas
+    if (this.gIdx >= 1 && !this.cutter && this.phase === 'inQueue') {
+      this.cutT -= dt;
+      if (this.cutT <= 0) {
+        this.cutT = 4 + Math.random() * 3.5;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const n = this.spawn(this.slot(this.gIdx - 0.5).x + (Math.random() - 0.5) * 2, Q_Z + side * (5 + Math.random()));
+        n.mode = 'cut';
+        this.cutter = n;
+        audio.warn();
+      }
+    }
+    // Lugar de cada uno en la cola
+    this.queue.forEach((e, k) => {
+      if (typeof e === 'string') return;
+      this.slot(k);
+      e.tx = this.v1.x;
+      e.tz = Q_Z;
+    });
+    const gi = this.gIdx;
+    if (gi >= 0) {
+      this.slot(gi, this.tmpV);
+      this.stepTo(this.gas, this.gasQWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2);
+      this.gasCircle.x = this.gas.root.position.x;
+      this.gasCircle.z = this.gas.root.position.z;
+    }
+    for (const n of this.npcs) {
+      if (n.mode === 'free') continue;
+      const r = n.p.root.position;
+      if (n.mode === 'queue') this.stepTo(n.p, n, n.tx, n.tz, 1.5, dt, Math.PI / 2);
+      else if (n.mode === 'toWc') {
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt)) {
+          this.wcBusyT[n.wc] = 12 + Math.random() * 10;
+          this.wcRes[n.wc] = false;
+          this.hide(n);
+          const d = pp.distanceTo(this.v1.set(WC_X, 0, WC_Z[n.wc]));
+          if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 160, 0.1);
+        }
+      } else if (n.mode === 'leave') {
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt)) this.hide(n);
+      } else if (n.mode === 'tail') {
+        this.slot(this.queue.length);
+        if (this.stepTo(n.p, n, this.v1.x, Q_Z, 1.7, dt) || Math.hypot(r.x - this.v1.x, r.z - Q_Z) < 0.5) {
+          n.mode = 'queue';
+          this.queue.push(n);
+        }
+      } else if (n.mode === 'cut') {
+        const k = this.gIdx;
+        if (k < 1) {
+          n.mode = 'tail';
+          this.cutter = null;
+          continue;
+        }
+        this.slot(k - 0.5);
+        const gx = this.v1.x;
+        const d = Math.hypot(r.x - gx, r.z - Q_Z);
+        // Se acerca disimulando y el último tramo, deprisa
+        if (this.stepTo(n.p, n, gx, Q_Z, d > 3 ? 1.2 : 2.6, dt)) {
+          this.queue.splice(k, 0, n);
+          n.mode = 'queue';
+          this.cutter = null;
+          this.cutsLost++;
+          audio.hit();
+          vibrate(30);
+          const lines = T_QUEUE_CUT_IN();
+          toast(lines[(this.cutsLost - 1) % lines.length]);
+          this.updateHud();
+        }
+      }
+      n.circle.x = r.x;
+      n.circle.z = r.z;
+    }
+    for (const n of this.npcs) if (n.mode === 'free') n.circle.x = n.circle.z = 1e4;
+    this.paintToilets();
+  }
+
+  /** ¿El que se cuela está a tiro para pararle los pies? */
+  private cutterNear() {
+    const n = this.cutter;
+    if (!n) return false;
+    this.slot(this.gIdx - 0.5, this.tmpV);
+    return Math.hypot(n.p.root.position.x - this.tmpV.x, n.p.root.position.z - Q_Z) < 3.4;
+  }
+
+  private blockCutter() {
+    const n = this.cutter;
+    if (!n) return;
+    this.cutter = null;
+    n.mode = 'tail';
+    this.cutsBlocked++;
+    this.shoutT = 1.2;
+    audio.luck();
+    vibrate(15);
+    const lines = T_QUEUE_BLOCK();
+    toast(lines[(this.cutsBlocked - 1) % lines.length]);
+    this.fx.burst(n.p.root.position.clone().setY(2.2), '✋', 1, 0.6, 0.5);
+    this.updateHud();
+  }
+
+  /** Se pone con Gas: justo detrás de él. */
+  private joinQueue() {
+    this.queue.splice(this.gIdx + 1, 0, 'azul');
+    this.phase = 'inQueue';
+    this.walker.stop();
+    this.queueT = 0;
+    this.cutT = 2.5;
+    toast(T_QUEUE_JOIN());
+    this.updateHud();
+  }
+
+  /** Le toca a Gas: él entra y fuera empieza un temón. */
+  private gasTurn() {
     this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
-    this.wcFree[i] = false;
-    this.paintToilets();
-    audio.pop();
-    fadeFlash(() => {
-      this.wcVisits++;
-      audio.splash();
-      // Otra persona se mete en ese y se libera otro
-      const others = this.wcFree.map((f, k) => (!f && k !== i ? k : -1)).filter((k) => k >= 0);
-      this.wcFree.fill(false);
-      this.wcFree[others[Math.floor(Math.random() * others.length)]] = true;
-      if (Math.random() < 0.5) this.wcFree[others[Math.floor(Math.random() * others.length)]] = true;
-      this.paintToilets();
-      this.player.root.position.set(WC_X - 1.6, 0, WC_Z[i]);
-      this.walker.facing = this.walker.yaw = -Math.PI / 2;
-      this.updateHud();
-    }, 900);
+    if (this.cutter) {
+      this.cutter.mode = 'tail';
+      this.cutter = null;
+    }
+    toast(T_QUEUE_DONE());
+    audio.cheer(0.35);
     setTimeout(() => {
-      this.fx.burst(this.player.root.position.clone().setY(2.2), '🧻', 2, 0.8, 0.6);
-      if (this.wcVisits >= WC_NEED) {
-        dialogue(CONCERT.wcDone, () => {
-          this.busy = false;
-          this.phase = 'findGas';
-          this.updateHud();
-        });
-      } else {
-        toast(CONCERT.wcBack[this.wcVisits - 1]);
-        this.busy = false;
-        this.phase = 'back';
+      fadeFlash(() => {
+        this.queue = this.queue.filter((e) => typeof e !== 'string');
+        this.gas.root.visible = false;
+        this.gasCircle.x = this.gasCircle.z = 1e4;
+        this.player.root.position.copy(FLASH_SPOT);
+        this.walker.stop();
+        this.phase = 'film';
         this.updateHud();
+      }, 500);
+      setTimeout(() => dialogue(T_FILM_INTRO(), () => this.startFilm()), 1100);
+    }, 1200);
+  }
+
+  /** Grabar el temón con el móvil: la cámara es el móvil y Fito no para de moverse por el escenario. */
+  private startFilm() {
+    this.busy = false;
+    this.input.reset();
+    this.filmT = 0;
+    this.filmIn = 0;
+    this.filmYaw = 0;
+    this.filmPitch = 0.12;
+    this.baseFov = this.camera.fov;
+    this.player.root.visible = false;
+    audio.startMusic('road');
+    const ui = document.createElement('div');
+    ui.style.cssText = 'position:fixed;inset:17% 12% 4%;border:3px solid rgba(255,255,255,.85);border-radius:22px;pointer-events:none;z-index:5;box-shadow:0 0 0 2000px rgba(0,0,0,.35)';
+    ui.innerHTML =
+      '<div style="position:absolute;left:16px;top:10px;color:#fff;font:600 16px Fredoka,sans-serif"><span data-rec style="color:#ff3b3b">●</span> REC <span data-t>0:00</span></div>' +
+      '<div style="position:absolute;right:16px;top:10px;color:#fff;font:600 16px Fredoka,sans-serif">🎸 <span data-q>0</span>%</div>' +
+      '<div data-box style="position:absolute;left:29%;right:29%;top:25%;bottom:25%;border:2px dashed rgba(255,255,255,.6);border-radius:10px"></div>' +
+      '<div data-hands style="position:absolute;inset:0;overflow:hidden"></div>';
+    document.body.append(ui);
+    this.filmUi = ui;
+    this.updateHud();
+  }
+
+  private stepFilm(dt: number) {
+    const ui = this.filmUi;
+    if (!ui) return;
+    this.filmT += dt;
+    // Fito va y viene por el escenario
+    const fito = this.band[0];
+    fito.root.position.x = Math.sin(this.filmT * 0.75) * 7 + Math.sin(this.filmT * 2.3) * 1.6;
+    // El móvil: joystick o arrastrar para apuntar
+    const ax = this.input.axes();
+    this.filmYaw = THREE.MathUtils.clamp(this.filmYaw - ax.x * 1.6 * dt - this.input.consumeCam() * 0.6, -0.9, 0.9);
+    this.filmPitch = THREE.MathUtils.clamp(this.filmPitch + ax.y * 1.0 * dt, -0.1, 0.5);
+    const pp = this.player.root.position;
+    const shake = Math.sin(this.filmT * 23) * 0.006 + Math.sin(this.filmT * 7) * 0.01;
+    this.camera.position.set(pp.x + 0.15, 1.75, pp.z + 0.3);
+    this.camera.fov += (34 - this.camera.fov) * Math.min(1, dt * 4);
+    this.camera.updateProjectionMatrix();
+    this.tmpV.set(pp.x + Math.sin(this.filmYaw + shake) * 10, 1.75 + Math.tan(this.filmPitch + shake) * 10, pp.z + Math.cos(this.filmYaw + shake) * 10);
+    this.camera.lookAt(this.tmpV);
+    this.camera.updateMatrixWorld();
+    // ¿Fito dentro del recuadro?
+    this.tmpV.copy(fito.root.position).setY(fito.root.position.y + 1.6).project(this.camera);
+    const inside = Math.abs(this.tmpV.x) < 0.42 && Math.abs(this.tmpV.y) < 0.5 && this.tmpV.z < 1;
+    if (inside) this.filmIn += dt;
+    (ui.querySelector('[data-box]') as HTMLElement).style.borderColor = inside ? 'rgba(80,255,140,.9)' : 'rgba(255,255,255,.6)';
+    (ui.querySelector('[data-t]') as HTMLElement).textContent = `0:${Math.floor(this.filmT).toString().padStart(2, '0')}`;
+    (ui.querySelector('[data-q]') as HTMLElement).textContent = `${Math.round((this.filmIn / Math.max(0.1, this.filmT)) * 100)}`;
+    (ui.querySelector('[data-rec]') as HTMLElement).style.opacity = this.filmT % 1 < 0.5 ? '1' : '0.2';
+    // Gente que salta delante con las manos arriba
+    if (Math.random() < dt * 0.7) {
+      const h = document.createElement('div');
+      h.textContent = Math.random() < 0.5 ? '🙌' : '🙋';
+      h.style.cssText = `position:absolute;bottom:-90px;left:${10 + Math.random() * 70}%;font-size:90px;transition:transform .45s ease-out;filter:brightness(.35)`;
+      ui.querySelector('[data-hands]')!.append(h);
+      requestAnimationFrame(() => (h.style.transform = 'translateY(-120px)'));
+      setTimeout(() => (h.style.transform = 'translateY(0)'), 650);
+      setTimeout(() => h.remove(), 1200);
+      this.filmYaw += (Math.random() - 0.5) * 0.12;
+    }
+    if (this.filmT >= FILM_SECS) this.endFilm();
+  }
+
+  private endFilm() {
+    this.filmUi?.remove();
+    this.filmUi = null;
+    this.filmDone = true;
+    this.band[0].root.position.x = 0;
+    this.player.root.visible = true;
+    this.camera.fov = this.baseFov;
+    this.camera.updateProjectionMatrix();
+    toast(`${T_FILM_DONE()} · ${this.filmPct()}%`);
+    audio.luck();
+    this.startFlash();
+  }
+
+  private filmPct() {
+    return Math.round((this.filmIn / Math.max(0.1, Math.min(this.filmT, FILM_SECS))) * 100);
+  }
+
+  /** Linterna del móvil de Gas (un cono que barre a oscuras) y el flash de Azul. */
+  private buildFlash() {
+    const geo = new THREE.ConeGeometry(1.5, 9, 18, 1, true).translate(0, -4.5, 0).rotateX(-Math.PI / 2);
+    this.torch = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff4d6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    this.torch.position.set(0.25, 1.55, 0.3);
+    this.torch.visible = false;
+    this.gas.root.add(this.torch);
+    this.scene.add(this.flashLight);
+    // Camino de Gas por el pasillo, de primera fila hasta donde está ella
+    this.gasPath = [...CROWD_PATH].reverse().map(([x, z]) => new THREE.Vector3(x, 0, z));
+    this.gasPath[this.gasPath.length - 1].copy(FLASH_SPOT);
+    for (let i = 1; i < this.gasPath.length; i++) this.gasPathLen += this.gasPath[i].distanceTo(this.gasPath[i - 1]);
+    this.gasPathLen -= 1.2;
+  }
+
+  private gasPathAt(s: number, out: THREE.Vector3) {
+    for (let i = 1; i < this.gasPath.length; i++) {
+      const a = this.gasPath[i - 1];
+      const b = this.gasPath[i];
+      const l = a.distanceTo(b);
+      if (s <= l) return out.copy(a).lerp(b, s / l);
+      s -= l;
+    }
+    return out.copy(this.gasPath[this.gasPath.length - 1]);
+  }
+
+  private setDark(dark: boolean) {
+    this.hemi.intensity = dark ? 0.3 : 1.5;
+    this.sun.light.intensity = dark ? 0.2 : 1.6;
+    this.spots.forEach((s) => (s.mesh.visible = !dark));
+    this.torch.visible = dark;
+  }
+
+  private startFlash() {
+    this.phase = 'flash';
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.player.root.position.copy(FLASH_SPOT);
+    this.gas.root.position.copy(GAS_POS);
+    this.gas.root.visible = true;
+    this.gasS = this.gasTargetS = 0;
+    this.flashHits = this.flashMiss = 0;
+    this.gaze = this.gazeTgt = 1.3;
+    this.gazeT = 1.5;
+    this.setDark(true);
+    audio.stopMusic();
+    audio.ambience(0.25);
+    this.updateHud();
+    dialogue(T_FLASH_INTRO(), () => {
+      this.busy = false;
+      this.updateHud();
+    });
+  }
+
+  /** ¿Gas está mirando hacia ella ahora mismo (y quieto)? */
+  private gasLooking() {
+    return this.gasS === this.gasTargetS && Math.abs(this.gazeTgt) < 0.3 && Math.abs(this.gaze) < 0.3;
+  }
+
+  private stepFlash(dt: number) {
+    const gp = this.gas.root.position;
+    const pp = this.player.root.position;
+    const toAz = Math.atan2(pp.x - gp.x, pp.z - gp.z);
+    this.flashLight.intensity *= Math.exp(-dt * 7);
+    this.flashLight.position.set(pp.x, 2.1, pp.z);
+    this.flashCd -= dt;
+    if (Math.abs(this.gasS - this.gasTargetS) > 1e-3) {
+      // Ha visto el flash: viene hacia ella (o se va detrás de otro flash)
+      const prev = this.gasPathAt(this.gasS, this.tmpV).clone();
+      const dir = Math.sign(this.gasTargetS - this.gasS);
+      this.gasS += dir * Math.min(Math.abs(this.gasTargetS - this.gasS), 2.4 * dt);
+      this.gasPathAt(this.gasS, gp);
+      const dx = gp.x - prev.x;
+      const dz = gp.z - prev.z;
+      if (dx * dx + dz * dz > 1e-8) this.gas.root.rotation.y += wrapA(Math.atan2(dx, dz) - this.gas.root.rotation.y) * Math.min(1, dt * 10);
+      this.gasWalk.walk += (2.4 * dt) / 0.53;
+      animatePerson(this.gas, dt, 'walk', 0.45, this.gasWalk.walk);
+      this.gaze = 0;
+      if (Math.abs(this.gasS - this.gasTargetS) <= 1e-3) {
+        this.gasS = this.gasTargetS;
+        // Llega a donde la vio y la vuelve a perder entre la gente
+        if (this.flashHits >= FLASH_NEED) {
+          this.phase = 'meet';
+          this.meetGas();
+        } else {
+          this.gazeTgt = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.6);
+          this.gazeT = 1 + Math.random();
+        }
       }
-    }, 1700);
+    } else {
+      // Busca: barre con la linterna a un lado y a otro, y a veces se queda mirando hacia ella
+      this.gazeT -= dt;
+      if (this.gazeT <= 0) {
+        const lookHer = Math.random() < 0.38;
+        this.gazeTgt = lookHer ? (Math.random() - 0.5) * 0.25 : (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 1.1);
+        this.gazeT = lookHer ? 0.9 + Math.random() * 0.6 - this.flashHits * 0.12 : 0.8 + Math.random() * 1.4;
+      }
+      this.gaze += (this.gazeTgt - this.gaze) * Math.min(1, dt * 3.2);
+      this.gas.root.rotation.y += wrapA(toAz + this.gaze - this.gas.root.rotation.y) * Math.min(1, dt * 8);
+      animatePerson(this.gas, dt, 'idle');
+    }
+    const look = this.gasLooking();
+    const mat = this.torch.material as THREE.MeshBasicMaterial;
+    mat.opacity += ((look ? 0.42 : 0.13) - mat.opacity) * Math.min(1, dt * 8);
+    // Azul mira hacia donde está Gas, y la cámara detrás de ella
+    this.walker.facing = this.walker.yaw = toAz + Math.PI;
+  }
+
+  private flash() {
+    if (this.flashCd > 0 || this.phase !== 'flash' || this.gasS !== this.gasTargetS) return;
+    this.flashCd = 0.9;
+    this.flashLight.intensity = 70;
+    this.recordT = 0.5;
+    audio.pop();
+    this.fx.burst(this.player.root.position.clone().setY(2.3), '✨', 3, 0.8, 0.6);
+    if (this.gasLooking()) {
+      this.flashHits++;
+      const lines = T_FLASH_HIT();
+      toast(lines[Math.min(lines.length - 1, this.flashHits - 1)]);
+      audio.luck();
+      vibrate(20);
+      this.gasTargetS = (this.gasPathLen * this.flashHits) / FLASH_NEED;
+    } else {
+      this.flashMiss++;
+      // Se va hacia otro flash: retrocede un poco
+      if (this.gasS > 0.5) this.gasTargetS = Math.max(0, this.gasS - this.gasPathLen / 10);
+      const lines = T_FLASH_MISS();
+      toast(lines[(this.flashMiss - 1) % lines.length]);
+      audio.warn();
+    }
+    this.updateHud();
   }
 
   private updateHud() {
     const h = this.hud;
-    const wcChip = this.wcVisits > 0 || this.phase === 'wc' || this.phase === 'back' ? `<span class="chip">🚻 ${this.wcVisits}/${WC_NEED}</span>` : '';
-    h.setCounters(wcChip + (this.smokeThrown ? '<span class="chip">🚭</span>' : ''));
+    let chips = '';
+    const gi = this.gIdx;
+    if (this.phase === 'inQueue' && gi >= 0) chips += `<span class="chip">🧍 Gas va ${gi + 1}º</span>`;
+    if (this.cutsBlocked + this.cutsLost > 0 && this.phase === 'inQueue') chips += `<span class="chip">✋ ${this.cutsBlocked}</span>`;
+    if (this.filmDone && this.phase !== 'flash') chips += '<span class="chip">📹</span>';
+    if (this.phase === 'flash') chips += `<span class="chip">📸 ${this.flashHits}/${FLASH_NEED}</span>`;
+    chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
+    if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
+    const setObj = (t: string) => {
+      if (t !== this.hudObj) h.setObjective((this.hudObj = t));
+    };
     switch (this.phase) {
       case 'intro':
-      case 'findBar':
-        h.setObjective('Pregunta por Gas en la barra');
+      case 'queue':
+        setObj('Ponte con Gas en la cola del lavabo');
         break;
-      case 'wc':
-        h.setObjective(`Ve a un WC portátil libre (luz verde) · ${this.wcVisits + 1}ª vez`);
+      case 'inQueue':
+        setObj('Que no se le cuele nadie a Gas');
         break;
-      case 'back':
-        h.setObjective('Vuelve al concierto');
+      case 'film':
+        setObj('Mantén a Fito dentro del recuadro');
         break;
-      case 'findGas':
-        h.setObjective('Ábrete paso entre la multitud hasta Gas');
+      case 'flash':
+      case 'meet':
+        setObj(T_FLASH_HINT());
         break;
       case 'rhythm':
-        h.setObjective(CONCERT.rhythm);
+        setObj(CONCERT.rhythm);
         break;
       default:
-        h.setObjective('💙 Feliz cumpleaños 💙');
+        setObj('💙 Feliz cumpleaños 💙');
     }
   }
 
   private target(): THREE.Vector3 | null {
-    if (this.phase === 'findBar') return BAR_POS;
-    if (this.phase === 'findGas') return GAS_POS;
-    if (this.phase === 'back') return CONCERT_SPOT;
-    if (this.phase === 'wc') {
-      const i = this.nearestFreeToilet();
-      return i >= 0 ? this.v1.set(WC_X - 1.3, 0, WC_Z[i]) : null;
-    }
+    if (this.phase === 'queue') return this.gas.root.position;
     return null;
   }
 
   /** Pantallas del escenario: ecualizador, nombre y luces al ritmo. */
   private drawScreens(beat: number, pulse: number) {
     const live = this.phase === 'rhythm' || this.phase === 'ending';
+    const dark = this.phase === 'flash' || this.phase === 'meet';
     for (const ctx of this.screenCtx) {
       const w = 512;
       const h = 256;
+      if (dark) {
+        ctx.fillStyle = '#05040c';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = `rgba(255,255,255,${0.15 + 0.1 * Math.sin(this.t * 3)})`;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 60px sans-serif';
+        ctx.fillText('· · ·', w / 2, h / 2 + 20);
+        continue;
+      }
       const hue = (Math.floor(beat / 4) * 40) % 360;
       const g = ctx.createLinearGradient(0, 0, w, h);
       g.addColorStop(0, `hsl(${hue + 260}, 60%, ${12 + pulse * 8}%)`);
@@ -965,11 +1503,16 @@ export class Level3 implements Level {
       (s.mesh.material as THREE.MeshBasicMaterial).color.setHSL(hue, 0.9, 0.55 + pulse * 0.15);
     });
 
-    // Jugadora
-    const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'wc' || this.phase === 'back' || this.phase === 'findGas');
+    // Jugadora (en la cola avanza sola con la cola; a oscuras se queda quieta haciendo señales)
+    const walking = !this.busy && this.phase === 'queue';
+    const az = this.azIdx;
+    const inQueue = this.phase === 'inQueue' && az >= 0 && !this.busy;
     this.walker.turn(this.input.consumeCam());
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
+    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.allPeople);
     this.stepCrowd(dt);
+    this.stepQueue(dt);
+    if (this.phase === 'flash' || this.phase === 'meet') this.stepFlash(dt);
+    if (this.phase === 'film') this.stepFilm(dt);
     {
       const pp0 = this.player.root.position;
       const m = this.movers[0];
@@ -984,12 +1527,26 @@ export class Level3 implements Level {
         if (d < 14) audio.knock(Math.min(1, im.strength * (im.kind === 'cup' ? 6 : 2)) / (1 + d * 0.3), im.kind === 'ball' ? 520 : 2300);
       }
     }
-    this.player.root.rotation.y = this.walker.facing;
     const live = this.phase === 'rhythm' || this.phase === 'ending';
-    if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
-    else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+    if (inQueue) {
+      this.slot(az, this.tmpV);
+      this.stepTo(this.player, this.azWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2);
+      this.walker.facing = this.player.root.rotation.y;
+      if (this.shoutT > 0) animatePerson(this.player, dt, 'talk');
+    } else {
+      this.player.root.rotation.y = this.walker.facing;
+      if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
+      else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : this.phase === 'flash' && this.flashCd > 0 ? 'wave' : 'idle', mag, this.walker.walk, this.walker);
+    }
+    // Móvil en alto: grabando el temón o haciendo flash
+    this.shoutT -= dt;
+    this.recordT -= dt;
+    if (this.recordT > 0) {
+      this.player.armR.rotation.x = -2.5;
+      this.player.elbowR.rotation.x = -0.5;
+    }
     if (live) animatePerson(this.gas, dt, 'dance', 0, beat * Math.PI + 1);
-    else animatePerson(this.gas, dt, 'wave');
+
     animatePerson(this.barman, dt, this.player.root.position.distanceTo(BAR_POS) < 4 ? 'talk' : 'idle');
 
     // Escenario vivo: pantallas, láseres y mecheros
@@ -1006,7 +1563,7 @@ export class Level3 implements Level {
         ((l as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.6;
       });
     }
-    this.lighters.visible = live || this.phase === 'findGas';
+    this.lighters.visible = live || this.phase === 'flash' || this.phase === 'meet';
     (this.lighters.material as THREE.PointsMaterial).size = 0.6 + Math.sin(this.t * 13) * 0.08;
     this.lighters.position.x = Math.sin(this.t * 1.2) * 0.25;
 
@@ -1028,63 +1585,28 @@ export class Level3 implements Level {
           this.fx.burst(SMOKE_POS.clone().setY(1), '✨', 8);
           this.updateHud();
         };
-      } else if (this.phase === 'wc' && this.toiletAt(pp) >= 0) {
-        const i = this.toiletAt(pp);
-        if (this.wcFree[i]) {
-          label = '🚻 Entrar';
-          action = () => this.useToilet(i);
-        } else {
-          label = '🚫 Ocupado';
-          action = () => {
-            audio.warn();
-            toast(CONCERT.wcBusy[Math.floor(Math.random() * CONCERT.wcBusy.length)]);
-          };
-        }
+      } else if (pp.distanceTo(this.gas.root.position) < 1.9) {
+        label = '🧍 Con Gas';
+        action = () => this.joinQueue();
       } else if (pp.distanceTo(BAR_POS) < 3.2) {
         label = 'Hablar';
-        action = () => this.talk(this.phase === 'findBar' ? CONCERT.barman : CONCERT.barmanAgain, () => (this.phase === 'findBar' ? 'wc' : this.phase));
-      } else if (this.phase === 'findGas' && pp.distanceTo(GAS_POS) < 3) {
-        label = 'Hablar';
-        action = () => this.meetGas();
+        action = () => this.talk(CONCERT.barmanAgain, () => this.phase);
       }
+    } else if (inQueue) {
+      // En la cola: parar a los que se cuelan hasta que le toque a Gas
+      this.queueT += dt;
+      if (this.gIdx === 0 && this.queueT > 3) this.gasTurn();
+      else if (this.cutterNear()) {
+        label = '✋ ¡A la cola!';
+        action = () => this.blockCutter();
+      }
+    } else if (this.phase === 'flash' && !this.busy && this.gasS === this.gasTargetS) {
+      label = '📸 Flash';
+      action = () => this.flash();
     }
-    this.hud.setAction(label, label === 'Tirar 🚭' || label === '🚻 Entrar');
+    if (inQueue) this.updateHud();
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!');
     if (this.input.consumeAction() && action) action();
-
-    // Vuelta al concierto entre visita y visita al baño
-    if (this.phase === 'back' && !this.busy && pp.distanceTo(CONCERT_SPOT) < 3) {
-      this.phase = 'wc';
-      audio.warn();
-      toast(CONCERT.wcAgain[Math.min(CONCERT.wcAgain.length - 1, this.wcVisits - 1)]);
-      this.updateHud();
-    }
-
-    // Entre la multitud: empujones de vez en cuando
-    this.pushT -= dt;
-    if (this.phase === 'findGas' && walking && this.pushT <= 0) {
-      const ni = this.people.findIndex((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 1.0);
-      const near = ni >= 0 ? this.people[ni] : undefined;
-      if (near && Math.random() < dt * 2.5) {
-        // Alguien se tambalea hacia ella y la arrolla
-        if (ni < this.cHome.length) {
-          const ux = pp.x - near.x;
-          const uz = pp.z - near.z;
-          const ud = Math.hypot(ux, uz) || 1;
-          this.cVel[2 * ni] += (ux / ud) * 1.6;
-          this.cVel[2 * ni + 1] += (uz / ud) * 1.6;
-        }
-        const dx = pp.x - near.x;
-        const dz = pp.z - near.z;
-        const d = Math.hypot(dx, dz) || 1;
-        this.walker.knock.set((dx / d) * 4, 0, (dz / d) * 4 - 2.5);
-        this.walker.shake(0.25);
-        vibrate(25);
-        audio.hit();
-        toast(CONCERT.pushes[Math.floor(Math.random() * CONCERT.pushes.length)]);
-        this.fx.burst(pp.clone().setY(2.2), '💥', 1, 0.6, 0.5);
-        this.pushT = 2.2;
-      }
-    }
 
     // Marcador y flecha
     const tgt = this.target();
@@ -1122,17 +1644,23 @@ export class Level3 implements Level {
   private meetGas() {
     this.busy = true;
     this.input.reset();
+    this.hud.setAction(null);
     const pp = this.player.root.position;
-    this.walker.facing = Math.atan2(GAS_POS.x - pp.x, GAS_POS.z - pp.z);
-    this.gas.root.rotation.y = Math.atan2(pp.x - GAS_POS.x, pp.z - GAS_POS.z);
-    dialogue([...CONCERT.gasFound, this.smokeThrown ? CONCERT.gasSmoke : CONCERT.gasNoSmoke], () => this.startRhythm());
+    const gp = this.gas.root.position;
+    this.walker.facing = Math.atan2(gp.x - pp.x, gp.z - pp.z);
+    this.gas.root.rotation.y = Math.atan2(pp.x - gp.x, pp.z - gp.z);
+    dialogue([...(T_FLASH_FOUND() ?? CONCERT.gasFound), this.smokeThrown ? CONCERT.gasSmoke : CONCERT.gasNoSmoke], () => this.startRhythm());
   }
 
   private startRhythm() {
     this.busy = true;
     this.phase = 'rhythm';
+    // Se vuelve la luz y Gas la lleva a su sitio en primera fila
+    this.setDark(false);
+    this.flashLight.intensity = 0;
     this.player.root.position.set(GAS_POS.x + 1.1, 0, GAS_POS.z);
     this.walker.facing = 0;
+    this.gas.root.position.copy(GAS_POS);
     this.gas.root.rotation.y = 0;
     this.hud.setAction(null);
     this.updateHud();
@@ -1174,8 +1702,10 @@ export class Level3 implements Level {
             stars: acc >= 0.9 ? 3 : acc >= 0.65 ? 2 : 1,
             stats: [
               ['Notas', `${hits}/${total}`],
-              ['Perfectas', `${perfects}`],
-              ['Mejor racha', `x${maxCombo}`],
+              ['Perfectas', `${perfects} · racha x${maxCombo}`],
+              ['Colados frenados', `${this.cutsBlocked}/${this.cutsBlocked + this.cutsLost}`],
+              ['Vídeo del temón', `${this.filmPct()}% con Fito en plano 📹`],
+              ['Flashes', `${this.flashHits}/${this.flashHits + this.flashMiss}`],
               ['Tabaco', this.smokeThrown ? 'a la papelera 🚭' : 'sigue ahí… 🚬'],
             ],
           });
@@ -1185,6 +1715,7 @@ export class Level3 implements Level {
   }
 
   private updateCamera(dt: number) {
+    if (this.phase === 'film') return;
     if (this.phase === 'rhythm' || this.phase === 'ending') {
       const p = this.player.root.position;
       const swing = this.phase === 'ending' ? Math.sin(this.t * 0.3) * 3 : 0;
@@ -1210,9 +1741,9 @@ export class Level3 implements Level {
       this.walker.facing = yaw;
     };
     return [
-      { label: '1 · Buscar la barra', run: () => { stop(); this.phase = 'findBar'; tp(0, -18); this.updateHud(); } },
-      { label: '2 · WC portátiles', run: () => { stop(); this.phase = 'wc'; tp(WC_X - 4, -13, Math.PI / 2); this.updateHud(); } },
-      { label: '3 · Buscar a Gas', run: () => { stop(); this.wcVisits = WC_NEED; this.phase = 'findGas'; tp(AISLE_X, 3); this.updateHud(); } },
+      { label: '1 · Cola del lavabo', run: () => { stop(); this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
+      { label: '2 · Grabar el temón', run: () => { stop(); this.phase = 'film'; this.gas.root.visible = false; this.player.root.position.copy(FLASH_SPOT); this.startFilm(); } },
+      { label: '3 · Flash a oscuras', run: () => { stop(); this.filmUi?.remove(); this.filmUi = null; this.player.root.visible = true; this.startFlash(); } },
       { label: '4 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
       {
         label: '5 · Final con fuegos',
@@ -1228,6 +1759,7 @@ export class Level3 implements Level {
 
   dispose() {
     this.rhythm?.dispose();
+    this.filmUi?.remove();
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
