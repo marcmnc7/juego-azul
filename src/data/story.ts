@@ -190,6 +190,7 @@ export const CONCERT = {
     { who: 'Azul', text: '(WhatsApp) ¿¡VOY TARDE!? Tú vas pronto.' },
   ] as Line[],
   airportHint: 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta',
+  burgerHit: ['🍔 ¡Plaf! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó', '🍔 26D ✨pasillo✨… pero con kétchup'],
   queueIntro: [
     { who: 'Narrador', text: 'Viernes 13. Estadio de Gran Canaria. Gas se va al baño justo antes del concierto.' },
     { who: 'Gas', text: '(WhatsApp) Toy cola lavabos ya. Pfffff. Temón.' },
