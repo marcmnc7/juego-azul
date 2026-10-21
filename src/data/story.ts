@@ -292,6 +292,13 @@ export const NIGHT = {
     { who: 'Gas', text: 'Aún no me lo puedo creer. Qué poco me esperaba esto hoy.' },
   ] as Line[],
   candle: (n: number) => `🕯️ ${n}/6`,
+  sneakHint: 'Silencio full: despacio y por las losas, que la grava cruje',
+  lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
+  caught: [
+    { who: 'Madre de Gas', text: '(desde la ventana) ¿Marc? ¿Eres tú?' },
+    { who: 'Gas', text: '(susurrando) ¡Shhh! Sí, mamá… era el gato. Bueno, yo. Vuelve a dormir.' },
+    { who: 'Narrador', text: 'Volvéis a la terraza conteniendo la risa. Otra vez, y ahora sí: silencio full.' },
+  ] as Line[],
 };
 
 // Crucigrama antes de la carta: la vuelta del que Azul le hizo a Gas (MARGAUX, PORTUGAL…).
