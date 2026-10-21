@@ -227,7 +227,12 @@ export class Terrace {
 
   private sit(p: Person) {
     animatePerson(p, 0.016, 'idle');
+    // Sentados de verdad: muslos en el asiento, rodillas dobladas y pies en el suelo
     p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2;
+    p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15;
+    p.footL.rotation.x = p.footR.rotation.x = 0.15;
+    p.body.rotation.z = 0;
+    p.body.position.y = 0;
   }
 
   update(dt: number, camera: THREE.PerspectiveCamera) {

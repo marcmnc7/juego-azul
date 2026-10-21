@@ -156,8 +156,21 @@ export interface Person {
   armL: THREE.Object3D;
   armR: THREE.Object3D;
   handR: THREE.Object3D; // para llevar cosas (una pomada)
+  // Articulaciones: rodillas, tobillos y codos
+  kneeL: THREE.Object3D;
+  kneeR: THREE.Object3D;
+  footL: THREE.Object3D;
+  footR: THREE.Object3D;
+  elbowL: THREE.Object3D;
+  elbowR: THREE.Object3D;
   blink: number;
   t: number;
+  /** Mezcla entre animaciones: modo anterior y tiempo de transición restante. */
+  mode?: PersonMode;
+  blendT?: number;
+  /** Mirada: hacia dónde gira la cabeza en reposo y cuándo cambia. */
+  lookY?: number;
+  lookT?: number;
 }
 
 const HEAD_Y = 1.3; // base del cuello
@@ -240,42 +253,61 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   head.add(eyes);
   body.add(head);
 
+  // Pierna: muslo desde la cadera, rodilla, espinilla y tobillo con el zapato
   const leg = () => {
-    const pivot = new THREE.Group();
-    const m = new Merger()
-      .add(G.capsule, look.skirt ? look.skin : look.pants, 0, -0.27, 0, 0, 0, 0, 0.15, 0.24, 0.15)
-      .add(G.rbox, shoes, 0, -0.58, 0.04, 0, 0, 0, 0.17, 0.12, 0.28)
-      .mesh();
-    pivot.add(m);
-    return pivot;
+    const hip = new THREE.Group();
+    const skinLeg = look.skirt ? look.skin : look.pants;
+    hip.add(new Merger().add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155, 0.135, 0.155).mesh());
+    const knee = new THREE.Group();
+    knee.position.y = -0.26;
+    knee.add(new Merger().add(G.capsule, skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14).mesh());
+    const foot = new THREE.Group();
+    foot.position.y = -0.25;
+    foot.add(new Merger().add(G.rbox, shoes, 0, -0.07, 0.04, 0, 0, 0, 0.17, 0.12, 0.28).mesh());
+    knee.add(foot);
+    hip.add(knee);
+    return { hip, knee, foot };
   };
+  // Brazo: hombro, codo y mano
   const arm = () => {
-    const pivot = new THREE.Group();
-    const m = new Merger()
-      .add(G.capsule, look.shirt, 0, -0.17, 0, 0, 0, 0, 0.14, 0.18, 0.14)
-      .add(G.capsule, look.skin, 0, -0.34, 0, 0, 0, 0, 0.1, 0.12, 0.1)
-      .add(G.sphere, look.skin, 0, -0.47, 0.01, 0, 0, 0, 0.13, 0.14, 0.13)
-      .mesh();
-    pivot.add(m);
-    return pivot;
+    const shoulder = new THREE.Group();
+    shoulder.add(new Merger().add(G.capsule, look.shirt, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14).mesh());
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.24;
+    elbow.add(
+      new Merger()
+        .add(G.capsule, look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
+        .add(G.sphere, look.skin, 0, -0.23, 0.01, 0, 0, 0, 0.13, 0.14, 0.13)
+        .mesh(),
+    );
+    shoulder.add(elbow);
+    return { shoulder, elbow };
   };
-  const legL = leg();
-  const legR = leg();
+  const lL = leg();
+  const lR = leg();
+  const legL = lL.hip;
+  const legR = lR.hip;
   legL.position.set(-0.11, 0.66, 0);
   legR.position.set(0.11, 0.66, 0);
-  const armL = arm();
-  const armR = arm();
+  const aL = arm();
+  const aR = arm();
+  const armL = aL.shoulder;
+  const armR = aR.shoulder;
   armL.position.set(-0.29, 1.17, 0);
   armR.position.set(0.29, 1.17, 0);
   const handR = new THREE.Object3D();
-  handR.position.set(0, -0.48, 0.06);
-  armR.add(handR);
+  handR.position.set(0, -0.24, 0.06);
+  aR.elbow.add(handR);
   body.add(legL, legR, armL, armR);
 
   if (outline) addOutline(body, 0.02);
   root.add(blobShadow(1.1));
   root.scale.setScalar(scale);
-  return { root, body, head, eyes, legL, legR, armL, armR, handR, blink: 2 + Math.random() * 3, t: Math.random() * 10 };
+  return {
+    root, body, head, eyes, legL, legR, armL, armR, handR,
+    kneeL: lL.knee, kneeR: lR.knee, footL: lL.foot, footR: lR.foot, elbowL: aL.elbow, elbowR: aR.elbow,
+    blink: 2 + Math.random() * 3, t: Math.random() * 10,
+  };
 }
 
 /** Anima un personaje: andar, bailar, saludar, celebrar, hablar o reposo (respira y parpadea). */
@@ -285,10 +317,12 @@ export interface Lean {
 }
 
 /**
- * Animación procedural del cuerpo. En 'walk', phase es la fase del paso (ligada a la distancia
- * recorrida) y move la velocidad 0..1: andando los brazos van sueltos y el paso es corto; corriendo
- * la zancada se alarga, los brazos se doblan y bombean, el tronco gira contra las caderas y la
- * cabeza se mantiene estable. Con lean, todo el cuerpo se inclina al acelerar y hacia dentro en las curvas.
+ * Animación procedural del cuerpo con rodillas, tobillos y codos.
+ * - 'walk': phase es la fase del paso (ligada a la distancia) y move la velocidad 0..1. La pierna
+ *   que avanza dobla la rodilla para no arrastrar el pie, la de apoyo se estira y el tobillo mantiene
+ *   la suela plana; de andar a correr la zancada se alarga, la rodilla sube más y los codos se doblan.
+ * - Al cambiar de animación no hay saltos: se mezcla con la postura anterior durante un instante.
+ * - Con lean, todo el cuerpo se inclina al acelerar y hacia dentro en las curvas.
  */
 export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0, phase?: number, lean?: Lean) {
   p.t += dt;
@@ -298,86 +332,171 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
   if (p.blink < 0) p.blink = 2.5 + Math.random() * 3;
   p.eyes.scale.y = p.blink < 0.12 ? 0.15 : 1;
 
-  p.armL.rotation.set(0, 0, -0.12);
-  p.armR.rotation.set(0, 0, 0.12);
-  p.legL.rotation.set(0, 0, 0);
-  p.legR.rotation.set(0, 0, 0);
-  p.head.rotation.set(0, 0, 0);
-  p.body.rotation.set(0, 0, 0);
+  // Transición suave entre animaciones
+  if (p.mode !== mode) {
+    p.blendT = p.mode ? 0.28 : 0;
+    p.mode = mode;
+  }
+  const joints = [p.body, p.head, p.armL, p.armR, p.elbowL, p.elbowR, p.legL, p.legR, p.kneeL, p.kneeR, p.footL, p.footR];
+  const blending = (p.blendT ?? 0) > 0;
+  const prev = blending ? joints.map((j) => [j.rotation.x, j.rotation.y, j.rotation.z]) : null;
+  const prevY = p.body.position.y;
+
+  for (const j of joints) j.rotation.set(0, 0, 0);
+  p.armL.rotation.z = -0.1;
+  p.armR.rotation.z = 0.1;
+  p.elbowL.rotation.x = p.elbowR.rotation.x = -0.15;
   p.body.position.y = 0;
 
   switch (mode) {
     case 'walk': {
+      const k = Math.min(1, move);
+      const run = THREE.MathUtils.smoothstep(k, 0.45, 0.9);
+      const hipAmp = 0.32 + 0.3 * k + 0.12 * run;
+      const leg = (hip: THREE.Object3D, knee: THREE.Object3D, foot: THREE.Object3D, ph: number) => {
+        const sn = Math.sin(ph);
+        const cs = Math.cos(ph);
+        // Positivo = pierna hacia atrás. Avanza (swing) cuando cs < 0
+        const h = sn * hipAmp - 0.06 * run;
+        const swing = Math.max(0, -cs);
+        const kneeFlex = (0.12 + 0.05 * k) * Math.max(0, cs) + swing * swing * (0.55 + 0.45 * k + 0.6 * run) + 0.08 * run;
+        hip.rotation.x = h;
+        knee.rotation.x = kneeFlex;
+        // Suela plana en el apoyo; en el aire la punta sube un poco (y al despegar empuja)
+        foot.rotation.x = -(h + kneeFlex) * 0.85 - swing * 0.15 + Math.max(0, sn) * Math.max(0, cs) * 0.5 * k;
+      };
+      leg(p.legL, p.kneeL, p.footL, t);
+      leg(p.legR, p.kneeR, p.footR, t + Math.PI);
       const s = Math.sin(t);
       const c = Math.cos(t);
-      const k = Math.min(1, move);
-      const run = THREE.MathUtils.smoothstep(k, 0.45, 0.9); // de andar a correr
-      const legAmp = 0.35 + 0.45 * k + 0.15 * run;
-      const armAmp = 0.25 + 0.35 * k;
-      // Altura: dos rebotes por ciclo, más marcados corriendo (fase de vuelo)
-      p.body.position.y = (Math.abs(c) * (0.025 + 0.06 * run) - 0.02 * run) * Math.max(k, 0.3);
-      // Caderas y hombros en contra: el tronco gira con el brazo que va delante
-      p.body.rotation.y = -s * (0.06 + 0.1 * run) * k;
-      p.body.rotation.z = s * 0.035 * k;
-      // Pierna que avanza un poco más que la que empuja (la de atrás se recoge)
-      p.legL.rotation.x = (s > 0 ? s : s * 0.8) * legAmp;
-      p.legR.rotation.x = (s < 0 ? -s : -s * 0.8) * legAmp;
-      // Brazos: sueltos andando, doblados y bombeando corriendo
-      p.armL.rotation.x = -s * armAmp - 0.35 * run;
-      p.armR.rotation.x = s * armAmp - 0.35 * run;
-      p.armL.rotation.z = -0.1 - 0.12 * run;
-      p.armR.rotation.z = 0.1 + 0.12 * run;
-      // La cabeza compensa el giro del tronco y mira al frente
+      // Altura: baja en el apoyo con la rodilla doblada, sube al pasar por encima de la pierna
+      p.body.position.y = (Math.abs(c) * (0.02 + 0.05 * run) - 0.015 - 0.04 * run) * Math.max(k, 0.3);
+      // Caderas y hombros en contra
+      p.body.rotation.y = -s * (0.05 + 0.09 * run) * k;
+      p.body.rotation.z = s * 0.03 * k * (1 - run * 0.5);
+      // Brazos opuestos a las piernas; el codo se dobla más cuando el brazo va delante
+      const armAmp = 0.22 + 0.3 * k + 0.15 * run;
+      const arm = (sh: THREE.Object3D, el: THREE.Object3D, sgn: number) => {
+        const a = -sgn * s * armAmp;
+        sh.rotation.x = a - 0.1 * run;
+        el.rotation.x = -(0.2 + 0.25 * k + 1.0 * run) - Math.max(0, -a) * (0.5 + 0.3 * run);
+      };
+      arm(p.armL, p.elbowL, 1);
+      arm(p.armR, p.elbowR, -1);
+      p.armL.rotation.z = -0.08 - 0.08 * run;
+      p.armR.rotation.z = 0.08 + 0.08 * run;
+      // La cabeza estabiliza la mirada
       p.head.rotation.y = -p.body.rotation.y * 0.85;
-      p.head.rotation.x = 0.04 * k - Math.abs(c) * 0.03 * run;
+      p.head.rotation.x = 0.04 * k - Math.abs(c) * 0.025 * run;
       p.head.rotation.z = -p.body.rotation.z * 0.7;
       break;
     }
     case 'dance': {
       const s = Math.sin(t);
-      p.body.position.y = Math.abs(Math.sin(t * 0.5)) * 0.25;
-      p.body.rotation.y = Math.sin(t * 0.5) * 0.35;
-      p.armL.rotation.z = -2.5 + s * 0.4;
-      p.armR.rotation.z = 2.5 - s * 0.4;
-      p.legL.rotation.x = Math.max(0, s) * 0.5;
-      p.legR.rotation.x = Math.max(0, -s) * 0.5;
-      p.head.rotation.z = s * 0.15;
+      const b = Math.abs(Math.sin(t * 0.5));
+      // Rebote con las rodillas, no con todo el cuerpo rígido
+      const bend = 0.25 + 0.3 * (1 - b);
+      p.body.position.y = b * 0.18 - 0.05;
+      p.legL.rotation.x = -bend * 0.6 - Math.max(0, s) * 0.35;
+      p.legR.rotation.x = -bend * 0.6 - Math.max(0, -s) * 0.35;
+      p.kneeL.rotation.x = bend + Math.max(0, s) * 0.5;
+      p.kneeR.rotation.x = bend + Math.max(0, -s) * 0.5;
+      p.footL.rotation.x = -(p.legL.rotation.x + p.kneeL.rotation.x) * 0.8;
+      p.footR.rotation.x = -(p.legR.rotation.x + p.kneeR.rotation.x) * 0.8;
+      p.body.rotation.y = Math.sin(t * 0.5) * 0.3;
+      p.body.rotation.z = s * 0.06;
+      p.armL.rotation.z = -2.3 + s * 0.35;
+      p.armR.rotation.z = 2.3 - s * 0.35;
+      p.elbowL.rotation.z = -0.4 - Math.max(0, s) * 0.5;
+      p.elbowR.rotation.z = 0.4 + Math.max(0, -s) * 0.5;
+      p.elbowL.rotation.x = p.elbowR.rotation.x = 0;
+      p.head.rotation.z = s * 0.12;
+      p.head.rotation.x = -0.05 + b * 0.08;
       break;
     }
     case 'cheer': {
-      p.body.position.y = Math.abs(Math.sin(t * 1.2)) * 0.18;
-      p.armL.rotation.z = -2.8;
-      p.armR.rotation.z = 2.8 + Math.sin(t * 3) * 0.2;
+      // Saltos de alegría: se agacha, impulsa y aterriza flexionando
+      const ph = (t * 1.2) % Math.PI;
+      const air = Math.sin(ph);
+      p.body.position.y = air * 0.2 - (1 - air) * 0.04;
+      const crouch = (1 - air) * 0.45;
+      p.legL.rotation.x = p.legR.rotation.x = -crouch * 0.6;
+      p.kneeL.rotation.x = p.kneeR.rotation.x = crouch;
+      p.footL.rotation.x = p.footR.rotation.x = -crouch * 0.4 + air * 0.35;
+      p.armL.rotation.z = -2.7;
+      p.armR.rotation.z = 2.7 + Math.sin(t * 3) * 0.15;
+      p.elbowL.rotation.x = p.elbowR.rotation.x = -0.15;
+      p.head.rotation.x = -0.12;
       break;
     }
     case 'wave': {
-      p.armR.rotation.z = 2.6 + Math.sin(t * 7) * 0.35;
-      p.head.rotation.z = Math.sin(t * 2) * 0.08;
-      p.body.position.y = Math.sin(t * 2) * 0.01;
+      // El brazo arriba y la mano saluda desde el codo
+      p.armR.rotation.z = 2.5;
+      p.armR.rotation.x = -0.2;
+      p.elbowR.rotation.z = Math.sin(t * 7) * 0.45;
+      p.elbowR.rotation.x = -0.2;
+      p.head.rotation.z = Math.sin(t * 2) * 0.06;
+      p.body.rotation.z = -0.03;
+      p.kneeL.rotation.x = 0.08;
+      p.body.position.y = Math.sin(t * 2) * 0.008;
       break;
     }
     case 'talk': {
       p.head.rotation.x = Math.sin(t * 6) * 0.05;
-      p.armR.rotation.x = -0.5 + Math.sin(t * 3) * 0.2;
-      p.armR.rotation.z = 0.3;
+      p.head.rotation.y = Math.sin(t * 0.9) * 0.12;
+      p.armR.rotation.x = -0.35 + Math.sin(t * 3) * 0.12;
+      p.armR.rotation.z = 0.25;
+      p.elbowR.rotation.x = -0.9 + Math.sin(t * 3 + 0.6) * 0.3;
+      p.elbowL.rotation.x = -0.2;
+      p.body.rotation.y = Math.sin(t * 0.9) * 0.05;
       break;
     }
     default: {
-      // Respiración
-      p.body.position.y = Math.sin(t * 2) * 0.012;
-      // Cambio de peso de una pierna a otra, muy lento
-      p.body.rotation.z = Math.sin(t * 0.37) * 0.018;
+      // Reposo: respira, carga el peso en una pierna (con la otra rodilla suelta) y mira alrededor
+      p.body.position.y = Math.sin(t * 2) * 0.008;
+      const w = Math.sin(t * 0.37);
+      p.body.rotation.z = w * 0.025;
+      p.kneeL.rotation.x = Math.max(0, w) * 0.16;
+      p.kneeR.rotation.x = Math.max(0, -w) * 0.16;
+      p.legL.rotation.x = -Math.max(0, w) * 0.06;
+      p.legR.rotation.x = -Math.max(0, -w) * 0.06;
+      p.footL.rotation.x = -(p.legL.rotation.x + p.kneeL.rotation.x);
+      p.footR.rotation.x = -(p.legR.rotation.x + p.kneeR.rotation.x);
+      p.armL.rotation.z = -0.1 - Math.sin(t * 2) * 0.015;
+      p.armR.rotation.z = 0.1 + Math.sin(t * 2) * 0.015;
+      p.armL.rotation.x = p.armR.rotation.x = 0.03;
+      // Mirada: elige un punto, gira la cabeza con suavidad y se queda un rato
+      p.lookT = (p.lookT ?? 0) - dt;
+      if (p.lookT <= 0) {
+        p.lookT = 1.5 + Math.random() * 3;
+        p.lookY = (Math.random() - 0.5) * 0.9;
+      }
+      const ly = p.lookY ?? 0;
+      p.head.rotation.y = prevHeadY(p) + (ly - prevHeadY(p)) * Math.min(1, dt * 3);
       p.head.rotation.z = -p.body.rotation.z * 0.6;
-      p.head.rotation.y = Math.sin(t * 0.5) * 0.15;
-      p.armL.rotation.z = -0.12 - Math.sin(t * 2) * 0.02;
-      p.armR.rotation.z = 0.12 + Math.sin(t * 2) * 0.02;
+      p.head.rotation.x = Math.sin(t * 0.7) * 0.03;
     }
   }
   if (lean) {
-    // Inclinación del cuerpo entero desde los pies
     p.body.rotation.x += lean.leanFwd;
     p.body.rotation.z += lean.leanSide;
   }
+  if (prev) {
+    p.blendT = (p.blendT ?? 0) - dt;
+    const a = Math.min(1, dt * 11);
+    joints.forEach((j, i) => {
+      j.rotation.x = prev[i][0] + (j.rotation.x - prev[i][0]) * a;
+      j.rotation.y = prev[i][1] + (j.rotation.y - prev[i][1]) * a;
+      j.rotation.z = prev[i][2] + (j.rotation.z - prev[i][2]) * a;
+    });
+    p.body.position.y = prevY + (p.body.position.y - prevY) * a;
+  }
+  p.head.userData.lookY = p.head.rotation.y;
+}
+
+/** Giro de cabeza del fotograma anterior (para que la mirada se mueva con suavidad). */
+function prevHeadY(p: Person) {
+  return (p.head.userData.lookY as number | undefined) ?? 0;
 }
 
 /** Geometría estática de una persona para la multitud (InstancedMesh). */
