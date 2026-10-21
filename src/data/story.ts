@@ -180,35 +180,11 @@ export const ROAD = {
 };
 
 export const CONCERT = {
-  intro: [
-    { who: 'Narrador', text: 'Gran Canaria, 13 de marzo. Estadio de Gran Canaria, Aullidos Tour de Fito.' },
-    { who: 'Narrador', text: 'Las entradas las compró Azul una noche de enero, un poco borracha. Por Ticketmaster, no por Viagogo. Casi.' },
-    { who: 'Narrador', text: 'Gas ha ido a por bebidas hace veinte minutos y no ha vuelto.' },
-    { who: 'Azul', text: 'Este hombre se pierde hasta en un pasillo. Voy a buscarlo.' },
-    { who: 'Narrador', text: 'Pregunta en la barra.' },
-  ] as Line[],
-  barman: [
-    { who: 'Camarero', text: '¿Un chico moreno? Ha estado aquí intentando pedir a una pareja de ingleses…' },
-    { who: 'Camarero', text: 'Les ha dicho “Uan bir, plis, and tu for mai guaif”. Luego ha dicho “Ow my got” y los ingleses todavía se están riendo.' },
-    { who: 'Camarero', text: 'Se fue hacia el escenario, por la izquierda.' },
-    { who: 'Azul', text: 'Vale. Pero antes… baño. Con tanta cerveza no llego a la primera fila.' },
-    { who: 'Narrador', text: 'Los WC portátiles están a la derecha. Busca uno con la luz verde.' },
-  ] as Line[],
-  barmanAgain: [{ who: 'Camarero', text: '¿Otra vez tú? Los baños, a la derecha. Y Gas, hacia el escenario.' }] as Line[],
-  wcBusy: ['🚫 Ocupado. Alguien canta «Soldadito marinero» dentro…', '🚫 Ocupado. Busca la luz verde', '🚫 Toc, toc… «¡Ocupadooo!»', '🚫 Ocupado. «Cola lavabos… pfff, temón»'],
-  wcBack: ['🚻 1/4 · Uf, qué alivio. Vuelve al concierto', '🚻 2/4 · Vuelve, que suena un temón. «Hice vídeo, don’t worry»', '🚻 3/4 · El de seguridad ya te saluda. Al concierto'],
-  wcAgain: ['¡Otra vez al baño! 🚻 Las cervezas de Gas…', '¿Otra vez? 🚻 Esto es culpa de Gas', 'La última, prometido 🚻'],
-  wcDone: [
-    { who: 'Azul', text: 'Cuatro veces. Récord personal. Ahora sí: ¿dónde se ha metido este hombre?' },
-    { who: 'Narrador', text: 'Te llega un mensaje: «Flash. Pls. Estoy. Xo no veo». Gas está en primera fila, a la izquierda.' },
-    { who: 'Narrador', text: 'Ábrete paso entre la multitud… y cuidado con los empujones.' },
-  ] as Line[],
-  pushes: ['¡Empujón! 😵', '¡Perdona, perdona!', '¡Uy, un pogo! 🤘', '¡Que no veo a Fito!', '¡Sin empujar, eh!', '¡Ese flash no es el de Gas!'],
+  barmanAgain: [{ who: 'Camarero', text: '¿Otra? Tu chico lleva un rato en la cola del baño. Dice que «pfff, temón».' }] as Line[],
   smokeFound: '🚭 ¡A la papelera! Gas va a estar orgulloso: en Canarias, ni uno',
   gasFound: [
-    { who: 'Gas', text: '¡Azul! ¡Por fin! Te he guardado sitio en primera fila. Las cervezas… es una historia larga.' },
-    { who: 'Azul', text: 'Ya me la ha contado el camarero. “And tu for mai guaif”.' },
-    { who: 'Gas', text: 'Buu. Bueno, ¡que empieza! Esta me la sé entera. Y la intro de «A contraluz» todavía me da escalofríos.' },
+    { who: 'Gas', text: '¡Azul! Por fin. Hay como mil flashes, pero el tuyo es el que más brilla.' },
+    { who: 'Azul', text: 'Te he grabado la canción. Me debes una grande.' },
   ] as Line[],
   gasSmoke: { who: 'Gas', text: 'Por cierto… ¿has tirado el tabaco? ¡Esa es mi chica! Dijimos que en Canarias, ni uno.' } as Line,
   gasNoSmoke: { who: 'Gas', text: 'Por cierto, ¿no estarás fumando, eh? Que dijimos que en Canarias, ni uno…' } as Line,
@@ -229,6 +205,8 @@ export const CONCERT = {
   ] as Line[],
   queueCut: ['¡Que se cuela! ✋', '¡Eh, que estábamos antes!', '«Solo voy a lavarme las manos»… sí, claro', '¡Ni de broma! ✋'],
   queueDone: '🚻 ¡Por fin! Y fuera suena un temón…',
+  queueJoin: '🧍 Con Gas en la cola. «Toy cola lavabos ya. Pfffff»',
+  queueCutIn: ['😤 Se os ha colado uno', '😤 «Es que voy con mi amiga, que está ahí delante»', '😤 Colado. Y Gas: «Temón… y yo aquí»'],
   filmIntro: [
     { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en la cola.' },
     { who: 'Azul', text: '(WhatsApp) Hize vídeo, don’t worry.' },
@@ -243,6 +221,8 @@ export const CONCERT = {
     { who: 'Gas', text: '(WhatsApp) Xo no veo.' },
     { who: 'Narrador', text: 'Enciende el flash del móvil cuando Gas mire hacia ti. Si lo enciendes mientras mira a otro lado, se va hacia otro flash.' },
   ] as Line[],
+  flashHint: 'Enciende el flash cuando Gas mire hacia ti',
+  flashHit: ['📱 «Flash» ¡Te ha visto!', '📱 «Pls» Viene hacia ti…', '📱 «Estoy» ¡Ya casi!', '📱 «Xo no veo»… ¡ya sí!'],
   flashWrong: ['Ese no era tu flash… 🙃', 'Gas se va hacia una señora con linterna', '¡Ahora no, que mira al otro lado!'],
   flashFound: [
     { who: 'Gas', text: '¡Azul! Hay como mil flashes, pero el tuyo es el que más brilla.' },
