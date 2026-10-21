@@ -17,7 +17,8 @@ export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, Menorca', emoji: '🫏' },
   { id: 2, name: 'La ruta de las zamburiñas', place: 'Madrid → San Vicente de la Barquera → Logroño', emoji: '🚗' },
   { id: 3, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria', emoji: '🎸' },
-  { id: 4, name: 'Noche de piscina y estrellas', place: 'Sa Caleta, en casa', emoji: '🌙' },
+  { id: 4, name: 'Sant Joan', place: 'Ciutadella, Menorca', emoji: '🐎' },
+  { id: 5, name: 'Noche de piscina y estrellas', place: 'Sa Caleta, donde empezó todo', emoji: '🌙' },
 ];
 
 export const FERRERIES = {
@@ -207,7 +208,8 @@ export const CONCERT = {
 
 export const NIGHT = {
   bar: [
-    { who: 'Narrador', text: 'Ciutadella, la noche del 26 de agosto. Azul está en el Imperi. Sigue con la Coca-Cola, que se lo prometió.' },
+    { who: 'Narrador', text: 'Volvamos al principio. Ciutadella, 26 de agosto de 2025, la noche después de Ferreries.' },
+    { who: 'Narrador', text: 'Azul está en el Imperi. Sigue con la Coca-Cola, que se lo prometió.' },
     { who: 'Narrador', text: 'Le llega un mensaje: «Ve hacia Pins. Coche azul. Gira».' },
     { who: 'Gas', text: '¡Azul! Sube, que te llevo. Mañana me voy y no pienso despedirme por WhatsApp.' },
     { who: 'Azul', text: '¿A dónde?' },

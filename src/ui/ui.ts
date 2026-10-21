@@ -60,7 +60,7 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   });
   const allDone = opts.test || LEVELS.every((l) => done.has(l.id));
   const fin = el('button', 'level-card final' + (allDone ? '' : ' locked'));
-  fin.append(el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines los cuatro capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒'));
+  fin.append(el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines todos los capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒'));
   if (allDone) fin.onclick = () => crossword(() => finalLetter(back), back);
   list.append(fin);
   s.append(list);

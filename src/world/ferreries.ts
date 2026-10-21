@@ -29,6 +29,13 @@ interface Hang {
   facing: 1 | -1;
 }
 
+/** Carteles del pueblo, para reutilizar las calles en otras fiestas (Sant Joan en Ciutadella). */
+export interface TownDressing {
+  banner: [string[], string];
+  signs: [string, string];
+  bars?: [string, string, string, string];
+}
+
 export interface FerreriesWorld {
   group: THREE.Group;
   colliders: Box2[];
@@ -253,7 +260,7 @@ function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => numb
 
 const MARC = new THREE.Vector3(-5.2, 0, 21.6);
 
-export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
+export function buildFerreries(scene: THREE.Scene, town?: TownDressing): FerreriesWorld {
   const group = new THREE.Group();
   const colliders: Box2[] = [];
   const lamps: Lamp[] = [];
@@ -372,10 +379,10 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   }
 
   // Bares
-  bar(m, 9, 8, 1, 0x2a7a50, colliders, 'Bar Es Pla', signs);
-  bar(m, -28, -3.6, 1, 0xc23b3b, colliders, 'Cas Ferrer', signs);
-  bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, 'Sa Penya', signs);
-  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, 'Bar Sa Plaça', signs);
+  bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs);
+  bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs);
+  bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, town?.bars?.[2] ?? 'Sa Penya', signs);
+  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Plaça', signs);
   const barFronts = [new THREE.Vector3(9, 0, 10.2), new THREE.Vector3(-28, 0, -1.6), new THREE.Vector3(30, 0, 1.6), new THREE.Vector3(-7.5, 0, 22.2)];
   const tables: [number, number][] = [[7.5, 18], [-6, 18], [-24, -1.5], [33, 1.2], [-9, 7], [-31, -1.4], [27, 1.3]];
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
@@ -444,7 +451,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   if (senyeraPlanes.length) group.add(mergedPlanes(senyeraPlanes, senyeraMat));
 
   // Pancartas de las fiestas cruzando la calle y a la entrada del Pla de l'Església
-  const bannerMat = toon({ map: bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "Jaleo d'Ases · 23, 24 i 25 d'agost") });
+  const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "Jaleo d'Ases · 23, 24 i 25 d'agost")) });
   const banners: Parameters<typeof mergedPlanes>[0] = [];
   for (const bx of [-34, 22]) {
     banners.push({ w: 8, h: 2, x: bx, y: 5.3, z: 0, ry: -Math.PI / 2 }, { w: 8, h: 2, x: bx + 0.03, y: 5.3, z: 0, ry: Math.PI / 2 });
@@ -455,9 +462,9 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   group.add(mergedPlanes(banners, bannerMat));
 
   // Placas de calle
-  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture('Carrer de Sant Bartomeu') }));
+  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu') }));
   sign1.position.set(-41, 3.2, -4.86);
-  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture("Pla de l'Església") }));
+  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església") }));
   sign2.position.set(-11.86, 3.0, 14.6);
   sign2.rotation.y = Math.PI / 2;
   const sign3 = sign2.clone();
@@ -482,7 +489,7 @@ export function buildFerreries(scene: THREE.Scene): FerreriesWorld {
   for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.03, 0.6, 0.03);
   m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.04, 0.04, 6);
   colliders.push({ minX: AX - 0.2, maxX: AX + 0.5, minZ: 14.8, maxZ: 21.2 });
-  const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture('AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
+  const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture(town ? 'AJUNTAMENT DE CIUTADELLA' : 'AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
   ajLetters.position.set(AX - 0.1, 7.3, 18);
   ajLetters.rotation.y = -Math.PI / 2;
   group.add(ajLetters);

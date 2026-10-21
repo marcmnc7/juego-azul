@@ -7,6 +7,7 @@ import { Level1 } from './world/level1';
 import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
+import { LevelSantJoan } from './world/levelSantJoan';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -225,7 +226,8 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-const LEVEL_CLASSES = [Level1, Level2, Level3, Level4];
+// Sant Joan va antes de la piscina: la primera noche se guarda para el final
+const LEVEL_CLASSES = [Level1, Level2, Level3, LevelSantJoan, Level4];
 
 function startLevel(n: number) {
   clearScreens();
@@ -248,7 +250,7 @@ function startLevel(n: number) {
         crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
-    // El capítulo 4 no tiene vale: su premio es la carta final
+    // Los capítulos sin vale (Sant Joan y la piscina) vuelven al mapa; el último abre la carta
     if (g) showGift(g, after, result);
     else after();
   };
