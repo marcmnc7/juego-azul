@@ -15,7 +15,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories, epilogue } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -247,7 +247,7 @@ function startLevel(n: number) {
           level.dispose();
           level = null;
         }
-        crossword(() => finalLetter(goMap), goMap);
+        epilogue(() => crossword(() => finalLetter(goMap), goMap));
       } else goMap();
     };
     // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta

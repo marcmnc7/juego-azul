@@ -315,6 +315,22 @@ export const NIGHT = {
 
 // Crucigrama antes de la carta: la vuelta del que Azul le hizo a Gas (MARGAUX, PORTUGAL…).
 // Las letras marcadas, en orden, forman el mensaje escondido.
+// Epílogo antes del crucigrama: un año después, otra vez en el Jaleo de Ferreries.
+export const EPILOGUE = {
+  title: 'Un año después',
+  place: 'Ferreries, 25 de agosto de 2026',
+  lines: [
+    { who: 'Narrador', text: 'Ferreries, 25 de agosto de 2026. Otra vez Sant Bartomeu. Otra vez el Jaleo.' },
+    { who: 'Gas', text: '(WhatsApp) Es ases son a las 11.' },
+    { who: 'Narrador', text: 'Os buscáis entre la gente con la ubicación. Como siempre.' },
+    { who: 'Gas', text: '(WhatsApp) Tengo bocata. Y patatas.' },
+    { who: 'Azul', text: 'Hace un año estaba aquí mismo, la noche antes de los ases. Y tú ibas ciego.' },
+    { who: 'Gas', text: 'Y tú bailando sin fijarte en nadie. Solo te he visto 22 veces. Horas llevo 203.' },
+    { who: 'Azul', text: 'Oye… ¿tenemos fecha nosotros? En la taza puse 25/08.' },
+    { who: 'Gas', text: 'Te contesto por escrito. Pero antes, una cosa: tú me hiciste un crucigrama. Ahora me toca a mí.' },
+  ] as Line[],
+};
+
 export interface CrossClue {
   clue: string;
   answer: string;

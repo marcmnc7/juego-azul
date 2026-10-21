@@ -348,3 +348,4 @@ button { font-family: inherit; cursor: pointer; border: 0; }
   .memories-screen:not(.album) .polaroid { width: clamp(104px, 18vw, 140px); }
   .memories-screen:not(.album) .polaroid figcaption { font-size: 12px; }
 }
+.epilogue-screen { justify-content: flex-start; padding-top: 12vh; }
