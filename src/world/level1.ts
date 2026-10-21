@@ -3,8 +3,8 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
-import { FERRERIES, NAMES } from '../data/story';
-import { buildFerreries, animateCrowd, FerreriesWorld } from './ferreries';
+import { FERRERIES, SANTJOAN, NAMES } from '../data/story';
+import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
@@ -15,6 +15,58 @@ import { clock, type Level, type LevelDone } from './level';
 // Nivel 1 · Jaleo d'ases (Ferreries).
 // Bucle: hablar con Tòfol → 3 pomadas + 3 toques de suerte esquivando ases → volver a Tòfol → encontrar a Marc → bailar → regalo.
 // Los ases avisan con un "!" antes de ponerse de manos; tocarlos en lo más alto da un toque perfecto.
+
+/** El mismo jaleo sirve para Ferreries (Sant Bartomeu) y para Ciutadella (Sant Joan). */
+export interface JaleoVariant {
+  text: typeof FERRERIES & { gasMoves?: string[] };
+  town?: TownDressing;
+  guide: string;
+  item: string;
+  hud: { talk: string; collectItems: string; collectLuck: string; collect: string; back: string; find: string; give: string };
+  bumped: string;
+  statHits: string;
+  horses?: boolean;
+}
+
+export const FERRERIES_VARIANT: JaleoVariant = {
+  text: FERRERIES,
+  guide: 'Tòfol',
+  item: '🍋',
+  hud: {
+    talk: 'Habla con Tòfol en el bar de la plaza',
+    collectItems: 'Recoge las pomadas que faltan en los bares',
+    collectLuck: 'Toca a los ases cuando se pongan de manos',
+    collect: 'Pomadas en los bares y toques a los ases cuando se pongan de manos',
+    back: '¡Lo tienes! Vuelve con Tòfol',
+    find: `Lleva una pomada a ${NAMES.partner}, junto a la iglesia`,
+    give: 'Darle la pomada',
+  },
+  bumped: '¡Buu! Cuidado con los ases 🫏',
+  statHits: 'Empujones de ases',
+};
+
+export const SANTJOAN_VARIANT: JaleoVariant = {
+  text: SANTJOAN,
+  town: {
+    banner: [['Festes de Sant Joan', 'Ciutadella · Menorca'], 'Jaleo · 23 i 24 de juny'],
+    signs: ['Plaça des Born', 'Ses Voltes'],
+    bars: ['Bar Imperi', 'Jazzbah', 'Es Pla', 'Maramao'],
+  },
+  guide: 'Carme',
+  item: '🌰',
+  hud: {
+    talk: 'Habla con Carme en el bar de la plaza',
+    collectItems: 'Recoge las avellanes que faltan',
+    collectLuck: 'Toca a los caballos cuando se pongan de manos',
+    collect: 'Avellanes y toques a los caballos cuando se pongan de manos',
+    back: '¡Lo tienes! Vuelve con Carme',
+    find: 'Encuentra a Gas: sigue su ubicación 📍',
+    give: 'Darle las avellanes',
+  },
+  bumped: '¡Buu! Cuidado con los caballos 🐎',
+  statHits: 'Empujones de caballos',
+  horses: true,
+};
 
 type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'kiss' | 'kissing' | 'ending' | 'done';
 
@@ -102,6 +154,10 @@ export class Level1 implements Level {
   private hue = 0;
   private tmpC = new THREE.Color();
   private solids: Circle[] = [];
+  private T: JaleoVariant['text'];
+  /** Sant Joan: Gas se cambia de sitio cuando te acercas (no encuentra la ubicación). */
+  private gasMovesLeft = 0;
+  private marcBox: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
 
   // temporales reutilizables
   private v1 = new THREE.Vector3();
@@ -112,8 +168,10 @@ export class Level1 implements Level {
     private input: Input,
     private onComplete: LevelDone,
     onMenu: () => void,
+    private V: JaleoVariant = FERRERIES_VARIANT,
   ) {
-    this.world = buildFerreries(this.scene);
+    this.T = V.text;
+    this.world = buildFerreries(this.scene, V.town);
     this.fx = new Particles(this.scene);
     this.buildCups();
 
@@ -124,13 +182,17 @@ export class Level1 implements Level {
     this.walker.facing = this.walker.yaw = Math.PI / 2;
     this.solids.push(...this.world.people);
 
-    this.tofol = makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
+    this.tofol = V.horses
+      ? makePerson({ skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x1f3a6b, hair: 0x6b3f22, hairStyle: 'long', skirt: true, eyes: 0x5a3a22 })
+      : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
     this.tofol.root.position.copy(this.world.tofolPos);
     // Delantal de Tòfol
-    this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
+    if (!V.horses) this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
     this.scene.add(this.tofol.root);
 
-    this.marc = makePerson(MARC_LOOK);
+    // En Sant Joan, Gas lleva la camiseta azul de Azul
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : MARC_LOOK);
+    if (V.horses) this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     this.marc.root.position.copy(this.world.marcPos);
     this.marc.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.marc.root);
@@ -155,12 +217,15 @@ export class Level1 implements Level {
     for (const p of [this.world.tofolPos, this.world.marcPos]) {
       this.world.colliders.push({ minX: p.x - 0.35, maxX: p.x + 0.35, minZ: p.z - 0.35, maxZ: p.z + 0.35 });
     }
+    this.marcBox = this.world.colliders[this.world.colliders.length - 1];
 
     // Ases: 3 dando vueltas en la plaza y 1 paseando por la calle
-    const coats = [0x7d6b5d, 0x5e4f45, 0x8f8379, 0x6d5a4a];
+    // En Sant Joan son caballos negros, más grandes que los ases
+    const coats = V.horses ? [0x15110f, 0x1c1714, 0x120e0c, 0x241c17] : [0x7d6b5d, 0x5e4f45, 0x8f8379, 0x6d5a4a];
     const ringGeo = new THREE.RingGeometry(TOUCH_R - 0.25, TOUCH_R, 40).rotateX(-Math.PI / 2);
     for (let i = 0; i < 4; i++) {
       const d = makeDonkey(coats[i]);
+      if (V.horses) d.root.scale.set(1.15, 1.3, 1.25);
       this.scene.add(d.root);
       const alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: alertTexture(), depthTest: false, transparent: true }));
       alert.position.y = 3.6;
@@ -189,11 +254,19 @@ export class Level1 implements Level {
     }
 
     // Pomadas: vaso con limonada y rodaja de limón, con un haz de luz para verlas de lejos
-    const glassGeo = new Merger()
-      .add(new THREE.CylinderGeometry(0.16, 0.12, 0.38, 12), 0xfff4b0, 0, 0.19, 0)
-      .add(G.cyl, 0xf9e04b, 0.1, 0.4, 0, 0, 0, Math.PI / 2, 0.18, 0.03, 0.18)
-      .add(G.cyl, 0x7fd36b, -0.05, 0.42, 0, 0.3, 0, 0.2, 0.03, 0.35, 0.03)
-      .build();
+    const glassGeo = V.horses
+      ? // Bolsita de avellanes: papel de estraza abierto con avellanes asomando
+        new Merger()
+          .add(new THREE.CylinderGeometry(0.17, 0.14, 0.34, 10), 0xc9a26b, 0, 0.17, 0)
+          .add(G.sphere, 0x8a5a2b, 0.06, 0.36, 0.03, 0, 0, 0, 0.12, 0.11, 0.12)
+          .add(G.sphere, 0x7a4b22, -0.07, 0.37, -0.02, 0, 0, 0, 0.12, 0.11, 0.12)
+          .add(G.sphere, 0x95632f, 0.0, 0.4, -0.07, 0, 0, 0, 0.11, 0.1, 0.11)
+          .build()
+      : new Merger()
+          .add(new THREE.CylinderGeometry(0.16, 0.12, 0.38, 12), 0xfff4b0, 0, 0.19, 0)
+          .add(G.cyl, 0xf9e04b, 0.1, 0.4, 0, 0, 0, Math.PI / 2, 0.18, 0.03, 0.18)
+          .add(G.cyl, 0x7fd36b, -0.05, 0.42, 0, 0.3, 0, 0.2, 0.03, 0.35, 0.03)
+          .build();
     const glassMat = toon({ vertexColors: true, emissive: 0x4a3a00 });
     const beamGeo = new THREE.CylinderGeometry(0.35, 0.5, 7, 16, 1, true).translate(0, 3.5, 0);
     const beamMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
@@ -234,7 +307,7 @@ export class Level1 implements Level {
     this.busy = true;
     setTimeout(() => {
       if (this.stage !== 'intro') return;
-      dialogue(FERRERIES.intro, () => {
+      dialogue(this.T.intro, () => {
         this.busy = false;
         this.stage = 'talkTofol';
         this.updateHud();
@@ -250,25 +323,25 @@ export class Level1 implements Level {
 
   private updateHud() {
     const h = this.hud;
-    const counters = `<span class="chip">🍋 ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
+    const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
     switch (this.stage) {
       case 'intro':
       case 'talkTofol':
-        h.setObjective('Habla con Tòfol en el bar de la plaza');
+        h.setObjective(this.V.hud.talk);
         h.setCounters('');
         break;
       case 'collect':
-        if (this.luckCount >= 3) h.setObjective('Recoge las pomadas que faltan en los bares');
-        else if (this.pomadaCount >= 3) h.setObjective('Toca a los ases cuando se pongan de manos');
-        else h.setObjective('Pomadas en los bares y toques a los ases cuando se pongan de manos');
+        if (this.luckCount >= 3) h.setObjective(this.V.hud.collectItems);
+        else if (this.pomadaCount >= 3) h.setObjective(this.V.hud.collectLuck);
+        else h.setObjective(this.V.hud.collect);
         h.setCounters(counters);
         break;
       case 'returnTofol':
-        h.setObjective('¡Lo tienes! Vuelve con Tòfol');
+        h.setObjective(this.V.hud.back);
         h.setCounters(counters);
         break;
       case 'findMarc':
-        h.setObjective(`Lleva una pomada a ${NAMES.partner}, junto a la iglesia`);
+        h.setObjective(this.V.hud.find);
         h.setCounters('');
         break;
       case 'kiss':
@@ -406,11 +479,11 @@ export class Level1 implements Level {
             lost.taken = false;
             lost.mesh.visible = true;
           }
-          toast(FERRERIES.hints.dropped);
+          toast(this.T.hints.dropped);
           this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 5);
           this.updateHud();
         } else {
-          toast('¡Buu! Cuidado con los ases 🫏');
+          toast(this.V.bumped);
         }
       }
     }
@@ -427,17 +500,17 @@ export class Level1 implements Level {
     if (perfect) {
       this.perfects++;
       audio.perfect();
-      toast(FERRERIES.hints.perfect);
+      toast(this.T.hints.perfect);
       this.fx.burst(at, '✨', 10, 3.5, 1.4);
       vibrate([20, 30, 20]);
     } else {
       audio.luck();
-      toast(k < 0.4 ? FERRERIES.hints.late : FERRERIES.hints.luck);
+      toast(k < 0.4 ? this.T.hints.late : this.T.hints.luck);
       vibrate(25);
     }
     this.fx.burst(at, '🍀', perfect ? 12 : 8);
     audio.cheer(perfect ? 0.45 : 0.3);
-    if (this.luckCount === 3) setTimeout(() => toast(FERRERIES.hints.allLuck), 1200);
+    if (this.luckCount === 3) setTimeout(() => toast(this.T.hints.allLuck), 1200);
     this.checkCollectDone();
   }
 
@@ -550,6 +623,7 @@ export class Level1 implements Level {
     if (carrying && !ending) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
 
     const dT = pp.distanceTo(this.world.tofolPos);
+    if (this.stage === 'findMarc' && this.gasMovesLeft > 0 && !this.busy && pp.distanceTo(this.world.marcPos) < 6) this.moveGas();
     const dM = pp.distanceTo(this.world.marcPos);
     animatePerson(this.tofol, dt, dT < 5 && !ending ? 'wave' : 'idle');
     if (dT < 8) this.tofol.root.rotation.y = Math.atan2(pp.x - this.world.tofolPos.x, pp.z - this.world.tofolPos.z);
@@ -576,7 +650,7 @@ export class Level1 implements Level {
           this.pomadaCount++;
           audio.pickup();
           vibrate(20);
-          toast(FERRERIES.hints.pomada);
+          toast(this.T.hints.pomada);
           this.fx.burst(this.v1.copy(p.home), '✨', 8);
           this.checkCollectDone();
         }
@@ -589,7 +663,7 @@ export class Level1 implements Level {
     let pulse = false;
     if (!this.busy && !ending) {
       if (this.stage === 'collect' && rearingNear) {
-        label = FERRERIES.hints.rear;
+        label = this.T.hints.rear;
         pulse = true;
         const s = rearingNear;
         this.pendingAction = () => this.touchDonkey(s);
@@ -601,7 +675,7 @@ export class Level1 implements Level {
         pulse = true;
         this.pendingAction = () => this.startKiss();
       } else if (dM < 3.5) {
-        label = this.stage === 'findMarc' ? 'Darle la pomada' : 'Hablar';
+        label = this.stage === 'findMarc' ? this.V.hud.give : 'Hablar';
         this.pendingAction = () => this.talkMarc();
       }
     }
@@ -634,7 +708,7 @@ export class Level1 implements Level {
           stars,
           stats: [
             ['Toques perfectos', `${this.perfects}/3`],
-            ['Empujones de ases', `${this.hits}`],
+            [this.V.statHits, `${this.hits}`],
             ['Tiempo', clock(this.playTime)],
           ],
         });
@@ -647,6 +721,23 @@ export class Level1 implements Level {
     this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 7.5, close ? 2.3 : ending ? 4.2 : intro ? 6 : 3.8);
     this.world.sun.follow(pp);
     this.world.sky.update(this.camera, dt);
+  }
+
+  /** Sant Joan: Gas no encuentra la ubicación y se va a otro rincón de la plaza. */
+  private moveGas() {
+    const moves = this.T.gasMoves ?? [];
+    const i = moves.length - this.gasMovesLeft;
+    this.gasMovesLeft--;
+    toast(moves[i]);
+    audio.whoosh();
+    const c = this.world.plazaCenter;
+    const spots = [new THREE.Vector3(c.x - 9, 0, c.z - 6), new THREE.Vector3(c.x + 9, 0, c.z + 2)];
+    const mp = this.world.marcPos;
+    this.fx.burst(this.v1.copy(mp).setY(2.2), '📍', 4, 1.5, 0.6);
+    mp.copy(spots[i % spots.length]);
+    this.marc.root.position.copy(mp);
+    this.marc.root.rotation.y = Math.atan2(c.x - mp.x, c.z - mp.z);
+    if (this.marcBox) Object.assign(this.marcBox, { minX: mp.x - 0.35, maxX: mp.x + 0.35, minZ: mp.z - 0.35, maxZ: mp.z + 0.35 });
   }
 
   private checkCollectDone() {
@@ -667,17 +758,17 @@ export class Level1 implements Level {
       if (next) this.stage = next;
       this.updateHud();
     };
-    if (this.stage === 'talkTofol') dialogue(FERRERIES.tofolQuest, done('collect'));
-    else if (this.stage === 'collect') dialogue(FERRERIES.tofolNotYet, done());
-    else if (this.stage === 'returnTofol') dialogue(FERRERIES.tofolDone, done('findMarc'));
-    else dialogue([{ who: 'Tòfol', text: '¿Qué haces aquí todavía? ¡Ve a por él!' }], done());
+    if (this.stage === 'talkTofol') dialogue(this.T.tofolQuest, done('collect'));
+    else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
+    else if (this.stage === 'returnTofol') dialogue(this.T.tofolDone, done('findMarc'));
+    else dialogue([{ who: this.V.guide, text: '¿Qué haces aquí todavía? ¡Ve a por él!' }], done());
   }
 
   private talkMarc() {
     this.busy = true;
     this.input.reset();
     if (this.stage !== 'findMarc') {
-      dialogue([{ who: NAMES.partner, text: '¡Hola! 🙂 (Te sonríe y sigue bailando… bastante mal.)' }], () => (this.busy = false));
+      dialogue([{ who: this.V.horses ? NAMES.partnerNick : NAMES.partner, text: '¡Hola! 🙂 (Te sonríe y sigue bailando… bastante mal.)' }], () => (this.busy = false));
       return;
     }
     // Ponerse frente a frente
@@ -685,7 +776,7 @@ export class Level1 implements Level {
     const mp = this.world.marcPos;
     this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
     this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
-    dialogue(FERRERIES.marcMeet, () => {
+    dialogue(this.T.marcMeet, () => {
       this.busy = false;
       this.pomadaCount = 0;
       // Se acercan: cara a cara, a un palmo, y la cámara de lado
@@ -733,7 +824,7 @@ export class Level1 implements Level {
     }
     if (this.kissT > 3.2) {
       this.stage = 'done'; // evita que se repita mientras está el diálogo
-      dialogue(FERRERIES.afterKiss, () => {
+      dialogue(this.T.afterKiss, () => {
         this.busy = false;
         this.stage = 'ending';
         this.endingT = 0;
@@ -761,7 +852,7 @@ export class Level1 implements Level {
       this.updateHud();
     };
     return [
-      { label: '1 · Hablar con Tòfol', run: go('talkTofol', () => tp(9, 9.6)) },
+      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => tp(9, 9.6)) },
       {
         label: '2 · Pomadas y ases',
         run: go('collect', () => {
@@ -771,7 +862,7 @@ export class Level1 implements Level {
           tp(0, 6);
         }),
       },
-      { label: '3 · Volver a Tòfol', run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(9, 9.6); }) },
+      { label: `3 · Volver a ${this.V.guide}`, run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(9, 9.6); }) },
       { label: '4 · Encontrar a Marc', run: go('findMarc', () => { this.pomadaCount = 1; tp(this.world.marcPos.x + 2.2, this.world.marcPos.z - 1.4); }) },
       {
         label: '5 · Ver el final',

@@ -16,20 +16,21 @@ export interface LevelInfo {
 export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, Menorca', emoji: '🫏' },
   { id: 2, name: 'La ruta de las zamburiñas', place: 'Madrid → San Vicente de la Barquera → Logroño', emoji: '🚗' },
-  { id: 3, name: 'Fito bajo las estrellas', place: 'Canarias', emoji: '🎸' },
-  { id: 4, name: 'Noche de piscina y estrellas', place: 'En casa', emoji: '🌙' },
+  { id: 3, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria', emoji: '🎸' },
+  { id: 4, name: 'Noche de piscina y estrellas', place: 'Sa Caleta, donde empezó todo', emoji: '🌙' },
+  { id: 5, name: 'Sant Joan', place: 'Ciutadella, Menorca', emoji: '🐎' },
 ];
 
 export const FERRERIES = {
   intro: [
     { who: 'Narrador', text: "Ferreries, Menorca. Finales de agosto: Festes de Sant Bartomeu." },
-    { who: 'Narrador', text: "Banderas de Menorca en los balcones, la fabiolera tocando en el Pla de l'Església y hoy toca Jaleo d'Ases." },
+    { who: 'Narrador', text: "Banderas de Menorca en los balcones, la fabiolera tocando en el Pla de l'Església y a las once, Jaleo d'Ases." },
     { who: 'Narrador', text: 'Suenan el fabiol y el tamborí. Los ases salen a la calle con sus jinetes y los bares están a reventar.' },
     { who: 'Narrador', text: 'Esta noche va a pasar algo importante… aunque todavía no lo sabes.' },
     { who: 'Narrador', text: 'Habla con Tòfol, el del bar de la plaza. Él sabe de todo.' },
   ] as Line[],
   tofolQuest: [
-    { who: 'Tòfol', text: 'Bon vespre! Primera vez en el Jaleo, ¿eh? Se te nota en la cara.' },
+    { who: 'Tòfol', text: 'Bon vespre! ¿Primera vez en el Jaleo de Ferreries? Se te nota en la cara.' },
     { who: 'Tòfol', text: 'Aquí hay dos tradiciones: la pomada (gin de Menorca con limonada) y tocar a un ase cuando se pone de manos. ¡Da suerte!' },
     { who: 'Tòfol', text: 'Consigue 3 pomadas en los bares y 3 toques de suerte. Ojo, que si un ase te pilla se te cae el vaso.' },
     { who: 'Tòfol', text: 'Y luego vuelve a verme, que te presento a alguien…' },
@@ -38,17 +39,20 @@ export const FERRERIES = {
   tofolDone: [
     { who: 'Tòfol', text: '¡Molt bé! Ya eres de Ferreries de toda la vida.' },
     { who: 'Tòfol', text: "¿Ves a ese que baila fatal en el Bar Sa Plaça, junto a la iglesia? Se llama Marc. Lleva toda la noche mirándote." },
-    { who: 'Tòfol', text: 'Llévale una pomada, anda.' },
+    { who: 'Tòfol', text: 'Dice que tiene una piscina. Yo que tú no me lo creería. Llévale una pomada, anda.' },
   ] as Line[],
   marcMeet: [
     { who: 'Marc', text: '¡Hola! ¿Esa pomada es para mí? Qué detalle.' },
-    { who: 'Marc', text: 'Soy Marc. Te he visto tocar a tres ases… eso es o mucha suerte o mucho valor.' },
-    { who: 'Margaux', text: 'Buu… ¿y tú no tocas ninguno?' },
-    { who: 'Marc', text: 'Yo soy más de bailar. Mal, pero con ganas. ¿Bailas? Prometo no pisarte. Mucho.' },
+    { who: 'Marc', text: 'Soy Marc. Perdona que te mire tanto, pero… need esos ojos.' },
+    { who: 'Margaux', text: '¿“Need”? Buu… ¿y tú no tocas ningún ase?' },
+    { who: 'Marc', text: 'Yo soy más de bailar. Mal, pero con ganas. Bueno, y de mirar. Que te he visto bailar en Sant Joan y no te fijaste en mí.' },
+    { who: 'Margaux', text: 'Yo iba a lo mío, no me fijaba en nadie.' },
+    { who: 'Marc', text: 'Ya. Lo dejamos en que yo iba ciego. ¿Bailas? Prometo no pisarte. Mucho.' },
     { who: 'Narrador', text: "Bailáis hasta que el bar Sa Plaça pone la última canción. La música baja, la plaza se queda en silencio un segundo…" },
   ] as Line[],
   afterKiss: [
     { who: 'Narrador', text: 'Y así, entre ases, pomada y música, en pleno Sant Bartomeu, empezó todo.' },
+    { who: 'Marc', text: 'Mañana, cuando llegues a Ciutadella, avísame. Te vengo a buscar.' },
     { who: 'Narrador', text: 'Él todavía no sabía que algún día sería Gas. Y ella, Azul.' },
   ] as Line[],
   hints: {
@@ -62,34 +66,84 @@ export const FERRERIES = {
   },
 };
 
+// Capítulo 5 y último: Sant Joan en Ciutadella (junio). Misma forma que FERRERIES para reutilizar el nivel 1.
+export const SANTJOAN = {
+  intro: [
+    { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. Banderas, caballos negros, avellanes volando y el Born a reventar.' },
+    { who: 'Narrador', text: 'Gas ha venido a pasar las fiestas contigo. Lleva tu camiseta. Todo el día. "Husband material".' },
+    { who: 'Narrador', text: 'Pero lleva treinta minutos dando vueltas por el pueblo y no te encuentra.' },
+    { who: 'Narrador', text: 'Habla con Carme, que conoce cada esquina de Ciutadella.' },
+  ] as Line[],
+  tofolQuest: [
+    { who: 'Carme', text: '¡Azul! ¿Gas? Me ha escrito a mí también: «Dime exacto pls». No sabe ni dónde está.' },
+    { who: 'Carme', text: 'Mientras lo encuentras, haz Sant Joan como toca: recoge 3 bolsitas de avellanes y toca 3 caballos cuando se pongan de manos. ¡Da suerte!' },
+    { who: 'Carme', text: 'Cuidado con los caballos, que si te pillan se te caen las avellanes. Y luego vuelve, que te digo dónde lo he visto.' },
+  ] as Line[],
+  tofolNotYet: [{ who: 'Carme', text: 'Te faltan avellanes o caballos. ¡Venga, que esto es Sant Joan, no un martes!' }] as Line[],
+  tofolDone: [
+    { who: 'Carme', text: '¡Así me gusta! Ya eres más de Ciutadella que yo.' },
+    { who: 'Carme', text: 'Gas me ha mandado la ubicación. Va por el Born… aunque con él nunca se sabe.' },
+    { who: 'Carme', text: 'Ve a buscarlo. Lo reconocerás: es el único con tu camiseta.' },
+  ] as Line[],
+  marcMeet: [
+    { who: 'Gas', text: '¡Azul! Por fin. Llevo treinta minutos dando vueltas. ¿Me has aceptado la ubi o no?' },
+    { who: 'Azul', text: 'Te la he aceptado tres veces. El que no sabe dónde está eres tú.' },
+    { who: 'Gas', text: 'Buu. Mira, te he guardado avellanes. Y me he quemado. Me dijeron que eran 4 los uvas.' },
+    { who: 'Azul', text: 'Sin crema te quemas, da igual el nivel de 🍇. Quemadito como un guiri.' },
+    { who: 'Gas', text: 'Lo que tú digas. Esta noche cenamos en Maramao, ¿eh? MARamao es nuestro.' },
+    { who: 'Narrador', text: 'Suena el fabiol. Los caballos entran en la plaza y todo el Born se pone a saltar…' },
+  ] as Line[],
+  afterKiss: [
+    { who: 'Azul', text: 'Gracias por hacer de este Sant Joan algo muy especial. Imposible de olvidar.' },
+    { who: 'Gas', text: 'Y la camiseta me la quedo. La llevaré cada 24 de junio.' },
+    { who: 'Azul', text: 'Más te vale. Y aún no te has ido… y ya mi manchi.' },
+    { who: 'Gas', text: 'De Ferreries a Sant Joan, un año entero. Y lo que queda. Feliz cumpleaños, Azul. 💙' },
+  ] as Line[],
+  hints: {
+    pomada: '¡Avellanes! 🌰',
+    luck: '¡Toque de suerte! 🐎',
+    dropped: '¡Buu! Un caballo te ha pillado y se te han caído las avellanes',
+    rear: '¡Ahora! Tócalo',
+    perfect: '¡Toque perfecto! ✨🐎',
+    late: 'Uy, por los pelos 🐎',
+    allLuck: '¡Tres caballos! El Born entero te aplaude 👏',
+  },
+  /** Cuando te acercas, Gas se va a otro sitio (las dos primeras veces). */
+  gasMoves: ['Gas: «Aceptame la UBI… que ya no estoy aquí» 📍', 'Gas: «Estoy al lado de Correos. Creo» 📍'],
+};
+
 export const ROAD = {
   intro: [
-    { who: 'Narrador', text: 'Unos meses después. Madrid, primera hora de la mañana.' },
-    { who: 'Gas', text: 'Coche cargado, Joy en el asiento de atrás y 400 kilómetros hasta el mar. ¿Lista, Azul?' },
-    { who: 'Azul', text: 'Lista. Pero conduzco yo, que tú te pierdes.' },
+    { who: 'Narrador', text: 'Dos meses después. Atocha, diez de la noche. Gas baja del tren con un plan de finde que ni él se cree.' },
+    { who: 'Gas', text: 'Plan A era Oporto en moto. Pero el pacto era: si llueve, coche. Y llueve.' },
+    { who: 'Azul', text: 'Pues Ford Focus gris, Joy detrás y conduzco yo. Tú solo dime dónde vamos.' },
+    { who: 'Gas', text: 'Eso es sorpresa. Tú conduce, que los caminitos los elijo yo.' },
     { who: 'Narrador', text: 'Desliza el dedo (o toca ◀ ▶) para cambiar de carril. Recoge fotos del viaje 📸 y esquiva lo que se cruce.' },
     { who: 'Gas', text: 'Los ⛽ dan turbo. Y si ves tabaco 🚬 por la carretera… ni se te ocurra, Azul.' },
   ] as Line[],
   regions: {
-    madrid: 'Saliendo de Madrid',
+    madrid: 'Saliendo de Madrid (con el helado aún en el congelador)',
     meseta: 'La meseta castellana',
     cantabria: 'Cantabria: verde, verde y más verde',
-    rioja: 'Camino de Logroño, entre viñedos',
+    rioja: 'La Rioja: Marqués de Riscal a la vista',
   },
   arriveSV: [
     { who: 'Narrador', text: 'San Vicente de la Barquera. El puente, el castillo, el mar… y un olor a plancha que no se puede aguantar.' },
-    { who: 'Gas', text: 'En El Ancla ponen las mejores zamburiñas del Cantábrico. Y el cocinero dice que, si las hacemos nosotros, invita él.' },
+    { who: 'Gas', text: 'Sorpresa. Hasta nos han guardado aparcamiento, que somos VIP. En El Ancla ponen las mejores zamburiñas del Cantábrico.' },
+    { who: 'Gas', text: 'Y el cocinero dice que, si las hacemos nosotros, invita él.' },
     { who: 'Narrador', text: 'Toca cada zamburiña cuando esté dorada. Si se quema… Buu.' },
   ] as Line[],
   zambDone: [
     { who: 'Gas', text: 'Las mejores zamburiñas de mi vida. ¿Cómo se dice zamburiña en inglés?' },
     { who: 'Azul', text: 'Scallop.' },
-    { who: 'Gas', text: '¿Escalope? ¿Como el de la carne? Los ingleses están fatal.' },
-    { who: 'Azul', text: 'El que está fatal eres tú. Venga, que nos queda Logroño.' },
+    { who: 'Gas', text: 'Pues… we will always find good zamburiñas. 🥴' },
+    { who: 'Azul', text: 'Hard task. Almost impossible. Después de estas, ninguna va a estar tan buena.' },
   ] as Line[],
   arriveLogrono: [
-    { who: 'Narrador', text: 'Logroño. Calle Laurel, un pincho en cada bar y un vino en cada pincho.' },
-    { who: 'Gas', text: 'Por el mejor viaje. Y por la copiloto… digo, la conductora.' },
+    { who: 'Narrador', text: 'Logroño. Calle Laurel, un pincho en cada bar y un vino en cada pincho. Y mañana, chuletón.' },
+    { who: 'Gas', text: 'Por el viaje más random de mi vida. Planear un finde entero con alguien que casi no conoces… y que salga así.' },
+    { who: 'Azul', text: 'No era el sitio, era el plan. Bueno, y la compañía.' },
+    { who: 'Gas', text: 'Eso lo he dicho yo antes. Dame el mérito.' },
     { who: 'Joy', text: '¡Guau!' },
   ] as Line[],
   terrace: [
@@ -98,89 +152,94 @@ export const ROAD = {
     { who: 'Narrador', text: 'Cómete una zamburiña.' },
   ] as Line[],
   terraceDone: [
-    { who: 'Azul', text: 'Mmm… Siguen siendo las mejores.' },
-    { who: 'Gas', text: 'Pues ahora, a Logroño. Que el vino no se bebe solo.' },
+    { who: 'Azul', text: 'Mmm… Déjalo. Ya sabes dónde se ha quedado mi corazón.' },
+    { who: 'Gas', text: 'En San Vicente de la Barquera. Pues ahora, a Logroño, que el vino no se bebe solo.' },
     { who: 'Joy', text: '¡Guau! (Joy también quiere una)' },
   ] as Line[],
-  hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!'],
-  smoke: ['Gas: «Azul, ¿otra vez? ¡Que lo tienes que dejar!» 🚭', 'Gas: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Gas: «Te lo requisó. Por tu bien.» 🚭'],
+  hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!', 'Gas: «¡Que me lo has dejado demasiado bien!»'],
+  smoke: ['Gas: «Azul, ¿otra vez? ¡Que lo tienes que dejar!» 🚭', 'Gas: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Gas: «Te lo requiso. Por tu bien. Prueba con la panadera.» 🚭'],
   turbo: '¡Gasolina! ⛽ Turbo',
   nearMiss: '¡Por los pelos! +1 📸',
   combo: (n: number) => `¡Racha de ${n} fotos! Joy está flipando 🐶`,
   stops: ['Madrid', 'San Vicente', 'Logroño'],
-  zamb: { served: '¡Al plato! 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
+  zamb: { served: '¡Al plato! Déjalo 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
 };
 
 export const CONCERT = {
   intro: [
-    { who: 'Narrador', text: 'Canarias. Noche de verano y concierto de Fito al aire libre.' },
+    { who: 'Narrador', text: 'Gran Canaria, 13 de marzo. Estadio de Gran Canaria, Aullidos Tour de Fito.' },
+    { who: 'Narrador', text: 'Las entradas las compró Azul una noche de enero, un poco borracha. Por Ticketmaster, no por Viagogo. Casi.' },
     { who: 'Narrador', text: 'Gas ha ido a por bebidas hace veinte minutos y no ha vuelto.' },
     { who: 'Azul', text: 'Este hombre se pierde hasta en un pasillo. Voy a buscarlo.' },
     { who: 'Narrador', text: 'Pregunta en la barra.' },
   ] as Line[],
   barman: [
     { who: 'Camarero', text: '¿Un chico moreno? Ha estado aquí intentando pedir a una pareja de ingleses…' },
-    { who: 'Camarero', text: 'Les ha dicho “Uan bir, plis, and tu for mai guaif”. Los ingleses todavía se están riendo.' },
+    { who: 'Camarero', text: 'Les ha dicho “Uan bir, plis, and tu for mai guaif”. Luego ha dicho “Ow my got” y los ingleses todavía se están riendo.' },
     { who: 'Camarero', text: 'Se fue hacia el escenario, por la izquierda.' },
     { who: 'Azul', text: 'Vale. Pero antes… baño. Con tanta cerveza no llego a la primera fila.' },
     { who: 'Narrador', text: 'Los WC portátiles están a la derecha. Busca uno con la luz verde.' },
   ] as Line[],
   barmanAgain: [{ who: 'Camarero', text: '¿Otra vez tú? Los baños, a la derecha. Y Gas, hacia el escenario.' }] as Line[],
-  wcBusy: ['🚫 Ocupado. Alguien canta «Soldadito marinero» dentro…', '🚫 Ocupado. Busca la luz verde', '🚫 Toc, toc… «¡Ocupadooo!»'],
-  wcBack: ['🚻 1/4 · Uf, qué alivio. Vuelve al concierto', '🚻 2/4 · Vuelve al concierto, que te lo pierdes', '🚻 3/4 · El de seguridad ya te saluda. Al concierto'],
+  wcBusy: ['🚫 Ocupado. Alguien canta «Soldadito marinero» dentro…', '🚫 Ocupado. Busca la luz verde', '🚫 Toc, toc… «¡Ocupadooo!»', '🚫 Ocupado. «Cola lavabos… pfff, temón»'],
+  wcBack: ['🚻 1/4 · Uf, qué alivio. Vuelve al concierto', '🚻 2/4 · Vuelve, que suena un temón. «Hice vídeo, don’t worry»', '🚻 3/4 · El de seguridad ya te saluda. Al concierto'],
   wcAgain: ['¡Otra vez al baño! 🚻 Las cervezas de Gas…', '¿Otra vez? 🚻 Esto es culpa de Gas', 'La última, prometido 🚻'],
   wcDone: [
     { who: 'Azul', text: 'Cuatro veces. Récord personal. Ahora sí: ¿dónde se ha metido este hombre?' },
-    { who: 'Narrador', text: 'Gas está en primera fila, a la izquierda. Ábrete paso entre la multitud… y cuidado con los empujones.' },
+    { who: 'Narrador', text: 'Te llega un mensaje: «Flash. Pls. Estoy. Xo no veo». Gas está en primera fila, a la izquierda.' },
+    { who: 'Narrador', text: 'Ábrete paso entre la multitud… y cuidado con los empujones.' },
   ] as Line[],
-  pushes: ['¡Empujón! 😵', '¡Perdona, perdona!', '¡Uy, un pogo! 🤘', '¡Que no veo a Fito!', '¡Sin empujar, eh!'],
-  smokeFound: '🚭 ¡A la papelera! Gas va a estar orgulloso',
+  pushes: ['¡Empujón! 😵', '¡Perdona, perdona!', '¡Uy, un pogo! 🤘', '¡Que no veo a Fito!', '¡Sin empujar, eh!', '¡Ese flash no es el de Gas!'],
+  smokeFound: '🚭 ¡A la papelera! Gas va a estar orgulloso: en Canarias, ni uno',
   gasFound: [
-    { who: 'Gas', text: '¡Azul! Te he guardado sitio en primera fila. Las cervezas… es una historia larga.' },
+    { who: 'Gas', text: '¡Azul! ¡Por fin! Te he guardado sitio en primera fila. Las cervezas… es una historia larga.' },
     { who: 'Azul', text: 'Ya me la ha contado el camarero. “And tu for mai guaif”.' },
-    { who: 'Gas', text: 'Buu. Bueno, ¡que empieza! Esta me la sé entera.' },
+    { who: 'Gas', text: 'Buu. Bueno, ¡que empieza! Esta me la sé entera. Y la intro de «A contraluz» todavía me da escalofríos.' },
   ] as Line[],
-  gasSmoke: { who: 'Gas', text: 'Por cierto… ¿has tirado el tabaco? ¡Esa es mi chica!' } as Line,
-  gasNoSmoke: { who: 'Gas', text: 'Por cierto, ¿no estarás fumando, eh? Que lo tienes que dejar…' } as Line,
+  gasSmoke: { who: 'Gas', text: 'Por cierto… ¿has tirado el tabaco? ¡Esa es mi chica! Dijimos que en Canarias, ni uno.' } as Line,
+  gasNoSmoke: { who: 'Gas', text: 'Por cierto, ¿no estarás fumando, eh? Que dijimos que en Canarias, ni uno…' } as Line,
   rhythm: 'Toca los botones cuando las notas lleguen a la línea',
   ending: [
     { who: 'Narrador', text: 'Las luces, la guitarra, miles de personas cantando… y vosotros dos en medio.' },
-    { who: 'Gas', text: 'Oye, Azul. Gracias por todo esto. Por Ferreries, por la carretera, por esta noche.' },
-    { who: 'Azul', text: 'Calla, que me vas a hacer llorar. Buu.' },
-    { who: 'Gas', text: 'Pues prepárate, que esto no ha terminado…' },
+    { who: 'Gas', text: 'Oye, Azul. Gracias por todo esto. Por Ferreries, por la carretera, por esta noche. Y por comprar las entradas borracha.' },
+    { who: 'Azul', text: 'Me debes una grande. Y calla, que me vas a hacer llorar. Buu.' },
+    { who: 'Gas', text: 'Todo lo que fuimos fue icónico. Y prepárate, que esto no ha terminado…' },
   ] as Line[],
 };
 
 export const NIGHT = {
   bar: [
-    { who: 'Narrador', text: 'Una noche de verano. Azul sale del Bar Imperi y, en la calle, la espera un coche con las luces puestas.' },
-    { who: 'Gas', text: '¡Azul! Sube, que te llevo.' },
+    { who: 'Narrador', text: 'Volvamos al principio. Ciutadella, 26 de agosto de 2025, la noche después de Ferreries.' },
+    { who: 'Narrador', text: 'Azul está en el Imperi. Sigue con la Coca-Cola, que se lo prometió.' },
+    { who: 'Narrador', text: 'Le llega un mensaje: «Ve hacia Pins. Coche azul. Gira».' },
+    { who: 'Gas', text: '¡Azul! Sube, que te llevo. Mañana me voy y no pienso despedirme por WhatsApp.' },
     { who: 'Azul', text: '¿A dónde?' },
     { who: 'Gas', text: 'A casa. Tengo piscina.' },
-    { who: 'Azul', text: 'Buu. …Vale.' },
+    { who: 'Azul', text: '¿Tienes piscina?' },
+    { who: 'Gas', text: 'Para ti, sí.' },
   ] as Line[],
   drive: [
-    { who: 'Gas', text: '¿Te has dejado el tabaco en el bar? Dime que sí, porfa.' },
-    { who: 'Azul', text: 'Conduce y calla, Gas.' },
+    { who: 'Gas', text: 'Condición: silencio full, que mis padres están durmiendo y molaría que no se enterasen.' },
+    { who: 'Azul', text: 'Entendido, jefe. 😇' },
     { who: 'Narrador', text: 'Ventanillas bajadas, la música bajita y olor a verano.' },
   ] as Line[],
   arrive: [
-    { who: 'Gas', text: 'Ya estamos. Pasa, que Joy lleva toda la noche esperándote.' },
-    { who: 'Joy', text: '¡Guau! ¡Guau! (detrás de la puerta, moviendo la cola)' },
+    { who: 'Gas', text: 'Ya estamos. Sa Caleta. Pasa sin hacer ruido, porfa.' },
+    { who: 'Joy', text: '¡Guau! (Joy no estuvo aquella noche, pero en este juego no se lo pierde)' },
   ] as Line[],
   intro: [
-    { who: 'Narrador', text: 'Ya en casa. Hace calor, la piscina está iluminada y Joy no deja de dar vueltas.' },
-    { who: 'Gas', text: 'Azul, he puesto velitas flotando en la piscina. ¿Te bañas?' },
+    { who: 'Narrador', text: 'Ya en casa. Hace calor, la piscinita está iluminada y la casa entera duerme.' },
+    { who: 'Gas', text: 'Es pequeñita, pero funciona. Y se le puede llamar piscina. He puesto velitas flotando. ¿Te bañas?' },
     { who: 'Azul', text: '¿Velitas? ¿Tú? ¿Quién eres y qué has hecho con Gas?' },
-    { who: 'Narrador', text: 'Baja al jardín y tírate a la piscina.' },
+    { who: 'Narrador', text: 'Baja al jardín y tírate a la piscina. Sin hacer ruido.' },
   ] as Line[],
   swim: [
-    { who: 'Gas', text: '¡Recoge las seis velitas antes de que Joy se tire a por ellas!' },
+    { who: 'Gas', text: '¡Recoge las seis velitas! Y shhh, que se despiertan mis padres.' },
   ] as Line[],
   swimDone: [
-    { who: 'Gas', text: 'Esta noche hay lluvia de estrellas. ¿Nos tumbamos en el césped a verlas?' },
+    { who: 'Gas', text: 'Esta noche hay estrellas de las que no se ven en Madrid. ¿Nos tumbamos en el césped a verlas?' },
     { who: 'Azul', text: 'Vale, pero las toallas las pones tú.' },
-    { who: 'Joy', text: '¡Guau! (Joy ya está tumbada encima de una toalla)' },
+    { who: 'Joy', text: '¡Guau! (Joy ya está tumbado encima de una toalla)' },
   ] as Line[],
   lie: [
     { who: 'Gas', text: 'Mira, allí… ¿ves esas estrellas? Si las unes, sale algo.' },
@@ -191,19 +250,48 @@ export const NIGHT = {
     { who: 'Gas', text: 'Lo he dibujado yo. Bueno, el universo. Pero la idea fue mía.' },
     { who: 'Narrador', text: 'Una estrella fugaz cruza el cielo.' },
     { who: 'Gas', text: '¡Pide un deseo, rápido!' },
-    { who: 'Azul', text: 'Ya lo tengo todo. Bueno… que aprendas inglés.' },
-    { who: 'Gas', text: 'Buu. Feliz cumpleaños, Azul. 💙' },
+    { who: 'Azul', text: 'Que aprendas inglés.' },
+    { who: 'Gas', text: 'Ya tengo el B2. English done. 🥴' },
+    { who: 'Azul', text: '¿B2? ¡Que diuuus! Pues entonces… que terminemos Interstellar.' },
+    { who: 'Gas', text: 'Buu. Eso sí que es imposible. Pero tú pídelo, que esto no ha terminado…' },
   ] as Line[],
   candle: (n: number) => `🕯️ ${n}/6`,
+};
+
+// Crucigrama antes de la carta: la vuelta del que Azul le hizo a Gas (MARGAUX, PORTUGAL…).
+// Las letras marcadas, en orden, forman el mensaje escondido.
+export interface CrossClue {
+  clue: string;
+  answer: string;
+  /** Posición (desde 0) de la letra marcada. */
+  mark: number;
+}
+
+export const CROSSWORD = {
+  title: 'El crucigrama de Gas',
+  intro: 'Tú me hiciste uno con MARGAUX, un boli de tinta invisible y PORTUGAL escondido. Ahora me toca a mí. Las letras marcadas esconden algo.',
+  hidden: 'TE QUIERO',
+  clues: [
+    { clue: 'La peli que nunca terminamos', answer: 'INTERSTELLAR', mark: 2 },
+    { clue: "Jaleo d'… (Ferreries, a las once)", answer: 'ASES', mark: 2 },
+    { clue: 'Le ganó a 🚬 en tu ranking (por los pelos)', answer: 'QUEVEDO', mark: 0 },
+    { clue: 'Cómo quiero que te llame todo el mundo', answer: 'AZUL', mark: 2 },
+    { clue: 'Bar de Ciutadella donde te recogí aquella noche', answer: 'IMPERI', mark: 0 },
+    { clue: 'Lo que vimos el 12 de agosto, sin cruzar la bocana', answer: 'ECLIPSE', mark: 0 },
+    { clue: 'Lo único que saca un 10 (sin nata, por favor)', answer: 'CARBONARA', mark: 2 },
+    { clue: 'El intensito que duerme contigo la noche antes de irte', answer: 'JOY', mark: 1 },
+  ] as CrossClue[],
+  solved: '¡Te quiero! Ahora sí, abre la carta.',
 };
 
 // Carta del regalo final. Marc: reescríbela con tus palabras.
 export const FINAL_LETTER = {
   title: 'Feliz cumpleaños, Azul',
   paragraphs: [
-    'Empezamos entre ases y pomadas en Ferreries, seguimos por carretera hasta las zamburiñas de San Vicente y acabamos cantando a Fito bajo las estrellas de Canarias.',
-    'Gracias por cada kilómetro, por reírte de mi inglés y por aguantar mis bailes. Y por los “Buu”, que también te quiero por ellos.',
-    'Joy y yo te deseamos el mejor 28 de octubre. Y que dejes de fumar, que lo sepas.',
+    'Empezamos entre ases y pomadas en Ferreries, seguimos con una piscinita en silencio en Sa Caleta, un finde sorpresa hasta las zamburiñas de San Vicente y acabamos cantando a Fito en Gran Canaria.',
+    'Gracias por las cartas, por el crucigrama, por reírte de mi inglés (que ya es B2, que conste) y por aguantar mis bailes. Y por los “Buu”, que también te quiero por ellos.',
+    'Me preguntaste si teníamos fecha. Sigo pensando que es muy bonito no tenerla, porque así cualquier día puede ser el nuestro. Hoy es el tuyo.',
+    'Joy y yo te deseamos el mejor 28 de noviembre. Y que dejes de fumar, que lo sepas.',
   ],
   signature: 'Te quiere, Gas 💙 (y Joy 🐾)',
 };

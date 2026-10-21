@@ -7,6 +7,7 @@ import { Level1 } from './world/level1';
 import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
+import { LevelSantJoan } from './world/levelSantJoan';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -14,7 +15,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, debugPanel, closeDialogue, chapterCard } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -225,7 +226,8 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-const LEVEL_CLASSES = [Level1, Level2, Level3, Level4];
+// Sant Joan es de lo más reciente: va el último y después vienen el crucigrama y la carta
+const LEVEL_CLASSES = [Level1, Level2, Level3, Level4, LevelSantJoan];
 
 function startLevel(n: number) {
   clearScreens();
@@ -245,12 +247,13 @@ function startLevel(n: number) {
           level.dispose();
           level = null;
         }
-        finalLetter(goMap);
+        crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
-    // El capítulo 4 no tiene vale: su premio es la carta final
-    if (g) showGift(g, after, result);
-    else after();
+    // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
+    const photos = () => memories(n, after);
+    if (g) showGift(g, photos, result);
+    else photos();
   };
   level = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   applyShadows(level.threeScene);
