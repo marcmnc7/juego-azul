@@ -65,6 +65,51 @@ export const FERRERIES = {
   },
 };
 
+// Capítulo de Sant Joan en Ciutadella (junio). Misma forma que FERRERIES para reutilizar el nivel 1.
+export const SANTJOAN = {
+  intro: [
+    { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. Banderas, caballos negros, avellanes volando y el Born a reventar.' },
+    { who: 'Narrador', text: 'Gas ha venido a pasar las fiestas contigo. Lleva tu camiseta. Todo el día. "Husband material".' },
+    { who: 'Narrador', text: 'Pero lleva treinta minutos dando vueltas por el pueblo y no te encuentra.' },
+    { who: 'Narrador', text: 'Habla con Carme, que conoce cada esquina de Ciutadella.' },
+  ] as Line[],
+  tofolQuest: [
+    { who: 'Carme', text: '¡Azul! ¿Gas? Me ha escrito a mí también: «Dime exacto pls». No sabe ni dónde está.' },
+    { who: 'Carme', text: 'Mientras lo encuentras, haz Sant Joan como toca: recoge 3 bolsitas de avellanes y toca 3 caballos cuando se pongan de manos. ¡Da suerte!' },
+    { who: 'Carme', text: 'Cuidado con los caballos, que si te pillan se te caen las avellanes. Y luego vuelve, que te digo dónde lo he visto.' },
+  ] as Line[],
+  tofolNotYet: [{ who: 'Carme', text: 'Te faltan avellanes o caballos. ¡Venga, que esto es Sant Joan, no un martes!' }] as Line[],
+  tofolDone: [
+    { who: 'Carme', text: '¡Así me gusta! Ya eres más de Ciutadella que yo.' },
+    { who: 'Carme', text: 'Gas me ha mandado la ubicación. Va por el Born… aunque con él nunca se sabe.' },
+    { who: 'Carme', text: 'Ve a buscarlo. Lo reconocerás: es el único con tu camiseta.' },
+  ] as Line[],
+  marcMeet: [
+    { who: 'Gas', text: '¡Azul! Por fin. Llevo treinta minutos dando vueltas. ¿Me has aceptado la ubi o no?' },
+    { who: 'Azul', text: 'Te la he aceptado tres veces. El que no sabe dónde está eres tú.' },
+    { who: 'Gas', text: 'Buu. Mira, te he guardado avellanes. Y me he quemado. Me dijeron que eran 4 los uvas.' },
+    { who: 'Azul', text: 'Sin crema te quemas, da igual el nivel de 🍇. Quemadito como un guiri.' },
+    { who: 'Gas', text: 'Lo que tú digas. Esta noche cenamos en Maramao, ¿eh? MARamao es nuestro.' },
+    { who: 'Narrador', text: 'Suena el fabiol. Los caballos entran en la plaza y todo el Born se pone a saltar…' },
+  ] as Line[],
+  afterKiss: [
+    { who: 'Azul', text: 'Gracias por hacer de este Sant Joan algo muy especial. Imposible de olvidar.' },
+    { who: 'Gas', text: 'Y la camiseta me la quedo. La llevaré cada 24 de junio.' },
+    { who: 'Azul', text: 'Más te vale. Y aún no te has ido… y ya mi manchi.' },
+  ] as Line[],
+  hints: {
+    pomada: '¡Avellanes! 🌰',
+    luck: '¡Toque de suerte! 🐎',
+    dropped: '¡Buu! Un caballo te ha pillado y se te han caído las avellanes',
+    rear: '¡Ahora! Tócalo',
+    perfect: '¡Toque perfecto! ✨🐎',
+    late: 'Uy, por los pelos 🐎',
+    allLuck: '¡Tres caballos! El Born entero te aplaude 👏',
+  },
+  /** Cuando te acercas, Gas se va a otro sitio (las dos primeras veces). */
+  gasMoves: ['Gas: «Aceptame la UBI… que ya no estoy aquí» 📍', 'Gas: «Estoy al lado de Correos. Creo» 📍'],
+};
+
 export const ROAD = {
   intro: [
     { who: 'Narrador', text: 'Dos meses después. Atocha, diez de la noche. Gas baja del tren con un plan de finde que ni él se cree.' },
