@@ -23,6 +23,14 @@ type Phase = 'airport' | 'intro' | 'queue' | 'inQueue' | 'film' | 'flash' | 'mee
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = CONCERT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
+const T_AIRPORT = () =>
+  txt<Line[]>('airport', [
+    { who: 'Narrador', text: 'Jueves 12 de marzo. Gas vuela desde Barcelona; Azul, una hora después desde Madrid.' },
+    { who: 'Gas', text: '(WhatsApp) Qué puto asco el burger. NUNCA más. Todo malo y caro, hasta la Fanta.' },
+    { who: 'Azul', text: '(WhatsApp) Yo 26D. 26 palo, pero D top: ✨pasillo✨.' },
+  ]);
+const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta');
+const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🍔 ¡Buu! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó']);
 const T_QUEUE_INTRO = () =>
   txt<Line[]>('queueIntro', [
     { who: 'Narrador', text: 'Viernes 13. Estadio de Gran Canaria. Gas se va al baño justo antes del concierto.' },
@@ -59,6 +67,9 @@ const AISLE_X = -8.5;
 const WC_X = 17;
 const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
 const FILM_SECS = 15;
+// Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona)
+const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
+const BURGERS: [number, number][] = [[302.6, -14], [289.4, 0], [302.6, 14]];
 // Una sola cola delante de los baños, hacia el recinto
 const Q_Z = -13.25;
 const WC_BROKEN = [0, 4, 5];
@@ -385,6 +396,11 @@ export class Level3 implements Level {
   private filmUi: HTMLDivElement | null = null;
   private filmDone = false;
   private baseFov = 0;
+  private burgers: { o: THREE.Mesh; v: THREE.Vector3; live: boolean }[] = [];
+  private travelers: { p: Person; dir: number; x: number; walk: number; c: Circle }[] = [];
+  private burgerT = 1;
+  private burgerHits = 0;
+  private invuln = 0;
   private cutsBlocked = 0;
   private cutsLost = 0;
   private queueT = 0;
@@ -495,11 +511,14 @@ export class Level3 implements Level {
     audio.startMusic('road');
     audio.ambience(0.12);
     this.busy = true;
+    this.buildAirport();
+    this.startAirport();
+    this.phase = 'intro';
     setTimeout(() => {
       if (this.phase !== 'intro') return;
-      dialogue(T_QUEUE_INTRO(), () => {
+      dialogue(T_AIRPORT(), () => {
         this.busy = false;
-        this.phase = 'queue';
+        this.phase = 'airport';
         this.updateHud();
       });
     }, 500);
@@ -507,6 +526,194 @@ export class Level3 implements Level {
 
   get threeScene() {
     return this.scene;
+  }
+
+  // ---------------- Aeropuerto ----------------
+
+  /** Terminal de Barajas: pasillo largo, el burger del «NUNCA más» y la puerta del vuelo a Gran Canaria. */
+  private buildAirport() {
+    const sc = this.scene;
+    const A = AIR;
+    const cx = (A.minX + A.maxX) / 2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX + 2, A.maxZ - A.minZ + 6).rotateX(-Math.PI / 2), toon({ color: 0xe9ecef, roughness: 0.25, metalness: 0.05 }));
+    floor.position.set(cx, 0.01, (A.minZ + A.maxZ) / 2);
+    floor.userData.noCast = true;
+    sc.add(floor);
+    const m = new Merger();
+    // Cristaleras a los dos lados y techo con lucernarios (las ondas de Barajas)
+    for (const x of [A.minX - 0.15, A.maxX + 0.15]) {
+      m.add(G.box, 0x9fc4e0, x, 3, (A.minZ + A.maxZ) / 2, 0, 0, 0, 0.2, 6, A.maxZ - A.minZ + 6);
+      for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 3) m.add(G.box, 0x5a6470, x, 3, z, 0, 0, 0, 0.3, 6, 0.15);
+    }
+    for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 2.2) m.add(G.box, 0xd9b26a, cx, 6.6 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.12, 0.8);
+    m.add(G.box, 0xd8dde3, cx, 3, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    m.add(G.box, 0xd8dde3, cx, 3, A.maxZ + 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    // Bancos de espera
+    for (const z of [-20, -12, 12, 20]) {
+      for (const x of [A.minX + 0.6, A.maxX - 0.6]) {
+        m.add(G.box, 0x2b2f36, x, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
+        m.add(G.box, 0x2b2f36, x + (x < cx ? -0.25 : 0.25), 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
+        this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 1.5, maxZ: z + 1.5 });
+      }
+    }
+    // Los dos burgers, uno a cada lado, escupiendo hamburguesas
+    for (const [x, z] of BURGERS) {
+      const side = x > cx ? 1 : -1;
+      m.add(G.box, 0xd7263d, x + side * 0.4, 1.1, z, 0, 0, 0, 2.2, 2.2, 4);
+      m.add(G.box, 0xf4c430, x + side * 0.4, 2.5, z, 0, 0, 0, 2.4, 0.6, 4.2);
+      m.add(G.box, 0xffffff, x - side * 0.75, 1.05, z, 0, 0, 0, 0.2, 0.1, 3.6);
+      this.colliders.push({ minX: x + side * 0.4 - 1.1, maxX: x + side * 0.4 + 1.1, minZ: z - 2, maxZ: z + 2 });
+    }
+    sc.add(m.mesh());
+    const sign = (text: string, x: number, y: number, z: number, ry: number, w: number, bg: string, fg: string) => {
+      const tex = canvasTex((ctx, cw, ch) => {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.fillStyle = fg;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let size = 80;
+        do ctx.font = `bold ${size}px sans-serif`;
+        while (ctx.measureText(text).width > cw - 40 && (size -= 4) > 18);
+        ctx.fillText(text, cw / 2, ch / 2 + 4);
+      }, 512, 128);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: tex }));
+      p.position.set(x, y, z);
+      p.rotation.y = ry;
+      sc.add(p);
+    };
+    for (const [x, z] of BURGERS) sign('BURGER 🍔', x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#f4c430', '#b3001b');
+    sign('Puerta 26 · LPA', cx, 4.4, A.maxZ + 3.0, Math.PI, 5, '#1b2a4a', '#ffd23f');
+    sign('Salidas · Departures', cx, 4.6, A.minZ - 3.0, 0, 5, '#1b2a4a', '#ffffff');
+    for (const z of [-15, 0, 15]) {
+      const l = new THREE.PointLight(0xffffff, 16, 18, 1.4);
+      l.position.set(cx, 5.5, z);
+      sc.add(l);
+    }
+    // Hamburguesas (pan, carne y pan) listas para salir volando
+    const bun = new Merger()
+      .add(G.dome, 0xd99a4e, 0, 0.12, 0, 0, 0, 0, 0.5, 0.4, 0.5)
+      .add(G.cyl, 0x5a3320, 0, 0.08, 0, 0, 0, 0, 0.52, 0.08, 0.52)
+      .add(G.cyl, 0x6fbf4a, 0, 0.12, 0, 0, 0, 0, 0.55, 0.03, 0.55)
+      .add(G.cyl, 0xd99a4e, 0, 0.0, 0, 0, 0, 0, 0.48, 0.08, 0.48)
+      .build();
+    for (let i = 0; i < 6; i++) {
+      const o = new THREE.Mesh(bun, vertexMat());
+      o.visible = false;
+      sc.add(o);
+      this.burgers.push({ o, v: new THREE.Vector3(), live: false });
+    }
+    // Viajeros con prisa, de un lado a otro del pasillo
+    for (let i = 0; i < 4; i++) {
+      const p = makePerson({ ...LOOKS[i], shirt: [0x34495e, 0x8e44ad, 0x16a085, 0xc0392b][i] });
+      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777][i], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
+      p.root.position.set(A.minX + 2 + i * 2.6, 0, -22 + i * 13);
+      sc.add(p.root);
+      this.travelers.push({ p, dir: i % 2 ? 1 : -1, x: p.root.position.x, walk: 0, c: { x: 0, z: 0, r: 0.35 } });
+    }
+    this.allPeople.push(...this.travelers.map((t) => t.c));
+  }
+
+  private startAirport() {
+    this.phase = 'airport';
+    this.player.root.position.set((AIR.minX + AIR.maxX) / 2, 0, AIR.minZ + 1);
+    this.walker.yaw = this.walker.facing = 0;
+    this.walker.stop();
+    this.camera.position.set((AIR.minX + AIR.maxX) / 2, 4, AIR.minZ - 4);
+    this.updateHud();
+  }
+
+  private stepAirport(dt: number) {
+    const pp = this.player.root.position;
+    // Viajeros con maleta
+    for (const t of this.travelers) {
+      const r = t.p.root.position;
+      r.z += t.dir * 1.6 * dt;
+      if (r.z > AIR.maxZ + 1 || r.z < AIR.minZ - 1) t.dir *= -1;
+      t.p.root.rotation.y = t.dir > 0 ? 0 : Math.PI;
+      t.walk += (1.6 * dt) / 0.53;
+      animatePerson(t.p, dt, 'walk', 0.3, t.walk);
+      t.c.x = r.x;
+      t.c.z = r.z;
+    }
+    // El burger lanza hamburguesas cruzando el pasillo
+    this.burgerT -= dt;
+    if (this.burgerT <= 0) {
+      this.burgerT = 0.6 + Math.random() * 0.6;
+      const b = this.burgers.find((x) => !x.live);
+      // Sale del burger más cercano a Azul (por delante de ella, para que dé tiempo a verla)
+      const [bx, bz] = BURGERS.reduce((a, c) => (Math.abs(c[1] - pp.z - 3) < Math.abs(a[1] - pp.z - 3) ? c : a));
+      if (b && Math.abs(bz - pp.z) < 12) {
+        const side = bx > (AIR.minX + AIR.maxX) / 2 ? -1 : 1;
+        b.live = true;
+        b.o.visible = true;
+        b.o.position.set(bx + side * 1.0, 1.2, bz + (Math.random() - 0.5) * 3);
+        // Apunta a donde va a estar Azul (con algo de error, para que se pueda esquivar)
+        const vx = 5 + Math.random() * 2.5;
+        const tf = Math.abs(pp.x - b.o.position.x) / vx;
+        const tz = pp.z + this.walker.vz * tf + (Math.random() - 0.5) * 1.2;
+        b.v.set(side * vx, 2.5 + Math.random() * 1.5, THREE.MathUtils.clamp((tz - b.o.position.z) / Math.max(0.3, tf), -6, 6));
+      }
+    }
+    for (const b of this.burgers) {
+      if (!b.live) continue;
+      b.v.y -= 9.8 * dt;
+      b.o.position.addScaledVector(b.v, dt);
+      b.o.rotation.x += dt * 8;
+      if (b.o.position.y < 0.12 && b.v.y < 0) {
+        b.o.position.y = 0.12;
+        b.v.y *= -0.45;
+        b.v.x *= 0.7;
+      }
+      if (b.o.position.x < AIR.minX - 0.5 || b.o.position.x > AIR.maxX + 0.5 || Math.abs(b.v.x) < 0.4) {
+        b.live = false;
+        b.o.visible = false;
+        continue;
+      }
+      if (this.invuln <= 0 && Math.hypot(b.o.position.x - pp.x, b.o.position.z - pp.z) < 0.6 && b.o.position.y < 2) {
+        this.invuln = 1.2;
+        this.burgerHits++;
+        this.walker.knock.set(Math.sign(b.v.x) * 6, 0, -2);
+        this.walker.shake(0.3);
+        audio.hit();
+        vibrate(60);
+        toast(T_BURGER_HIT()[(this.burgerHits - 1) % T_BURGER_HIT().length]);
+        this.fx.burst(pp.clone().setY(1.6), '🍔', 3, 1, 0.6);
+        b.live = false;
+        b.o.visible = false;
+        this.updateHud();
+      }
+    }
+  }
+
+  /** Embarca: fundido y ya está en el estadio, con Gas en la cola. */
+  private board() {
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    audio.whoosh();
+    for (const b of this.burgers) b.o.visible = b.live = false;
+    fadeFlash(() => {
+      this.phase = 'intro';
+      for (const t of this.travelers) {
+        t.p.root.visible = false;
+        t.c.x = t.c.z = 1e4;
+      }
+      this.player.root.position.set(0, 0, -18);
+      this.walker.yaw = this.walker.facing = 0;
+      this.walker.stop();
+      this.camera.position.set(0, 5, -27);
+      this.updateHud();
+    }, 700);
+    setTimeout(
+      () =>
+        dialogue(T_QUEUE_INTRO(), () => {
+          this.busy = false;
+          this.phase = 'queue';
+          this.updateHud();
+        }),
+      1500,
+    );
   }
 
   private buildWorld() {
@@ -986,6 +1193,11 @@ export class Level3 implements Level {
       for (const n of this.npcs) if (n.mode !== 'free') this.hide(n);
       return;
     }
+    if (this.phase === 'airport' || (this.phase === 'intro' && this.player.root.position.x > 100)) {
+      for (const n of this.npcs) if (n.mode === 'queue') animatePerson(n.p, dt, 'idle');
+      animatePerson(this.gas, dt, 'idle');
+      return;
+    }
     const pp = this.player.root.position;
     for (let i = 0; i < WC_Z.length; i++) {
       if (this.wcBusyT[i] <= 0) continue;
@@ -1386,7 +1598,11 @@ export class Level3 implements Level {
     const setObj = (t: string) => {
       if (t !== this.hudObj) h.setObjective((this.hudObj = t));
     };
+    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🍔 ${this.burgerHits}</span>`;
     switch (this.phase) {
+      case 'airport':
+        setObj(T_AIRPORT_HINT());
+        break;
       case 'intro':
       case 'queue':
         setObj('Ponte con Gas en la cola del lavabo');
@@ -1410,6 +1626,7 @@ export class Level3 implements Level {
   }
 
   private target(): THREE.Vector3 | null {
+    if (this.phase === 'airport') return this.v1.set((AIR.minX + AIR.maxX) / 2, 0, AIR.maxZ - 1);
     if (this.phase === 'queue') return this.gas.root.position;
     return null;
   }
@@ -1504,11 +1721,13 @@ export class Level3 implements Level {
     });
 
     // Jugadora (en la cola avanza sola con la cola; a oscuras se queda quieta haciendo señales)
-    const walking = !this.busy && this.phase === 'queue';
+    const walking = !this.busy && (this.phase === 'queue' || this.phase === 'airport');
+    this.invuln -= dt;
+    if (this.phase === 'airport') this.stepAirport(dt);
     const az = this.azIdx;
     const inQueue = this.phase === 'inQueue' && az >= 0 && !this.busy;
     this.walker.turn(this.input.consumeCam());
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.allPeople);
+    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.allPeople);
     this.stepCrowd(dt);
     this.stepQueue(dt);
     if (this.phase === 'flash' || this.phase === 'meet') this.stepFlash(dt);
@@ -1575,7 +1794,12 @@ export class Level3 implements Level {
     let label: string | null = null;
     let action: (() => void) | null = null;
     const pp = this.player.root.position;
-    if (walking) {
+    if (walking && this.phase === 'airport') {
+      if (pp.z > AIR.maxZ - 2.5) {
+        label = '🛫 Embarcar';
+        action = () => this.board();
+      }
+    } else if (walking) {
       if (!this.smokeThrown && pp.distanceTo(SMOKE_POS) < 1.8) {
         label = 'Tirar 🚭';
         action = () => {
@@ -1605,7 +1829,7 @@ export class Level3 implements Level {
       action = () => this.flash();
     }
     if (inQueue) this.updateHud();
-    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!');
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!' || label === '🛫 Embarcar');
     if (this.input.consumeAction() && action) action();
 
     // Marcador y flecha
@@ -1703,6 +1927,7 @@ export class Level3 implements Level {
             stats: [
               ['Notas', `${hits}/${total}`],
               ['Perfectas', `${perfects} · racha x${maxCombo}`],
+              ['Hamburguesas esquivadas', this.burgerHits ? `te dieron ${this.burgerHits} 🍔` : 'todas 🍔'],
               ['Colados frenados', `${this.cutsBlocked}/${this.cutsBlocked + this.cutsLost}`],
               ['Vídeo del temón', `${this.filmPct()}% con Fito en plano 📹`],
               ['Flashes', `${this.flashHits}/${this.flashHits + this.flashMiss}`],
@@ -1741,6 +1966,7 @@ export class Level3 implements Level {
       this.walker.facing = yaw;
     };
     return [
+      { label: '0 · Aeropuerto', run: () => { stop(); this.startAirport(); } },
       { label: '1 · Cola del lavabo', run: () => { stop(); this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
       { label: '2 · Grabar el temón', run: () => { stop(); this.phase = 'film'; this.gas.root.visible = false; this.player.root.position.copy(FLASH_SPOT); this.startFilm(); } },
       { label: '3 · Flash a oscuras', run: () => { stop(); this.filmUi?.remove(); this.filmUi = null; this.player.root.visible = true; this.startFlash(); } },
