@@ -8,6 +8,7 @@ import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import { LevelSantJoan } from './world/levelSantJoan';
+import { LevelCena } from './world/levelCena';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -226,8 +227,8 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito y Sant Joan
-const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan];
+// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, Sant Joan y la cena a escondidas
+const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan, LevelCena];
 
 function startLevel(n: number) {
   clearScreens();

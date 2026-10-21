@@ -401,23 +401,31 @@ export function dialogue(lines: Line[], onDone: () => void) {
   let i = 0;
   let shown = 0;
   let timer = 0;
+  // Las líneas que empiezan por «(WhatsApp)» se pintan como un mensaje del móvil
+  const WA = '(WhatsApp) ';
+  const body = (ln: Line) => (ln.text.startsWith(WA) ? ln.text.slice(WA.length) : ln.text);
   const show = () => {
     const ln = lines[i];
-    who.textContent = ln.who;
+    const wa = ln.text.startsWith(WA);
+    box.classList.toggle('wa', wa);
+    box.classList.toggle('wa-me', wa && (ln.who === 'Azul' || ln.who === 'Margaux'));
+    who.textContent = wa ? `📱 ${ln.who}` : ln.who;
+    const full = body(ln);
     shown = 0;
     text.textContent = '';
     clearInterval(timer);
     timer = window.setInterval(() => {
       shown++;
-      text.textContent = ln.text.slice(0, shown);
+      text.textContent = full.slice(0, shown);
       if (shown % 3 === 0) audio.talk();
-      if (shown >= ln.text.length) clearInterval(timer);
+      if (shown >= full.length) clearInterval(timer);
     }, 22);
   };
   const advance = () => {
-    if (shown < lines[i].text.length) {
-      shown = lines[i].text.length;
-      text.textContent = lines[i].text;
+    const full = body(lines[i]);
+    if (shown < full.length) {
+      shown = full.length;
+      text.textContent = full;
       clearInterval(timer);
       return;
     }
@@ -443,6 +451,135 @@ export function dialogue(lines: Line[], onDone: () => void) {
   cancelDialogue = cancel;
   window.addEventListener('keydown', onKey);
   show();
+}
+
+export interface GaugeZone {
+  /** Hasta dónde llega la zona (0-1); empieza donde acaba la anterior. */
+  to: number;
+  label: string;
+  color: string;
+  good?: boolean;
+}
+
+export interface GaugeOptions {
+  title: string;
+  zones: GaugeZone[];
+  /** Segundos que tarda la aguja en recorrer la barra entera. */
+  duration: number;
+  button: string;
+  /** Botón trampa que aparece a ratos (la nata). */
+  trap?: { label: string; onPress: () => void };
+}
+
+/**
+ * Minijuego de punto justo: la aguja avanza por la barra y hay que tocar cuando está en la zona buena.
+ * Devuelve la calidad (1 = en el centro de la zona buena, 0.6 = en el borde, 0 = fuera) y la zona.
+ */
+export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: GaugeZone) => void) {
+  const w = el('div', 'gauge');
+  w.append(el('div', 'gauge-title', o.title));
+  const bar = el('div', 'gauge-bar');
+  let from = 0;
+  for (const z of o.zones) {
+    const seg = el('div', 'gauge-seg' + (z.good ? ' good' : ''), `<span>${z.label}</span>`);
+    seg.style.left = `${from * 100}%`;
+    seg.style.width = `${(z.to - from) * 100}%`;
+    seg.style.background = z.color;
+    bar.append(seg);
+    from = z.to;
+  }
+  const needle = el('div', 'gauge-needle');
+  bar.append(needle);
+  const btn = el('button', 'big-btn gauge-btn', o.button);
+  w.append(bar, btn);
+  let trap: HTMLButtonElement | null = null;
+  if (o.trap) {
+    trap = el('button', 'gauge-trap', o.trap.label) as HTMLButtonElement;
+    trap.hidden = true;
+    trap.onpointerdown = (e) => {
+      e.stopPropagation();
+      trap!.hidden = true;
+      o.trap!.onPress();
+    };
+    w.append(trap);
+  }
+  root.append(w);
+  const t0 = performance.now();
+  let done = false;
+  let raf = 0;
+  const zoneAt = (x: number) => o.zones.find((z) => x <= z.to) ?? o.zones[o.zones.length - 1];
+  const finish = (x: number) => {
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(raf);
+    const z = zoneAt(x);
+    let q = 0;
+    if (z.good) {
+      const i = o.zones.indexOf(z);
+      const a = i === 0 ? 0 : o.zones[i - 1].to;
+      const mid = (a + z.to) / 2;
+      q = 1 - (Math.abs(x - mid) / ((z.to - a) / 2)) * 0.4;
+    }
+    w.classList.add(q > 0 ? 'hit' : 'miss');
+    vibrate(q > 0 ? 25 : [40, 30, 40]);
+    setTimeout(() => {
+      w.remove();
+      onResult(q, z);
+    }, 650);
+  };
+  const tick = () => {
+    const x = Math.min(1, (performance.now() - t0) / 1000 / o.duration);
+    needle.style.left = `${x * 100}%`;
+    if (trap) trap.hidden = !(Math.sin(x * 19) > 0.55);
+    if (x >= 1) finish(1);
+    else raf = requestAnimationFrame(tick);
+  };
+  btn.onpointerdown = (e) => {
+    e.stopPropagation();
+    finish(Math.min(1, (performance.now() - t0) / 1000 / o.duration));
+  };
+  raf = requestAnimationFrame(tick);
+  return () => {
+    done = true;
+    cancelAnimationFrame(raf);
+    w.remove();
+  };
+}
+
+/** Pantalla de móvil con un chat de WhatsApp que se va escribiendo. Toca para cerrar al final. */
+export function phoneChat(time: string, contact: string, msgs: { me: boolean; text: string }[], onDone: () => void) {
+  const o = el('div', 'phone-overlay');
+  const ph = el('div', 'phone');
+  ph.append(el('div', 'phone-bar', `<span>${time}</span><b>${contact}</b><span>🔋</span>`));
+  const chat = el('div', 'phone-chat');
+  ph.append(chat);
+  const hint = el('div', 'phone-hint', 'toca para continuar ▸');
+  hint.style.visibility = 'hidden';
+  o.append(ph, hint);
+  root.append(o);
+  let i = 0;
+  const next = () => {
+    if (i >= msgs.length) {
+      hint.style.visibility = 'visible';
+      return;
+    }
+    const typing = el('div', 'bubble typing' + (msgs[i].me ? ' me' : ''), '<i></i><i></i><i></i>');
+    chat.append(typing);
+    setTimeout(() => {
+      typing.remove();
+      chat.append(el('div', 'bubble' + (msgs[i].me ? ' me' : ''), msgs[i].text));
+      audio.pop();
+      i++;
+      setTimeout(next, 700);
+    }, 900);
+  };
+  setTimeout(next, 400);
+  o.onpointerdown = (e) => {
+    e.stopPropagation();
+    if (i < msgs.length) return;
+    o.remove();
+    onDone();
+  };
 }
 
 export interface DebugItem {
