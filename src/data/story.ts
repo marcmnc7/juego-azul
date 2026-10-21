@@ -67,25 +67,17 @@ export const FERRERIES = {
   },
 };
 
-// Capítulo 5 y último: Sant Joan en Ciutadella (junio). Misma forma que FERRERIES para reutilizar el nivel 1.
+// Capítulo 5: Sant Joan en Ciutadella (junio de 2026). Buscar a Gas por sus ubicaciones entre caballos y avellanes.
 export const SANTJOAN = {
-  intro: [
-    { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. Banderas, caballos negros, avellanes volando y el Born a reventar.' },
-    { who: 'Narrador', text: 'Gas ha venido a pasar las fiestas contigo. Lleva tu camiseta. Todo el día. "Husband material".' },
-    { who: 'Narrador', text: 'Pero lleva treinta minutos dando vueltas por el pueblo y no te encuentra.' },
-    { who: 'Narrador', text: 'Habla con Carme, que conoce cada esquina de Ciutadella.' },
+  huntIntro: [
+    { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. A las cinco sale la bandera y el pueblo entero se echa a la calle.' },
+    { who: 'Narrador', text: 'Gas lleva tu camiseta. Todo el día. «Husband material.»' },
+    { who: 'Gas', text: '(WhatsApp) Llevo 30’ dando vueltas.' },
+    { who: 'Azul', text: '(WhatsApp) ¿Dónde estássss?' },
+    { who: 'Narrador', text: 'Te va mandando su ubicación por la Plaça Espanya, el Born y Correos. Síguela… aunque con él nunca se sabe.' },
   ] as Line[],
-  tofolQuest: [
-    { who: 'Carme', text: '¡Azul! ¿Gas? Me ha escrito a mí también: «Dime exacto pls». No sabe ni dónde está.' },
-    { who: 'Carme', text: 'Mientras lo encuentras, haz Sant Joan como toca: recoge 3 bolsitas de avellanes y toca 3 caballos cuando se pongan de manos. ¡Da suerte!' },
-    { who: 'Carme', text: 'Cuidado con los caballos, que si te pillan se te caen las avellanes. Y luego vuelve, que te digo dónde lo he visto.' },
-  ] as Line[],
-  tofolNotYet: [{ who: 'Carme', text: 'Te faltan avellanes o caballos. ¡Venga, que esto es Sant Joan, no un martes!' }] as Line[],
-  tofolDone: [
-    { who: 'Carme', text: '¡Así me gusta! Ya eres más de Ciutadella que yo.' },
-    { who: 'Carme', text: 'Gas me ha mandado la ubicación. Va por el Born… aunque con él nunca se sabe.' },
-    { who: 'Carme', text: 'Ve a buscarlo. Lo reconocerás: es el único con tu camiseta.' },
-  ] as Line[],
+  exactHint: 'Mándale tu ubicación exacta 📍',
+  sentLoc: '📍 Azul: «Obelisco. Lado del Ajuntament. No te muevas»',
   marcMeet: [
     { who: 'Gas', text: '¡Azul! Por fin. Llevo treinta minutos dando vueltas. ¿Me has aceptado la ubi o no?' },
     { who: 'Azul', text: 'Te la he aceptado tres veces. El que no sabe dónde está eres tú.' },

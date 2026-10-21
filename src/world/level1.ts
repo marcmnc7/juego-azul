@@ -3,7 +3,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
-import { FERRERIES, SANTJOAN, NAMES } from '../data/story';
+import { FERRERIES, NAMES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
 import { Particles } from '../entities/fx';
@@ -43,29 +43,6 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   },
   bumped: '¡Buu! Cuidado con los ases 🫏',
   statHits: 'Empujones de ases',
-};
-
-export const SANTJOAN_VARIANT: JaleoVariant = {
-  text: SANTJOAN,
-  town: {
-    banner: [['Festes de Sant Joan', 'Ciutadella · Menorca'], 'Jaleo · 23 i 24 de juny'],
-    signs: ['Plaça des Born', 'Ses Voltes'],
-    bars: ['Bar Imperi', 'Jazzbah', 'Es Pla', 'Maramao'],
-  },
-  guide: 'Carme',
-  item: '🌰',
-  hud: {
-    talk: 'Habla con Carme en el bar de la plaza',
-    collectItems: 'Recoge las avellanes que faltan',
-    collectLuck: 'Toca a los caballos cuando se pongan de manos',
-    collect: 'Avellanes y toques a los caballos cuando se pongan de manos',
-    back: '¡Lo tienes! Vuelve con Carme',
-    find: 'Encuentra a Gas: sigue su ubicación 📍',
-    give: 'Darle las avellanes',
-  },
-  bumped: '¡Buu! Cuidado con los caballos 🐎',
-  statHits: 'Empujones de caballos',
-  horses: true,
 };
 
 type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'kiss' | 'kissing' | 'ending' | 'done';
