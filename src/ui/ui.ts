@@ -1,5 +1,5 @@
 import { GIFTS, Gift } from '../data/gifts';
-import { LEVELS, Line, FINAL_LETTER } from '../data/story';
+import { LEVELS, Line, FINAL_LETTER, CROSSWORD } from '../data/story';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
@@ -60,8 +60,8 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   });
   const allDone = opts.test || LEVELS.every((l) => done.has(l.id));
   const fin = el('button', 'level-card final' + (allDone ? '' : ' locked'));
-  fin.append(el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines los tres capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒'));
-  if (allDone) fin.onclick = () => finalLetter(back);
+  fin.append(el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines los cuatro capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒'));
+  if (allDone) fin.onclick = () => crossword(() => finalLetter(back), back);
   list.append(fin);
   s.append(list);
   const g = el('button', 'link-btn', `🎁 Mis regalos (${save.giftsUnlocked.length}/${GIFTS.length})`);
@@ -73,6 +73,96 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
     s.append(r);
   }
   root.append(s);
+}
+
+/** Quita tildes y espacios para comparar respuestas (la Ñ se respeta). */
+function norm(t: string) {
+  return t
+    .toUpperCase()
+    .replace(/Ñ/g, '\u0001')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f\s]/g, '')
+    .replace(/\u0001/g, 'Ñ');
+}
+
+/** Crucigrama antes de la carta: las letras marcadas forman el mensaje escondido. */
+export function crossword(onSolved: () => void, onBack: () => void) {
+  clearScreens();
+  const o = el('div', 'screen crossword-screen');
+  const card = el('div', 'letter crossword');
+  card.append(el('h2', '', CROSSWORD.title), el('p', 'cw-intro', CROSSWORD.intro));
+  const hidden = el('div', 'cw-hidden');
+  const slots: HTMLElement[] = [];
+  for (const ch of CROSSWORD.hidden) {
+    const sl = el('span', ch === ' ' ? 'gap' : 'slot', ch === ' ' ? '' : '?');
+    if (ch !== ' ') slots.push(sl);
+    hidden.append(sl);
+  }
+  card.append(hidden);
+  const solved = new Set<number>();
+  const rows: HTMLElement[] = [];
+  const finish = el('button', 'big-btn', 'Abrir la carta 💌');
+  finish.hidden = true;
+  finish.onclick = onSolved;
+  CROSSWORD.clues.forEach((c, i) => {
+    const row = el('div', 'cw-row');
+    const boxes = el('div', 'cw-boxes');
+    const cells: HTMLElement[] = [];
+    for (let k = 0; k < c.answer.length; k++) {
+      const b = el('span', 'cw-cell' + (k === c.mark ? ' mark' : ''));
+      cells.push(b);
+      boxes.append(b);
+    }
+    const input = el('input', 'cw-input') as HTMLInputElement;
+    input.maxLength = c.answer.length + 4;
+    input.autocapitalize = 'characters';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('aria-label', c.clue);
+    const paint = () => {
+      const v = norm(input.value);
+      cells.forEach((b, k) => (b.textContent = v[k] ?? ''));
+    };
+    input.oninput = () => {
+      paint();
+      if (norm(input.value) === c.answer && !solved.has(i)) {
+        solved.add(i);
+        row.classList.add('ok');
+        input.disabled = true;
+        slots[i].textContent = c.answer[c.mark];
+        slots[i].classList.add('on');
+        audio.talk();
+        vibrate(30);
+        const next = rows.find((_, j) => !solved.has(j));
+        (next?.querySelector('input') as HTMLInputElement | null)?.focus();
+        if (solved.size === CROSSWORD.clues.length) {
+          input.blur();
+          audio.fanfare();
+          hidden.classList.add('done');
+          finish.hidden = false;
+          toast(CROSSWORD.solved);
+        }
+      }
+    };
+    const hint = el('button', 'cw-hint', 'Pista');
+    hint.onclick = () => {
+      if (solved.has(i)) return;
+      // Rellena la primera letra que falte o esté mal
+      const v = norm(input.value).slice(0, c.answer.length);
+      let k = 0;
+      while (k < v.length && v[k] === c.answer[k]) k++;
+      input.value = c.answer.slice(0, k + 1);
+      input.dispatchEvent(new Event('input'));
+    };
+    boxes.onclick = () => input.focus();
+    row.append(el('div', 'cw-clue', `${i + 1}. ${c.clue} <small>(${c.answer.length})</small>`), hint, boxes, input);
+    rows.push(row);
+    card.append(row);
+  });
+  const back = el('button', 'link-btn', 'Volver');
+  back.onclick = onBack;
+  o.append(card, finish, back);
+  root.append(o);
 }
 
 export function finalLetter(onClose: () => void) {

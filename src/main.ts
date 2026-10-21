@@ -14,7 +14,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, debugPanel, closeDialogue, chapterCard } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -245,7 +245,7 @@ function startLevel(n: number) {
           level.dispose();
           level = null;
         }
-        finalLetter(goMap);
+        crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
     // El capítulo 4 no tiene vale: su premio es la carta final
