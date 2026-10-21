@@ -3,24 +3,25 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
-import { NIGHT } from '../data/story';
+import { NIGHT, type Line } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { CarRig, G, Merger, makePerson, makeDog, makeCar, animatePerson, Person, Dog } from '../entities/models';
+import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person } from '../entities/models';
 import { buildStreet, STREET } from './homeStreet';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, fadeFlash, toast, Hud, DebugItem } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone } from './level';
 
-// Capítulo 4 · Noche de piscina y estrellas, en casa.
+// Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
 // jardín de césped con camino de losas por la derecha y la piscina al fondo.
 // Empieza en la puerta del Bar Imperi: Azul sube al coche de Gas, van a casa, entra por la
 // puerta peatonal y sale al jardín.
-// Bucle: bajar al jardín → tirarse a la piscina → recoger 6 velitas → tumbarse en las toallas →
-// unir las estrellas que forman un corazón → estrella fugaz → final.
+// Bucle: cruzar el jardín sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden
+// las ventanas de arriba) → tirarse a la piscina → recoger 6 velitas → tumbarse en el césped →
+// unir las estrellas que forman un corazón → estrella fugaz → final. Joy no estaba aquella noche.
 
 type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
 
@@ -33,10 +34,24 @@ const PLOT = { minX: -4.1, maxX: 4.1, minZ: 0.25, maxZ: 14.1 };
 // Calle: zona del bar y zona delante de casa
 const BAR_AREA = { minX: STREET.bar.x - 12, maxX: STREET.bar.x + 14, minZ: -26.6, maxZ: STREET.bar.z - 0.4 };
 const HOME_AREA = { minX: -6, maxX: 5, minZ: -26.6, maxZ: -15.35 };
-const YARD = { minX: -4.2, maxX: 4.2, minZ: STREET.wallZ + 0.5, maxZ: -15.4 };
 const CAR_START_X = STREET.bar.x + 3.2;
 const CAR_STOP_X = -0.6;
 const DRIVE_TIME = 7;
+// Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
+const GRAVEL = { minX: -4.4, maxX: 4.4, minZ: 2.4, maxZ: 4.6 };
+const STONES: [number, number][] = [[3.425, 2.7], [3.35, 3.5], [3.275, 4.3], [-1.7, 2.75], [-1.1, 3.55], [-1.6, 4.35]];
+const NOISE_LIGHT = 0.55;
+// Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
+const TXT = NIGHT as unknown as Record<string, unknown>;
+const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
+const T_SNEAK_HINT = () => txt<string>('sneakHint', 'Llega a la piscina sin hacer ruido: despacio y por las losas');
+const T_LIGHT_ON = () => txt<string>('lightOn', '💡 Se ha encendido una luz arriba… ¡quieta!');
+const T_CAUGHT = () =>
+  txt<Line[]>('caught', [
+    { who: 'Madre de Gas', text: '(desde la ventana) ¿Marc? ¿Eres tú?' },
+    { who: 'Gas', text: '¡Sí, mamá! ¡Bajaba a por agua! Buenas noches…' },
+    { who: 'Gas', text: '(susurrando) Silencio full, te dije. Vuelve a la terraza y otra vez, despacito.' },
+  ]);
 
 interface Candle {
   obj: THREE.Group;
@@ -52,9 +67,13 @@ export class Level4 implements Level {
   private player: Person;
   private walker: Walker;
   private gas: Person;
-  private joy: Dog;
-  private joyWalk = 0;
-  private barkT = 4;
+  // Sigilo: ruido acumulado, ventanas de los padres y las veces que casi os pillan
+  private noise = 0;
+  private lightOn = false;
+  private caught = 0;
+  private winMat = new THREE.MeshBasicMaterial({ color: 0x1b2135 });
+  private lastStep = 0;
+  private hudChips = '-';
   private sky: Sky;
   private sun: Sun;
   private colliders: Box2[] = [];
@@ -70,16 +89,12 @@ export class Level4 implements Level {
   private diveV = new THREE.Vector3();
   private diveStage = 0;
   private divePitch = 0;
-  // Física: pelota de playa que flota en la piscina, Joy y Azul la empujan; ondas en el agua
+  // Física: pelota de playa que flota en la piscina, Azul la empuja; ondas en el agua
   private phys = new PhysicsWorld();
   private ball!: Body;
-  private movers: Mover[] = [
-    { x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 },
-    { x: 0, z: 0, vx: 0, vz: 0, r: 0.3, height: 0.6 },
-  ];
+  private movers: Mover[] = [{ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 }];
   private ripples: { m: THREE.Mesh; t: number; max: number; size: number }[] = [];
   private rippleT = 0;
-  private joyPrev = new THREE.Vector3();
   private diveFrom = new THREE.Vector3();
   private diveTo = new THREE.Vector3();
   private playTime = 0;
@@ -98,7 +113,6 @@ export class Level4 implements Level {
   // Coche y viaje
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
   private rig: CarRig | null = null;
-  private joyVel = new THREE.Vector2();
   private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95 };
   private driveT = 0;
   private driveTalkDone = false;
@@ -154,9 +168,6 @@ export class Level4 implements Level {
     this.gas.root.visible = false; // va en el coche
     sc.add(this.gas.root);
 
-    this.joy = makeDog();
-    this.joy.root.position.set(-0.5, 0, -16.6); // espera en el patio de casa
-    sc.add(this.joy.root);
 
     // Velitas flotando en la piscina
     const candleGeo = new Merger()
@@ -346,10 +357,32 @@ export class Level4 implements Level {
     const windows = new Merger();
     windows.add(G.box, 0xffd9a0, -2, 1.3, 0.03, 0, 0, 0, 3.2, 2.4, 0.05);
     windows.add(G.box, 0xffd9a0, 2.2, 1.3, 0.03, 0, 0, 0, 2.4, 2.4, 0.05);
-    windows.add(G.box, 0xffe7c0, -2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
-    windows.add(G.box, 0xffe7c0, 2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
     const wm = new THREE.Mesh(windows.build(), glow);
     sc.add(wm);
+    // Ventanas del dormitorio de los padres: a oscuras… hasta que hacéis ruido
+    const up = new Merger();
+    up.add(G.box, 0xffffff, -2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
+    up.add(G.box, 0xffffff, 2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
+    sc.add(new THREE.Mesh(up.build(), this.winMat));
+    // Grava entre la terraza y el césped, con losas para pasar sin ruido
+    const gravelTex = canvasTex((ctx, w, h) => {
+      ctx.fillStyle = '#9d988d';
+      ctx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 4000; i++) {
+        const v = 120 + Math.random() * 110;
+        ctx.fillStyle = `rgb(${v},${v - 4},${v - 12})`;
+        ctx.beginPath();
+        ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+    gravelTex.wrapS = gravelTex.wrapT = THREE.RepeatWrapping;
+    gravelTex.repeat.set(4, 1);
+    const gravel = new THREE.Mesh(new THREE.PlaneGeometry(GRAVEL.maxX - GRAVEL.minX, GRAVEL.maxZ - GRAVEL.minZ).rotateX(-Math.PI / 2), toon({ map: gravelTex, roughness: 1 }));
+    gravel.position.set((GRAVEL.minX + GRAVEL.maxX) / 2, 0.025, (GRAVEL.minZ + GRAVEL.maxZ) / 2);
+    gravel.userData.noCast = true;
+    sc.add(gravel);
+    for (const [x, z] of STONES.slice(3)) m.add(G.cyl, 0xe8dcc0, x, 0.04, z, 0, 0, 0, 0.7, 0.06, 0.6);
     for (const [x, w] of [[-2, 3.2], [2.2, 2.4]]) {
       m.add(G.box, 0x333338, x, 2.55, 0.06, 0, 0, 0, w + 0.1, 0.1, 0.08);
       m.add(G.box, 0x333338, x, 1.3, 0.07, 0, 0, 0, 0.06, 2.4, 0.06);
@@ -462,7 +495,12 @@ export class Level4 implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.phase === 'swim' ? `<span class="chip">${NIGHT.candle(this.collected)}</span>` : '');
+    let chips = this.phase === 'swim' ? `<span class="chip">${NIGHT.candle(this.collected)}</span>` : '';
+    if (this.phase === 'toPool') {
+      const n = Math.min(6, Math.round(this.noise * 6));
+      chips = `<span class="chip">🤫 ${'▮'.repeat(n)}${'▯'.repeat(6 - n)}</span>`;
+    }
+    if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     switch (this.phase) {
       case 'intro':
       case 'atBar':
@@ -475,7 +513,7 @@ export class Level4 implements Level {
         h.setObjective('Entra en casa');
         break;
       case 'toPool':
-        h.setObjective('Baja al jardín y tírate a la piscina');
+        h.setObjective(T_SNEAK_HINT());
         break;
       case 'swim':
         h.setObjective('Recoge las velitas que flotan');
@@ -530,7 +568,7 @@ export class Level4 implements Level {
       this.walker.traction = swimming ? 0.22 : 1;
       this.solids.length = 0;
       if (swimming) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
-      else this.solids.push({ x: this.joy.root.position.x, z: this.joy.root.position.z, r: 0.3 }, { x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
+      else this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       const bounds = swimming
         ? { minX: POOL.minX + 0.4, maxX: POOL.maxX - 0.4, minZ: POOL.minZ + 0.4, maxZ: POOL.maxZ - 0.4 }
         : this.phase === 'intro' || this.phase === 'atBar'
@@ -547,7 +585,7 @@ export class Level4 implements Level {
     }
 
     this.updateGas(dt);
-    this.updateJoy(dt);
+    if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
     this.updatePoolPhysics(dt);
 
     // Velitas
@@ -659,14 +697,6 @@ export class Level4 implements Level {
     a.vx = this.walker.vx;
     a.vz = this.walker.vz;
     a.height = this.player.root.visible ? 1.8 : -10;
-    const j = this.joy.root.position;
-    const b = this.movers[1];
-    b.x = j.x;
-    b.z = j.z;
-    b.vx = dt > 0 ? (j.x - this.joyPrev.x) / dt : 0;
-    b.vz = dt > 0 ? (j.z - this.joyPrev.z) / dt : 0;
-    b.height = this.joy.root.visible ? 0.6 : -10;
-    this.joyPrev.copy(j);
     const wasY = this.ball.pos.y;
     this.phys.step(dt, this.movers);
     const bp = this.ball.pos;
@@ -730,73 +760,58 @@ export class Level4 implements Level {
     }
   }
 
-  /** Joy sigue a Azul (sin meterse en la piscina), mueve la cola y ladra de vez en cuando. */
-  private updateJoy(dt: number) {
-    const j = this.joy.root;
-    const street = this.phase === 'intro' || this.phase === 'atBar' || this.phase === 'drive' || this.phase === 'arrive';
-    // Mientras Azul está fuera, Joy espera en el patio y no sale a la calle
-    const area = street ? YARD : PLOT;
+  private onStone(x: number, z: number) {
+    return STONES.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 0.4);
+  }
+
+  /** Sigilo: la grava cruje, correr retumba, y si el ruido sube se encienden las ventanas de los padres. */
+  private updateSneak(dt: number) {
     const p = this.player.root.position;
-    let tx = p.x - 1.0;
-    let tz = p.z - 0.9;
-    if (this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
-      tx = TOWELS.x - 1.3;
-      tz = TOWELS.z + 0.3;
+    const sp = Math.min(this.walker.speed, this.walker.currentSpeed);
+    const gravel = p.x > GRAVEL.minX && p.x < GRAVEL.maxX && p.z > GRAVEL.minZ && p.z < GRAVEL.maxZ && !this.onStone(p.x, p.z);
+    if (gravel && sp > 0.3) this.noise += dt * (0.3 + sp * 0.22);
+    else this.noise += dt * Math.max(0, sp - 2.6) * 0.6;
+    this.noise = Math.max(0, this.noise - dt * 0.2);
+    // Cada pisada en la grava, un crujido
+    const step = Math.floor(this.walker.walk / Math.PI);
+    if (step !== this.lastStep) {
+      this.lastStep = step;
+      if (gravel) audio.knock(0.25 + sp * 0.06, 2600 + Math.random() * 900, 0.05);
     }
-    // Si Azul está en el agua, Joy corre por el borde
-    if (tx > POOL.minX - 0.6 && tx < POOL.maxX + 0.6 && tz > POOL.minZ - 0.6 && tz < POOL.maxZ + 0.6) {
-      const opts = [tx - (POOL.minX - 0.7), POOL.maxX + 0.7 - tx, tz - (POOL.minZ - 0.7), POOL.maxZ + 0.7 - tz];
-      const i = opts.indexOf(Math.min(...opts));
-      if (i === 0) tx = POOL.minX - 0.7;
-      else if (i === 1) tx = POOL.maxX + 0.7;
-      else if (i === 2) tz = POOL.minZ - 0.7;
-      else tz = POOL.maxZ + 0.7;
+    if (this.noise > 0.35 && Math.random() < dt * 1.5) this.fx.burst(this.v1.copy(this.gas.root.position).setY(2.3), '🤫', 1, 0.5, 0.6);
+    const on = this.noise > NOISE_LIGHT;
+    if (on !== this.lightOn) {
+      this.lightOn = on;
+      if (on) {
+        toast(T_LIGHT_ON());
+        audio.warn();
+        vibrate(20);
+      }
     }
-    const dx = tx - j.position.x;
-    const dz = tz - j.position.z;
-    const d = Math.hypot(dx, dz);
-    // Joy tiene inercia: arranca al trote, frena con las patas y gira en curva, no en el sitio
-    const want = d > 0.6 ? Math.min(6, (d - 0.5) * 3) : 0;
-    const v = this.joyVel;
-    const wx = d > 1e-3 ? (dx / d) * want : 0;
-    const wz = d > 1e-3 ? (dz / d) * want : 0;
-    const ex = wx - v.x;
-    const ey = wz - v.y;
-    const el = Math.hypot(ex, ey);
-    if (el > 1e-4) {
-      const step = Math.min(el, (want > v.length() ? 14 : 20) * dt);
-      v.x += (ex / el) * step;
-      v.y += (ey / el) * step;
-    }
-    const ox = j.position.x;
-    const oz = j.position.z;
-    j.position.x += v.x * dt;
-    j.position.z += v.y * dt;
-    j.position.x = Math.max(area.minX, Math.min(area.maxX, j.position.x));
-    j.position.z = Math.max(area.minZ, Math.min(area.maxZ, j.position.z));
-    const moved = Math.hypot(j.position.x - ox, j.position.z - oz);
-    const speed = dt > 0 ? moved / dt : 0;
-    if (speed > 0.3) {
-      const turn = Math.atan2(Math.sin(Math.atan2(v.x, v.y) - j.rotation.y), Math.cos(Math.atan2(v.x, v.y) - j.rotation.y));
-      j.rotation.y += Math.sign(turn) * Math.min(Math.abs(turn), dt * 10);
-    }
-    // Zancada de perro: ciclo ligado a la distancia; al correr, galope (patas de cada par juntas)
-    this.joyWalk += moved / 0.16;
-    const gallop = THREE.MathUtils.smoothstep(speed, 2.5, 4.5);
-    const w = Math.sin(this.joyWalk) * (0.35 + 0.35 * gallop) * Math.min(1, speed / 1.5);
-    const pair = 1 - 2 * gallop; // 1 = trote (diagonales), -1 = galope (pares juntos)
-    this.joy.legs[0].rotation.x = w;
-    this.joy.legs[2].rotation.x = -w;
-    this.joy.legs[1].rotation.x = -w * pair;
-    this.joy.legs[3].rotation.x = w * pair;
-    this.joy.tail.rotation.z = Math.sin(this.t * 14) * 0.6;
-    if (this.phase === 'stars' || this.phase === 'ending') j.rotation.y = Math.PI / 2;
-    this.barkT -= dt;
-    if (this.barkT <= 0 && (!street || this.phase === 'arrive') && this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
-      this.barkT = 5 + Math.random() * 6;
-      audio.bark();
-      this.fx.burst(this.v1.copy(j.position).setY(1.2), '🐾', 2, 0.8, 0.6);
-    }
+    this.winMat.color.lerp(this.v1.set(on ? 1 : 0.105, on ? 0.86 : 0.13, on ? 0.6 : 0.21) as unknown as THREE.Color, Math.min(1, dt * 6));
+    if (this.noise >= 1) this.wakeParents();
+    this.updateHud();
+  }
+
+  private wakeParents() {
+    this.busy = true;
+    this.caught++;
+    this.walker.stop();
+    this.input.reset();
+    this.hud.setAction(null);
+    audio.hit();
+    vibrate(60);
+    dialogue(T_CAUGHT(), () => {
+      fadeFlash(() => {
+        this.noise = 0;
+        this.lightOn = false;
+        this.player.root.position.set(-1.2, 0, 1.2);
+        this.walker.yaw = this.walker.facing = 0;
+        this.walker.stop();
+        this.busy = false;
+        this.updateHud();
+      });
+    });
   }
 
   // ---------------- Bar Imperi y viaje a casa ----------------
@@ -844,7 +859,7 @@ export class Level4 implements Level {
     }
   }
 
-  /** Bajan del coche delante de casa; Gas abre la puerta peatonal y Joy espera en el patio. */
+  /** Bajan del coche delante de casa; Gas abre la puerta peatonal. */
   private arriveHome() {
     this.phase = 'arrive';
     this.placeCar(CAR_STOP_X);
@@ -856,8 +871,6 @@ export class Level4 implements Level {
     this.gas.root.visible = true;
     this.gas.root.position.set(-1.9, 0, STREET.wallZ + 1.0);
     this.gas.root.rotation.set(0, Math.PI, 0);
-    this.joy.root.visible = true;
-    this.joy.root.position.set(-0.8, 0, -16.6);
     this.updateHud();
     dialogue(NIGHT.arrive, () => {
       this.busy = false;
@@ -872,8 +885,6 @@ export class Level4 implements Level {
       this.toGarden();
       this.phase = 'toPool';
       this.updateHud();
-      audio.bark();
-      this.fx.burst(this.v1.copy(this.joy.root.position).setY(1.2), '🐾', 3, 0.8, 0.6);
       dialogue(NIGHT.intro, () => {
         this.busy = false;
       });
@@ -891,8 +902,8 @@ export class Level4 implements Level {
     this.gas.root.visible = true;
     this.gas.root.position.set(1.0, 0, 7.9);
     this.gas.root.rotation.set(0, Math.PI, 0);
-    this.joy.root.visible = true;
-    this.joy.root.position.set(0.6, 0, 2.4);
+    this.walker.stop();
+    this.noise = 0;
   }
 
   // ---------------- Piscina ----------------
@@ -1061,7 +1072,7 @@ export class Level4 implements Level {
           this.phase = 'done';
           audio.ambience(0);
           const stars = 1 + (this.misses <= 6 ? 1 : 0) + (this.playTime < 240 ? 1 : 0);
-          this.onComplete({ stars, stats: [['Velitas', '6/6 🕯️'], ['Estrellas unidas', '10/10 ✨'], ['Tiempo', clock(this.playTime)]] });
+          this.onComplete({ stars, stats: [['Velitas', '6/6 🕯️'], ['Estrellas unidas', '10/10 ✨'], ['Casi os pillan', this.caught ? `${this.caught} ${this.caught === 1 ? 'vez' : 'veces'} 💡` : 'nunca 🤫'], ['Tiempo', clock(this.playTime)]] });
         }, 1500);
       });
     }, 2200);
@@ -1121,7 +1132,7 @@ export class Level4 implements Level {
       this.input.reset();
       this.player.root.rotation.set(0, 0, 0);
       this.gas.root.rotation.set(0, Math.PI, 0);
-      this.player.root.visible = this.gas.root.visible = this.joy.root.visible = true;
+      this.player.root.visible = this.gas.root.visible = true;
       this.car.azul.visible = false;
     };
     return [
