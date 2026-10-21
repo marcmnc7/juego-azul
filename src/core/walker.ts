@@ -36,12 +36,16 @@ export class Walker {
   /** Fase del ciclo de paso: avanza con la distancia recorrida, así los pies no patinan. */
   walk = 0;
   speed = 5.8;
+  /** Agarre: 1 en suelo; en el agua bajo, para que se deslice y cueste arrancar y frenar. */
+  traction = 1;
   knock = new THREE.Vector3();
   /** Inclinación hacia delante (aceleración) y hacia el lado (curvas), suavizadas, en radianes. */
   leanFwd = 0;
   leanSide = 0;
   private leanFwdV = 0;
   private leanSideV = 0;
+  /** Velocidad que la jugadora quiere llevar (hacia donde empuja), aunque algo se lo impida. */
+  wish = new THREE.Vector2();
   private turnRate = 0;
   private stumble = 0;
   private manualCam = 0;
@@ -67,6 +71,14 @@ export class Walker {
 
   shake(t = 0.35) {
     this.shakeT = t;
+  }
+
+  /** Velocidad real en x y z. */
+  get vx() {
+    return this.velocity.x;
+  }
+  get vz() {
+    return this.velocity.z;
   }
 
   /** Velocidad actual (m/s). */
@@ -125,6 +137,7 @@ export class Walker {
       if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * 1.6 * mag);
     }
     this.turnRate = wrap(this.facing - prevFacing) / dt;
+    this.wish.set(tx, tz);
 
     // Aceleración limitada: arrancar cuesta un poco más que frenar
     const dx = tx - v.x;
@@ -132,7 +145,7 @@ export class Walker {
     const dl = Math.hypot(dx, dz);
     if (dl > 1e-5) {
       const speeding = tx * v.x + tz * v.z > 0 && tx * tx + tz * tz > v.x * v.x + v.z * v.z;
-      const a = this.stumble > 0 ? STUMBLE_DECEL : speeding ? ACCEL : BRAKE;
+      const a = (this.stumble > 0 ? STUMBLE_DECEL : speeding ? ACCEL : BRAKE) * this.traction;
       const step = Math.min(dl, a * dt);
       v.x += (dx / dl) * step;
       v.z += (dz / dl) * step;

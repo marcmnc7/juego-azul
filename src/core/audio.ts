@@ -205,6 +205,27 @@ export class Audio {
     this.drum(this.ctx.currentTime, 0.9);
     this.sfx([-12, -17], 0.08, 'sawtooth', 0.12);
   }
+  /** Golpe físico (vaso de plástico, pelota, salpicón): ruido corto filtrado. Agudo = objeto ligero. */
+  private lastKnock = 0;
+  knock(vol: number, freq = 1800, len = 0.08) {
+    if (!this.ctx || !this.noise || vol < 0.02) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    if (t - this.lastKnock < 0.035) return;
+    this.lastKnock = t;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = freq * (0.9 + Math.random() * 0.2);
+    f.Q.value = 2.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(Math.min(0.6, vol) * 0.6, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    s.connect(f).connect(g).connect(this.master);
+    s.start(t, Math.random() * 0.5);
+    s.stop(t + len + 0.02);
+  }
   fanfare() { this.sfx([7, 12, 16, 19, 24, 19, 24, 28], 0.11, 'triangle', 0.3); }
   perfect() { this.sfx([24, 28, 31, 36], 0.04, 'square', 0.08); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
   warn() { this.sfx([5, 5], 0.1, 'square', 0.06); }

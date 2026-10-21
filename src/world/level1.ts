@@ -7,6 +7,7 @@ import { FERRERIES, NAMES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld } from './ferreries';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
 import { Particles } from '../entities/fx';
+import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
 import { clock, type Level, type LevelDone } from './level';
@@ -72,6 +73,10 @@ export class Level1 implements Level {
   private tofol: Person;
   private marc: Person;
   private donkeys: DonkeyState[] = [];
+  // Vasos de plástico de pomada por el suelo: se patean, se vuelcan, ruedan y los ases los arrollan
+  private phys = new PhysicsWorld();
+  private movers: Mover[] = [];
+  private moverPrev: THREE.Vector3[] = [];
   private pomadas: Pomada[] = [];
   private inHand: THREE.Object3D;
   private fx: Particles;
@@ -110,6 +115,7 @@ export class Level1 implements Level {
   ) {
     this.world = buildFerreries(this.scene);
     this.fx = new Particles(this.scene);
+    this.buildCups();
 
     this.player = makePerson(MARGAUX_LOOK);
     this.player.root.position.copy(this.world.spawn);
@@ -435,6 +441,62 @@ export class Level1 implements Level {
     this.checkCollectDone();
   }
 
+  private buildCups() {
+    const ph = this.phys;
+    const W = this.world;
+    ph.walls = W.colliders.filter((c) => c.maxX - c.minX < 60 && c.maxZ - c.minZ < 60);
+    ph.bounds = W.bounds;
+    const geo = new THREE.CylinderGeometry(0.07, 0.05, 0.17, 14);
+    const mats = [toon({ color: 0xf2f2f2, roughness: 0.35 }), toon({ color: 0xc9e7a6, roughness: 0.35 }), toon({ color: 0xd62828, roughness: 0.45 })];
+    const B = W.bounds;
+    let n = 0;
+    for (let i = 0; i < 600 && n < 36; i++) {
+      const x = B.minX + 1 + Math.random() * (B.maxX - B.minX - 2);
+      const z = B.minZ + 1 + Math.random() * (B.maxZ - B.minZ - 2);
+      if (W.colliders.some((c) => x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) continue;
+      const mesh = new THREE.Mesh(geo, mats[n % mats.length]);
+      mesh.castShadow = true;
+      this.scene.add(mesh);
+      const b = new Body(mesh, { kind: 'cup', r: 0.07, h: 0.17, mass: 0.03, bounce: 0.25, drag: 0.6 });
+      b.pos.set(x, 0, z);
+      if (Math.random() < 0.5) {
+        const a = Math.random() * Math.PI * 2;
+        b.tilt = Math.PI / 2;
+        b.tiltAxis.set(Math.cos(a), 0, Math.sin(a));
+        b.rollAngle = Math.random() * 6;
+      }
+      ph.add(b);
+      b.asleep = true;
+      n++;
+    }
+    this.movers.push({ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 });
+  }
+
+  private stepCups(dt: number) {
+    const pp = this.player.root.position;
+    const m0 = this.movers[0];
+    m0.x = pp.x;
+    m0.z = pp.z;
+    m0.vx = this.walker.vx;
+    m0.vz = this.walker.vz;
+    // Los ases (burros y caballos de la fiesta) también los arrollan
+    this.donkeys.forEach((s, i) => {
+      const r = s.d.root.position;
+      const m = (this.movers[i + 1] ??= { x: 0, z: 0, vx: 0, vz: 0, r: 0.55, height: 1.6 });
+      const prev = (this.moverPrev[i] ??= r.clone());
+      m.vx = dt > 0 ? (r.x - prev.x) / dt : 0;
+      m.vz = dt > 0 ? (r.z - prev.z) / dt : 0;
+      m.x = r.x;
+      m.z = r.z;
+      prev.copy(r);
+    });
+    this.phys.step(dt, this.movers);
+    for (const im of this.phys.impacts) {
+      const d = im.at.distanceTo(pp);
+      if (d < 12) audio.knock(Math.min(1, im.strength * 6) / (1 + d * 0.3), 2300);
+    }
+  }
+
   update(dt: number) {
     this.t += dt;
     const ending = this.stage === 'ending' || this.stage === 'done';
@@ -474,6 +536,7 @@ export class Level1 implements Level {
       for (const o of [0.55, -0.5]) this.solids[k++] = { x: r.position.x + fx * o, z: r.position.z + fz * o, r: 0.5 };
     }
     const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds, this.solids);
+    this.stepCups(dt);
     this.invuln -= dt;
     this.player.root.rotation.y = this.walker.facing;
     this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;

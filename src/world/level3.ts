@@ -7,6 +7,7 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
+import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
@@ -294,6 +295,16 @@ export class Level3 implements Level {
   private smokeThrown = false;
   private colliders: Box2[] = [];
   private people: Circle[] = [];
+  // Física: vasos y pelota de playa, y un público que cede, se tambalea y vuelve a su sitio
+  private phys = new PhysicsWorld();
+  private ball!: Body;
+  private movers: Mover[] = [{ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.75 }];
+  private cHome: { x: number; z: number }[] = [];
+  private cOff = new Float32Array(0);
+  private cVel = new Float32Array(0);
+  private cNbr: number[][] = [];
+  private tiltQ = new THREE.Quaternion();
+  private tiltAx = new THREE.Vector3();
   private wcVisits = 0;
   private wcFree = [false, true, false, false, true, false];
   private wcLights: THREE.MeshBasicMaterial[] = [];
@@ -354,6 +365,8 @@ export class Level3 implements Level {
     // El público y Gas no se pueden atravesar
     this.people = this.crowds.flatMap((c) => c.base.map((b) => ({ x: b.x, z: b.z, r: 0.35 })));
     this.people.push({ x: GAS_POS.x, z: GAS_POS.z, r: 0.35 });
+    this.initCrowdPhysics();
+    this.buildProps();
 
     this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short' });
     this.barman.root.position.set(BAR_POS.x - 1.6, 0, BAR_POS.z);
@@ -556,6 +569,164 @@ export class Level3 implements Level {
     this.lighters = new THREE.Points(lg, new THREE.PointsMaterial({ map: glowTexture(), color: 0xffc070, size: 0.7, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.lighters.visible = false;
     sc.add(this.lighters);
+  }
+
+  private initCrowdPhysics() {
+    const homes = this.crowds.flatMap((c) => c.base.map((b) => ({ x: b.x, z: b.z })));
+    this.cHome = homes;
+    this.cOff = new Float32Array(homes.length * 2);
+    this.cVel = new Float32Array(homes.length * 2);
+    this.cNbr = homes.map((h, i) => homes.flatMap((o, j) => (j !== i && Math.hypot(o.x - h.x, o.z - h.z) < 1.4 ? [j] : [])));
+  }
+
+  /** Vasos de plástico tirados por el suelo y una pelota de playa que el público va botando. */
+  private buildProps() {
+    const ph = this.phys;
+    ph.walls = this.colliders.filter((c) => c.maxX - c.minX < 40);
+    ph.bounds = this.bounds;
+    const cupGeo = new THREE.CylinderGeometry(0.07, 0.05, 0.17, 14);
+    const mats = [toon({ color: 0xd62828, roughness: 0.45 }), toon({ color: 0xf0f0f0, roughness: 0.4 }), toon({ color: 0x2a64c8, roughness: 0.45 })];
+    let n = 0;
+    for (let i = 0; i < 400 && n < 34; i++) {
+      const x = -12 + Math.random() * 28;
+      const z = -16 + Math.random() * 21;
+      if (this.colliders.some((c) => x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) continue;
+      if (Math.hypot(x, z + 18) < 2) continue;
+      const mesh = new THREE.Mesh(cupGeo, mats[n % mats.length]);
+      mesh.castShadow = true;
+      this.scene.add(mesh);
+      const b = new Body(mesh, { kind: 'cup', r: 0.07, h: 0.17, mass: 0.03, bounce: 0.25, drag: 0.6 });
+      b.pos.set(x, 0, z);
+      if (Math.random() < 0.4) {
+        const a = Math.random() * Math.PI * 2;
+        b.tilt = Math.PI / 2;
+        b.tiltAxis.set(Math.cos(a), 0, Math.sin(a));
+        b.rollAngle = Math.random() * 6;
+      }
+      ph.add(b);
+      b.asleep = true;
+      n++;
+    }
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 16), toon({ map: beachBallTexture(), roughness: 0.35 }));
+    ball.castShadow = true;
+    this.scene.add(ball);
+    this.ball = new Body(ball, { kind: 'ball', r: 0.32, mass: 0.12, bounce: 0.72, drag: 0.22, density: 0.05 });
+    this.ball.pos.set(2, 3.5, 14);
+    this.ball.vel.set(0.6, 2, -0.4);
+    ph.add(this.ball);
+  }
+
+  /**
+   * El público como cuerpos blandos: Azul empuja con su impulso y la gente cede (pesan más que ella,
+   * así que menos de lo que empuja), choca con los de al lado en cadena, se tambalea y vuelve a su sitio.
+   */
+  private stepCrowd(dt: number) {
+    const n = this.cHome.length;
+    if (!n || dt <= 0) return;
+    const h = Math.min(dt, 1 / 30);
+    const pp = this.player.root.position;
+    const wx = this.walker.wish.x;
+    const wz = this.walker.wish.y;
+    const off = this.cOff;
+    const vel = this.cVel;
+    const W = 2.4; // vuelta al sitio
+    const Z = 0.75;
+    for (let i = 0; i < n; i++) {
+      const hx = this.cHome[i].x + off[2 * i];
+      const hz = this.cHome[i].z + off[2 * i + 1];
+      const dx = hx - pp.x;
+      const dz = hz - pp.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < 0.85 * 0.85) {
+        const d = Math.sqrt(d2) || 1e-3;
+        const nx = dx / d;
+        const nz = dz / d;
+        const push = wx * nx + wz * nz;
+        if (push > 0) {
+          const vn = vel[2 * i] * nx + vel[2 * i + 1] * nz;
+          const target = push * 0.4;
+          if (vn < target) {
+            const k = (target - vn) * Math.min(1, h * 12);
+            vel[2 * i] += nx * k;
+            vel[2 * i + 1] += nz * k;
+          }
+        }
+        if (d < 0.75) {
+          off[2 * i] += nx * (0.75 - d) * 0.5;
+          off[2 * i + 1] += nz * (0.75 - d) * 0.5;
+        }
+      }
+      // Muelle hacia su sitio (vuelven andando a donde estaban)
+      const ox = off[2 * i];
+      const oz = off[2 * i + 1];
+      if (ox === 0 && oz === 0 && vel[2 * i] === 0 && vel[2 * i + 1] === 0) continue;
+      vel[2 * i] += (-W * W * ox - 2 * Z * W * vel[2 * i]) * h;
+      vel[2 * i + 1] += (-W * W * oz - 2 * Z * W * vel[2 * i + 1]) * h;
+      off[2 * i] += vel[2 * i] * h;
+      off[2 * i + 1] += vel[2 * i + 1] * h;
+      if (Math.abs(off[2 * i]) + Math.abs(off[2 * i + 1]) < 0.003 && Math.abs(vel[2 * i]) + Math.abs(vel[2 * i + 1]) < 0.01) {
+        off[2 * i] = off[2 * i + 1] = vel[2 * i] = vel[2 * i + 1] = 0;
+      }
+    }
+    // Choques entre vecinos: la onda se propaga por la multitud
+    for (let i = 0; i < n; i++) {
+      if (off[2 * i] === 0 && off[2 * i + 1] === 0 && vel[2 * i] === 0 && vel[2 * i + 1] === 0) continue;
+      const ax = this.cHome[i].x + off[2 * i];
+      const az = this.cHome[i].z + off[2 * i + 1];
+      for (const j of this.cNbr[i]) {
+        const bx = this.cHome[j].x + off[2 * j];
+        const bz = this.cHome[j].z + off[2 * j + 1];
+        const dx = bx - ax;
+        const dz = bz - az;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= 0.7 * 0.7) continue;
+        const d = Math.sqrt(d2) || 1e-3;
+        const nx = dx / d;
+        const nz = dz / d;
+        const pen = (0.7 - d) * 0.5;
+        off[2 * i] -= nx * pen;
+        off[2 * i + 1] -= nz * pen;
+        off[2 * j] += nx * pen;
+        off[2 * j + 1] += nz * pen;
+        const rel = (vel[2 * j] - vel[2 * i]) * nx + (vel[2 * j + 1] - vel[2 * i + 1]) * nz;
+        if (rel < 0) {
+          const imp = -rel * 0.55;
+          vel[2 * i] -= nx * imp;
+          vel[2 * i + 1] -= nz * imp;
+          vel[2 * j] += nx * imp;
+          vel[2 * j + 1] += nz * imp;
+        }
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      this.people[i].x = this.cHome[i].x + off[2 * i];
+      this.people[i].z = this.cHome[i].z + off[2 * i + 1];
+    }
+  }
+
+  /** La pelota: el público la devuelve hacia arriba con las manos; Azul la puede cabecear o chutar. */
+  private stepBall() {
+    const b = this.ball;
+    const p = b.pos;
+    const pp = this.player.root.position;
+    const inCrowd = p.x > -13 && p.x < 13 && p.z > 6 && p.z < 27.5 && distToPath(p.x, p.z) > 0.6;
+    if (inCrowd && p.y < 2.35 && b.vel.y < 0) {
+      b.vel.y = 4.2 + Math.random() * 2.2;
+      b.vel.x = b.vel.x * 0.4 + (Math.random() - 0.5) * 2.2 + -p.x * 0.06;
+      b.vel.z = b.vel.z * 0.4 + (Math.random() - 0.5) * 2.2 + (16 - p.z) * 0.06;
+      b.wake();
+      const d = p.distanceTo(pp);
+      if (d < 14) audio.knock(0.5 / (1 + d * 0.3), 480, 0.12);
+    }
+    const dx = p.x - pp.x;
+    const dz = p.z - pp.z;
+    if (Math.hypot(dx, dz) < 0.55 && p.y - b.r < 1.95 && p.y > 1.3 && b.vel.y < 0) {
+      b.vel.y = -b.vel.y * 0.55 + 2.8;
+      b.vel.x += this.walker.vx * 0.6 + dx * 2;
+      b.vel.z += this.walker.vz * 0.6 + dz * 2;
+      b.wake();
+      audio.knock(0.45, 520, 0.12);
+    }
   }
 
   /** Fila de WC portátiles azules, con la luz de libre/ocupado en cada puerta. */
@@ -761,11 +932,24 @@ export class Level3 implements Level {
 
     // Público y banda
     const jump = this.phase === 'rhythm' || this.phase === 'ending' ? 0.35 : 0.12;
+    let gi = 0;
     for (const c of this.crowds) {
       c.base.forEach((b, i) => {
-        const y = Math.abs(Math.sin(beat * Math.PI + b.ph * (this.phase === 'rhythm' ? 0.15 : 1))) * jump;
+        const k = gi++;
+        const ox = this.cOff[2 * k] ?? 0;
+        const oz = this.cOff[2 * k + 1] ?? 0;
+        const vx = this.cVel[2 * k] ?? 0;
+        const vz = this.cVel[2 * k + 1] ?? 0;
+        const pushed = Math.hypot(vx, vz);
+        // Si le empujan deja de saltar y se tambalea hacia donde le llevan
+        const y = Math.abs(Math.sin(beat * Math.PI + b.ph * (this.phase === 'rhythm' ? 0.15 : 1))) * jump * Math.max(0, 1 - pushed * 2);
         this.tmpQ.setFromAxisAngle(this.up, b.ry);
-        c.mesh.setMatrixAt(i, this.tmpM.compose(this.tmpV.set(b.x, y, b.z), this.tmpQ, this.one));
+        if (pushed > 0.01) {
+          this.tiltAx.set(vz / pushed, 0, -vx / pushed);
+          this.tiltQ.setFromAxisAngle(this.tiltAx, Math.min(0.35, pushed * 0.2 + Math.hypot(ox, oz) * 0.12));
+          this.tmpQ.premultiply(this.tiltQ);
+        }
+        c.mesh.setMatrixAt(i, this.tmpM.compose(this.tmpV.set(b.x + ox, y, b.z + oz), this.tmpQ, this.one));
       });
       c.mesh.instanceMatrix.needsUpdate = true;
     }
@@ -785,6 +969,21 @@ export class Level3 implements Level {
     const walking = !this.busy && (this.phase === 'findBar' || this.phase === 'wc' || this.phase === 'back' || this.phase === 'findGas');
     this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
+    this.stepCrowd(dt);
+    {
+      const pp0 = this.player.root.position;
+      const m = this.movers[0];
+      m.x = pp0.x;
+      m.z = pp0.z;
+      m.vx = this.walker.vx;
+      m.vz = this.walker.vz;
+      this.phys.step(dt, this.movers);
+      this.stepBall();
+      for (const im of this.phys.impacts) {
+        const d = im.at.distanceTo(pp0);
+        if (d < 14) audio.knock(Math.min(1, im.strength * (im.kind === 'cup' ? 6 : 2)) / (1 + d * 0.3), im.kind === 'ball' ? 520 : 2300);
+      }
+    }
     this.player.root.rotation.y = this.walker.facing;
     const live = this.phase === 'rhythm' || this.phase === 'ending';
     if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
@@ -863,8 +1062,17 @@ export class Level3 implements Level {
     // Entre la multitud: empujones de vez en cuando
     this.pushT -= dt;
     if (this.phase === 'findGas' && walking && this.pushT <= 0) {
-      const near = this.people.find((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 1.0);
+      const ni = this.people.findIndex((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 1.0);
+      const near = ni >= 0 ? this.people[ni] : undefined;
       if (near && Math.random() < dt * 2.5) {
+        // Alguien se tambalea hacia ella y la arrolla
+        if (ni < this.cHome.length) {
+          const ux = pp.x - near.x;
+          const uz = pp.z - near.z;
+          const ud = Math.hypot(ux, uz) || 1;
+          this.cVel[2 * ni] += (ux / ud) * 1.6;
+          this.cVel[2 * ni + 1] += (uz / ud) * 1.6;
+        }
         const dx = pp.x - near.x;
         const dz = pp.z - near.z;
         const d = Math.hypot(dx, dz) || 1;

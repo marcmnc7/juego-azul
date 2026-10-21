@@ -8,6 +8,7 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { CarRig, G, Merger, makePerson, makeDog, makeCar, animatePerson, Person, Dog } from '../entities/models';
 import { buildStreet, STREET } from './homeStreet';
 import { Particles } from '../entities/fx';
+import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, fadeFlash, Hud, DebugItem } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
@@ -66,6 +67,19 @@ export class Level4 implements Level {
   private busy = false;
   private t = 0;
   private diveT = 0;
+  private diveV = new THREE.Vector3();
+  private diveStage = 0;
+  private divePitch = 0;
+  // Física: pelota de playa que flota en la piscina, Joy y Azul la empujan; ondas en el agua
+  private phys = new PhysicsWorld();
+  private ball!: Body;
+  private movers: Mover[] = [
+    { x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 },
+    { x: 0, z: 0, vx: 0, vz: 0, r: 0.3, height: 0.6 },
+  ];
+  private ripples: { m: THREE.Mesh; t: number; max: number; size: number }[] = [];
+  private rippleT = 0;
+  private joyPrev = new THREE.Vector3();
   private diveFrom = new THREE.Vector3();
   private diveTo = new THREE.Vector3();
   private playTime = 0;
@@ -301,6 +315,7 @@ export class Level4 implements Level {
     water.position.set(cx, WATER_Y, cz);
     sc.add(water);
     this.colliders.push({ minX: POOL.minX - 0.1, maxX: POOL.maxX + 0.1, minZ: POOL.minZ - 0.1, maxZ: POOL.maxZ + 0.1 });
+    this.buildPoolPhysics();
 
     // Camino de losas por la derecha, de la terraza a la piscina
     for (let i = 0; i < 9; i++) {
@@ -512,6 +527,7 @@ export class Level4 implements Level {
     else if (this.phase === 'drive') this.updateDrive(dt);
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
       this.walker.speed = swimming ? 3.0 : 5.0;
+      this.walker.traction = swimming ? 0.22 : 1;
       this.solids.length = 0;
       if (swimming) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       else this.solids.push({ x: this.joy.root.position.x, z: this.joy.root.position.z, r: 0.3 }, { x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
@@ -532,6 +548,7 @@ export class Level4 implements Level {
 
     this.updateGas(dt);
     this.updateJoy(dt);
+    this.updatePoolPhysics(dt);
 
     // Velitas
     if (swimming) {
@@ -603,6 +620,80 @@ export class Level4 implements Level {
   }
 
   /** Nadar: el cuerpo medio sumergido y brazos de crol. */
+  private buildPoolPhysics() {
+    const ph = this.phys;
+    ph.walls = this.colliders.filter((c) => !(c.minX === POOL.minX - 0.1 && c.maxZ === POOL.maxZ + 0.1));
+    ph.bounds = PLOT;
+    ph.water = { box: POOL, level: WATER_Y };
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), toon({ map: beachBallTexture(), roughness: 0.35 }));
+    ball.castShadow = true;
+    this.scene.add(ball);
+    this.ball = new Body(ball, { kind: 'ball', r: 0.3, mass: 0.12, bounce: 0.7, drag: 0.22, density: 0.06 });
+    this.ball.pos.set(1.6, WATER_Y + 0.4, 12.4);
+    ph.add(this.ball);
+    // Ondas: anillos que se abren y se desvanecen sobre el agua
+    const geo = new THREE.RingGeometry(0.42, 0.5, 40).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 14; i++) {
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xdff8ff, transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false;
+      m.renderOrder = 2;
+      this.scene.add(m);
+      this.ripples.push({ m, t: 0, max: 1, size: 1 });
+    }
+  }
+
+  private ripple(x: number, z: number, size = 1, life = 1.4) {
+    const r = this.ripples.reduce((a, b) => (b.t <= 0 ? b : a.t <= 0 ? a : a.t < b.t ? a : b));
+    r.m.position.set(x, WATER_Y + 0.015, z);
+    r.t = r.max = life;
+    r.size = size;
+    r.m.visible = true;
+  }
+
+  private updatePoolPhysics(dt: number) {
+    const pp = this.player.root.position;
+    const a = this.movers[0];
+    const swimming = this.phase === 'swim' || this.phase === 'diving';
+    a.x = pp.x;
+    a.z = pp.z;
+    a.vx = this.walker.vx;
+    a.vz = this.walker.vz;
+    a.height = this.player.root.visible ? 1.8 : -10;
+    const j = this.joy.root.position;
+    const b = this.movers[1];
+    b.x = j.x;
+    b.z = j.z;
+    b.vx = dt > 0 ? (j.x - this.joyPrev.x) / dt : 0;
+    b.vz = dt > 0 ? (j.z - this.joyPrev.z) / dt : 0;
+    b.height = this.joy.root.visible ? 0.6 : -10;
+    this.joyPrev.copy(j);
+    const wasY = this.ball.pos.y;
+    this.phys.step(dt, this.movers);
+    const bp = this.ball.pos;
+    const inPool = bp.x > POOL.minX && bp.x < POOL.maxX && bp.z > POOL.minZ && bp.z < POOL.maxZ;
+    if (inPool && wasY - this.ball.r > WATER_Y && bp.y - this.ball.r <= WATER_Y) {
+      this.ripple(bp.x, bp.z, 1.2, 1.6);
+      audio.knock(0.35, 700, 0.18);
+    }
+    for (const im of this.phys.impacts) if (im.at.distanceTo(pp) < 12) audio.knock(Math.min(0.5, im.strength * 2), 520, 0.1);
+    // Ondas del que nada y de la pelota al moverse
+    this.rippleT -= dt;
+    if (this.rippleT <= 0) {
+      this.rippleT = 0.32;
+      if (swimming && this.walker.currentSpeed > 0.4) this.ripple(pp.x, pp.z, 1.3 + this.walker.currentSpeed * 0.3);
+      if (this.phase === 'swim' && this.gas.root.visible) this.ripple(this.gas.root.position.x, this.gas.root.position.z, 1.1);
+      if (inPool && Math.hypot(this.ball.vel.x, this.ball.vel.z) > 0.25) this.ripple(bp.x, bp.z, 0.8, 1);
+    }
+    for (const r of this.ripples) {
+      if (r.t <= 0) continue;
+      r.t -= dt;
+      const k = 1 - r.t / r.max;
+      r.m.scale.setScalar(0.4 + k * 2.6 * r.size);
+      (r.m.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.45;
+      if (r.t <= 0) r.m.visible = false;
+    }
+  }
+
   private swimPose(p: Person, move: number) {
     animatePerson(p, 0.016, 'idle');
     const t = this.t * (3 + move * 4);
@@ -816,23 +907,69 @@ export class Level4 implements Level {
     this.diveTo.set(Math.max(POOL.minX + 0.8, Math.min(POOL.maxX - 0.8, p.x)), SWIM_Y, Math.max(POOL.minZ + 0.9, Math.min(POOL.maxZ - 0.9, p.z + 1.6)));
     this.walker.facing = Math.atan2(this.diveTo.x - p.x, this.diveTo.z - p.z);
     this.player.root.rotation.y = this.walker.facing;
+    // Salto balístico: impulso hacia arriba y hacia delante, la gravedad hace el resto
+    const vy = 3.6;
+    const entryY = SWIM_Y - 0.5;
+    const T = (vy + Math.sqrt(vy * vy + 2 * 9.81 * (p.y - entryY))) / 9.81;
+    this.diveV.set((this.diveTo.x - p.x) / T, vy, (this.diveTo.z - p.z) / T);
+    this.diveStage = 0;
+    this.divePitch = 0.2;
+    this.walker.stop();
     this.hud.setAction(null);
     audio.whoosh();
   }
 
   private updateDive(dt: number) {
     this.diveT += dt;
-    const k = Math.min(1, this.diveT / 0.8);
     const p = this.player.root.position;
-    p.lerpVectors(this.diveFrom, this.diveTo, k);
-    p.y = THREE.MathUtils.lerp(this.diveFrom.y, SWIM_Y, k) + Math.sin(k * Math.PI) * 1.4;
-    animatePerson(this.player, dt, 'cheer');
-    this.player.body.rotation.x = k * 1.2;
-    if (k >= 1) {
+    const v = this.diveV;
+    const h = Math.min(dt, 1 / 30);
+    if (this.diveStage === 0) {
+      // En el aire: parábola y el cuerpo apunta hacia donde va (cabeza abajo al entrar)
+      v.y -= 9.81 * h;
+      p.addScaledVector(v, h);
+      animatePerson(this.player, dt, 'cheer');
+      const pitch = Math.PI / 2 - Math.atan2(v.y, Math.hypot(v.x, v.z));
+      this.divePitch += (Math.min(2.6, pitch) - this.divePitch) * Math.min(1, h * 10);
+      this.player.body.rotation.x = this.divePitch;
+      if (p.y <= WATER_Y - 0.25 && v.y < 0) {
+        this.diveStage = 1;
+        audio.splash();
+        vibrate(50);
+        this.fx.burst(this.v1.copy(p).setY(0.2), '💦', 10, 3, 1.2);
+        this.ripple(p.x, p.z, 2.2, 2);
+        this.ripple(p.x, p.z, 1.4, 1.5);
+        // El agua frena de golpe: se pierde casi toda la velocidad
+        v.multiplyScalar(0.35);
+        // Ola que empuja la pelota si está cerca
+        const bp = this.ball.pos;
+        const d = Math.hypot(bp.x - p.x, bp.z - p.z);
+        if (d < 3) {
+          this.ball.vel.x += ((bp.x - p.x) / (d || 1)) * (3 - d) * 0.8;
+          this.ball.vel.z += ((bp.z - p.z) / (d || 1)) * (3 - d) * 0.8;
+          this.ball.vel.y += (3 - d) * 0.6;
+          this.ball.wake();
+        }
+      }
+      return;
+    }
+    // Bajo el agua: el empuje la devuelve a la superficie con un par de rebotes amortiguados
+    const W = 4.5;
+    v.y += (-W * W * (p.y - SWIM_Y) - 2 * 0.45 * W * v.y) * h;
+    const k = Math.exp(-h * 3);
+    v.x *= k;
+    v.z *= k;
+    p.addScaledVector(v, h);
+    p.x = Math.max(POOL.minX + 0.4, Math.min(POOL.maxX - 0.4, p.x));
+    p.z = Math.max(POOL.minZ + 0.4, Math.min(POOL.maxZ - 0.4, p.z));
+    const y = p.y;
+    this.swimPose(this.player, 0.3);
+    p.y = y; // la altura la manda la física, no la pose
+    // Bajo el agua se va enderezando hasta la postura de nado
+    this.divePitch += (0.35 - this.divePitch) * Math.min(1, h * 3);
+    this.player.body.rotation.x = this.divePitch;
+    if (this.diveT > 0.5 && ((Math.abs(p.y - SWIM_Y) < 0.04 && Math.abs(v.y) < 0.15) || this.diveT > 2.6)) {
       this.player.body.rotation.x = 0;
-      audio.splash();
-      vibrate(50);
-      this.fx.burst(this.v1.copy(p).setY(0.2), '💦', 10, 3, 1.2);
       this.phase = 'swim';
       this.busy = true;
       this.updateHud();
