@@ -315,6 +315,68 @@ export const NIGHT = {
 
 // Crucigrama antes de la carta: la vuelta del que Azul le hizo a Gas (MARGAUX, PORTUGAL…).
 // Las letras marcadas, en orden, forman el mensaje escondido.
+// Capítulo nuevo (si Marc lo elige): la cena a escondidas en casa de los padres de Azul, 13 de julio de 2026.
+export const CENA = {
+  intro: [
+    { who: 'Narrador', text: 'Ciutadella, 13 de julio de 2026. Casi un año después de la piscinita… y ahora la que se cuela es otra.' },
+    { who: 'Narrador', text: 'Los padres de Azul salen a cenar. Gas viene a cenar a escondidas. El plan: de 9 a 23, ni un minuto más.' },
+    { who: 'Gas', text: '(WhatsApp) A partir de las 22.50 yo lo pasaré mal.' },
+    { who: 'Azul', text: '(WhatsApp) ¿Qué cocinamos?' },
+    { who: 'Gas', text: '(WhatsApp) Todo esto lo hago por una pasta.' },
+    { who: 'Azul', text: '(WhatsApp) Carbonara muy pesada…' },
+    { who: 'Gas', text: '(WhatsApp) 🙄' },
+    { who: 'Azul', text: '(WhatsApp) Venga vale, carbo. Pero guanciale no está cada día en casa, eh.' },
+    { who: 'Gas', text: '(WhatsApp) Bacon iba bien si tenías.' },
+    { who: 'Azul', text: '(WhatsApp) Que dices.' },
+  ] as Line[],
+  waitIntro: [
+    { who: 'Gas', text: '(WhatsApp) Voy tirando.' },
+    { who: 'Azul', text: '(WhatsApp) ¡Nooo! Wait. Aún están. Hay una situación rara, apárcate más adelante.' },
+    { who: 'Gas', text: '(WhatsApp) Estoy en un lugar estratégico. Cuando me digas voy y tardo 30 segundos.' },
+    { who: 'Narrador', text: 'Vigila a tus padres. Dile «Ven» solo cuando se hayan ido de verdad.' },
+  ] as Line[],
+  waitEvents: ['Sale mi padre ahora…', 'No. Jdr. ¿Qué hace mi padre?', 'Se ha dejado algo. Vuelve a entrar…', 'Mi madre busca las llaves…'],
+  tooSoon: [
+    { who: 'Gas', text: '(WhatsApp) A ver QUE. Pero no apures tanto. No viene de 2’.' },
+    { who: 'Narrador', text: '¡Casi os pillan! Espera a que el coche arranque.' },
+  ] as Line[],
+  comeIn: [
+    { who: 'Azul', text: '(WhatsApp) Ya sí. Ven. Ahora sí.' },
+    { who: 'Narrador', text: 'Treinta segundos después, Gas está en la puerta. «Voy pumpeado.» Viene del gym.' },
+  ] as Line[],
+  cookIntro: [
+    { who: 'Gas', text: 'Bueno, chef. Yo con la pasta de atún llevo un 6,75. Y un 7 la 2.0. Cuando llegue al 9 empiezo con la carbonara.' },
+    { who: 'Azul', text: 'Pues mira y aprende. Regla número uno: nada de nata.' },
+    { who: 'Narrador', text: 'Guanciale crujiente, pasta al dente y la crema de huevo y pecorino fuera del fuego. Si se cuaja, son huevos revueltos.' },
+  ] as Line[],
+  steps: {
+    guanciale: 'Toca cuando el guanciale esté dorado 🥓',
+    pasta: 'Escurre la pasta al dente ⏱️',
+    mix: 'Mezcla fuera del fuego: que no se cuaje 🥚',
+    nata: 'Gas: «¿Y la nata?» — Azul: «Fuera de mi cocina.»',
+    scrambled: '¡Buu! Huevos revueltos',
+    burnt: '¡Buu! Guanciale quemado',
+    raw: 'Todavía está dura',
+  },
+  grade: (n: number) =>
+    n >= 10 ? 'Gas: «Un 10. La carbonara siempre es el 10.»'
+    : n >= 9 ? `Gas: «Un ${n}. Casi casi.»`
+    : n >= 7 ? `Gas: «Un ${n}. Como mi pasta de atún 2.0.»`
+    : `Gas: «Un ${n}…» — Azul: «No acepto. Prueba otra vez.»`,
+  dinner: [
+    { who: 'Gas', text: 'Algo me pasa. Cuando me ponen una carbonara con nata me ofendo mucho. Con esta, en cambio… Déjalo.' },
+    { who: 'Azul', text: 'Gracias por dejarme la palabra.' },
+    { who: 'Narrador', text: 'Cenáis en la terraza, con la puerta de la calle vigilada y el reloj mirando hacia las 23:00.' },
+  ] as Line[],
+  leave: [
+    { who: 'Narrador', text: '22:50. Gas se va justo a tiempo. ¿A qué hora volverán? Gas apuesta por las 00:15; Azul, por las 12:30.' },
+    { who: 'Narrador', text: '23:49. Azul ya está en la cama. Coge el móvil.' },
+    { who: 'Azul', text: '(WhatsApp) Me gustó mucho cenar contigo hoy.' },
+    { who: 'Azul', text: '(WhatsApp) Quería decirte que te quiero.' },
+    { who: 'Azul', text: '(WhatsApp) Poc a poc se me quitará la tontería de no decirte las cosas.' },
+  ] as Line[],
+};
+
 // Epílogo antes del crucigrama: un año después, otra vez en el Jaleo de Ferreries.
 export const EPILOGUE = {
   title: 'Un año después',
