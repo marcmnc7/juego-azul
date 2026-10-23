@@ -351,8 +351,9 @@ export function fadeFlash(mid: () => void, hold = 300) {
   const f = el('div', 'fade');
   root.append(f);
   requestAnimationFrame(() => f.classList.add('on'));
+  const e = epoch;
   setTimeout(() => {
-    mid();
+    if (e === epoch) mid();
     setTimeout(() => {
       f.classList.remove('on');
       setTimeout(() => f.remove(), 500);
@@ -388,6 +389,20 @@ let cancelDialogue: (() => void) | null = null;
 export function closeDialogue() {
   cancelDialogue?.();
   cancelDialogue = null;
+}
+
+// Cada vez que se entra o se sale de un capítulo cambia la "época": los temporizadores
+// del capítulo anterior que sigan pendientes ya no hacen nada (ni diálogos sueltos en el mapa
+// ni capítulos que se completan solos).
+let epoch = 0;
+export function newEpoch() {
+  epoch++;
+  root.querySelectorAll('.gauge, .phone-overlay, .fade, .toast').forEach((n) => n.remove());
+}
+/** setTimeout que no se dispara si mientras tanto se ha salido del capítulo. */
+export function later(fn: () => void, ms: number) {
+  const e = epoch;
+  return window.setTimeout(() => e === epoch && fn(), ms);
 }
 
 /** Muestra una secuencia de líneas con efecto máquina de escribir. Toca para avanzar. */
@@ -504,14 +519,26 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
     w.append(trap);
   }
   root.append(w);
-  const t0 = performance.now();
+  let t0 = performance.now();
+  // Si el móvil se va a segundo plano, la aguja se para en vez de contar como fallo
+  let hiddenAt = 0;
+  const onVis = () => {
+    if (document.hidden) hiddenAt = performance.now();
+    else if (hiddenAt) {
+      t0 += performance.now() - hiddenAt;
+      hiddenAt = 0;
+    }
+  };
+  document.addEventListener('visibilitychange', onVis);
   let done = false;
   let raf = 0;
+  let resultTimer = 0;
   const zoneAt = (x: number) => o.zones.find((z) => x <= z.to) ?? o.zones[o.zones.length - 1];
   const finish = (x: number) => {
     if (done) return;
     done = true;
     cancelAnimationFrame(raf);
+    document.removeEventListener('visibilitychange', onVis);
     const z = zoneAt(x);
     let q = 0;
     if (z.good) {
@@ -522,7 +549,7 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
     }
     w.classList.add(q > 0 ? 'hit' : 'miss');
     vibrate(q > 0 ? 25 : [40, 30, 40]);
-    setTimeout(() => {
+    resultTimer = later(() => {
       w.remove();
       onResult(q, z);
     }, 650);
@@ -542,6 +569,8 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
   return () => {
     done = true;
     cancelAnimationFrame(raf);
+    clearTimeout(resultTimer);
+    document.removeEventListener('visibilitychange', onVis);
     w.remove();
   };
 }

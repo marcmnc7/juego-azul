@@ -9,8 +9,8 @@ import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
-import { clock, type Level, type LevelDone } from './level';
+import { hud, dialogue, toast, Hud, DebugItem, later } from '../ui/ui';
+import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Nivel 1 · Jaleo d'ases (Ferreries).
 // Bucle: hablar con Tòfol → 3 pomadas + 3 toques de suerte esquivando ases → volver a Tòfol → encontrar a Marc → bailar → regalo.
@@ -282,7 +282,7 @@ export class Level1 implements Level {
 
     this.camera.position.set(-50, 9, 4);
     this.busy = true;
-    setTimeout(() => {
+    later(() => {
       if (this.stage !== 'intro') return;
       dialogue(this.T.intro, () => {
         this.busy = false;
@@ -380,7 +380,7 @@ export class Level1 implements Level {
           this.fx.burst(this.v1, 'dust', 6, 1.6, 0.4);
           if (dist < 7) this.walker.shake(0.18);
         }
-        const touchable = !s.touched && s.rearT > 0.2 && this.stage === 'collect';
+        const touchable = !s.touched && this.luckCount < 3 && s.rearT > 0.2 && this.stage === 'collect';
         s.ring.visible = touchable;
         if (touchable) {
           const perfect = k > 0.85;
@@ -434,7 +434,7 @@ export class Level1 implements Level {
         }
       }
 
-      if (!s.touched && s.rearT > 0.2 && dist < TOUCH_R && dist < nearest) {
+      if (!s.touched && this.luckCount < 3 && s.rearT > 0.2 && dist < TOUCH_R && dist < nearest) {
         rearingNear = s;
         nearest = dist;
       }
@@ -487,7 +487,7 @@ export class Level1 implements Level {
     }
     this.fx.burst(at, '🍀', perfect ? 12 : 8);
     audio.cheer(perfect ? 0.45 : 0.3);
-    if (this.luckCount === 3) setTimeout(() => toast(this.T.hints.allLuck), 1200);
+    if (this.luckCount === 3) later(() => toast(this.T.hints.allLuck), 1200);
     this.checkCollectDone();
   }
 
@@ -862,9 +862,6 @@ export class Level1 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }

@@ -7,9 +7,10 @@ import { CENA } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeCar, animatePerson, Person, PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
+import { disposeObj } from './level';
 
 // Capítulo 6 · La cena a escondidas (13 de julio de 2026), en casa de los padres de Azul, junto a Sa Farola.
 // Es el espejo de la piscinita: aquella noche se coló Azul en casa de los padres de Gas; ahora se cuela él.
@@ -142,7 +143,7 @@ export class LevelCena implements Level {
     this.updateHud();
     this.camera.position.set(-6, 5.5, 18);
     this.camLook.set(0, 1.5, 4);
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'intro') return;
       dialogue(CENA.intro, () => this.phase === 'intro' && this.startWait());
     }, 2300);
@@ -386,7 +387,7 @@ export class LevelCena implements Level {
             toast(i === 0 && z.to === 1 ? CENA.steps.burnt : i === 2 && z.to < 0.5 ? CENA.steps.scrambled : CENA.steps.raw);
           }
           if (this.phase !== 'cook') return;
-          if (i < 2) setTimeout(() => this.phase === 'cook' && step(i + 1), 450);
+          if (i < 2) later(() => this.phase === 'cook' && step(i + 1), 450);
           else this.finishCook(scores);
         });
       };
@@ -419,13 +420,13 @@ export class LevelCena implements Level {
     toast(CENA.grade(this.grade));
     if (this.grade < 7) {
       audio.boo();
-      setTimeout(() => this.phase === 'cook' && this.startCook(), 2200);
+      later(() => this.phase === 'cook' && this.startCook(), 2200);
       return;
     }
     audio.fanfare();
     vibrate([30, 40, 60]);
     this.fx.burst(this.v1.copy(this.player.root.position).setY(2.2), '❤️', 10, 2);
-    setTimeout(() => {
+    later(() => {
       this.phase = 'toTable';
       this.busy = false;
       this.minutes = 21 * 60 + 40;
@@ -450,7 +451,7 @@ export class LevelCena implements Level {
       this.updateHud();
       toast('🕙 22:50');
       audio.warn();
-      setTimeout(() => this.gasLeaves(), 1200);
+      later(() => this.gasLeaves(), 1200);
     });
   }
 
@@ -458,7 +459,7 @@ export class LevelCena implements Level {
     this.phase = 'leaving';
     this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
     this.gasWalk = [GATE.clone().setZ(8.8), GATE.clone().setZ(11.5), new THREE.Vector3(2.4, 0, STREET_Z - 1.6)];
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'leaving') return;
       fadeFlash(() => this.ending(), 500);
     }, 5200);
@@ -702,9 +703,6 @@ export class LevelCena implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }

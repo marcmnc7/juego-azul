@@ -8,10 +8,11 @@ import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
+import { disposeObj } from './level';
 
 // Capítulo 4 · Fito en Gran Canaria.
 // Pista en la barra (tabaco opcional a la papelera) → la cola eterna del lavabo, donde la gente intenta
@@ -514,7 +515,7 @@ export class Level3 implements Level {
     this.buildAirport();
     this.startAirport();
     this.phase = 'intro';
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'intro') return;
       dialogue(T_AIRPORT(), () => {
         this.busy = false;
@@ -705,7 +706,7 @@ export class Level3 implements Level {
       this.camera.position.set(0, 5, -27);
       this.updateHud();
     }, 700);
-    setTimeout(
+    later(
       () =>
         dialogue(T_QUEUE_INTRO(), () => {
           this.busy = false;
@@ -1167,14 +1168,14 @@ export class Level3 implements Level {
   }
 
   /** Paso de un personaje hacia un punto, con su ciclo de andar. Devuelve true al llegar. */
-  private stepTo(p: Person, st: { walk: number }, tx: number, tz: number, speed: number, dt: number, idleFace?: number) {
+  private stepTo(p: Person, st: { walk: number }, tx: number, tz: number, speed: number, dt: number, idleFace?: number, anim = true) {
     const r = p.root.position;
     const dx = tx - r.x;
     const dz = tz - r.z;
     const d = Math.hypot(dx, dz);
     if (d < 0.06) {
       if (idleFace !== undefined) p.root.rotation.y += wrapA(idleFace - p.root.rotation.y) * Math.min(1, dt * 6);
-      animatePerson(p, dt, 'idle');
+      if (anim) animatePerson(p, dt, 'idle');
       return true;
     }
     const sp = speed * Math.min(1, d / 0.5 + 0.35);
@@ -1183,7 +1184,7 @@ export class Level3 implements Level {
     r.z += (dz / d) * step;
     p.root.rotation.y += wrapA(Math.atan2(dx, dz) - p.root.rotation.y) * Math.min(1, dt * 9);
     st.walk += step / 0.53;
-    animatePerson(p, dt, 'walk', Math.min(1, sp / 5.8), st.walk);
+    if (anim) animatePerson(p, dt, 'walk', Math.min(1, sp / 5.8), st.walk);
     return d - step < 0.06;
   }
 
@@ -1356,7 +1357,7 @@ export class Level3 implements Level {
     }
     toast(T_QUEUE_DONE());
     audio.cheer(0.35);
-    setTimeout(() => {
+    later(() => {
       fadeFlash(() => {
         this.queue = this.queue.filter((e) => typeof e !== 'string');
         this.gas.root.visible = false;
@@ -1366,7 +1367,7 @@ export class Level3 implements Level {
         this.phase = 'film';
         this.updateHud();
       }, 500);
-      setTimeout(() => dialogue(T_FILM_INTRO(), () => this.startFilm()), 1100);
+      later(() => dialogue(T_FILM_INTRO(), () => this.startFilm()), 1100);
     }, 1200);
   }
 
@@ -1378,9 +1379,10 @@ export class Level3 implements Level {
     this.filmIn = 0;
     this.filmYaw = 0;
     this.filmPitch = 0.12;
-    this.baseFov = this.camera.fov;
+    if (!this.filmUi) this.baseFov = this.camera.fov;
     this.player.root.visible = false;
     audio.startMusic('road');
+    this.filmUi?.remove();
     const ui = document.createElement('div');
     ui.style.cssText = 'position:fixed;inset:17% 12% 4%;border:3px solid rgba(255,255,255,.85);border-radius:22px;pointer-events:none;z-index:5;box-shadow:0 0 0 2000px rgba(0,0,0,.35)';
     ui.innerHTML =
@@ -1427,8 +1429,8 @@ export class Level3 implements Level {
       h.style.cssText = `position:absolute;bottom:-90px;left:${10 + Math.random() * 70}%;font-size:90px;transition:transform .45s ease-out;filter:brightness(.35)`;
       ui.querySelector('[data-hands]')!.append(h);
       requestAnimationFrame(() => (h.style.transform = 'translateY(-120px)'));
-      setTimeout(() => (h.style.transform = 'translateY(0)'), 650);
-      setTimeout(() => h.remove(), 1200);
+      later(() => (h.style.transform = 'translateY(0)'), 650);
+      later(() => h.remove(), 1200);
       this.filmYaw += (Math.random() - 0.5) * 0.12;
     }
     if (this.filmT >= FILM_SECS) this.endFilm();
@@ -1440,7 +1442,7 @@ export class Level3 implements Level {
     this.filmDone = true;
     this.band[0].root.position.x = 0;
     this.player.root.visible = true;
-    this.camera.fov = this.baseFov;
+    this.camera.fov = (this.camera.userData.baseFov ?? this.baseFov);
     this.camera.updateProjectionMatrix();
     toast(`${T_FILM_DONE()} · ${this.filmPct()}%`);
     audio.luck();
@@ -1594,11 +1596,11 @@ export class Level3 implements Level {
     if (this.filmDone && this.phase !== 'flash') chips += '<span class="chip">📹</span>';
     if (this.phase === 'flash') chips += `<span class="chip">📸 ${this.flashHits}/${FLASH_NEED}</span>`;
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
+    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🍔 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
       if (t !== this.hudObj) h.setObjective((this.hudObj = t));
     };
-    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🍔 ${this.burgerHits}</span>`;
     switch (this.phase) {
       case 'airport':
         setObj(T_AIRPORT_HINT());
@@ -1723,10 +1725,11 @@ export class Level3 implements Level {
     // Jugadora (en la cola avanza sola con la cola; a oscuras se queda quieta haciendo señales)
     const walking = !this.busy && (this.phase === 'queue' || this.phase === 'airport');
     this.invuln -= dt;
-    if (this.phase === 'airport') this.stepAirport(dt);
+    if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
     const az = this.azIdx;
     const inQueue = this.phase === 'inQueue' && az >= 0 && !this.busy;
-    this.walker.turn(this.input.consumeCam());
+    // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
+    if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.allPeople);
     this.stepCrowd(dt);
     this.stepQueue(dt);
@@ -1749,7 +1752,7 @@ export class Level3 implements Level {
     const live = this.phase === 'rhythm' || this.phase === 'ending';
     if (inQueue) {
       this.slot(az, this.tmpV);
-      this.stepTo(this.player, this.azWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2);
+      this.stepTo(this.player, this.azWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2, this.shoutT <= 0);
       this.walker.facing = this.player.root.rotation.y;
       if (this.shoutT > 0) animatePerson(this.player, dt, 'talk');
     } else {
@@ -1873,6 +1876,9 @@ export class Level3 implements Level {
     const gp = this.gas.root.position;
     this.walker.facing = Math.atan2(gp.x - pp.x, gp.z - pp.z);
     this.gas.root.rotation.y = Math.atan2(pp.x - gp.x, pp.z - gp.z);
+    // Que no vuelva a barrer con la linterna mientras hablan
+    this.gaze = this.gazeTgt = 0;
+    this.gazeT = 1e9;
     dialogue([...(T_FLASH_FOUND() ?? CONCERT.gasFound), this.smokeThrown ? CONCERT.gasSmoke : CONCERT.gasNoSmoke], () => this.startRhythm());
   }
 
@@ -1913,10 +1919,10 @@ export class Level3 implements Level {
     this.endT = 0;
     this.updateHud();
     audio.fanfare();
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'ending') return;
       dialogue(CONCERT.ending, () => {
-        setTimeout(() => {
+        later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
           audio.ambience(0);
@@ -1959,6 +1965,15 @@ export class Level3 implements Level {
       this.rhythm = null;
       this.busy = false;
       this.input.reset();
+      if (this.filmUi) {
+        this.filmUi.remove();
+        this.filmUi = null;
+        this.player.root.visible = true;
+        this.camera.fov = this.camera.userData.baseFov ?? this.baseFov;
+        this.camera.updateProjectionMatrix();
+      }
+      this.setDark(false);
+      this.flashLight.intensity = 0;
     };
     const tp = (x: number, z: number, yaw = 0) => {
       this.player.root.position.set(x, 0, z);
@@ -1967,7 +1982,7 @@ export class Level3 implements Level {
     };
     return [
       { label: '0 · Aeropuerto', run: () => { stop(); this.startAirport(); } },
-      { label: '1 · Cola del lavabo', run: () => { stop(); this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
+      { label: '1 · Cola del lavabo', run: () => { stop(); if (!this.queue.includes('gas')) this.queue.splice(Math.min(6, this.queue.length), 0, 'gas'); this.queue = this.queue.filter((q) => q !== 'azul'); this.gas.root.visible = true; this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
       { label: '2 · Grabar el temón', run: () => { stop(); this.phase = 'film'; this.gas.root.visible = false; this.player.root.position.copy(FLASH_SPOT); this.startFilm(); } },
       { label: '3 · Flash a oscuras', run: () => { stop(); this.filmUi?.remove(); this.filmUi = null; this.player.root.visible = true; this.startFlash(); } },
       { label: '4 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
@@ -1989,9 +2004,6 @@ export class Level3 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }

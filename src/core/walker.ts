@@ -244,7 +244,7 @@ export class Walker {
     const pc = cam as THREE.PerspectiveCamera;
     if (pc.isPerspectiveCamera) {
       if (!this.baseFov) this.baseFov = pc.fov;
-      const fov = this.baseFov + run * 3;
+      const fov = (pc.userData.baseFov ?? this.baseFov) + run * 3;
       if (Math.abs(pc.fov - fov) > 0.05) {
         pc.fov += (fov - pc.fov) * Math.min(1, k * 3);
         pc.updateProjectionMatrix();

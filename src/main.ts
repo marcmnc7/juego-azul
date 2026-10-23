@@ -1,3 +1,4 @@
+import { audio } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
@@ -16,7 +17,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories, epilogue } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, epilogue } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -196,6 +197,7 @@ function resize() {
   camera.aspect = w / h;
   // En vertical abrimos más el plano para que se vea algo de calle
   camera.fov = w < h ? 75 : 60;
+  camera.userData.baseFov = camera.fov;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -218,6 +220,7 @@ function goMap() {
   closeDebug?.();
   closeDebug = null;
   closeDialogue();
+  newEpoch();
   if (level) {
     level.dispose();
     level = null;
@@ -232,9 +235,15 @@ const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan, LevelCena]
 
 function startLevel(n: number) {
   clearScreens();
+  closeDialogue();
+  newEpoch();
+  input.reset();
+  input.enabled = true;
   tryFullscreen();
   chapterCard(n);
   const done = (result?: LevelResult) => {
+    // Un capítulo ya cerrado no puede completarse "solo"
+    if (level !== me) return;
     closeDebug?.();
     closeDebug = null;
     const g = giftForLevel(n);
@@ -256,7 +265,10 @@ function startLevel(n: number) {
     if (g) showGift(g, photos, result);
     else photos();
   };
-  level = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
+  camera.fov = camera.userData.baseFov ?? camera.fov;
+  camera.updateProjectionMatrix();
+  const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
+  level = me;
   applyShadows(level.threeScene);
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(level.debug());
@@ -327,9 +339,11 @@ function dropShadows() {
   });
 }
 
+window.addEventListener('pointerdown', () => audio.resume(), true);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) renderer.setAnimationLoop(null);
   else {
+    audio.resume();
     clock.getDelta();
     renderer.setAnimationLoop(frame);
   }
