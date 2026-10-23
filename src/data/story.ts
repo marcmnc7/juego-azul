@@ -402,7 +402,7 @@ export const CROSSWORD = {
 export const FINAL_LETTER = {
   title: 'Feliz cumpleaños, Azul',
   paragraphs: [
-    'Empezamos entre ases y pomadas en Ferreries, seguimos con una piscinita en silencio en Sa Caleta, un finde sorpresa hasta las zamburiñas de San Vicente y acabamos cantando a Fito en Gran Canaria.',
+    'Empezamos entre ases y pomadas en Ferreries, seguimos con una piscinita en silencio en Sa Caleta, un finde sorpresa hasta las zamburiñas de San Vicente y cantando a Fito en Gran Canaria. Luego vino Sant Joan, buscándote por Ciutadella con tu camiseta puesta, y una carbonara a escondidas en casa de tus padres que por fin sacó un 10.',
     'Gracias por las cartas, por el crucigrama, por reírte de mi inglés (que ya es B2, que conste) y por aguantar mis bailes. Y por los “Buu”, que también te quiero por ellos.',
     'Me preguntaste si teníamos fecha. Sigo pensando que es muy bonito no tenerla, porque así cualquier día puede ser el nuestro. Hoy es el tuyo.',
     'Joy y yo te deseamos el mejor 28 de noviembre. Y que dejes de fumar, que lo sepas.',
