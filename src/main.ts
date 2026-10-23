@@ -1,3 +1,4 @@
+import { audio } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
@@ -8,6 +9,7 @@ import { Level2 } from './world/level2';
 import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import { LevelSantJoan } from './world/levelSantJoan';
+import { LevelCena } from './world/levelCena';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -15,7 +17,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, chapterCard, memories } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, epilogue } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -195,6 +197,7 @@ function resize() {
   camera.aspect = w / h;
   // En vertical abrimos más el plano para que se vea algo de calle
   camera.fov = w < h ? 75 : 60;
+  camera.userData.baseFov = camera.fov;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -217,6 +220,7 @@ function goMap() {
   closeDebug?.();
   closeDebug = null;
   closeDialogue();
+  newEpoch();
   if (level) {
     level.dispose();
     level = null;
@@ -226,14 +230,20 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-// Sant Joan es de lo más reciente: va el último y después vienen el crucigrama y la carta
-const LEVEL_CLASSES = [Level1, Level2, Level3, Level4, LevelSantJoan];
+// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, Sant Joan y la cena a escondidas
+const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan, LevelCena];
 
 function startLevel(n: number) {
   clearScreens();
+  closeDialogue();
+  newEpoch();
+  input.reset();
+  input.enabled = true;
   tryFullscreen();
   chapterCard(n);
   const done = (result?: LevelResult) => {
+    // Un capítulo ya cerrado no puede completarse "solo"
+    if (level !== me) return;
     closeDebug?.();
     closeDebug = null;
     const g = giftForLevel(n);
@@ -247,7 +257,7 @@ function startLevel(n: number) {
           level.dispose();
           level = null;
         }
-        crossword(() => finalLetter(goMap), goMap);
+        epilogue(() => crossword(() => finalLetter(goMap), goMap));
       } else goMap();
     };
     // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
@@ -255,7 +265,10 @@ function startLevel(n: number) {
     if (g) showGift(g, photos, result);
     else photos();
   };
-  level = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
+  camera.fov = camera.userData.baseFov ?? camera.fov;
+  camera.updateProjectionMatrix();
+  const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
+  level = me;
   applyShadows(level.threeScene);
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(level.debug());
@@ -326,9 +339,11 @@ function dropShadows() {
   });
 }
 
+window.addEventListener('pointerdown', () => audio.resume(), true);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) renderer.setAnimationLoop(null);
   else {
+    audio.resume();
     clock.getDelta();
     renderer.setAnimationLoop(frame);
   }

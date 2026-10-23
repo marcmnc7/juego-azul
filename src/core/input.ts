@@ -29,16 +29,22 @@ export class Input {
     window.addEventListener('pointercancel', this.onUp);
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
-      if (e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') this.actionQueued = true;
+      // Con un diálogo abierto la tecla solo sirve para avanzarlo (si no, se reabría al cerrarlo)
+      if ((e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') && !document.querySelector('.dialogue')) this.actionQueued = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    // Si el móvil se va a segundo plano con el dedo en el joystick, el "soltar" no llega nunca
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.reset();
+    });
+    document.addEventListener('visibilitychange', () => document.hidden && this.reset());
   }
 
   private onDown = (e: PointerEvent) => {
     if (!this.enabled) return;
     const left = e.clientX < window.innerWidth * 0.45;
-    if (left && this.stickId === null) {
+    if (left) {
       this.stickId = e.pointerId;
       this.stickOrigin = { x: e.clientX, y: e.clientY };
       this.base.style.left = `${e.clientX}px`;

@@ -7,10 +7,10 @@ import { SANTJOAN, type Line } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeDonkey, animatePerson, personGeometry, vertexMat, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, Hud, DebugItem, later } from '../ui/ui';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
-import { clock, type Level, type LevelDone } from './level';
+import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 5 (el último) · Sant Joan en Ciutadella, 23 de junio de 2026.
 // Ciutadella de verdad: el Born con el obelisco, el Ajuntament almenado, Correus, Ses Voltes con sus
@@ -186,7 +186,7 @@ export class LevelSantJoan implements Level {
     this.updateHud();
     audio.startMusic('jaleo');
     audio.ambience(0.15);
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'intro') return;
       dialogue(T_INTRO(), () => {
         if (this.phase !== 'intro') return;
@@ -472,7 +472,7 @@ export class LevelSantJoan implements Level {
     if (next < PINS.length) {
       // Ya no está: se ha ido a otro sitio
       toast(moved[this.pin % moved.length]);
-      setTimeout(() => this.phase === 'hunt' && this.setPin(next), 1900);
+      later(() => this.phase === 'hunt' && this.setPin(next), 1900);
     } else this.setPin(next);
     this.updateHud();
   }
@@ -735,7 +735,7 @@ export class LevelSantJoan implements Level {
         this.hits++;
         audio.hit();
         vibrate(80);
-        toast(SANTJOAN.hints.dropped.replace('se te han caído las avellanes', 'cuidado'));
+        toast('¡Buu! Un caballo te ha pillado, ¡cuidado!');
       }
     }
     return near;
@@ -783,12 +783,14 @@ export class LevelSantJoan implements Level {
     this.horses.forEach((h, i) => {
       h.warnT = 0;
       h.rearT = REAR + i * 0.2;
+      h.alert.visible = false;
+      h.d.head.rotation.y = 0;
     });
     this.updateHud();
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'ending') return;
       dialogue(SANTJOAN.afterKiss, () => {
-        setTimeout(() => {
+        later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
           audio.ambience(0);
@@ -808,6 +810,17 @@ export class LevelSantJoan implements Level {
   }
 
   debug(): DebugItem[] {
+    const hunt = (i: number) => {
+      this.phase = 'hunt';
+      this.reached = i;
+      this.gas.root.visible = false;
+      if (this.confetti) {
+        this.scene.remove(this.confetti.mesh);
+        this.confetti = null;
+      }
+      this.map.style.display = 'block';
+      this.setPin(i);
+    };
     const tp = (x: number, z: number, yaw = 0) => {
       this.busy = false;
       this.input.reset();
@@ -816,9 +829,9 @@ export class LevelSantJoan implements Level {
       this.walker.yaw = this.walker.facing = yaw;
     };
     return [
-      { label: '1 · Plaça Espanya', run: () => { this.phase = 'hunt'; this.setPin(0); tp(66, 0, Math.PI / 2); } },
-      { label: '2 · Correus', run: () => { this.phase = 'hunt'; this.setPin(1); tp(12, 0, -Math.PI / 2); } },
-      { label: '3 · Obelisco', run: () => { this.phase = 'hunt'; this.setPin(2); tp(12, -6, -Math.PI / 2); } },
+      { label: '1 · Plaça Espanya', run: () => { hunt(0); tp(66, 0, Math.PI / 2); } },
+      { label: '2 · Correus', run: () => { hunt(1); tp(12, 0, -Math.PI / 2); } },
+      { label: '3 · Obelisco', run: () => { hunt(2); tp(12, -6, -Math.PI / 2); } },
       { label: '4 · Mandar ubicación', run: () => { this.reached = 3; this.setPin(3); tp(1, 4.5, Math.PI); } },
       { label: '5 · Final', run: () => { tp(1, 4.5); this.gas.root.visible = true; this.gas.root.position.set(2, 0, 5.5); this.meet(); } },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
@@ -830,9 +843,6 @@ export class LevelSantJoan implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }

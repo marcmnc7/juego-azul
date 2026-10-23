@@ -90,6 +90,11 @@ export class Audio {
     window.setInterval(() => this.schedule(), 50);
   }
 
+  /** Tras una llamada o bloquear el móvil, iOS deja el audio suspendido: se reanuda con el siguiente toque. */
+  resume() {
+    if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume();
+  }
+
   /** Reloj de audio en segundos (o reloj normal si no hay audio). */
   time() {
     return this.ctx ? this.ctx.currentTime : performance.now() / 1000;

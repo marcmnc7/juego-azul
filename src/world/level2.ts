@@ -6,9 +6,9 @@ import { G, Merger, makeCar, makeScallop, vertexMat, CarRig } from '../entities/
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, addOutline, applyShadows } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, fadeFlash, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { Terrace } from './terrace';
-import { clock, type Level, type LevelDone } from './level';
+import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 2 · La ruta de las zamburiñas.
 // Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
@@ -322,7 +322,7 @@ export class Level2 implements Level {
     this.updateHud();
     this.camera.lookAt(0, 1, 10);
     audio.startMusic('road');
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'intro') return;
       dialogue(ROAD.intro, () => {
         this.phase = 'drive1';
@@ -639,7 +639,7 @@ export class Level2 implements Level {
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
     // Sensación de velocidad: el plano se abre con el turbo
-    const fov = this.baseFov + Math.max(0, this.speed - MAX_SPEED) * 0.9;
+    const fov = (this.camera.userData.baseFov ?? this.baseFov) + Math.max(0, this.speed - MAX_SPEED) * 0.9;
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 4);
       this.camera.updateProjectionMatrix();
@@ -782,7 +782,7 @@ export class Level2 implements Level {
     this.lane = 1;
     this.updateHud();
     audio.bark();
-    setTimeout(() => {
+    later(() => {
       dialogue(ROAD.arriveSV, () => this.startGrill());
     }, 1200);
   }
@@ -805,8 +805,20 @@ export class Level2 implements Level {
     const ndc = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const hits = this.raycaster.intersectObjects(this.scallops.map((s) => s.root), true);
-    if (!hits.length) return;
-    const s = this.scallops.find((sc) => hits[0].object.parent === sc.root);
+    let s = hits.length ? this.scallops.find((sc) => hits[0].object.parent === sc.root) : undefined;
+    if (!s) {
+      // Con el dedo es fácil tocar el borde de la concha: vale la zamburiña más cercana en pantalla
+      let best = (Math.min(window.innerWidth, window.innerHeight) * 0.09) ** 2;
+      for (const sc of this.scallops) {
+        const v = sc.root.getWorldPosition(new THREE.Vector3()).project(this.camera);
+        const dx = ((v.x + 1) / 2) * window.innerWidth - e.clientX;
+        const dy = ((1 - v.y) / 2) * window.innerHeight - e.clientY;
+        if (dx * dx + dy * dy < best) {
+          best = dx * dx + dy * dy;
+          s = sc;
+        }
+      }
+    }
     if (!s || s.wait > 0) return;
     if (s.p >= 0.62 && s.p <= 1) {
       this.served++;
@@ -828,7 +840,7 @@ export class Level2 implements Level {
     window.removeEventListener('pointerdown', this.onTap);
     this.input.enabled = true;
     this.updateHud();
-    setTimeout(() => dialogue(ROAD.zambDone, () => this.sitOnTerrace()), 600);
+    later(() => dialogue(ROAD.zambDone, () => this.sitOnTerrace()), 600);
   }
 
   private startDrive2() {
@@ -840,6 +852,8 @@ export class Level2 implements Level {
     this.carX = 0;
     this.carVX = 0;
     this.phase = 'drive2';
+    // La cámara salta detrás del coche (si no, vuela cientos de metros desde la terraza)
+    this.camera.position.set(0, 4.6, this.carZ - 8.5);
     this.updateHud();
   }
 
@@ -847,7 +861,7 @@ export class Level2 implements Level {
     this.phase = 'logrono';
     this.updateHud();
     audio.bark();
-    setTimeout(() => dialogue(ROAD.arriveLogrono, () => this.finish()), 1500);
+    later(() => dialogue(ROAD.arriveLogrono, () => this.finish()), 1500);
   }
 
   /** En San Vicente: sentados en la terraza de El Ancla comiéndose una zamburiña. */
@@ -862,7 +876,7 @@ export class Level2 implements Level {
       this.route.style.display = 'none';
       this.input.enabled = true;
       this.terrace.frame(this.camera);
-      this.camera.fov = this.baseFov;
+      this.camera.fov = (this.camera.userData.baseFov ?? this.baseFov);
       this.camera.updateProjectionMatrix();
       this.updateHud();
       this.busy = true;
@@ -1019,13 +1033,11 @@ export class Level2 implements Level {
     this.input.enabled = true;
     this.hud.remove();
     this.route.remove();
-    this.camera.fov = this.baseFov;
+    this.camera.fov = (this.camera.userData.baseFov ?? this.baseFov);
     this.camera.updateProjectionMatrix();
     this.laneBtns.forEach((b) => b.remove());
     audio.stopMusic();
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
+    this.terrace?.scene.traverse(disposeObj);
   }
 }

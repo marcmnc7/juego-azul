@@ -20,7 +20,7 @@ export const GIFTS: Gift[] = [
   },
   {
     id: 'cena',
-    level: 2,
+    level: 3,
     icon: '🍽️',
     title: 'Una cena en un buen restaurante',
     description: 'Una cena de las buenas, con mantel y todo. Si hay zamburiñas en la carta, mejor.',
@@ -28,7 +28,7 @@ export const GIFTS: Gift[] = [
   },
   {
     id: 'carnaval',
-    level: 3,
+    level: 4,
     icon: '🎭',
     title: 'Billetes al Carnaval de Tenerife',
     description: 'Volvemos a Canarias, esta vez a disfrazarnos. Ve pensando el disfraz.',

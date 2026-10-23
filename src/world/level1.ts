@@ -3,14 +3,14 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
-import { FERRERIES, SANTJOAN, NAMES } from '../data/story';
+import { FERRERIES, NAMES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { hud, dialogue, toast, Hud, DebugItem } from '../ui/ui';
-import { clock, type Level, type LevelDone } from './level';
+import { hud, dialogue, toast, Hud, DebugItem, later } from '../ui/ui';
+import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Nivel 1 · Jaleo d'ases (Ferreries).
 // Bucle: hablar con Tòfol → 3 pomadas + 3 toques de suerte esquivando ases → volver a Tòfol → encontrar a Marc → bailar → regalo.
@@ -43,29 +43,6 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   },
   bumped: '¡Buu! Cuidado con los ases 🫏',
   statHits: 'Empujones de ases',
-};
-
-export const SANTJOAN_VARIANT: JaleoVariant = {
-  text: SANTJOAN,
-  town: {
-    banner: [['Festes de Sant Joan', 'Ciutadella · Menorca'], 'Jaleo · 23 i 24 de juny'],
-    signs: ['Plaça des Born', 'Ses Voltes'],
-    bars: ['Bar Imperi', 'Jazzbah', 'Es Pla', 'Maramao'],
-  },
-  guide: 'Carme',
-  item: '🌰',
-  hud: {
-    talk: 'Habla con Carme en el bar de la plaza',
-    collectItems: 'Recoge las avellanes que faltan',
-    collectLuck: 'Toca a los caballos cuando se pongan de manos',
-    collect: 'Avellanes y toques a los caballos cuando se pongan de manos',
-    back: '¡Lo tienes! Vuelve con Carme',
-    find: 'Encuentra a Gas: sigue su ubicación 📍',
-    give: 'Darle las avellanes',
-  },
-  bumped: '¡Buu! Cuidado con los caballos 🐎',
-  statHits: 'Empujones de caballos',
-  horses: true,
 };
 
 type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'kiss' | 'kissing' | 'ending' | 'done';
@@ -305,7 +282,7 @@ export class Level1 implements Level {
 
     this.camera.position.set(-50, 9, 4);
     this.busy = true;
-    setTimeout(() => {
+    later(() => {
       if (this.stage !== 'intro') return;
       dialogue(this.T.intro, () => {
         this.busy = false;
@@ -403,7 +380,7 @@ export class Level1 implements Level {
           this.fx.burst(this.v1, 'dust', 6, 1.6, 0.4);
           if (dist < 7) this.walker.shake(0.18);
         }
-        const touchable = !s.touched && s.rearT > 0.2 && this.stage === 'collect';
+        const touchable = !s.touched && this.luckCount < 3 && s.rearT > 0.2 && this.stage === 'collect';
         s.ring.visible = touchable;
         if (touchable) {
           const perfect = k > 0.85;
@@ -457,7 +434,7 @@ export class Level1 implements Level {
         }
       }
 
-      if (!s.touched && s.rearT > 0.2 && dist < TOUCH_R && dist < nearest) {
+      if (!s.touched && this.luckCount < 3 && s.rearT > 0.2 && dist < TOUCH_R && dist < nearest) {
         rearingNear = s;
         nearest = dist;
       }
@@ -510,7 +487,7 @@ export class Level1 implements Level {
     }
     this.fx.burst(at, '🍀', perfect ? 12 : 8);
     audio.cheer(perfect ? 0.45 : 0.3);
-    if (this.luckCount === 3) setTimeout(() => toast(this.T.hints.allLuck), 1200);
+    if (this.luckCount === 3) later(() => toast(this.T.hints.allLuck), 1200);
     this.checkCollectDone();
   }
 
@@ -885,9 +862,6 @@ export class Level1 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }

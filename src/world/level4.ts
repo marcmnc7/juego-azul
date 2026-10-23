@@ -9,10 +9,10 @@ import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person } from '.
 import { buildStreet, STREET } from './homeStreet';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, toast, Hud, DebugItem } from '../ui/ui';
+import { hud, dialogue, fadeFlash, toast, Hud, DebugItem, later } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
-import { clock, type Level, type LevelDone } from './level';
+import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
@@ -109,6 +109,7 @@ export class Level4 implements Level {
   private starCamLook = new THREE.Vector3();
   private endT = 0;
   private v1 = new THREE.Vector3();
+  private winTarget = new THREE.Color();
   private v2 = new THREE.Vector3();
   // Coche y viaje
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
@@ -201,7 +202,7 @@ export class Level4 implements Level {
     this.camera.position.set(STREET.bar.x - 1, 2.4, -27);
     this.camLook.set(STREET.bar.x, 2.2, STREET.bar.z);
     this.busy = true;
-    setTimeout(() => {
+    later(() => {
       if (this.phase !== 'intro') return;
       dialogue(NIGHT.bar, () => {
         if (this.phase !== 'intro') return;
@@ -748,7 +749,7 @@ export class Level4 implements Level {
       g.root.position.set(x, SWIM_Y, z);
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 1.1, Math.cos(a) * 1.6);
       this.swimPose(g, 0.6);
-    } else if (this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
+    } else if (this.phase === 'stars' || this.phase === 'toTowels' || this.phase === 'ending' || this.phase === 'done') {
       animatePerson(g, dt, 'idle');
       g.eyes.scale.y = 1;
     } else if (this.phase === 'diving') {
@@ -788,7 +789,7 @@ export class Level4 implements Level {
         vibrate(20);
       }
     }
-    this.winMat.color.lerp(this.v1.set(on ? 1 : 0.105, on ? 0.86 : 0.13, on ? 0.6 : 0.21) as unknown as THREE.Color, Math.min(1, dt * 6));
+    this.winMat.color.lerp(this.winTarget.setRGB(on ? 1 : 0.105, on ? 0.86 : 0.13, on ? 0.6 : 0.21), Math.min(1, dt * 6));
     if (this.noise >= 1) this.wakeParents();
     this.updateHud();
   }
@@ -805,7 +806,7 @@ export class Level4 implements Level {
       fadeFlash(() => {
         this.noise = 0;
         this.lightOn = false;
-        this.player.root.position.set(-1.2, 0, 1.2);
+        this.player.root.position.set(-1.2, 0, 1.8);
         this.walker.yaw = this.walker.facing = 0;
         this.walker.stop();
         this.busy = false;
@@ -840,7 +841,7 @@ export class Level4 implements Level {
       this.driveTalkDone = false;
       this.camLook.copy(this.car.root.position);
       this.updateHud();
-      setTimeout(() => dialogue(NIGHT.drive, () => (this.driveTalkDone = true)), 900);
+      later(() => dialogue(NIGHT.drive, () => (this.driveTalkDone = true)), 900);
     }, 250);
   }
 
@@ -894,7 +895,7 @@ export class Level4 implements Level {
   /** Coloca a todos en el jardín, saliendo por la cristalera. */
   private toGarden() {
     this.player.root.visible = true;
-    this.player.root.position.set(-1.2, 0, 1.2);
+    this.player.root.position.set(-1.2, 0, 1.8);
     this.walker.yaw = this.walker.facing = 0;
     this.camera.position.set(-1.2, 9, -6);
     this.car.azul.visible = false;
@@ -992,7 +993,7 @@ export class Level4 implements Level {
     this.busy = true;
     this.hud.setAction(null);
     audio.fanfare();
-    setTimeout(() => {
+    later(() => {
       dialogue(NIGHT.swimDone, () => {
         fadeFlash(() => {
           // Fuera del agua, ya secos, junto a las toallas
@@ -1064,10 +1065,10 @@ export class Level4 implements Level {
     window.removeEventListener('pointerdown', this.onTap);
     audio.fanfare();
     vibrate([40, 60, 120]);
-    for (let i = 0; i < 4; i++) setTimeout(() => this.launchShootingStar(), i * 700);
-    setTimeout(() => {
+    for (let i = 0; i < 4; i++) later(() => this.launchShootingStar(), i * 700);
+    later(() => {
       dialogue(NIGHT.starsDone, () => {
-        setTimeout(() => {
+        later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
           audio.ambience(0);
@@ -1210,7 +1211,7 @@ export class Level4 implements Level {
           this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.lieDown();
-          setTimeout(() => {
+          later(() => {
             while (this.phase === 'stars') {
               this.busy = false;
               this.hitStar();
@@ -1227,9 +1228,6 @@ export class Level4 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    this.scene.traverse(disposeObj);
   }
 }
