@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toon, addOutline } from '../core/gfx';
 import { spring } from '../core/walker';
+import { surfaceFor } from '../core/surfaces';
 
 // Personajes y decorado hechos con primitivas low-poly y sombreado "cel":
 // no hay que descargar modelos y el juego entero cabe en un único archivo.
@@ -30,6 +31,9 @@ export class Merger {
   private e = new THREE.Euler();
   private c = new THREE.Color();
 
+  /** textured: el decorado lleva texturas de superficie según su color; los personajes y vehículos no. */
+  constructor(private textured = true) {}
+
   add(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
     const g = (geo.index ? geo.toNonIndexed() : geo.clone()) as THREE.BufferGeometry;
     for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
@@ -45,6 +49,7 @@ export class Merger {
       cols[i * 3 + 2] = this.c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(this.textured ? surfaceFor(color) : 0), 1));
     this.parts.push(g);
     return this;
   }
@@ -264,7 +269,7 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   root.add(body);
   const shoes = look.shoes ?? 0x3a2a20;
 
-  const torso = new Merger();
+  const torso = new Merger(false);
   if (look.jumpsuit) {
     // Ajustado: torso estrecho, cadera que enlaza con las perneras y escote en pico
     torso.add(G.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.4, 0.3, 0.27);
@@ -280,14 +285,14 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
 
   const head = new THREE.Group();
   head.position.y = HEAD_Y;
-  const hm = new Merger();
+  const hm = new Merger(false);
   hm.add(G.ball, look.skin, 0, 0.3, 0, 0, 0, 0, 0.6, 0.58, 0.56);
   faceInto(hm, look, 0.3);
   hairInto(hm, look, 0.3);
   head.add(hm.mesh());
   const eyes = new THREE.Group();
   eyes.position.y = 0.33;
-  const em = new Merger();
+  const em = new Merger(false);
   eyesInto(em, look, 0);
   const eyeMesh = em.mesh();
   eyeMesh.userData.noCast = true;
@@ -300,14 +305,14 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
     const hip = new THREE.Group();
     const skinLeg = look.skirt && !look.jumpsuit ? look.skin : look.pants;
     const w = look.jumpsuit ? 0.88 : 1;
-    hip.add(new Merger().add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155 * w, 0.135, 0.155 * w).mesh());
+    hip.add(new Merger(false).add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155 * w, 0.135, 0.155 * w).mesh());
     const knee = new THREE.Group();
     knee.position.y = -0.26;
     // El mono acaba bajo la rodilla: la espinilla va al aire
-    knee.add(new Merger().add(G.capsule, look.jumpsuit ? look.skin : skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14 * w, 0.13, 0.14 * w).mesh());
+    knee.add(new Merger(false).add(G.capsule, look.jumpsuit ? look.skin : skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14 * w, 0.13, 0.14 * w).mesh());
     const foot = new THREE.Group();
     foot.position.y = -0.25;
-    foot.add(new Merger().add(G.rbox, shoes, 0, -0.07, 0.04, 0, 0, 0, 0.17, 0.12, 0.28).mesh());
+    foot.add(new Merger(false).add(G.rbox, shoes, 0, -0.07, 0.04, 0, 0, 0, 0.17, 0.12, 0.28).mesh());
     knee.add(foot);
     hip.add(knee);
     return { hip, knee, foot };
@@ -315,11 +320,11 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   // Brazo: hombro, codo y mano
   const arm = () => {
     const shoulder = new THREE.Group();
-    shoulder.add(new Merger().add(G.capsule, look.shirt, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14).mesh());
+    shoulder.add(new Merger(false).add(G.capsule, look.shirt, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14).mesh());
     const elbow = new THREE.Group();
     elbow.position.y = -0.24;
     elbow.add(
-      new Merger()
+      new Merger(false)
         .add(G.capsule, look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
         .add(G.sphere, look.skin, 0, -0.23, 0.01, 0, 0, 0, 0.13, 0.14, 0.13)
         .mesh(),
@@ -580,7 +585,7 @@ function prevHeadY(p: Person) {
 
 /** Geometría estática de una persona para la multitud (InstancedMesh). */
 export function personGeometry(look: PersonLook, armsUp = false) {
-  const m = new Merger();
+  const m = new Merger(false);
   const shoes = look.shoes ?? 0x3a2a20;
   if (look.skirt) m.add(new THREE.CylinderGeometry(0.2, 0.42, 0.5, 7), look.pants, 0, 0.78, 0);
   m.add(GL.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.46, 0.3, 0.32);
@@ -618,7 +623,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
   inner.position.z = 0.75;
   pivot.add(inner);
 
-  const b = new Merger();
+  const b = new Merger(false);
   b.add(G.capsule, coat, 0, 1.15, 0, Math.PI / 2, 0, 0, 0.72, 0.65, 0.7);
   b.add(G.box, 0xd9cbbd, 0, 0.95, 0, 0, 0, 0, 0.5, 0.2, 1.2); // barriga clara
   b.add(G.box, 0x9b2335, 0, 1.52, -0.05, 0, 0, 0, 0.78, 0.08, 0.7); // manta roja
@@ -637,7 +642,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
 
   const head = new THREE.Group();
   head.position.set(0, 1.45, 0.75);
-  const h = new Merger();
+  const h = new Merger(false);
   h.add(G.capsule, coat, 0, 0.25, 0.1, 0.5, 0, 0, 0.3, 0.32, 0.3); // cuello
   h.add(G.box, coat, 0, 0.55, 0.4, 0.35, 0, 0, 0.3, 0.3, 0.65);
   h.add(G.box, 0xd9cbbd, 0, 0.45, 0.72, 0.35, 0, 0, 0.26, 0.24, 0.12); // hocico
@@ -649,7 +654,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
   inner.add(head);
 
   const legs: THREE.Object3D[] = [];
-  const legGeo = new Merger()
+  const legGeo = new Merger(false)
     .add(G.cyl, coat, 0, -0.4, 0, 0, 0, 0, 0.14, 0.8, 0.14)
     .add(G.cyl, 0x2a2420, 0, -0.82, 0, 0, 0, 0, 0.16, 0.08, 0.16)
     .build();
@@ -676,7 +681,7 @@ export function makeHorse(coat = 0x0e0c0b): Donkey {
   pivot.add(inner);
   const shine = 0x2a2522;
 
-  const b = new Merger();
+  const b = new Merger(false);
   b.add(G.capsule, coat, 0, 1.55, 0, Math.PI / 2, 0, 0, 0.82, 0.95, 0.8); // tronco
   b.add(G.sphere, coat, 0, 1.5, -0.7, 0, 0, 0, 0.82, 0.78, 0.7); // grupa
   b.add(G.sphere, coat, 0, 1.6, 0.7, 0, 0, 0, 0.8, 0.82, 0.7); // pecho
@@ -704,7 +709,7 @@ export function makeHorse(coat = 0x0e0c0b): Donkey {
 
   const head = new THREE.Group();
   head.position.set(0, 1.85, 0.95);
-  const h = new Merger();
+  const h = new Merger(false);
   h.add(G.capsule, coat, 0, 0.35, 0.12, 0.45, 0, 0, 0.36, 0.62, 0.34); // cuello alto
   h.add(G.box, coat, 0, 0.6, 0.12, 0.45, 0, 0, 0.06, 0.8, 0.3); // crin
   h.add(G.capsule, coat, 0, 0.82, 0.48, 1.25, 0, 0, 0.26, 0.5, 0.28); // cabeza alargada
@@ -722,7 +727,7 @@ export function makeHorse(coat = 0x0e0c0b): Donkey {
   inner.add(head);
 
   const legs: THREE.Object3D[] = [];
-  const legGeo = new Merger()
+  const legGeo = new Merger(false)
     .add(G.capsule, coat, 0, -0.35, 0, 0, 0, 0, 0.2, 0.55, 0.2)
     .add(G.cyl, coat, 0, -0.85, 0, 0, 0, 0, 0.12, 0.55, 0.12)
     .add(G.cyl, 0x222222, 0, -1.15, 0.02, 0, 0, 0, 0.17, 0.1, 0.19)
@@ -749,7 +754,7 @@ export interface Dog {
 export function makeDog(): Dog {
   const root = new THREE.Group();
   const black = 0x1d1b1f;
-  const b = new Merger();
+  const b = new Merger(false);
   b.add(G.capsule, black, 0, 0.5, 0, Math.PI / 2, 0, 0, 0.36, 0.38, 0.34);
   b.add(G.sphere, black, 0, 0.78, 0.42, 0, 0, 0, 0.36, 0.34, 0.36); // cabeza
   b.add(G.box, black, 0, 0.72, 0.62, 0, 0, 0, 0.18, 0.15, 0.22); // hocico
@@ -763,9 +768,9 @@ export function makeDog(): Dog {
   root.add(b.mesh());
   const tail = new THREE.Group();
   tail.position.set(0, 0.6, -0.36);
-  tail.add(new Merger().add(G.capsule, black, 0, 0.15, -0.05, -0.5, 0, 0, 0.06, 0.15, 0.06).mesh());
+  tail.add(new Merger(false).add(G.capsule, black, 0, 0.15, -0.05, -0.5, 0, 0, 0.06, 0.15, 0.06).mesh());
   root.add(tail);
-  const legGeo = new Merger().add(G.capsule, black, 0, -0.16, 0, 0, 0, 0, 0.09, 0.2, 0.09).build();
+  const legGeo = new Merger(false).add(G.capsule, black, 0, -0.16, 0, 0, 0, 0, 0.09, 0.2, 0.09).build();
   const legs: THREE.Object3D[] = [];
   for (const [x, z] of [[-0.12, 0.22], [0.12, 0.22], [-0.12, -0.22], [0.12, -0.22]]) {
     const p = new THREE.Group();
@@ -785,7 +790,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  const m = new Merger();
+  const m = new Merger(false);
   m.add(G.box, color, 0, 0.62, 0, 0, 0, 0, 1.8, 0.6, 3.8);
   m.add(G.box, color, 0, 1.15, -0.25, 0, 0, 0, 1.6, 0.55, 2.1);
   m.add(G.box, 0x9fd3e8, 0, 1.15, 0.82, -0.35, 0, 0, 1.5, 0.45, 0.06); // parabrisas
@@ -806,7 +811,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   // Cabezas en los asientos: Azul (rubia) a la derecha y Gas a la izquierda, al volante en el capítulo 4.
   const azulX = -0.4;
   const gasX = 0.4;
-  const a = new Merger();
+  const a = new Merger(false);
   a.add(G.sphere, 0xf4d0b0, azulX, 1.18, 0.2, 0, 0, 0, 0.32, 0.36, 0.32);
   a.add(G.sphere, 0xf2d27a, azulX, 1.25, 0.17, 0, 0, 0, 0.36, 0.3, 0.36);
   const azul = a.mesh();
@@ -817,7 +822,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   // Joy asomada por la ventanilla trasera
   const joy = new THREE.Group();
   joy.position.set(0.82, 1.18, -0.9);
-  const j = new Merger();
+  const j = new Merger(false);
   j.add(G.sphere, 0x1d1b1f, 0, 0, 0, 0, 0, 0, 0.36, 0.32, 0.36);
   j.add(G.box, 0x1d1b1f, 0.08, -0.04, 0.2, 0, 0, 0, 0.16, 0.14, 0.2);
   j.add(G.box, 0x1d1b1f, 0, 0.14, -0.15, 0.9, 0, 0, 0.1, 0.24, 0.12); // oreja al viento
@@ -825,7 +830,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   joy.add(j.mesh());
   if (withJoy) body.add(joy);
   const wheels: THREE.Object3D[] = [];
-  const wGeo = new Merger().add(G.cyl, 0x1a1a1a, 0, 0, 0, 0, 0, Math.PI / 2, 0.68, 0.32, 0.68).add(G.cyl, 0xbbbbbb, 0, 0, 0, 0, 0, Math.PI / 2, 0.34, 0.34, 0.34).build();
+  const wGeo = new Merger(false).add(G.cyl, 0x1a1a1a, 0, 0, 0, 0, 0, Math.PI / 2, 0.68, 0.32, 0.68).add(G.cyl, 0xbbbbbb, 0, 0, 0, 0, 0, Math.PI / 2, 0.34, 0.34, 0.34).build();
   for (const [x, z] of [[-0.85, 1.25], [0.85, 1.25], [-0.85, -1.25], [0.85, -1.25]]) {
     const w = new THREE.Mesh(wGeo, vertexMat());
     w.position.set(x, 0.34, z);
@@ -840,7 +845,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
 /** Moto (la de Gas) con él montado y casco. Mira hacia +Z. */
 export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
   const root = new THREE.Group();
-  const m = new Merger();
+  const m = new Merger(false);
   // Chasis, depósito, asiento, colín y horquilla
   m.add(G.rbox, color, 0, 0.72, 0.15, 0, 0, 0, 0.36, 0.3, 0.75); // depósito
   m.add(G.rbox, 0x111111, 0, 0.8, -0.45, 0, 0, 0, 0.32, 0.12, 0.7); // asiento
@@ -851,7 +856,7 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
   m.add(G.cyl, 0x222222, 0, 1.02, 0.62, 0, 0, Math.PI / 2, 0.04, 0.75, 0.04); // manillar
   m.add(G.sphere, 0xfff3b0, 0, 0.9, 0.82, 0, 0, 0, 0.2, 0.2, 0.12); // faro
   m.add(G.box, 0xff3030, 0, 0.82, -1.1, 0, 0, 0, 0.14, 0.06, 0.04); // piloto
-  const wGeo = new Merger().add(G.cyl, 0x151515, 0, 0, 0, 0, 0, Math.PI / 2, 0.66, 0.14, 0.66).add(G.cyl, 0xa8a8b0, 0, 0, 0, 0, 0, Math.PI / 2, 0.3, 0.16, 0.3).build();
+  const wGeo = new Merger(false).add(G.cyl, 0x151515, 0, 0, 0, 0, 0, Math.PI / 2, 0.66, 0.14, 0.66).add(G.cyl, 0xa8a8b0, 0, 0, 0, 0, 0, Math.PI / 2, 0.3, 0.16, 0.3).build();
   const wheels: THREE.Object3D[] = [];
   for (const z of [0.8, -0.78]) {
     const w = new THREE.Mesh(wGeo, vertexMat());
@@ -871,7 +876,7 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
     person.legR.rotation.z = 0.15;
     person.armL.rotation.x = person.armR.rotation.x = -1.1;
     person.body.rotation.x = 0.25;
-    const helmet = new Merger().add(G.ball, 0x1b1d22, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh();
+    const helmet = new Merger(false).add(G.ball, 0x1b1d22, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh();
     person.head.add(helmet);
     root.add(person.root);
   }

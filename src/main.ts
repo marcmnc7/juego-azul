@@ -27,7 +27,7 @@ const uiRoot = document.getElementById('ui')!;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = quality.shadows;
 
 // Modo seguro. ?lite arranca sin grano, sin luz de entorno y sin postproceso. Y si en este
@@ -164,7 +164,7 @@ const GRADE = {
 };
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
 const renderPass = new RenderPass(new THREE.Scene(), camera);
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.38, 0.55, 0.88);
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.5, 0.94);
 composer.addPass(renderPass);
 composer.addPass(bloom);
 composer.addPass(new ShaderPass(GRADE));

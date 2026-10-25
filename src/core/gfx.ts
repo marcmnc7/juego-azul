@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
 import { Water } from 'three/examples/jsm/objects/Water.js';
+import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, type Surf } from './surfaces';
 
 // Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
 // sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
@@ -23,7 +24,8 @@ export const quality = {
 };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
-export function toon(params: THREE.MeshStandardMaterialParameters) {
+export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf }) {
+  const { surf, ...params } = allParams;
   if (quality.kind !== 'standard') {
     const { roughness, metalness: _m, envMapIntensity: _e, ...rest } = params;
     void _m, void _e;
@@ -35,10 +37,12 @@ export function toon(params: THREE.MeshStandardMaterialParameters) {
       specular: new THREE.Color().setScalar(0.03 + 0.3 * smooth * smooth),
       ...(rest as THREE.MeshPhongMaterialParameters),
     });
+    ph.userData.surf = surf ?? 0;
     addGrain(ph);
     return ph as unknown as THREE.MeshStandardMaterial;
   }
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
+  m.userData.surf = surf ?? 0;
   addGrain(m);
   return m;
 }
@@ -50,8 +54,13 @@ export function toon(params: THREE.MeshStandardMaterialParameters) {
 export function addGrain(m: THREE.Material, amount = 0.14) {
   m.onBeforeCompile = (sh) => {
     if (!quality.grain) return;
+    sh.uniforms.surfTex = { value: surfaceTexture() };
+    sh.uniforms.surfScale = { value: SURF_SCALE.map((v) => 1 / v) };
+    sh.uniforms.surfStrength = { value: SURF_STRENGTH };
+    sh.uniforms.surfMean = { value: Array.from(surfMeans) };
+    sh.uniforms.uSurf = { value: (m.userData.surf as number) ?? 0 };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;')
+      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -61,7 +70,8 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         #else
           vGrainPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
           vGrainN = normalize(mat3(modelMatrix) * objectNormal);
-        #endif`,
+        #endif
+        vSurf = surf;`,
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -69,6 +79,12 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         `#include <common>
         varying highp vec3 vGrainPos;
         varying vec3 vGrainN;
+        varying float vSurf;
+        uniform highp sampler2DArray surfTex;
+        uniform float surfScale[16];
+        uniform float surfStrength[16];
+        uniform float surfMean[16];
+        uniform float uSurf;
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -81,6 +97,18 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         `#include <color_fragment>
         float gN = gNoise(vGrainPos * 0.6) * 0.6 + gNoise(vGrainPos * 4.0) * 0.3 + gNoise(vGrainPos * 19.0) * 0.1;
         diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
+        // Textura de la superficie (encalado, teja, marès…) proyectada desde los tres ejes del mundo
+        int sIdx = int(max(vSurf, uSurf) + 0.5);
+        if (sIdx > 0) {
+          vec3 bw = pow(abs(vGrainN), vec3(4.0));
+          bw /= (bw.x + bw.y + bw.z + 1e-4);
+          vec3 sp = vGrainPos * surfScale[sIdx];
+          float sl = float(sIdx);
+          float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
+                   + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
+                   + texture(surfTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).r * bw.z;
+          diffuseColor.rgb *= mix(1.0, sd / surfMean[sIdx], surfStrength[sIdx]);
+        }
         // Suciedad y humedad al pie de las paredes, y desgaste en las aristas altas: lo que hace que
         // un muro encalado parezca de verdad y no una caja
         float gWall = 1.0 - abs(vGrainN.y);
@@ -95,7 +123,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);`,
       );
   };
-  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount : 'plain');
+  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) : 'plain');
 }
 
 /**

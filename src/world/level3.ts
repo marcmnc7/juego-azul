@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Surf } from '../core/surfaces';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
@@ -534,7 +535,20 @@ export class Level3 implements Level {
     }
     for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 2.2) m.add(G.box, 0xd9b26a, cx, 6.6 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.12, 0.8);
     m.add(G.box, 0xd8dde3, cx, 3, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
+    this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.maxZ + 3.1, maxZ: A.maxZ + 7 });
     m.add(G.box, 0xd8dde3, cx, 3, A.maxZ + 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    // Barajas T4: pilares en «Y» que van del amarillo al rojo a lo largo de la terminal, y techo
+    // ondulado de lamas de bambú
+    for (let z = A.minZ - 1, k = 0; z <= A.maxZ + 1; z += 7.5, k++) {
+      const col = new THREE.Color(0xf2c230).lerp(new THREE.Color(0xd7263d), k / 8).getHex();
+      for (const x of [A.minX + 1.2, A.maxX - 1.2]) {
+        m.add(G.cyl, col, x, 2.2, z, 0, 0, 0, 0.5, 4.4, 0.5);
+        m.add(G.cyl, col, x - 0.6, 5.4, z, 0, 0, 0.45, 0.3, 2.6, 0.3);
+        m.add(G.cyl, col, x + 0.6, 5.4, z, 0, 0, -0.45, 0.3, 2.6, 0.3);
+        this.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
+      }
+    }
     // Bancos de espera
     for (const z of [-20, -12, 12, 20]) {
       for (const x of [A.minX + 0.6, A.maxX - 0.6]) {
@@ -572,8 +586,8 @@ export class Level3 implements Level {
     for (const [x, z] of BURGERS) sign('BURGER 🍔', x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#f4c430', '#b3001b');
     sign('Puerta 26 · LPA', cx, 4.4, A.maxZ + 3.0, Math.PI, 5, '#1b2a4a', '#ffd23f');
     sign('Salidas · Departures', cx, 4.6, A.minZ - 3.0, 0, 5, '#1b2a4a', '#ffffff');
-    for (const z of [-15, 0, 15]) {
-      const l = new THREE.PointLight(0xffffff, 16, 18, 1.4);
+    for (const z of [-24, -12, 0, 12, 24]) {
+      const l = new THREE.PointLight(0xfff6e8, 22, 20, 1.3);
       l.position.set(cx, 5.5, z);
       sc.add(l);
     }
@@ -734,6 +748,60 @@ export class Level3 implements Level {
     const moon = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 12), new THREE.MeshBasicMaterial({ color: 0xfff6d8, fog: false }));
     moon.position.set(-90, 110, 220);
     sc.add(moon);
+
+    // Anexo del Estadio de Gran Canaria: el concierto es sobre la pista de atletismo (tartán rojo con
+    // calles blancas) y el césped tapado con planchas; al lado, el gran estadio con su visera
+    {
+      const pathPt = (t: number, r: number): [number, number] => {
+        // Óvalo de atletismo: rectas a lo largo de z (x = ±r) y curvas de radio r en z = ±L
+        const L = 34, P = 4 * L + 2 * Math.PI * r;
+        let d = (t % 1) * P;
+        if (d < 2 * L) return [r, -L + d];
+        d -= 2 * L;
+        if (d < Math.PI * r) { const a = d / r; return [r * Math.cos(a), L + r * Math.sin(a)]; }
+        d -= Math.PI * r;
+        if (d < 2 * L) return [-r, L - d];
+        d -= 2 * L;
+        const a = Math.PI + d / r;
+        return [r * Math.cos(a), -L + r * Math.sin(a)];
+      };
+      const strip = (r0: number, r1: number, y: number, color: number) => {
+        const pos: number[] = [];
+        const N = 160;
+        for (let i = 0; i < N; i++) {
+          const a0 = pathPt(i / N, r0), b0 = pathPt(i / N, r1), a1 = pathPt((i + 1) / N, r0), b1 = pathPt((i + 1) / N, r1);
+          pos.push(a0[0], y, a0[1], a1[0], y, a1[1], b0[0], y, b0[1], b0[0], y, b0[1], a1[0], y, a1[1], b1[0], y, b1[1]);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.computeVertexNormals();
+        const mesh = new THREE.Mesh(g, toon({ color, roughness: 0.9, side: THREE.DoubleSide, surf: color === 0xa8433a ? Surf.Asphalt : Surf.None }));
+        mesh.userData.noCast = true;
+        sc.add(mesh);
+      };
+      strip(30, 39.6, 0.02, 0xa8433a);
+      for (let k = 0; k <= 8; k++) strip(30 + k * 1.2 - 0.04, 30 + k * 1.2 + 0.04, 0.03, 0xf4f1ea);
+      const st = new Merger();
+      // El estadio: gradas en anillo y la visera blanca
+      for (let i = 0; i < 40; i++) {
+        const a = (i / 40) * Math.PI * 2;
+        const x = -150 + Math.cos(a) * 60, z = Math.sin(a) * 45;
+        st.add(G.box, 0x6a7380, x, 10, z, 0, -a, 0, 6, 20, 10);
+        st.add(G.box, 0xf2f2f2, -150 + Math.cos(a) * 54, 23, Math.sin(a) * 40, 0.3, -a, 0, 8, 0.6, 16);
+      }
+      sc.add(st.mesh());
+      // Las luces de los barrios en las laderas de Las Palmas
+      const lights: number[] = [];
+      for (let i = 0; i < 700; i++) {
+        const a = Math.random() * Math.PI * 2, r = 140 + Math.random() * 120;
+        lights.push(Math.cos(a) * r, 2 + Math.random() * 30 * (r / 260), Math.sin(a) * r);
+      }
+      const pts = new THREE.Points(
+        new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lights, 3)),
+        new THREE.PointsMaterial({ color: 0xffc070, size: 1.4, sizeAttenuation: true, fog: false }),
+      );
+      sc.add(pts);
+    }
 
     const m = new Merger();
     // El Teide al fondo

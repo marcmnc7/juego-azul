@@ -284,37 +284,89 @@ export class LevelSantJoan implements Level {
     const OCHRE = 0xd8b483;
     const WHITE = 0xf4f0e6;
 
-    // Obelisco del Born (homenaje a 1558), con su verja
-    m.add(G.box, 0xbfae8c, 0, 0.5, 0, 0, 0, 0, 2.6, 1, 2.6);
-    m.add(G.box, 0xcfbf9c, 0, 1.4, 0, 0, 0, 0, 1.8, 0.8, 1.8);
-    m.add(new THREE.CylinderGeometry(0.35, 0.65, 1, 4), 0xd9c9a6, 0, 5.6, 0, 0, Math.PI / 4, 0, 1, 7.6, 1);
-    m.add(new THREE.ConeGeometry(0.5, 1, 4), 0xd9c9a6, 0, 9.8, 0, 0, Math.PI / 4, 0, 0.75, 0.9, 0.75);
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      m.add(G.cyl, 0x222222, Math.cos(a) * 2.2, 0.55, Math.sin(a) * 2.2, 0, 0, 0, 0.06, 1.1, 0.06);
+    // Obelisco del Born (1857, homenaje a la resistencia de 1558): 22 m de marès sobre un zócalo
+    // escalonado con cuatro lápidas en latín, y una verja de hierro alrededor
+    for (let i = 0; i < 3; i++) m.add(G.box, 0xc9b48c, 0, 0.15 + i * 0.3, 0, 0, 0, 0, 4.2 - i * 0.6, 0.3, 4.2 - i * 0.6);
+    m.add(G.box, 0xd6c29a, 0, 2.05, 0, 0, 0, 0, 2.2, 2.2, 2.2);
+    for (const [dx, dz, ry] of [[0, 1.11, 0], [0, -1.11, 0], [1.11, 0, Math.PI / 2], [-1.11, 0, Math.PI / 2]] as [number, number, number][])
+      m.add(G.box, 0x8e7d62, dx, 2.05, dz, 0, ry, 0, 1.4, 1.1, 0.04); // lápidas
+    m.add(G.box, 0xcdb994, 0, 3.3, 0, 0, 0, 0, 2.5, 0.3, 2.5); // cornisa
+    m.add(G.box, 0xd6c29a, 0, 3.9, 0, 0, 0, 0, 1.7, 0.9, 1.7);
+    m.add(new THREE.CylinderGeometry(0.42, 0.78, 1, 4), 0xdcc8a2, 0, 11.4, 0, 0, Math.PI / 4, 0, 1, 14.2, 1);
+    m.add(new THREE.ConeGeometry(0.5, 1, 4), 0xdcc8a2, 0, 19.2, 0, 0, Math.PI / 4, 0, 0.62, 1.4, 0.62);
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      m.add(G.cyl, 0x1e1e1e, Math.cos(a) * 3.1, 0.6, Math.sin(a) * 3.1, 0, 0, 0, 0.05, 1.2, 0.05);
+      m.add(new THREE.ConeGeometry(0.06, 0.16, 4), 0x1e1e1e, Math.cos(a) * 3.1, 1.28, Math.sin(a) * 3.1, 0, 0, 0, 1, 1, 1);
     }
-    this.colliders.push({ minX: -2.3, maxX: 2.3, minZ: -2.3, maxZ: 2.3 });
+    m.add(new THREE.TorusGeometry(3.1, 0.04, 4, 48), 0x1e1e1e, 0, 1.05, 0, Math.PI / 2, 0, 0, 1, 1, 1);
+    m.add(new THREE.TorusGeometry(3.1, 0.04, 4, 48), 0x1e1e1e, 0, 0.25, 0, Math.PI / 2, 0, 0, 1, 1, 1);
+    for (const [fx, fz] of [[3.1, 3.1], [-3.1, 3.1], [3.1, -3.1], [-3.1, -3.1]].map(([x, z]) => [x * 0.707, z * 0.707])) {
+      m.add(G.cyl, 0x1e1e1e, fx, 2, fz, 0, 0, 0, 0.12, 4, 0.12); // farolas de la verja
+      m.add(G.box, 0xf4e6c0, fx, 4.2, fz, 0, Math.PI / 4, 0, 0.45, 0.6, 0.45);
+    }
+    this.colliders.push({ minX: -3.2, maxX: 3.2, minZ: -3.2, maxZ: 3.2 });
 
-    // Norte: el Ajuntament, almenado, con su gran portal
+    // Norte: el Ajuntament (antiguo alcázar real), fachada de principios del XX: almenas, ventanas
+    // ojivales, galería de arcos arriba y una torre almenada; delante, palmeras
     this.block(m, -14, 8, 13.5, 22, 11, OCHRE);
     for (let x = -13.6; x <= 7.6; x += 1.2) m.add(G.box, OCHRE, x, 11.6, 13.7, 0, 0, 0, 0.7, 1.2, 0.5);
-    m.add(G.box, 0x4a3020, -3, 2.2, 13.45, 0, 0, 0, 3, 4.4, 0.1);
-    m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, -3, 4.4, 13.45, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
-    this.facade(m, -14, 8, 13.5, -1, 3);
+    m.add(G.box, OCHRE, -3, 8, 15, 0, 0, 0, 5, 16, 3.4); // torre
+    for (let x = -5.1; x <= -0.9; x += 1.05) m.add(G.box, OCHRE, x, 16.5, 13.4, 0, 0, 0, 0.6, 1, 0.5);
+    m.add(G.box, 0x4a3020, -3, 2.2, 13.3, 0, 0, 0, 3, 4.4, 0.1);
+    m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, -3, 4.4, 13.3, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+    m.add(G.box, 0xb8955f, -3, 5.6, 13.25, 0, 0, 0, 3.8, 0.25, 0.3); // imposta
+    for (let x = -12.5; x <= 7; x += 2.4) {
+      if (Math.abs(x + 3) < 2.5) continue;
+      for (const y of [2.6, 6.4]) {
+        m.add(G.box, 0x3a2a20, x, y, 13.46, 0, 0, 0, 0.9, 1.8, 0.06);
+        m.add(new THREE.ConeGeometry(0.62, 0.7, 4), 0xb8955f, x, y + 1.15, 13.44, 0, Math.PI / 4, 0, 1, 1, 0.12); // ojiva
+      }
+      m.add(G.box, 0x2a2a2a, x, 5.3, 13.1, 0, 0, 0, 1.3, 0.08, 0.6); // balconcillo
+    }
+    for (let x = -13; x <= 7.4; x += 1.1) m.add(G.box, 0x3a2a20, x, 9.6, 13.46, 0, 0, 0, 0.6, 1.3, 0.06); // galería alta
+    for (const px of [-11, 5]) {
+      m.add(G.cyl, 0x8a7a5a, px, 4.5, 11.4, 0, 0, 0, 0.45, 9, 0.45);
+      for (let k = 0; k < 9; k++) {
+        const a = (k / 9) * Math.PI * 2;
+        m.add(G.box, 0x4f7a3a, px + Math.cos(a) * 1.6, 8.9, 11.4 + Math.sin(a) * 1.6, Math.sin(a) * 0.5, -a, Math.cos(a) * 0.5, 3.4, 0.1, 0.6);
+      }
+      this.colliders.push({ minX: px - 0.4, maxX: px + 0.4, minZ: 11, maxZ: 11.8 });
+    }
     this.block(m, 8, 18, 13.5, 20, 9, SAND);
     this.facade(m, 8, 18, 13.5, -1, 2);
-    // Oeste: los palacios (Salort, Torresaura) mirando al Born
+    // Oeste: Palau de Torre-Saura (neoclásico, con logia de arcos en lo alto y frontón) y Palau Salort
     this.block(m, -26, -18.5, -13, 0, 12, SAND);
     this.block(m, -26, -18.5, 0, 13.5, 13, 0xe9dcbc);
     this.facade(m, -13, 0, -18.5, 1, 3, false);
-    this.facade(m, 0, 13.5, -18.5, 1, 3, false);
+    for (let z = 1.5; z <= 12; z += 2.1) {
+      m.add(G.box, 0x3a2a20, -18.44, 10.2, z, 0, 0, 0, 0.06, 2, 1.2);
+      m.add(new THREE.CylinderGeometry(0.6, 0.6, 0.08, 12, 1, false, 0, Math.PI), 0x3a2a20, -18.44, 11.2, z, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+      m.add(G.box, 0xf2ead6, -18.3, 10.2, z + 1.05, 0, 0, 0, 0.3, 2.6, 0.3); // columnas
+    }
+    m.add(new THREE.ConeGeometry(1, 1, 3), 0xe9dcbc, -18.6, 14.3, 6.75, Math.PI / 2, 0, Math.PI / 2, 2.4, 0.4, 7);
+    this.facade(m, 0, 9, -18.5, 1, 2, false);
+    this.sign('Palau Torre-Saura', -18.35, 4, 6.75, Math.PI / 2, 3.6);
     // Sur: casas con Correus
-    this.block(m, -18, -6, -21, -13.5, 9, 0xeee3c8);
+    // Teatre des Born (1875): fachada clasicista a lo Palladio, columnas, frontón y escalinata
+    this.block(m, -18, -6, -21, -13.5, 11, 0xe7d3b0);
+    for (let x = -16.6; x <= -7.4; x += 1.84) m.add(G.cyl, 0xf3ead6, x, 4.2, -13.2, 0, 0, 0, 0.55, 8.4, 0.55);
+    m.add(G.box, 0xf3ead6, -12, 8.7, -13.2, 0, 0, 0, 11, 0.6, 0.9);
+    m.add(new THREE.ConeGeometry(1, 1, 3), 0xf3ead6, -12, 10.1, -13.4, Math.PI / 2, 0, 0, 6.4, 0.5, 2.2);
+    for (let i = 0; i < 3; i++) m.add(G.box, 0xcdb994, -12, 0.1 + i * 0.2, -13.1 + i * 0.25 - 0.5, 0, 0, 0, 10, 0.2, 1);
+    for (const x of [-14.2, -12, -9.8]) m.add(G.box, 0x3a2a20, x, 2, -13.47, 0, 0, 0, 1.3, 3, 0.06);
+    // Correus, en la casa del medio
     this.block(m, -6, 10, -21, -13.5, 10, 0xf1d9a0);
-    this.block(m, 10, 18.5, -21, -13.5, 9, SAND);
-    this.facade(m, -18, -6, -13.5, -1 as 1 | -1, 2);
     this.facade(m, -6, 10, -13.5, -1 as 1 | -1, 2);
-    this.facade(m, 10, 18.5, -13.5, -1 as 1 | -1, 2);
+    // Sant Francesc: fachada de marès alta, rosetón, portal y campanario de espadaña
+    this.block(m, 10, 18.5, -24, -13.5, 14, 0xd2b27a);
+    m.add(new THREE.CylinderGeometry(1.3, 1.3, 0.12, 24), 0x5a4a3a, 14.25, 9.5, -13.45, Math.PI / 2, 0, 0, 1, 1, 1);
+    m.add(new THREE.TorusGeometry(1.35, 0.14, 6, 24), 0xe3c991, 14.25, 9.5, -13.4, 0, 0, 0, 1, 1, 1);
+    m.add(G.box, 0x4a3020, 14.25, 2.2, -13.46, 0, 0, 0, 2.4, 4.4, 0.08);
+    m.add(new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, 14.25, 4.4, -13.46, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+    m.add(G.box, 0xd2b27a, 16.8, 15.6, -18, 0, 0, 0, 2.2, 3.2, 1.2); // espadaña
+    m.add(G.box, 0x2a2420, 16.8, 15.4, -17.38, 0, 0, 0, 0.9, 1.5, 0.05);
+    this.sign('Teatre des Born', -12, 6.6, -13.05, 0, 3.4);
     // Este: dos manzanas y entre ellas la entrada a Ses Voltes
     this.block(m, 18.5, 30, -13.5, STREET.minZ - 0.2, 10, 0xeee3c8);
     this.block(m, 18.5, 30, STREET.maxZ + 0.2, 13.5, 10, SAND);
@@ -333,6 +385,14 @@ export class LevelSantJoan implements Level {
         m.add(new THREE.TorusGeometry(1.05, 0.22, 6, 12, Math.PI), WHITE, x + 1.3, 3.15, pz, 0, 0, 0, 1, 0.8, 1.2);
       }
       m.add(G.box, WHITE, (30 + STREET.maxX) / 2, 4.3, side * 3.6, 0, 0, 0, STREET.maxX - 30, 1.2, 1.9);
+      // Bajo los arcos, escaparates de tiendas (avarques, sobrasada, ropa, joyerías) con su luz
+      const shopCols = [0xc23030, 0x2f6b8a, 0xd8a23a, 0x6b4a2e, 0xf4f0e6, 0x2a2a2a];
+      for (let x = 31.6, k = 0; x < STREET.maxX - 2.4; x += 2.6, k++) {
+        const wz = side * (STREET.maxZ + 0.15);
+        m.add(G.box, k % 3 ? 0x3a2a20 : 0x1f3a2a, x + 1.3, 1.45, wz, 0, 0, 0, 2.1, 2.9, 0.12); // marco
+        m.add(G.box, 0xe9d6ae, x + 1.3, 1.5, wz - side * 0.07, 0, 0, 0, 1.8, 2.3, 0.04); // luz del escaparate
+        for (let j = 0; j < 4; j++) m.add(G.rbox, shopCols[(k + j) % shopCols.length], x + 0.65 + j * 0.42, 1.0 + (j % 2) * 0.55, wz - side * 0.12, 0, 0, 0, 0.3, 0.32, 0.12);
+      }
       this.facade(m, 31, STREET.maxX - 1, wallZ, (-side) as 1 | -1, 2);
     }
     // Plaça Espanya: árboles, bancos y casas alrededor

@@ -28,7 +28,7 @@ const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; t
   madrid: { ground: 0xb9a27a, fog: 0xf3d9b0, sky: 0x9cc9ec, top: 0x3f7fd0 },
   meseta: { ground: 0xd9b75e, fog: 0xf4e1b0, sky: 0x8fc3ef, top: 0x2f72cc },
   cantabria: { ground: 0x5f9e4c, fog: 0xcfe3e8, sky: 0x9fc6e0, top: 0x5a8fc0 },
-  rioja: { ground: 0x9a7a4a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
+  rioja: { ground: 0xa8704a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
 };
 const TURBO = 1.45;
 // El juego del viaje: parar en el primer restaurante que empiece por M
@@ -161,6 +161,7 @@ export class Level2 implements Level {
   private dist = 0; // metros recorridos en el tramo actual
   private legStart = 0;
   private region: Region = 'madrid';
+  private logronoTown: THREE.Object3D | null = null;
   private things: Thing[] = [];
   private nextSpawn = 60;
   private scatters: Scatter[] = [];
@@ -403,12 +404,24 @@ export class Level2 implements Level {
       .add(G.cyl, 0xf4f1ea, -0.3, 0.35, -0.6, 0, 0, 0, 0.18, 0.7, 0.18)
       .add(G.cyl, 0xf4f1ea, 0.3, 0.35, -0.6, 0, 0, 0, 0.18, 0.7, 0.18)
       .build();
+    // Viñedo riojano en vaso: cepas bajas y retorcidas, en hileras, sobre tierra arcillosa rojiza
     const vines = new Merger();
     for (let i = 0; i < 5; i++) {
-      vines.add(G.box, 0x4f7a2a, i * 2.2, 0.7, 0, 0, 0, 0, 0.7, 1.2, 9);
-      vines.add(G.box, 0x6a3d7a, i * 2.2 + 0.3, 0.6, 0, 0, 0, 0, 0.2, 0.3, 8);
+      vines.add(G.box, 0x8a5a3a, i * 2.4, 0.03, 0, 0, 0, 0, 0.9, 0.06, 10); // caballón de tierra
+      for (let j = 0; j < 7; j++) {
+        const z = -4.5 + j * 1.5;
+        vines.add(G.cyl, 0x4a3426, i * 2.4, 0.3, z, 0.15 * ((j % 3) - 1), 0, 0.12, 0.12, 0.6, 0.12);
+        vines.add(G.bush, j % 2 ? 0x5a7f2e : 0x4f7428, i * 2.4, 0.8, z, 0, j, 0, 1.0, 0.65, 1.0);
+        if (j % 2) vines.add(G.box, 0x3a2050, i * 2.4 + 0.35, 0.55, z, 0, 0, 0, 0.16, 0.22, 0.16); // racimo
+      }
     }
     const vineGeo = vines.build();
+    // Picos de Europa al fondo: caliza gris con nieve en las cumbres
+    const peak = new Merger()
+      .add(G.rock2, 0x8d8f94, 0, 0, 0, 0, 0, 0, 60, 46, 40)
+      .add(G.rock, 0xf2f4f6, 0, 17, 0, 0, 0.6, 0, 22, 9, 16)
+      .add(G.rock, 0x7c7f86, 30, -4, 6, 0, 1.2, 0, 40, 30, 30)
+      .build();
     const bull = new Merger()
       .add(G.box, 0x111111, 0, 7, 0, 0, 0, 0, 0.2, 5, 11)
       .add(G.box, 0x111111, 0, 9.8, 5.2, 0, 0, 0, 0.2, 2.6, 2.6)
@@ -426,10 +439,13 @@ export class Level2 implements Level {
       new Scatter(mill, 6, 45, ['meseta'], [25, 60], true, [1, 1.2]),
       new Scatter(bull, 1, 260, ['meseta'], [22, 24], false, [1, 1], false),
       new Scatter(hill, 10, 30, ['cantabria'], [40, 90], false, [0.7, 1.4]),
+      new Scatter(peak, 6, 70, ['cantabria'], [-150, -210], false, [0.9, 1.5], false),
       new Scatter(oak, 22, 9, ['cantabria'], [8, 35], true, [0.8, 1.3]),
       new Scatter(cow, 10, 16, ['cantabria'], [-9, -30], false, [1, 1]),
       new Scatter(vineGeo, 24, 10, ['rioja'], [8, 30], true, [1, 1], false),
     ];
+    // Las montañas lejanas no llevan niebla (si no, desaparecen): ya son de un gris azulado de lejanía
+    this.scatters[7].mesh.material = toon({ vertexColors: true, fog: false });
     for (const s of this.scatters) this.scene.add(s.mesh);
   }
 
@@ -540,8 +556,21 @@ export class Level2 implements Level {
     m.add(G.box, 0xc9b98f, -36, 10, 30, 0, 0, 0, 14, 8, 7);
     m.add(G.box, 0xc9b98f, -31, 14, 30, 0, 0, 0, 4, 16, 4);
     m.add(G.cone, 0x8a7a66, -31, 23, 30, 0, Math.PI / 4, 0, 5, 3, 5);
-    // Terraza con mesa (donde se cocinan las zamburiñas)
-    m.add(G.box, 0xd9c7a5, -9, 0.05, -22, 0, 0, 0, 8, 0.1, 8);
+    // La plancha de El Ancla: suelo de losas, la fachada de piedra con soportales detrás, el toldo
+    // de rayas azules y blancas, la barra y unas mesas
+    m.add(G.box, 0xbdb4a4, -9, 0.05, -22, 0, 0, 0, 22, 0.1, 16);
+    m.add(G.box, 0xb8ad97, -9, 5, -12.5, 0, 0, 0, 22, 10, 3);
+    for (let x = -18; x <= 0; x += 4.5) {
+      m.add(G.box, 0x2a2420, x + 2.25, 1.6, -13.95, 0, 0, 0, 3, 3.2, 0.1);
+      m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 14, 1, false, 0, Math.PI), 0x2a2420, x + 2.25, 3.2, -13.95, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+    }
+    for (let k = 0; k < 11; k++) m.add(G.box, k % 2 ? 0xf4f4f0 : 0x1f5fbf, -18.9 + k * 1.8 + 0.9, 4.6, -15.2, -0.45, 0, 0, 1.8, 0.06, 3); // toldo
+    for (let k = 0; k < 4; k++) m.add(G.box, 0x6b4a2e, -16 + k * 4.5, 6.6, -14.2, 0, 0, 0, 2.6, 1.2, 0.8); // balcones de madera
+    m.add(G.box, 0x6b4a2e, -3, 0.55, -19, 0, 0, 0, 0.8, 1.1, 5); // barra
+    for (const [x, z] of [[-17, -24], [-14, -27], [-3, -26]]) {
+      m.add(G.box, 0x8a6a44, x, 0.75, z, 0, 0, 0, 1.4, 0.06, 1.0);
+      for (const sx of [-1, 1]) m.add(G.rbox, 0x1f5fbf, x + sx * 0.95, 0.45, z, 0, 0, 0, 0.45, 0.9, 0.45);
+    }
     g.add(m.mesh());
     return g;
   }
@@ -866,6 +895,8 @@ export class Level2 implements Level {
 
   private startGrill() {
     this.phase = 'grill';
+    const g = this.grill.position;
+    this.camera.position.set(g.x + 0.3, 6.2, g.z - 3.2);
     this.served = 0;
     this.scallops.forEach((s, i) => {
       s.p = 0;
@@ -923,6 +954,7 @@ export class Level2 implements Level {
   private startDrive2() {
     this.legStart = LEG1 + 40;
     this.reset(this.legStart);
+    this.buildLogrono(this.legStart + LEG2 + 60);
     this.dist = 0;
     this.speed = 0;
     this.lane = 1;
@@ -932,6 +964,35 @@ export class Level2 implements Level {
     // La cámara salta detrás del coche (si no, vuela cientos de metros desde la terraza)
     this.camera.position.set(0, 4.6, this.carZ - 8.5);
     this.updateHud();
+  }
+
+  /** Logroño al final: el Ebro con el Puente de Piedra y las dos torres barrocas de La Redonda. */
+  private buildLogrono(z: number) {
+    if (this.logronoTown) this.scene.remove(this.logronoTown);
+    const m = new Merger();
+    m.add(G.box, 0x4f7f8f, 0, 0.03, z, 0, 0, 0, 260, 0.05, 26); // el Ebro
+    for (let i = -6; i <= 6; i++) {
+      if (Math.abs(i) < 1) continue;
+      m.add(G.box, 0xc9b48c, i * 9, 1.8, z, 0, 0, 0, 2, 3.6, 4);
+      m.add(new THREE.CylinderGeometry(3.6, 3.6, 3.8, 18, 1, false, 0, Math.PI), 0xc9b48c, i * 9 + 4.5, 2.2, z, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+    }
+    m.add(G.box, 0xc9b48c, 0, 4.4, z, 0, 0, 0, 120, 0.8, 9);
+    for (let i = 0; i < 18; i++) {
+      const x = -60 + i * 7 + (i % 3);
+      const h = 9 + (i * 7) % 11;
+      m.add(G.box, [0xe8dcc0, 0xd8b88a, 0xf0e6d2, 0xc89a6a][i % 4], x, h / 2, z + 26 + (i % 2) * 6, 0, 0, 0, 6, h, 8);
+      m.add(G.box, 0xa9573a, x, h + 0.3, z + 26 + (i % 2) * 6, 0, 0, 0, 6.2, 0.6, 8.2);
+    }
+    // Concatedral de Santa María de la Redonda: dos torres gemelas con chapitel
+    for (const sx of [-5, 5]) {
+      m.add(G.box, 0xd2b07a, sx + 12, 11, z + 40, 0, 0, 0, 4.4, 22, 4.4);
+      m.add(G.box, 0xc29c66, sx + 12, 23.5, z + 40, 0, 0, 0, 3.6, 3, 3.6);
+      m.add(G.cyl, 0xc29c66, sx + 12, 26.6, z + 40, 0, 0, 0, 3, 3.2, 3);
+      m.add(G.cone, 0x5a5a60, sx + 12, 30, z + 40, 0, 0, 0, 2.6, 3.6, 2.6);
+    }
+    m.add(G.box, 0xd2b07a, 12, 8, z + 46, 0, 0, 0, 14, 16, 16);
+    this.logronoTown = m.mesh();
+    this.scene.add(this.logronoTown);
   }
 
   private arriveLogrono() {

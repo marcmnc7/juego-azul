@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
+import { Surf } from '../core/surfaces';
 import { MOTO } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makeMoto, makePerson, type Person } from '../entities/models';
@@ -170,9 +171,9 @@ export class LevelMoto implements Level {
       g.computeVertexNormals();
       return g;
     };
-    const land = new THREE.Mesh(mk(pos, col), toon({ vertexColors: true, side: THREE.DoubleSide }));
+    const land = new THREE.Mesh(mk(pos, col), toon({ vertexColors: true, side: THREE.DoubleSide, surf: Surf.Grass }));
     land.userData.noCast = true;
-    const asphalt = new THREE.Mesh(mk(road, rcol), toon({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
+    const asphalt = new THREE.Mesh(mk(road, rcol), toon({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide, surf: Surf.Asphalt }));
     asphalt.userData.noCast = true;
     sc.add(land, asphalt);
 
@@ -190,24 +191,40 @@ export class LevelMoto implements Level {
       // Quitamiedos del lado del mar
       if (i % 4 === 0) m.add(G.box, 0x8c8c92, r.x + r.rx * 4.6, 0.35, r.z + r.rz * 4.6, 0, yaw, 0, 0.08, 0.7, 0.08);
       m.add(G.box, 0xc8c8cc, r.x + r.rx * 4.6, 0.6, r.z + r.rz * 4.6, 0, yaw, 0, 0.05, 0.22, 2.0);
-      // Pinos del lado de la montaña
-      if (rnd() < 0.55) {
+      const wild = i / SAMPLES > 0.45; // pasado Roses, el Cap de Creus: pizarra, matorral y bancales
+      // Bancales de piedra seca en la ladera (las «feixes» abandonadas del Cap de Creus)
+      if (i % 6 === 0) {
+        for (const d of [-12, -18, -25]) {
+          const y = THREE.MathUtils.lerp(0.6, 5, Math.min(1, (-d - 8) / 18));
+          m.add(G.box, 0x8f877a, r.x + r.rx * d, y + 0.35, r.z + r.rz * d, 0, yaw, 0, 0.6, 0.9 + (i % 3) * 0.2, 6.4);
+        }
+      }
+      // Olivos (troncos retorcidos, copa gris plateada) y matas de lentisco y brezo
+      if (wild && rnd() < 0.35) {
+        const d = -(7 + rnd() * 14);
+        const x = r.x + r.rx * d, z = r.z + r.rz * d;
+        const y = THREE.MathUtils.lerp(0.6, 5, Math.min(1, (-d - 8) / 18));
+        m.add(G.cyl, 0x5a4a38, x, y + 0.8, z, 0.25, 0, 0.2, 0.35, 1.8, 0.35);
+        m.add(G.bush, 0x8a9a78, x + 0.3, y + 2.2, z, 0, rnd() * 3, 0, 2.6, 1.5, 2.4);
+      }
+      // Pinos piñoneros del lado de la montaña (de L'Escala a Roses)
+      if (!wild && rnd() < 0.55) {
         const d = -(7 + rnd() * 20);
         const x = r.x + r.rx * d, z = r.z + r.rz * d;
         const y = THREE.MathUtils.lerp(0.6, 5, Math.min(1, (-d - 8) / 18));
         const hgt = 3 + rnd() * 3;
-        m.add(G.cyl, 0x6b4a2e, x, y + hgt * 0.3, z, 0, 0, 0, 0.3, hgt * 0.6, 0.3);
-        m.add(G.bush, rnd() < 0.5 ? 0x3f6a32 : 0x4d7a3a, x, y + hgt * 0.75, z, 0, rnd() * 3, 0, 3.2, 1.3, 3.2);
+        m.add(G.cyl, 0x5a4a38, x, y + hgt * 0.4, z, 0.08, 0, 0.06, 0.3, hgt * 0.8, 0.3);
+        m.add(G.bush, rnd() < 0.5 ? 0x3f6a32 : 0x4d7a3a, x, y + hgt * 0.85, z, 0, rnd() * 3, 0, 4.2, 1.2, 4.0);
       }
       if (rnd() < 0.25) {
         const d = -(5 + rnd() * 3);
-        m.add(G.bush, 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, 0, 0, 1.6, 0.9, 1.6);
+        m.add(G.bush, wild ? 0x6f7a4a : 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, rnd() * 3, 0, 1.6, 0.9, 1.6);
       }
       // Rocas del acantilado
       if (rnd() < 0.4) {
         const d = 9 + rnd() * 8;
         const s = 1.5 + rnd() * 2.5;
-        m.add(rnd() < 0.5 ? G.rock : G.rock2, rnd() < 0.5 ? 0x8a7560 : 0x9c8770, r.x + r.rx * d, -2.6 + s * 0.3, r.z + r.rz * d, rnd(), rnd() * 3, 0, s * 1.4, s, s * 1.2);
+        m.add(rnd() < 0.5 ? G.rock : G.rock2, wild ? (rnd() < 0.5 ? 0x6f6a62 : 0x7d766b) : rnd() < 0.5 ? 0x8a7560 : 0x9c8770, r.x + r.rx * d, -2.6 + s * 0.3, r.z + r.rz * d, rnd(), rnd() * 3, 0, s * 1.4, s, s * 1.2);
       }
     }
     // L'Escala: casitas blancas junto a la salida
@@ -218,11 +235,28 @@ export class LevelMoto implements Level {
       m.add(G.box, 0xf6f1e6, x, 2, z, 0, 0.3 * i, 0, 5, 4, 5);
       m.add(G.box, 0xb8623e, x, 4.2, z, 0, 0.3 * i, 0, 5.4, 0.4, 5.4);
     }
+    // Cadaqués al otro lado de la bahía: casas blancas apiñadas y la iglesia de Santa Maria arriba
+    {
+      const r = ring(Math.floor(SAMPLES * 0.72));
+      const cx = r.x + r.rx * 70, cz = r.z + r.rz * 70;
+      m.add(G.rock2, 0x6f6a62, cx, -3, cz, 0, 0.4, 0, 60, 14, 40);
+      for (let k = 0; k < 26; k++) {
+        const a = (k / 26) * Math.PI * 2;
+        const rr2 = 6 + (k % 5) * 3.5;
+        const hx = cx + Math.cos(a) * rr2 * 1.3, hz = cz + Math.sin(a) * rr2 * 0.8;
+        const hy = 3.2 + (1 - rr2 / 22) * 4;
+        m.add(G.box, 0xf6f1e6, hx, hy, hz, 0, a, 0, 3.4, 3.6 + (k % 3), 3.2);
+        m.add(G.box, 0xb8623e, hx, hy + 2 + (k % 3) * 0.5, hz, 0, a, 0, 3.6, 0.3, 3.4);
+      }
+      m.add(G.box, 0xf6f1e6, cx, 10, cz, 0, 0, 0, 5, 7, 9);
+      m.add(G.box, 0xf6f1e6, cx + 2, 14.5, cz - 4, 0, 0, 0, 2.4, 9, 2.4);
+      m.add(G.box, 0x3a3a3a, cx + 2, 17, cz - 5.21, 0, 0, 0, 0.9, 1.4, 0.05);
+    }
     // Cap de Creus: faro blanco sobre las rocas, al final de la carretera
     const end = ring(SAMPLES);
     const fx = end.x + end.rx * 14 + 10, fz = end.z + end.rz * 14 + 16;
     this.lighthouse.set(fx, 9, fz);
-    m.add(G.rock2, 0x8a7560, fx, -1, fz, 0, 0, 0, 22, 8, 18);
+    m.add(G.rock2, 0x6f6a62, fx, -1, fz, 0, 0, 0, 22, 8, 18);
     m.add(G.box, 0xf6f1e6, fx, 4.5, fz, 0, 0, 0, 7, 3, 5);
     m.add(G.cyl, 0xf6f1e6, fx + 2, 7, fz, 0, 0, 0, 1.6, 6, 1.6);
     m.add(G.cyl, 0x2f2f36, fx + 2, 10.4, fz, 0, 0, 0, 1.9, 0.8, 1.9);
