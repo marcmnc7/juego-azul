@@ -728,14 +728,28 @@ export class Level3 implements Level {
 
   private buildWorld() {
     const sc = this.scene;
-    // Suelo de picón volcánico
+    // Césped del anexo tapado con planchas protectoras (rejilla de plástico gris) para el concierto
     const tex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#3b3430';
+      ctx.fillStyle = '#3d4140';
       ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 1500; i++) {
-        const v = 40 + Math.random() * 40;
-        ctx.fillStyle = `rgb(${v + 10},${v},${v - 5})`;
-        ctx.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+      const n = 6, cw = w / n;
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++) {
+          const v = 58 + Math.random() * 14;
+          ctx.fillStyle = `rgb(${v},${v + 3},${v + 2})`;
+          ctx.fillRect(i * cw + 1, j * cw + 1, cw - 2, cw - 2);
+          // Rejilla de la plancha
+          ctx.fillStyle = 'rgba(20,24,22,0.35)';
+          for (let k = 4; k < cw - 2; k += 5) {
+            ctx.fillRect(i * cw + k, j * cw + 2, 1, cw - 4);
+            ctx.fillRect(i * cw + 2, j * cw + k, cw - 4, 1);
+          }
+        }
+      // Pisadas y suciedad
+      for (let i = 0; i < 900; i++) {
+        const v = 30 + Math.random() * 50;
+        ctx.fillStyle = `rgba(${v},${v - 4},${v - 8},0.5)`;
+        ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
       }
     }, 256, 256);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -775,13 +789,21 @@ export class Level3 implements Level {
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         g.computeVertexNormals();
-        const mesh = new THREE.Mesh(g, toon({ color, roughness: 0.9, side: THREE.DoubleSide, surf: color === 0xa8433a ? Surf.Asphalt : Surf.None }));
+        const mesh = new THREE.Mesh(g, toon({ color, roughness: 0.9, side: THREE.DoubleSide, surf: color === 0xa8433a ? Surf.Asphalt : color === 0x35603a ? Surf.Grass : Surf.None }));
         mesh.userData.noCast = true;
         sc.add(mesh);
       };
       strip(30, 39.6, 0.02, 0xa8433a);
       for (let k = 0; k <= 8; k++) strip(30 + k * 1.2 - 0.04, 30 + k * 1.2 + 0.04, 0.03, 0xf4f1ea);
       const st = new Merger();
+      // Franja de césped alrededor de la pista y la pequeña tribuna cubierta del anexo
+      strip(39.6, 47, 0.015, 0x35603a);
+      for (let k = 0; k < 7; k++) st.add(G.box, 0x8d939a, 50 + k * 0.9, 0.35 + k * 0.45, 0, 0, 0, 0, 0.9, 0.7 + k * 0.9, 40);
+      for (let k = 0; k < 7; k++) for (let j = 0; j < 30; j++)
+        st.add(G.box, j % 5 === 0 ? 0xf2c230 : 0x1f6fb2, 50 + k * 0.9, 0.9 + k * 0.9, -18.5 + j * 1.28, 0, 0, 0, 0.5, 0.25, 0.9);
+      for (const z of [-19, -6, 6, 19]) st.add(G.box, 0xe8e8e8, 57.5, 5, z, 0, 0, 0, 0.3, 10, 0.3);
+      st.add(G.box, 0xeeeeee, 53.5, 10, 0, 0, 0, -0.12, 9, 0.3, 41);
+      this.colliders.push({ minX: 49.5, maxX: 58, minZ: -20, maxZ: 20 });
       // El estadio: gradas en anillo y la visera blanca
       for (let i = 0; i < 40; i++) {
         const a = (i / 40) * Math.PI * 2;

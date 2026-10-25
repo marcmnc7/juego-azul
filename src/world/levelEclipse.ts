@@ -1,3 +1,4 @@
+import { Surf } from '../core/surfaces';
 import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
@@ -281,6 +282,11 @@ export class LevelEclipse implements Level {
     floor.position.z = 1;
     floor.userData.noCast = true;
     sc.add(floor);
+    // Fuera de la cocina: el patio de la casa, para que no flote en el vacío
+    const yard = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), toon({ color: 0xbfae8a, surf: Surf.Paving }));
+    yard.position.y = -0.02;
+    yard.userData.noCast = true;
+    sc.add(yard);
     const m = new Merger();
     const WALL = 0xf6f1e6;
     // Paredes (la de delante no, para que se vea la cocina), zócalo y vigas de madera
@@ -299,6 +305,30 @@ export class LevelEclipse implements Level {
     // Ventana con persianas verdes y la luz entrando
     m.add(G.box, 0x9fd3e8, -1, 1.75, -D + 0.11, 0, 0, 0, 1.4, 0.9, 0.02);
     for (const s of [-1, 1]) m.add(G.box, 0x2f7a4a, -1 + s * 1.05, 1.75, -D + 0.14, 0, 0, 0, 0.66, 1.0, 0.04);
+    // Azulejos sobre la encimera, campana extractora, escurreplatos y botes
+    for (let i = 0; i < 16; i++) m.add(G.box, i % 2 ? 0xdfe9ee : 0x5b8fb0, -3.6 + i * 0.4, 1.22, -D + 0.11, 0, 0, 0, 0.39, 0.5, 0.02);
+    m.add(G.box, 0xc9ccd0, 1.2, 2.0, -D + 0.3, 0, 0, 0, 0.9, 0.35, 0.5);
+    m.add(G.box, 0xc9ccd0, 1.2, 2.5, -D + 0.18, 0, 0, 0, 0.3, 0.7, 0.25);
+    for (let i = 0; i < 3; i++) m.add(G.cyl, [0xd84a3a, 0xe8d6a8, 0x3a6a8a][i], -3.4 + i * 0.28, 1.06, -D + 0.25, 0, 0, 0, 0.2, 0.26, 0.2);
+    m.add(G.cyl, 0x8a8e92, 1.0, 1.06, -D + 0.4, 0, 0, 0, 0.36, 0.22, 0.36); // olla
+    // Aparador con platos en la pared izquierda, puerta a la derecha, reloj y calendario
+    m.add(G.box, 0x7a5a3a, -W + 0.35, 0.5, -0.6, 0, 0, 0, 0.6, 1.0, 2.0);
+    m.add(G.box, 0x6b4a2e, -W + 0.2, 1.6, -0.6, 0, 0, 0, 0.3, 1.2, 2.0);
+    for (let i = 0; i < 5; i++) m.add(G.cyl, 0xf4f1ea, -W + 0.3, 1.5, -1.3 + i * 0.35, 0, 0, Math.PI / 2, 0.3, 0.02, 0.3);
+    this.colliders.push({ minX: -W, maxX: -W + 0.7, minZ: -1.6, maxZ: 0.4 });
+    m.add(G.box, 0x8a6a44, W - 0.11, 1.05, -0.2, 0, 0, 0, 0.04, 2.1, 0.95);
+    m.add(G.sphere, 0xd9b45a, W - 0.15, 1.0, 0.15, 0, 0, 0, 0.06, 0.06, 0.06);
+    m.add(G.cyl, 0xfbf7ee, 2.6, 2.3, -D + 0.12, Math.PI / 2, 0, 0, 0.36, 0.04, 0.36);
+    m.add(G.box, 0x2a2a2e, 2.6, 2.36, -D + 0.15, 0, 0, 0, 0.02, 0.14, 0.01);
+    m.add(G.box, 0xf4f1ea, W - 0.12, 1.6, -1.6, 0, 0, 0, 0.02, 0.6, 0.42);
+    m.add(G.box, 0xc23030, W - 0.13, 1.84, -1.6, 0, 0, 0, 0.02, 0.12, 0.42);
+    // Lámpara colgando sobre la mesa y alfombra de esparto
+    m.add(G.box, 0x333333, 0.4, 2.3, 0.9, 0, 0, 0, 0.02, 1.0, 0.02);
+    m.add(G.cone, 0x2f6b46, 0.4, 1.72, 0.9, 0, 0, 0, 0.5, 0.3, 0.5);
+    m.add(G.box, 0xc9ae7a, 0.4, 0.01, 0.9, 0, 0, 0, 2.8, 0.01, 2.0);
+    // Maceta con potos en una esquina
+    m.add(G.cyl, 0xb5603b, W - 0.5, 0.25, 2.2, 0, 0, 0, 0.5, 0.5, 0.5);
+    m.add(G.sphere, 0x3e7a3a, W - 0.5, 0.75, 2.2, 0, 0, 0, 0.7, 0.6, 0.7);
     // Mesa de madera con hule, sillas, frutero y una ensaimada
     m.add(G.box, 0x8a6a44, 0.4, 0.74, 0.9, 0, 0, 0, 1.8, 0.06, 1.0);
     for (const [x, z] of [[-0.4, 0.5], [1.2, 0.5], [-0.4, 1.3], [1.2, 1.3]]) m.add(G.box, 0x6b4a2e, x, 0.37, z, 0, 0, 0, 0.07, 0.74, 0.07);
@@ -899,7 +929,7 @@ export class LevelEclipse implements Level {
       this.busy = false;
       this.input.reset();
       this.setGlasses(false);
-      document.querySelectorAll('.mini-screen, .dialogue, .phone-overlay').forEach((e) => e.remove());
+      document.querySelectorAll('.mini-screen, .dialogue, .phone-overlay, .princesa-screen').forEach((e) => e.remove());
     };
     return [
       { label: '1 · Kayak', run: () => { reset(); this.buildKayak(); applyShadows(this.scene); this.startKayak(); } },

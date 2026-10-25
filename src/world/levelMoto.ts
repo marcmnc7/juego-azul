@@ -255,11 +255,20 @@ export class LevelMoto implements Level {
     // Cap de Creus: faro blanco sobre las rocas, al final de la carretera
     const end = ring(SAMPLES);
     const fx = end.x + end.rx * 14 + 10, fz = end.z + end.rz * 14 + 16;
-    this.lighthouse.set(fx, 9, fz);
-    m.add(G.rock2, 0x6f6a62, fx, -1, fz, 0, 0, 0, 22, 8, 18);
-    m.add(G.box, 0xf6f1e6, fx, 4.5, fz, 0, 0, 0, 7, 3, 5);
-    m.add(G.cyl, 0xf6f1e6, fx + 2, 7, fz, 0, 0, 0, 1.6, 6, 1.6);
-    m.add(G.cyl, 0x2f2f36, fx + 2, 10.4, fz, 0, 0, 0, 1.9, 0.8, 1.9);
+    // El faro real: edificio blanco alargado de dos plantas con la torre cuadrada en medio y la linterna
+    // encima, sobre el promontorio de pizarra gris que cae al mar
+    this.lighthouse.set(fx, 13, fz);
+    m.add(G.rock2, 0x6f6a62, fx, -2, fz, 0, 0.3, 0, 30, 18, 24);
+    m.add(G.rock2, 0x7d766b, (fx + end.x) / 2, -3, (fz + end.z) / 2, 0, 1.1, 0, 22, 12, 18);
+    m.add(G.rock, 0x6f6a62, fx + 12, -1, fz - 6, 0, 0.7, 0, 9, 6, 8);
+    m.add(G.box, 0xf6f1e6, fx, 9.6, fz, 0, 0, 0, 11, 5, 5.5);
+    m.add(G.box, 0xe9dcc2, fx, 12.2, fz, 0, 0, 0, 11.4, 0.3, 5.9);
+    for (let k = 0; k < 4; k++) for (const sz of [-1, 1]) m.add(G.box, 0x2f6b46, fx - 4.2 + k * (k > 1 ? 2.8 : 2.8), 9.8, fz + sz * 2.77, 0, 0, 0, 0.9, 1.5, 0.05);
+    m.add(G.box, 0xf6f1e6, fx, 14.6, fz, 0, 0, 0, 2.6, 4.6, 2.6);
+    m.add(G.box, 0xe9dcc2, fx, 17, fz, 0, 0, 0, 3.2, 0.3, 3.2);
+    m.add(G.cyl, 0xbfe4f0, fx, 17.9, fz, 0, 0, 0, 1.5, 1.5, 1.5);
+    m.add(G.cyl, 0x2f2f36, fx, 18.9, fz, 0, 0, 0, 1.7, 0.5, 1.7);
+    m.add(G.cone, 0x2f2f36, fx, 19.4, fz, 0, Math.PI / 4, 0, 1.6, 0.6, 1.6);
     // Montañas al fondo
     for (let i = 0; i < 10; i++) {
       const r = ring(Math.floor((i / 10) * SAMPLES));
@@ -421,9 +430,11 @@ export class LevelMoto implements Level {
       {
         label: '3 · Cap de Creus',
         run: () => {
+          document.querySelector('.pack-screen')?.remove();
           this.phase = 'ride';
           this.s = 0.97;
           this.speed = SPEED;
+          this.updateHud();
         },
       },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },

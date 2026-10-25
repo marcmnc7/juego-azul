@@ -174,7 +174,15 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
       }
     }
   }
-  // Buganvilla en algunas fachadas
+  // Chimenea menorquina encalada con su tejadillo, bajante de zinc y escalón de marès en la puerta
+  if (r() < 0.55) {
+    const chx = cx + (r() - 0.5) * (w - 1.6), chz = cz - facing * (d / 4);
+    m.add(G.box, 0xf4efe4, chx, h + 1.1, chz, 0, 0, 0, 0.7, 2.2, 0.7);
+    m.add(G.box, 0xe9dcc2, chx, h + 2.25, chz, 0, 0, 0, 0.85, 0.1, 0.85);
+    m.add(ROOF_GEO, ROOF, chx, h + 2.3, chz, 0, 0, 0, 0.9, 0.35, 0.9);
+  }
+  m.add(G.cyl, 0x8a8e90, cx + w / 2 - 0.5, h / 2, fz + facing * 0.08, 0, 0, 0, 0.12, h, 0.12);
+  m.add(G.box, MARES, cx - w / 2 + (w / cols) * (Math.floor(cols / 2) + 0.5), 0.06, fz + facing * 0.3, 0, 0, 0, 1.7, 0.12, 0.5);
   if (r() < 0.25) {
     const bx = cx + (r() - 0.5) * (w - 2);
     for (let k = 0; k < 6; k++) m.add(G.sphere, k % 2 ? 0xd6338a : 0x3e7a3a, bx + (r() - 0.5) * 1.6, 1 + r() * 2.5, fz + facing * 0.2, 0, 0, 0, 0.9, 0.7, 0.4);

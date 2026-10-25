@@ -524,7 +524,9 @@ export class Level4 implements Level {
     let chips = this.phase === 'swim' ? `<span class="chip">${NIGHT.candle(this.collected)}</span>` : '';
     if (this.phase === 'toPool') {
       const n = Math.min(6, Math.round(this.noise * 6));
-      chips = `<span class="chip">🤫 ${'▮'.repeat(n)}${'▯'.repeat(6 - n)}</span>`;
+      const seg = (on: boolean, i: number) =>
+        `<i style="display:inline-block;width:7px;height:14px;margin-left:2px;border-radius:2px;vertical-align:-2px;background:${on ? (i >= 4 ? '#ff6b6b' : '#ffd166') : 'rgba(255,255,255,.25)'}"></i>`;
+      chips = `<span class="chip">🤫 ${Array.from({ length: 6 }, (_, i) => seg(i < n, i)).join('')}</span>`;
     }
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     switch (this.phase) {
@@ -674,7 +676,11 @@ export class Level4 implements Level {
       this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
       this.camLook.lerp(this.v2.set(c.x + 3, 1, c.z), Math.min(1, dt * 4));
       this.camera.lookAt(this.camLook);
-    } else this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.5 : 6.5, swimming ? 3.2 : 3.6);
+    } else {
+      // En el pasillo estrecho, cámara alta y cerca para no tapar con las paredes
+      const inCorridor = pp.x < -4.4 && pp.x > CORRIDOR.wallX && pp.z < 8;
+      this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.5 : inCorridor ? 4.2 : 6.5, swimming ? 3.2 : inCorridor ? 8 : 3.6);
+    }
     this.sun.follow(this.phase === 'drive' ? this.car.root.position : pp);
     this.sky.update(this.camera, dt);
   }

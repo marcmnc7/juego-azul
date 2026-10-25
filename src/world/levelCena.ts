@@ -188,7 +188,7 @@ export class LevelCena implements Level {
                   ? 'Antes de las 22:50…'
                   : '13 de julio · Ciutadella';
     this.hud.setObjective(objective);
-    this.hud.setCounters(`<span>${clock}</span>${this.scares ? `<span>😱 ${this.scares}</span>` : ''}${this.grade ? `<span>🍝 ${this.grade}/10</span>` : ''}`);
+    this.hud.setCounters(`<span class="chip">${clock}</span>${this.scares ? `<span class="chip">😱 ${this.scares}</span>` : ''}${this.grade ? `<span class="chip">🍝 ${this.grade}/10</span>` : ''}`);
   }
 
   private startWait() {
