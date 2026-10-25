@@ -586,6 +586,80 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
   return { root, pivot, legs, head };
 }
 
+/** Caballo menorquín negro con su caixer, como los de Sant Joan: alto, crin larga y escarapelas. Mira hacia +Z. */
+export function makeHorse(coat = 0x0e0c0b): Donkey {
+  const root = new THREE.Group();
+  const pivot = new THREE.Group();
+  pivot.position.z = -0.85; // eje en las patas traseras: así se pone de manos (el «bot»)
+  root.add(pivot);
+  const inner = new THREE.Group();
+  inner.position.z = 0.85;
+  pivot.add(inner);
+  const shine = 0x2a2522;
+
+  const b = new Merger();
+  b.add(G.capsule, coat, 0, 1.55, 0, Math.PI / 2, 0, 0, 0.82, 0.95, 0.8); // tronco
+  b.add(G.sphere, coat, 0, 1.5, -0.7, 0, 0, 0, 0.82, 0.78, 0.7); // grupa
+  b.add(G.sphere, coat, 0, 1.6, 0.7, 0, 0, 0, 0.8, 0.82, 0.7); // pecho
+  b.add(G.sphere, shine, 0.2, 1.75, 0.2, 0, 0, 0, 0.3, 0.2, 0.6); // brillo del pelo
+  // Silla, sudadero blanco y cincha
+  b.add(G.rbox, 0xf4f1ea, 0, 1.98, -0.05, 0, 0, 0, 0.86, 0.06, 0.9);
+  b.add(G.rbox, 0x2a1a12, 0, 2.06, -0.05, 0, 0, 0, 0.5, 0.1, 0.62);
+  b.add(G.box, 0x2a1a12, 0, 1.55, 0.05, 0, 0, 0, 0.84, 0.08, 0.1);
+  // Cola larga, con lazo
+  b.add(G.capsule, coat, 0, 1.25, -1.15, -0.35, 0, 0, 0.16, 0.85, 0.12);
+  b.add(G.box, 0xd7263d, 0, 1.62, -1.05, -0.35, 0, 0, 0.18, 0.08, 0.1);
+  // Caixer: casaca negra, pantalón blanco, botas y capell
+  b.add(G.capsule, 0xf3f0ea, -0.3, 2.05, 0.05, 0.3, 0, 0, 0.18, 0.36, 0.18);
+  b.add(G.capsule, 0xf3f0ea, 0.3, 2.05, 0.05, 0.3, 0, 0, 0.18, 0.36, 0.18);
+  b.add(G.capsule, 0x111111, -0.36, 1.68, 0.15, 0, 0, 0, 0.14, 0.32, 0.14);
+  b.add(G.capsule, 0x111111, 0.36, 1.68, 0.15, 0, 0, 0, 0.14, 0.32, 0.14);
+  b.add(G.capsule, 0x16161c, 0, 2.6, -0.02, 0, 0, 0, 0.44, 0.44, 0.32);
+  b.add(G.box, 0xffffff, 0, 2.66, 0.14, 0, 0, 0, 0.16, 0.3, 0.04);
+  b.add(G.sphere, 0xe8b894, 0, 3.08, 0, 0, 0, 0, 0.34, 0.38, 0.34);
+  b.add(G.box, 0x111111, 0, 3.3, 0, 0, 0, 0, 0.62, 0.1, 0.3); // capell de dos picos
+  b.add(G.cyl, 0x111111, 0, 3.36, 0, 0, 0, 0, 0.3, 0.14, 0.3);
+  b.add(G.capsule, 0x16161c, -0.26, 2.62, 0.25, 1.1, 0, 0, 0.11, 0.22, 0.11);
+  b.add(G.capsule, 0x16161c, 0.26, 2.62, 0.25, 1.1, 0, 0, 0.11, 0.22, 0.11);
+  inner.add(b.mesh());
+
+  const head = new THREE.Group();
+  head.position.set(0, 1.85, 0.95);
+  const h = new Merger();
+  h.add(G.capsule, coat, 0, 0.35, 0.12, 0.45, 0, 0, 0.36, 0.62, 0.34); // cuello alto
+  h.add(G.box, coat, 0, 0.6, 0.12, 0.45, 0, 0, 0.06, 0.8, 0.3); // crin
+  h.add(G.capsule, coat, 0, 0.82, 0.48, 1.25, 0, 0, 0.26, 0.5, 0.28); // cabeza alargada
+  h.add(G.sphere, 0x1d1917, 0, 0.66, 0.78, 0, 0, 0, 0.24, 0.22, 0.22); // morro
+  h.add(G.box, coat, -0.09, 1.14, 0.32, -0.2, 0, -0.15, 0.06, 0.18, 0.08); // orejas cortas
+  h.add(G.box, coat, 0.09, 1.14, 0.32, -0.2, 0, 0.15, 0.06, 0.18, 0.08);
+  h.add(G.sphere, 0xffffff, -0.15, 0.92, 0.5, 0, 0, 0, 0.05, 0.06, 0.06);
+  h.add(G.sphere, 0xffffff, 0.15, 0.92, 0.5, 0, 0, 0, 0.05, 0.06, 0.06);
+  // Escarapelas en la frente y bridas
+  h.add(G.cyl, 0xd7263d, 0, 1.0, 0.42, 1.2, 0, 0, 0.18, 0.04, 0.18);
+  h.add(G.cyl, 0xf4f1ea, 0, 1.0, 0.43, 1.2, 0, 0, 0.09, 0.05, 0.09);
+  h.add(G.box, 0x6b4428, -0.15, 0.75, 0.6, 1.2, 0, 0, 0.03, 0.45, 0.03);
+  h.add(G.box, 0x6b4428, 0.15, 0.75, 0.6, 1.2, 0, 0, 0.03, 0.45, 0.03);
+  head.add(h.mesh());
+  inner.add(head);
+
+  const legs: THREE.Object3D[] = [];
+  const legGeo = new Merger()
+    .add(G.capsule, coat, 0, -0.35, 0, 0, 0, 0, 0.2, 0.55, 0.2)
+    .add(G.cyl, coat, 0, -0.85, 0, 0, 0, 0, 0.12, 0.55, 0.12)
+    .add(G.cyl, 0x222222, 0, -1.15, 0.02, 0, 0, 0, 0.17, 0.1, 0.19)
+    .build();
+  for (const [x, z] of [[-0.25, 0.68], [0.25, 0.68], [-0.25, -0.72], [0.25, -0.72]]) {
+    const p = new THREE.Group();
+    p.position.set(x, 1.2, z);
+    p.add(new THREE.Mesh(legGeo, vertexMat()));
+    inner.add(p);
+    legs.push(p);
+  }
+  addOutline(pivot, 0.025);
+  root.add(blobShadow(2.8));
+  return { root, pivot, legs, head };
+}
+
 export interface Dog {
   root: THREE.Group;
   tail: THREE.Object3D;

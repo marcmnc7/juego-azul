@@ -59,55 +59,23 @@ export const FERRERIES = {
 
 // Capítulo 5: Sant Joan en Ciutadella (junio de 2026). Buscar a Gas por sus ubicaciones entre caballos y avellanes.
 export const SANTJOAN = {
-  huntIntro: [
-    { who: 'Narrador', text: 'Ciutadella. 23 de junio de 2026, las dos de la mañana. Mañana es Sant Joan y lleváis días sin entenderos.' },
-    { who: 'Azul', text: '(WhatsApp) Lo que no me cabe en la cabeza es lo mucho que yo te quiero cerca' },
-    { who: 'Gas', text: '(WhatsApp) No sé explicarlo ni decirlo de otra manera' },
-    { who: 'Azul', text: '(WhatsApp) Yo quiero que lo sea porque yo te quiero' },
-    { who: 'Azul', text: '(WhatsApp) Yo creo solo que aquí hay algo muy bonito. Y tengo miedo de que se eche a perder todo' },
-    { who: 'Gas', text: '(WhatsApp) Eres espectacular y la persona más afín a mí que he conocido nunca' },
-    { who: 'Azul', text: '(WhatsApp) Mañana es Sant Joan' },
-    { who: 'Gas', text: '(WhatsApp) Me la sopla Sant Joan. Mañana a las 10.45 estoy ahí' },
-    { who: 'Gas', text: '(WhatsApp) Te quiero' },
-    { who: 'Narrador', text: 'A las 10.45 está ahí. A las cinco sale la bandera y os perdéis entre el pueblo entero.' },
-    { who: 'Gas', text: '(WhatsApp) Acéptame la UBI' },
-    { who: 'Azul', text: '(WhatsApp) Tuuuu maldito' },
-  ] as Line[],
-  exactHint: 'Mándale tu ubicación exacta 📍',
-  sentLoc: '📍 Azul: «¿Dónde estássss?»',
-  marcMeet: [
-    { who: 'Gas', text: 'Treinta minutos dando vueltas. Te he dicho exacto.' },
-    { who: 'Azul', text: 'Y yo te he mandado la ubi. Ven aquí.' },
-    { who: 'Narrador', text: 'Suena el fabiol. Los caballos entran en el Born.' },
-  ] as Line[],
-  afterKiss: [
-    { who: 'Narrador', text: '24 de junio. Gas se pasa el día con tu camiseta puesta.' },
-    { who: 'Gas', text: '(WhatsApp) Top la cami' },
-    { who: 'Azul', text: '(WhatsApp) ¿Te dijeron cosas?' },
-    { who: 'Gas', text: '(WhatsApp) Tod@s' },
-    { who: 'Azul', text: '(WhatsApp) Tendrán sospechas, supongo' },
-    { who: 'Azul', text: '(WhatsApp) Quizás me escondes muy bien' },
-    { who: 'Gas', text: '(WhatsApp) Muy difícil, sí… Deslumbras' },
-  ] as Line[],
+  night: [{ who: 'Narrador', text: 'Ciutadella. Madrugada del 23 de junio de 2026. Mañana es Sant Joan.' }] as Line[],
+  morning: [{ who: 'Narrador', text: 'Por la mañana.' }] as Line[],
+  bandera: [{ who: 'Narrador', text: 'A las cinco y cuarto se acaba la bandera. Estás en la Plaça Espanya y hay que ir hacia el Born.' }] as Line[],
+  huntHint: 'Ve hacia Correus por Ses Voltes 📍',
+  correus: [{ who: 'Narrador', text: 'Correus. Ni rastro de Gas. Una hora después:' }] as Line[],
+  exactHint: 'Mándale una foto exacta: que salga el obelisco 📷',
+  notExact: 'Con esta foto no sabrá dónde estás. Que salga el obelisco 📷',
+  comingHint: 'Gas viene hacia ti',
+  meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
+  after: [{ who: 'Narrador', text: 'Dos días después.' }] as Line[],
   hints: {
     pomada: '¡Avellanes! 🌰',
     luck: '¡Toque de suerte! 🐎',
-    dropped: '¡Buu! Un caballo te ha pillado y se te han caído las avellanes',
-    rear: '¡Ahora! Tócalo',
+    rear: '¡Ahora! Tócale el pecho',
     perfect: '¡Toque perfecto! ✨🐎',
     late: 'Uy, por los pelos 🐎',
-    allLuck: '¡Tres caballos! El Born entero te aplaude 👏',
   },
-  /** Mensajes de ubicación de Gas mientras le buscas (para la versión con pins que se mueven). */
-  pins: [
-    '📍 Gas: «Finito bandera ya. Ve pa’l Born»',
-    '📍 Azul: «Vamos Correos»',
-    '📍 Gas: «Llevo 30’ dando vueltas»',
-    '📍 Gas: «Dime exacto pls»',
-  ],
-  pinHint: 'Sigue la última ubi de Gas en el mapa 📍',
-  /** Cuando te acercas, Gas se va a otro sitio (las dos primeras veces). */
-  gasMoves: ['Gas: «No te he visto. Vuelvo» 📍', 'Gas: «Acéptame la UBI… que ya no estoy aquí» 📍'],
 };
 
 export const ROAD = {

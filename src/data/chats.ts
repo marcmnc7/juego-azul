@@ -1674,6 +1674,11 @@ export const CHATS = {
     "me": false,
     "t": "18:16",
     "text": "Dime exacto pls"
+   },
+   {
+    "me": true,
+    "t": "18:16",
+    "text": "📷 Foto"
    }
   ]
  },

@@ -3,43 +3,31 @@ import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, Fireworks, Confetti, glowTexture, toon, vibrate } from '../core/gfx';
-import { SANTJOAN, type Line } from '../data/story';
+import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeDonkey, animatePerson, personGeometry, vertexMat, type Person, type Donkey, type PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeHorse, animatePerson, personGeometry, vertexMat, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } from '../ui/ui';
+import { CHATS } from '../data/chats';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
-// Capítulo 5 (el último) · Sant Joan en Ciutadella, 23 de junio de 2026.
-// Ciutadella de verdad: el Born con el obelisco, el Ajuntament almenado, Correus, Ses Voltes con sus
-// arcos blancos y la Plaça Espanya. Gas no sabe dónde está y te va mandando ubicaciones que cambian:
-// Plaça Espanya → Correus → el obelisco → «Dime exacto pls». Entonces le mandas la tuya y viene él.
-// Por el camino, jaleo: caballos negros que se ponen de manos (tocarlos arriba da suerte) y avellanes.
+// Capítulo 5 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
+// Por la tarde, al acabar la bandera, Azul va desde la Plaça Espanya hacia el Born por Ses Voltes,
+// entre la gente y los caballos que se ponen de manos (tocarles el pecho da suerte). En Correus, Gas lleva
+// media hora dando vueltas: «Dime exacto pls». Le mandas una foto exacta, con el obelisco, y te encuentra.
+// Todos los chats son trozos literales.
 
 type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'ending' | 'done';
-
-const TXT = SANTJOAN as unknown as Record<string, unknown>;
-const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
-const T_INTRO = () =>
-  txt<Line[]>('huntIntro', [
-    { who: 'Narrador', text: 'Ciutadella, 23 de junio. Sant Joan. Banderas, caballos negros, avellanes volando y el Born a reventar.' },
-    { who: 'Narrador', text: 'Gas lleva tu camiseta. Todo el día. Y lleva treinta minutos dando vueltas por el pueblo sin encontrarte.' },
-    { who: 'Narrador', text: 'Te va mandando su ubicación. Síguela… aunque con él nunca se sabe.' },
-  ]);
-const T_PINS = () => txt<string[]>('pins', ['📍 Gas: «Estoy en la Plaça Espanya»', '📍 Gas: «Ahora al lado de Correos. Creo»', '📍 Gas: «Por el Born. Al lado del obelisco»', '📍 Gas: «Llevo 30’ dando vueltas. Dime exacto pls»']);
-const T_PIN_HINT = () => txt<string>('pinHint', 'Sigue el último pin de Gas en el mapa 📍');
-const T_MOVED = () => txt<string[]>('gasMoves', ['Gas: «Aceptame la UBI… que ya no estoy aquí» 📍', 'Gas: «Estoy al lado de Correos. Creo» 📍']);
-const T_EXACT_HINT = () => txt<string>('exactHint', 'Mándale tu ubicación exacta 📍');
-const T_SENT = () => txt<string>('sentLoc', '📍 «Obelisco. Lado del Ajuntament. No te muevas»');
-const T_ALL_PINS = ['Plaça Espanya', 'Correus', 'Obelisc des Born'];
 
 // Plano (metros): el Born en el origen, Ses Voltes hacia el este y la Plaça Espanya al final
 const BORN = { minX: -18, maxX: 18, minZ: -13, maxZ: 13 };
 const STREET = { minX: 18, maxX: 70, minZ: -4.4, maxZ: 4.4 };
 const ESPANYA = { minX: 70, maxX: 90, minZ: -12, maxZ: 12 };
-const PINS = [new THREE.Vector3(81, 0, 3), new THREE.Vector3(5, 0, -11.2), new THREE.Vector3(0, 0, 3.2)];
+const PINS = [new THREE.Vector3(5, 0, -10.6)]; // Correus
+const START = new THREE.Vector3(82, 0, 0); // Plaça Espanya
+const STREET_HORSES = 2;
 const REACH = 6;
 const AISLES: [number, number][] = [[19, 0], [5.5, -14], [-4, 14], [-19, 7]];
 /** Distancia de (x, z) al segmento que va del obelisco a (ax, az). */
@@ -54,6 +42,8 @@ const TOUCH_R = 3.2;
 
 interface Horse {
   d: Donkey;
+  /** Los de Ses Voltes van y vienen por la calle; los del Born dan vueltas al obelisco. */
+  street?: { dir: number };
   angle: number;
   warnT: number;
   rearT: number;
@@ -111,8 +101,8 @@ export class LevelSantJoan implements Level {
   private luck = 0;
   private hits = 0;
   private invuln = 0;
-  private pin = 0;
   private reached = 0;
+  private misses = 0;
   private pinPos = new THREE.Vector3();
   private pinObj: THREE.Group;
   private map: HTMLCanvasElement;
@@ -124,6 +114,7 @@ export class LevelSantJoan implements Level {
   private playTime = 0;
   private endT = 0;
   private v1 = new THREE.Vector3();
+  private v2 = new THREE.Vector3();
   private tmpM = new THREE.Matrix4();
   private tmpQ = new THREE.Quaternion();
   private one = new THREE.Vector3(1, 1, 1);
@@ -137,12 +128,12 @@ export class LevelSantJoan implements Level {
     onMenu: () => void,
   ) {
     const sc = this.scene;
-    sc.fog = new THREE.Fog(0x2a2a52, 45, 170);
-    // Atardecer de junio que se va haciendo de noche
-    this.sky = new Sky({ top: 0x141a4a, mid: 0x5a3f78, bottom: 0xf09a6a, stars: 500 });
+    sc.fog = new THREE.Fog(0xf3dcc0, 60, 190);
+    // Tarde de junio: sol aún alto y cálido
+    this.sky = new Sky({ top: 0x3a78c8, mid: 0x8fc3ef, bottom: 0xf6d6a8, stars: 0 });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xb7a8ff, 0x5a4636, 1.35));
-    this.sun = new Sun(sc, 0xffc59a, 1.2, new THREE.Vector3(-0.6, 0.6, 0.5), 24);
+    sc.add(new THREE.HemisphereLight(0xdfeaff, 0x7a6448, 1.6));
+    this.sun = new Sun(sc, 0xfff0d8, 1.7, new THREE.Vector3(-0.5, 0.8, 0.4), 24);
 
     this.buildTown();
     this.buildCrowd();
@@ -152,13 +143,13 @@ export class LevelSantJoan implements Level {
     sc.add(this.fireworks.points);
 
     this.player = makePerson(MARGAUX_LOOK);
-    this.player.root.position.set(40, 0, 0.5);
+    this.player.root.position.copy(START);
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
-    this.walker.yaw = this.walker.facing = Math.PI / 2;
+    this.walker.yaw = this.walker.facing = -Math.PI / 2;
 
-    // Gas, con la camiseta de Azul (blanca con el azul de ella)
-    this.gas = makePerson({ ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt });
+    // Gas, de blanco como todo el pueblo
+    this.gas = makePerson({ ...MARC_LOOK, shirt: 0xffffff });
     this.gas.root.visible = false;
     sc.add(this.gas.root);
 
@@ -182,18 +173,29 @@ export class LevelSantJoan implements Level {
     document.body.append(this.map);
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
-    this.camera.position.set(34, 4, 0);
+    this.camera.position.set(START.x + 7, 4, 0);
     this.updateHud();
     audio.startMusic('jaleo');
     audio.ambience(0.15);
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(T_INTRO(), () => {
-        if (this.phase !== 'intro') return;
-        this.busy = false;
-        this.phase = 'hunt';
-        this.setPin(0);
-      });
+      const ex = CHATS.dimeExacto;
+      dialogue(SANTJOAN.night, () =>
+        phoneChat(CHATS.laNoche, () =>
+          dialogue(SANTJOAN.morning, () =>
+            phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
+              dialogue(SANTJOAN.bandera, () =>
+                phoneChat({ ...ex, msgs: ex.msgs.slice(0, 6) }, () => {
+                  if (this.phase !== 'intro') return;
+                  this.busy = false;
+                  this.phase = 'hunt';
+                  this.setPin(0);
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
     }, 900);
   }
 
@@ -405,7 +407,7 @@ export class LevelSantJoan implements Level {
     }
     for (let i = 0; i < 4000 && pts.length < 215; i++) {
       const x = 32 + Math.random() * 56;
-      const z = x < 70 ? (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 0.6) : -10 + Math.random() * 20;
+      const z = x < 70 ? (Math.random() < 0.5 ? -1 : 1) * (2.6 + Math.random() * 0.6) : -10 + Math.random() * 20;
       if (ok(x, z)) pts.push({ x, z });
     }
     LOOKS.forEach((lk, li) => {
@@ -421,16 +423,16 @@ export class LevelSantJoan implements Level {
 
   /** Caballos negros con sus caixers dando vueltas al obelisco. */
   private buildHorses() {
-    for (let i = 0; i < 4; i++) {
-      const d = makeDonkey(0x15110f);
-      // Orejas de caballo: más cortas que las del ase
-      d.head.scale.set(1, 0.85, 1.1);
+    for (let i = 0; i < 4 + STREET_HORSES; i++) {
+      const d = makeHorse();
       const alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: alertTexture(), depthTest: false }));
-      alert.position.set(0, 3.6, 0);
+      alert.position.set(0, 4.1, 0);
       alert.visible = false;
       d.root.add(alert);
       this.scene.add(d.root);
-      this.horses.push({ d, angle: (i / 4) * Math.PI * 2, warnT: 0, rearT: 0, nextRear: 2 + i * 1.7, walk: 0, alert, touched: false });
+      const street = i >= 4 ? { dir: i % 2 ? 1 : -1 } : undefined;
+      // En la calle, «angle» es la x por donde va
+      this.horses.push({ d, street, angle: street ? 30 + (i - 4) * 22 : (i / 4) * Math.PI * 2, warnT: 0, rearT: 0, nextRear: 2 + i * 1.7, walk: 0, alert, touched: false });
     }
   }
 
@@ -448,40 +450,62 @@ export class LevelSantJoan implements Level {
   // ---------------- Ubicaciones ----------------
 
   private setPin(i: number) {
-    this.pin = i;
-    const lines = T_PINS();
-    toast(lines[Math.min(i, lines.length - 1)]);
     audio.pop();
     vibrate(20);
-    if (i < PINS.length) {
-      this.pinPos.copy(PINS[i]);
-      this.pinObj.visible = true;
-    } else {
-      this.pinObj.visible = false;
-      this.phase = 'exact';
-    }
+    this.pinPos.copy(PINS[0]);
+    this.pinObj.visible = true;
     this.map.style.display = 'block';
     this.updateHud();
   }
 
+  /** En Correus: Gas no la encuentra. «Dime exacto pls». */
   private reachedPin() {
-    const moved = T_MOVED();
-    const next = this.pin + 1;
     this.reached++;
     this.pinObj.visible = false;
-    if (next < PINS.length) {
-      // Ya no está: se ha ido a otro sitio
-      toast(moved[this.pin % moved.length]);
-      later(() => this.phase === 'hunt' && this.setPin(next), 1900);
-    } else this.setPin(next);
-    this.updateHud();
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    const ex = CHATS.dimeExacto;
+    dialogue(SANTJOAN.correus, () =>
+      phoneChat({ ...ex, msgs: ex.msgs.slice(6, -1) }, () => {
+        this.busy = false;
+        this.phase = 'exact';
+        this.updateHud();
+      }),
+    );
+  }
+
+  /** ¿Sale el obelisco en la foto? Hay que mirar hacia él y no estar demasiado lejos. */
+  private obeliskInShot() {
+    const pp = this.player.root.position;
+    const d = Math.hypot(pp.x, pp.z);
+    const ang = Math.atan2(-pp.x, -pp.z);
+    const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
+    return d < 20 && Math.abs(rel) < 0.5;
+  }
+
+  /** La foto exacta: si sale el obelisco, Gas sabe dónde está. */
+  private takePhoto() {
+    audio.pop();
+    vibrate(25);
+    fadeFlash(() => {}, 120);
+    if (!this.obeliskInShot()) {
+      this.misses++;
+      toast(SANTJOAN.notExact);
+      return;
+    }
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    const ex = CHATS.dimeExacto;
+    later(() => phoneChat({ ...ex, msgs: ex.msgs.slice(-1) }, () => this.sendLocation()), 500);
   }
 
   private sendLocation() {
     this.phase = 'coming';
-    toast(T_SENT());
+    this.busy = false;
     audio.luck();
-    vibrate(25);
     // Gas aparece entre la gente del Born y viene hacia ella
     const pp = this.player.root.position;
     const a = Math.atan2(pp.z, pp.x) + Math.PI * 0.7;
@@ -538,10 +562,10 @@ export class LevelSantJoan implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(`<span class="chip">📍 ${this.reached}/3</span><span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
-    if (this.phase === 'hunt') h.setObjective(`${T_PIN_HINT()} · ${T_ALL_PINS[Math.min(2, this.pin)]}`);
-    else if (this.phase === 'exact') h.setObjective(T_EXACT_HINT());
-    else if (this.phase === 'coming') h.setObjective('Gas viene hacia ti: búscalo con tu camiseta');
+    h.setCounters(`<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
+    if (this.phase === 'hunt') h.setObjective(SANTJOAN.huntHint);
+    else if (this.phase === 'exact') h.setObjective(SANTJOAN.exactHint);
+    else if (this.phase === 'coming') h.setObjective(SANTJOAN.comingHint);
     else if (this.phase === 'intro') h.setObjective('Ciutadella, Sant Joan');
     else h.setObjective('💙 Feliz cumpleaños 💙');
   }
@@ -549,6 +573,7 @@ export class LevelSantJoan implements Level {
   private target(): THREE.Vector3 | null {
     if (this.phase === 'hunt' && this.pinObj.visible) return this.pinPos;
     if (this.phase === 'coming') return this.gas.root.position;
+    if (this.phase === 'exact') return this.v2.set(0, 0, 0);
     return null;
   }
 
@@ -603,8 +628,7 @@ export class LevelSantJoan implements Level {
 
     // Pin flotando, que se mueve un poco (Gas no para quieto)
     if (this.pinObj.visible) {
-      const base = PINS[Math.min(2, this.pin)];
-      this.pinPos.set(base.x + Math.sin(this.t * 0.6) * 1.5, 0, base.z + Math.cos(this.t * 0.45) * 1.2);
+      this.pinPos.copy(PINS[0]);
       this.pinObj.position.set(this.pinPos.x, 3.4 + Math.sin(this.t * 3) * 0.2, this.pinPos.z);
       this.pinObj.rotation.y += dt * 1.5;
       if (this.phase === 'hunt' && !this.busy && Math.hypot(pp.x - this.pinPos.x, pp.z - this.pinPos.z) < REACH) this.reachedPin();
@@ -633,10 +657,10 @@ export class LevelSantJoan implements Level {
       label = SANTJOAN.hints.rear;
       action = () => this.touchHorse(rearNear);
     } else if (!this.busy && this.phase === 'exact') {
-      label = '📍 Mandar ubicación';
-      action = () => this.sendLocation();
+      label = '📷 Foto exacta';
+      action = () => this.takePhoto();
     }
-    this.hud.setAction(label, !!label);
+    this.hud.setAction(label, !!label && (this.phase !== 'exact' || this.obeliskInShot()));
     if (this.input.consumeAction() && action) action();
 
     const tgt = this.target();
@@ -654,7 +678,7 @@ export class LevelSantJoan implements Level {
 
     if (this.phase === 'ending') {
       this.endT += dt;
-      if (Math.random() < dt * 1.8) this.fireworks.burst(new THREE.Vector3(-25 + Math.random() * 50, 24 + Math.random() * 10, 30 + Math.random() * 20));
+      if (Math.random() < dt * 2.5) this.fx.burst(this.v2.set(-12 + Math.random() * 24, 3 + Math.random() * 2, -10 + Math.random() * 20), '🌰', 3, 2.5, 0.8);
       if (Math.random() < dt * 3) this.fx.burst(pp.clone().lerp(this.gas.root.position, 0.5).setY(2.4), '❤️', 1, 1.2);
     }
 
@@ -708,9 +732,16 @@ export class LevelSantJoan implements Level {
           }
         }
       } else {
-        s.angle += dt * 0.28;
-        r.position.set(Math.cos(s.angle) * HORSE_R, 0, Math.sin(s.angle) * HORSE_R);
-        r.rotation.y = -s.angle;
+        if (s.street) {
+          s.angle += s.street.dir * dt * 1.6;
+          if (s.angle > 68 || s.angle < 22) s.street.dir *= -1;
+          r.position.set(s.angle, 0, 0);
+          r.rotation.y = (s.street.dir * Math.PI) / 2;
+        } else {
+          s.angle += dt * 0.28;
+          r.position.set(Math.cos(s.angle) * HORSE_R, 0, Math.sin(s.angle) * HORSE_R);
+          r.rotation.y = -s.angle;
+        }
         s.walk += dt * 7;
         const w = Math.sin(s.walk) * 0.5;
         s.d.legs[0].rotation.x = s.d.legs[3].rotation.x = w;
@@ -769,7 +800,7 @@ export class LevelSantJoan implements Level {
     this.walker.facing = Math.atan2(g.x - pp.x, g.z - pp.z);
     this.gas.root.rotation.y = Math.atan2(pp.x - g.x, pp.z - g.z);
     this.updateHud();
-    dialogue(SANTJOAN.marcMeet, () => this.finish());
+    dialogue(SANTJOAN.meet, () => this.finish());
   }
 
   private finish() {
@@ -789,7 +820,7 @@ export class LevelSantJoan implements Level {
     this.updateHud();
     later(() => {
       if (this.phase !== 'ending') return;
-      dialogue(SANTJOAN.afterKiss, () => {
+      dialogue(SANTJOAN.after, () => phoneChat(CHATS.deslumbras, () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
@@ -798,14 +829,14 @@ export class LevelSantJoan implements Level {
           this.onComplete({
             stars,
             stats: [
-              ['Ubicaciones seguidas', '3 + la tuya 📍'],
+              ['Fotos hasta la exacta', `${this.misses + 1} 📷`],
               ['Avellanes', `${this.bagCount}/${this.bags.length} 🌰`],
               ['Toques a los caballos', `${this.luck} 🐎`],
               ['Tiempo dando vueltas', clock(this.playTime)],
             ],
           });
         }, 2000);
-      });
+      }));
     }, 2500);
   }
 
@@ -829,10 +860,9 @@ export class LevelSantJoan implements Level {
       this.walker.yaw = this.walker.facing = yaw;
     };
     return [
-      { label: '1 · Plaça Espanya', run: () => { hunt(0); tp(66, 0, Math.PI / 2); } },
-      { label: '2 · Correus', run: () => { hunt(1); tp(12, 0, -Math.PI / 2); } },
-      { label: '3 · Obelisco', run: () => { hunt(2); tp(12, -6, -Math.PI / 2); } },
-      { label: '4 · Mandar ubicación', run: () => { this.reached = 3; this.setPin(3); tp(1, 4.5, Math.PI); } },
+      { label: '1 · Plaça Espanya', run: () => { hunt(0); tp(START.x, START.z, -Math.PI / 2); } },
+      { label: '2 · Ses Voltes', run: () => { hunt(0); tp(40, 0, -Math.PI / 2); } },
+      { label: '3 · Foto exacta (Correus)', run: () => { hunt(0); this.pinObj.visible = false; this.phase = 'exact'; this.updateHud(); tp(5, -9.5, Math.PI); } },
       { label: '5 · Final', run: () => { tp(1, 4.5); this.gas.root.visible = true; this.gas.root.position.set(2, 0, 5.5); this.meet(); } },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
