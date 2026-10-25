@@ -26,19 +26,19 @@ export interface Memory {
 }
 
 export const MEMORIES: Memory[] = [
-  { level: 1, src: stOso, caption: 'Así bailaba Gas en el Jaleo. Más o menos.', sticker: true },
+  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Plaça. Más o menos.', sticker: true },
   { level: 2, src: diadema, caption: '«Aún no me lo puedo creer. Qué poco me esperaba esto hoy.»' },
   { level: 2, src: cocacola, caption: 'Una Coca-Cola con mi nombre. Como en el Imperi, pero oficial.' },
   { level: 3, src: ruta, caption: 'El planning: 1.454 km. «A Coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
-  { level: 3, src: joy, caption: 'Joy. Con él todo tiene que ser más divertido.' },
-  { level: 3, src: stPerroPiscina, caption: 'Joy no vio la piscinita. Se ha pedido el road trip.', sticker: true },
+  { level: 3, src: joy, caption: 'Joy. El que manda en Madrid.' },
+  { level: 3, src: stPerroPiscina, caption: 'Joy, a la espera de su invitación.', sticker: true },
   { level: 4, src: vueloLpa, caption: '«¿VOY TARDE?» «Tú vas pronto.»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },
   { level: 5, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
   { level: 5, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
-  { level: 5, src: santJoan, caption: 'Camisetas a juego. Un año después.' },
+  { level: 5, src: santJoan, caption: '«Top la cami.» Deslumbras.' },
 ];
 
 export const memoriesFor = (level: number) => MEMORIES.filter((m) => m.level === level);

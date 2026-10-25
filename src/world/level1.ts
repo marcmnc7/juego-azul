@@ -38,7 +38,7 @@ export const FERRERIES_VARIANT: JaleoVariant = {
     collectLuck: 'Toca a los ases cuando se pongan de manos',
     collect: 'Pomadas en los bares y toques a los ases cuando se pongan de manos',
     back: '¡Lo tienes! Vuelve con Tòfol',
-    find: `Lleva una pomada a ${NAMES.partner}, junto a la iglesia`,
+    find: 'Lleva la pomada al que baila tan mal, junto a la iglesia',
     give: 'Darle la pomada',
   },
   bumped: '¡Buu! Cuidado con los ases 🫏',
