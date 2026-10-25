@@ -12,6 +12,7 @@ import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } fro
 import { CHATS } from '../data/chats';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
+import { Surf } from '../core/surfaces';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 5 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
@@ -280,6 +281,13 @@ export class LevelSantJoan implements Level {
     sc.add(ground);
 
     const m = new Merger();
+    // El Born, como en las fotos: adoquín rojizo, dos parterres de césped con su dibujo circular
+    // y verja baja en los lados largos, la gran araucaria y los ficus junto al Ajuntament y las
+    // farolas negras de fundición
+    const born = new THREE.Mesh(new THREE.PlaneGeometry(BORN.maxX - BORN.minX, BORN.maxZ - BORN.minZ).rotateX(-Math.PI / 2), toon({ color: 0xc09478, roughness: 0.95, surf: Surf.Cobble }));
+    born.position.y = 0.012;
+    born.userData.noCast = true;
+    sc.add(born);
     const SAND = 0xe6d2a8;
     const OCHRE = 0xd8b483;
     const WHITE = 0xf4f0e6;
@@ -289,7 +297,13 @@ export class LevelSantJoan implements Level {
     for (let i = 0; i < 3; i++) m.add(G.box, 0xc9b48c, 0, 0.15 + i * 0.3, 0, 0, 0, 0, 4.2 - i * 0.6, 0.3, 4.2 - i * 0.6);
     m.add(G.box, 0xd6c29a, 0, 2.05, 0, 0, 0, 0, 2.2, 2.2, 2.2);
     for (const [dx, dz, ry] of [[0, 1.11, 0], [0, -1.11, 0], [1.11, 0, Math.PI / 2], [-1.11, 0, Math.PI / 2]] as [number, number, number][])
-      m.add(G.box, 0x8e7d62, dx, 2.05, dz, 0, ry, 0, 1.4, 1.1, 0.04); // lápidas
+      for (const o of [-0.5, 0.5]) {
+        const ox = ry ? 0 : o, oz = ry ? o : 0;
+        m.add(G.box, 0xc4b08a, dx + ox, 2.1, dz + oz, 0, ry, 0, 0.7, 0.95, 0.04); // lápidas
+        m.add(G.box, 0xb5a07a, dx + ox, 2.1, dz + oz, 0, ry, 0, 0.6, 0.85, 0.05);
+      }
+    for (const [cx, cz] of [[0.75, 0.75], [-0.75, 0.75], [0.75, -0.75], [-0.75, -0.75]]) m.add(G.box, 0xcdb994, cx, 4.15, cz, 0, Math.PI / 4, 0, 0.5, 0.6, 0.5); // trofeos en relieve
+    m.add(G.cyl, 0x4f7a3a, 0, 0.03, 0, 0, 0, 0, 6.0, 0.04, 6.0); // césped dentro de la verja
     m.add(G.box, 0xcdb994, 0, 3.3, 0, 0, 0, 0, 2.5, 0.3, 2.5); // cornisa
     m.add(G.box, 0xd6c29a, 0, 3.9, 0, 0, 0, 0, 1.7, 0.9, 1.7);
     m.add(new THREE.CylinderGeometry(0.42, 0.78, 1, 4), 0xdcc8a2, 0, 11.4, 0, 0, Math.PI / 4, 0, 1, 14.2, 1);
@@ -316,6 +330,10 @@ export class LevelSantJoan implements Level {
     m.add(G.box, 0x4a3020, -3, 2.2, 13.3, 0, 0, 0, 3, 4.4, 0.1);
     m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, -3, 4.4, 13.3, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
     m.add(G.box, 0xb8955f, -3, 5.6, 13.25, 0, 0, 0, 3.8, 0.25, 0.3); // imposta
+    m.add(G.cyl, 0xf4efe2, -3, 13.6, 13.27, Math.PI / 2, 0, 0, 1.6, 0.06, 1.6); // reloj de la torre
+    m.add(G.cyl, 0x2a2a2a, -3, 13.6, 13.22, Math.PI / 2, 0, 0, 0.16, 0.05, 0.16);
+    m.add(G.box, 0x2a2a2a, -3, 13.85, 13.21, 0, 0, 0, 0.05, 0.55, 0.02);
+    m.add(G.box, 0x2a2a2a, -2.82, 13.6, 13.21, 0, 0, 0, 0.4, 0.05, 0.02);
     for (let x = -12.5; x <= 7; x += 2.4) {
       if (Math.abs(x + 3) < 2.5) continue;
       for (const y of [2.6, 6.4]) {
@@ -440,6 +458,23 @@ export class LevelSantJoan implements Level {
     fm.userData.noCast = true;
     sc.add(fm);
 
+    // Farolas fernandinas negras bajo cada luz, la araucaria y los ficus del Born
+    const posts = new Merger();
+    for (const [x, z] of [[-17.3, -8], [-17.3, 8], [17.3, -10], [17.3, 10], [-10, 12.8], [8, -12.8]]) {
+      posts.add(G.cyl, 0x1e1e1e, x, 0.3, z, 0, 0, 0, 0.4, 0.6, 0.4);
+      posts.add(G.cyl, 0x1e1e1e, x, 2.1, z, 0, 0, 0, 0.14, 3.6, 0.14);
+      posts.add(G.box, 0xf4e6c0, x, 4.2, z, 0, Math.PI / 4, 0, 0.42, 0.6, 0.42);
+      posts.add(G.cone, 0x1e1e1e, x, 4.65, z, 0, Math.PI / 4, 0, 0.7, 0.35, 0.7);
+    }
+    posts.add(G.cyl, 0x6b4a32, -16, 8, -11, 0, 0, 0, 0.4, 16, 0.4);
+    for (let k = 0; k < 11; k++) posts.add(G.cone, 0x2c5a30, -16, 5 + k * 1.2, -11, 0, k * 0.5, 0, 4.2 - k * 0.36, 0.45, 4.2 - k * 0.36);
+    for (const [x, z] of [[12, 11.5], [-15.5, 11.2], [15.5, -11.5]]) {
+      posts.add(G.cyl, 0x7a6a56, x, 1.8, z, 0, 0, 0, 0.5, 3.6, 0.5);
+      for (let k = 0; k < 6; k++) posts.add(G.bush, k % 2 ? 0x3d7a34 : 0x4a8a3c, x + Math.cos(k) * 1.8, 4.6 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 1.4, 0, k, 0, 2.6, 1.8, 2.2);
+      this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
+    }
+    this.colliders.push({ minX: -16.4, maxX: -15.6, minZ: -11.4, maxZ: -10.6 });
+    sc.add(posts.mesh());
     // Farolas: luces cálidas
     const lamp = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     for (const [x, z] of [[-17.3, -8], [-17.3, 8], [17.3, -10], [17.3, 10], [-10, 12.8], [8, -12.8], [40, 3.9], [55, -3.9], [72, 0], [88, 0]]) {

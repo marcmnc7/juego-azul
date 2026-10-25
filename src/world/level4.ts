@@ -300,7 +300,7 @@ export class Level4 implements Level {
     const m = new Merger();
     const GRASS = 0x3f7a3a;
     const NEIGH = 0x4a7a40;
-    const WALL = 0xf1e6cf;
+    const WALL = 0xeec26a; // amarillo, como la fachada a la calle
 
     // Suelo: césped alrededor del hueco de la piscina, y los jardines vecinos
     const grassTex = canvasTex((ctx, w, h) => {

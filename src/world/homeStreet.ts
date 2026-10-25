@@ -29,36 +29,6 @@ const YELLOW = 0xeec26a;
 const BAR_YELLOW = 0xf0c24f;
 const WHITE = 0xf7f4ec;
 
-function stoneTexture() {
-  return canvasTex(
-    (ctx, w, h) => {
-      ctx.fillStyle = '#d9d0bf';
-      ctx.fillRect(0, 0, w, h);
-      const tones = ['#b9a58a', '#a8937a', '#c4b49c', '#9c8a76', '#d1c0a4', '#8f7f6c', '#b7a07f'];
-      for (let i = 0; i < 90; i++) {
-        const x = Math.random() * w;
-        const y = Math.random() * h;
-        const r = 9 + Math.random() * 13;
-        ctx.fillStyle = tones[i % tones.length];
-        ctx.beginPath();
-        const k = 6 + Math.floor(Math.random() * 3);
-        for (let j = 0; j < k; j++) {
-          const a = (j / k) * Math.PI * 2;
-          const rr = r * (0.7 + Math.random() * 0.35);
-          ctx.lineTo(x + Math.cos(a) * rr * 1.25, y + Math.sin(a) * rr * 0.8);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(60,45,30,0.35)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-    },
-    256,
-    128,
-  );
-}
-
 function cobbleTexture() {
   const t = canvasTex((ctx, w, h) => {
     ctx.fillStyle = '#8f887c';
@@ -295,10 +265,9 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   } else colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
   colliders.push({ minX: CORRIDOR.wallX - 0.2, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
 
-  const stone = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.15), toon({ map: stoneTexture(), color: 0xffffff }));
-  stone.position.set(-0.8, 0.62, S.wallZ - 0.16);
-  stone.rotation.y = Math.PI;
-  sc.add(stone);
+  // Paño de piedra seca: textura sacada de la piedra real del Camí de sa Farola
+  m.add(G.box, 0xbfae92, -0.8, 0.62, S.wallZ - 0.1, 0, 0, 0, 2.0, 1.15, 0.14);
+  m.add(G.box, 0x9a9a96, -0.75, 0.55, S.wallZ - 0.18, 0, 0, 0, 0.5, 0.3, 0.03); // placa metálica
   // Placa con la dirección
   const plate = new THREE.Mesh(
     new THREE.PlaneGeometry(1.1, 0.42),
@@ -329,7 +298,9 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   // Palmeras y seto junto a la casa, vecinos blancos con teja
   palm(m, -7.6, -16.9, 8.5);
   palm(m, -8.4, -14.4, 7.6);
-  m.add(G.box, 0x2c5a2a, -11, 1.2, -17.8, 0, 0, 0, 7, 2.4, 0.9);
+  palm(m, -9.6, -12.6, 10.5);
+  m.add(G.box, 0x2c5a2a, -11, 1.25, -17.8, 0, 0, 0, 7, 2.5, 0.9);
+  for (let i = 0; i < 9; i++) m.add(G.bush, i % 2 ? 0x2c5a2a : 0x35682f, -14 + i * 0.8, 2.5, -17.8, 0, i, 0, 0.9, 0.5, 0.9); // copa irregular del seto
   for (const sx of [-1, 1]) {
     const x = sx < 0 ? -11.5 : 9;
     m.add(G.box, WHITE, x, 3, -13.5, 0, 0, 0, 9, 6, 3);

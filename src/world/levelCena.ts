@@ -684,15 +684,17 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   }
   m.add(G.box, 0x2c5a40, 3.2, 2.7, 6.4, 0, 0, 0, 3.3, 0.08, 0.08);
   m.add(G.box, 0x2c5a40, 4.8, 2.7, 3.2, 0, 0, 0, 0.08, 0.08, 13);
-  for (let i = 0; i < 90; i++) {
-    const t = i / 90;
-    // De la fachada (izquierda) a la pérgola de la derecha, colgando por delante del porche
-    const x = -3.6 + t * 8.8 + Math.sin(i * 2.3) * 0.5;
-    const z = 0.9 + Math.abs(Math.sin(i * 1.7)) * (x > 1.4 ? 8.6 : 2.2);
-    const y = 2.6 + Math.sin(i * 3.1) * 0.35 + (x < 1.4 ? 0.3 : 0);
-    const c = i % 4 === 0 ? 0x3a6a32 : i % 3 ? 0xd2245a : 0xe33a6e;
-    m.add(G.bush, c, x, y, z, 0, i, 0, 0.6 + (i % 3) * 0.18, 0.45, 0.55 + (i % 2) * 0.2);
+  for (let i = 0; i < 80; i++) {
+    // Sobre el porche (pegada a la fachada) y por encima de la pérgola de la derecha, siempre alta
+    // para no tapar la cámara al cocinar ni al cenar
+    const onPergola = i % 3 !== 0;
+    const x = onPergola ? 1.6 + ((i * 0.37) % 1) * 3.4 : -0.6 + ((i * 0.53) % 1) * 2.2;
+    const z = onPergola ? 0.9 + ((i * 0.61) % 1) * 5.6 : 0.5 + ((i * 0.29) % 1) * 0.6;
+    const y = onPergola ? 2.95 + Math.sin(i * 3.1) * 0.15 : 2.2 + ((i * 0.71) % 1) * 1.0;
+    const c = i % 5 === 0 ? 0x3a6a32 : i % 2 ? 0xd2245a : 0xe33a6e;
+    m.add(G.bush, c, x, y, z, 0, i, 0, 0.6 + (i % 3) * 0.15, 0.4, 0.55 + (i % 2) * 0.2);
   }
+  for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0xd2245a : 0xe33a6e, 4.85, 1.0 + (i % 7) * 0.32, 1.2 + Math.floor(i / 7) * 4.2 + (i % 3) * 0.5, 0, i, 0, 0.35, 0.5, 0.6); // trepando por la pérgola
   for (let i = 0; i < 8; i++) m.add(G.bush, i % 2 ? 0xd2245a : 0xe33a6e, -0.8 + (i % 4) * 0.35, 1.7 - Math.floor(i / 4) * 0.6, 0.9 + (i % 3) * 0.1, 0, i, 0, 0.5, 0.6, 0.4); // cayendo sobre el porche
   // Limonero y ficus a la izquierda del patio, contenedor verde, moto blanca y una maceta de barro
   const tree = (x: number, z: number, h: number, c: number, fruit?: number) => {
@@ -702,7 +704,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
   };
   tree(-4.3, 5.6, 3.6, 0x4f8a3a, 0xe8d24a);
-  tree(-4.4, 8.6, 2.6, 0x3f7a34);
+  m.add(G.bush, 0x3f7a34, -4.5, 0.6, 8.4, 0, 0, 0, 1.1, 1.1, 1.0); // arbusto junto al muro
   m.add(G.rbox, 0x2f6b3a, -3.2, 0.55, 8.9, 0, 0.1, 0, 0.6, 1.1, 0.7); // contenedor
   m.add(G.cyl, 0x222222, -3.45, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
   m.add(G.cyl, 0x222222, -2.95, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
