@@ -23,19 +23,19 @@ export function clearScreens() {
 
 export function titleScreen(onStart: () => void) {
   clearScreens();
-  const s = el('div', 'screen');
+  const s = el('div', 'screen title-screen');
   s.append(
-    el('div', 'hearts', '💙 💙 💙'),
-    el('h1', '', 'Feliz cumpleaños,<br>Azul'),
+    el('div', 'eyebrow', 'De Gas, para ti'),
+    el('h1', 'display', 'Feliz cumpleaños,<br><em>Azul</em>'),
     sticker(STICKERS.oso, 'title-sticker'),
-    el('p', '', 'Un pequeño juego sobre nuestra historia, de Gas para ti. Cada capítulo que completes desbloquea un regalo de verdad.'),
+    el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),
   );
-  const b = el('button', 'big-btn', 'Empezar');
+  const b = el('button', 'big-btn', 'Empezar ▸');
   b.onclick = () => {
     audio.unlock();
     onStart();
   };
-  s.append(b, el('p', '', '<small>Mejor con el móvil en horizontal y el sonido activado 🔊</small>'));
+  s.append(b, el('p', 'fine', 'Mejor con el móvil en horizontal y el sonido activado 🔊'));
   root.append(s);
 }
 
@@ -48,22 +48,23 @@ export interface MapOptions {
 export function mapScreen(save: SaveData, opts: MapOptions) {
   clearScreens();
   const back = () => mapScreen(save, opts);
-  const s = el('div', 'screen');
+  const s = el('div', 'screen map-screen');
   if (opts.test) s.append(el('div', 'test-banner', '🛠 Modo prueba: todo desbloqueado'));
-  s.append(el('h1', '', 'Nuestra historia'));
+  s.append(el('div', 'eyebrow', `${save.levelsDone.length} de ${LEVELS.length} capítulos`), el('h1', 'display', 'Nuestra historia'));
   const list = el('div', 'levels');
   const done = new Set(save.levelsDone);
   LEVELS.forEach((lv, i) => {
     const unlocked = opts.test || i === 0 || done.has(LEVELS[i - 1].id);
     const card = el('button', 'level-card' + (unlocked ? '' : ' locked'));
-    const state = done.has(lv.id) ? '✓ Completado · jugar otra vez' : unlocked ? '▶ Jugar' : '🔒 Completa el anterior';
-    card.append(el('div', 'emoji', lv.emoji), el('div', 'name', `${lv.id}. ${lv.name}`), el('div', 'place', lv.place), el('div', 'state', state));
+    const state = done.has(lv.id) ? '✓ Completado' : unlocked ? '▶ Jugar' : '🔒 Bloqueado';
+    if (done.has(lv.id)) card.classList.add('done');
+    card.append(el('div', 'num', String(lv.id).padStart(2, '0')), el('div', 'emoji', lv.emoji), el('div', 'name', lv.name), el('div', 'place', lv.place), el('div', 'state', state));
     if (unlocked) card.onclick = () => opts.onPlay(lv.id);
     list.append(card);
   });
   const allDone = opts.test || LEVELS.every((l) => done.has(l.id));
   const fin = el('button', 'level-card final' + (allDone ? '' : ' locked'));
-  fin.append(el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines todos los capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒'));
+  fin.append(el('div', 'num', '♥'), el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines todos los capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒 Bloqueado'));
   if (allDone) fin.onclick = () => epilogue(() => crossword(() => finalLetter(back), back));
   list.append(fin);
   s.append(list);
@@ -72,7 +73,9 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length;
   const a = el('button', 'link-btn', `📷 Nuestro álbum (${seen}/${MEMORIES.length})`);
   a.onclick = () => album(save, opts.test, back);
-  s.append(g, a);
+  const links = el('div', 'link-row');
+  links.append(g, a);
+  s.append(links);
   if (opts.test) {
     const r = el('button', 'link-btn', 'Borrar el progreso guardado');
     r.onclick = opts.onReset;
