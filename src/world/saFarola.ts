@@ -4,12 +4,14 @@ import { toon, glowTexture, makeSea } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 
-// Alrededores de la casa de los padres de Azul, en Ciutadella, hasta la punta de Sa Farola:
-// - Una calle de chalets blancos con persianas verdes, muros encalados, buganvillas, palmeras y tamarindos.
-// - El paseo marítimo: pavimento claro, muro bajo encalado, farolas, bancos y la plataforma de marès
-//   rocoso que baja al mar.
-// - El faro de Ciutadella (Punta de Sa Farola): torre cilíndrica de 13 m con franjas verticales blancas y
-//   negras, pegada a la casa del farero, dos galerías y linterna; un muro de hormigón la protege del mar.
+// Alrededores de la casa de los padres de Azul, en Ciutadella, hasta la punta de Sa Farola, como en
+// las fotos de Street View:
+// - La calle de la casa baja al Camí de sa Farola, que va pegado al mar: asfalto gastado, arcén de
+//   tierra con matorral y un pretil bajo de marès; al otro lado, muros de piedra seca con pilares
+//   blancos, adelfas, palmeras datileras, pinos, coches aparcados y postes de madera con el cable.
+// - La placita del faro: adoquín, bancos, un árbol grande, el panel y la casita blanca de teja blanca.
+// - El faro de Ciutadella: torre con franjas verticales blancas y negras pegada a la casa del farero,
+//   dos galerías y linterna; un muro de hormigón la protege del mar.
 // - Al otro lado de la bocana, el Castell de Sant Nicolau (torre octogonal) y algún llaüt navegando.
 
 export const COAST_Z = -46;
@@ -20,59 +22,6 @@ export const FAROLA_WALK = new THREE.Vector3(-26, 0, -42);
 const WHITE = 0xf6f1e6;
 const SHUTTER = 0x2f7a4a;
 
-function noiseTex(base: string, tones: string[], n: number, size: [number, number], w = 256, h = 256) {
-  return canvasTex(
-    (ctx) => {
-      ctx.fillStyle = base;
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < n; i++) {
-        ctx.fillStyle = tones[i % tones.length];
-        ctx.globalAlpha = 0.25 + Math.random() * 0.5;
-        const r = size[0] + Math.random() * (size[1] - size[0]);
-        ctx.beginPath();
-        ctx.ellipse(Math.random() * w, Math.random() * h, r, r * (0.5 + Math.random() * 0.6), Math.random() * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    },
-    w,
-    h,
-  );
-}
-
-/** Marès: piedra arenisca dorada y porosa de Menorca. */
-function maresTexture() {
-  const t = noiseTex('#cfae74', ['#b8925c', '#e0c48e', '#a8834f', '#d9b97f', '#8f6d40'], 900, [1, 5]);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-/** Losas claras del paseo marítimo. */
-function pavingTexture() {
-  const t = canvasTex((ctx, w, h) => {
-    ctx.fillStyle = '#d8cfbd';
-    ctx.fillRect(0, 0, w, h);
-    for (let y = 0; y < 4; y++)
-      for (let x = 0; x < 4; x++) {
-        const v = 200 + Math.floor(Math.random() * 25);
-        ctx.fillStyle = `rgb(${v},${v - 8},${v - 22})`;
-        ctx.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
-      }
-    for (let i = 0; i < 500; i++) {
-      ctx.fillStyle = `rgba(90,80,60,${Math.random() * 0.15})`;
-      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
-    }
-  });
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-function asphaltTexture() {
-  const t = noiseTex('#4a4a50', ['#3a3a40', '#5a5a60', '#44444a', '#6a6a6e'], 1400, [0.5, 1.6]);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
 /** Franjas verticales blancas y negras de la torre. */
 function stripeTexture() {
   return canvasTex((ctx, w, h) => {
@@ -81,16 +30,6 @@ function stripeTexture() {
     ctx.fillStyle = '#1c1c20';
     for (let i = 0; i < 8; i++) ctx.fillRect((i * w) / 8, 0, w / 16, h);
   }, 256, 64);
-}
-
-function plane(tex: THREE.Texture, w: number, d: number, x: number, y: number, z: number, rep: [number, number]) {
-  const t = tex.clone();
-  t.needsUpdate = true;
-  t.repeat.set(...rep);
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), toon({ map: t, color: 0xffffff, roughness: 0.95 }));
-  p.position.set(x, y, z);
-  p.userData.noCast = true;
-  return p;
 }
 
 /** Chalet menorquín: blanco, persianas verdes, tejado de teja o azotea con pretil, muro y buganvilla. */
@@ -126,13 +65,6 @@ function villa(m: Merger, x: number, z: number, faceX: 1 | -1, colliders: Box2[]
   }
 }
 
-/** Tamarindo (tamariu) del paseo: tronco retorcido y copa gris verdosa. */
-function tamarisk(m: Merger, x: number, z: number, s = 1) {
-  m.add(G.cyl, 0x5a4a38, x, 1.2 * s, z, 0.15, 0, 0.1, 0.3 * s, 2.4 * s, 0.3 * s);
-  m.add(G.bush, 0x7f9474, x + 0.3, 3.0 * s, z, 0, 0, 0, 3.2 * s, 2.0 * s, 2.8 * s);
-  m.add(G.bush, 0x8aa07e, x - 0.6, 2.7 * s, z + 0.5, 0, 0, 0, 2.2 * s, 1.5 * s, 2.0 * s);
-}
-
 export interface SaFarola {
   lamp: THREE.Vector3;
   sea: THREE.Mesh;
@@ -142,46 +74,82 @@ export interface SaFarola {
 /** Construye la calle, el paseo y el faro. day: colores de día (el eclipse) o de noche (la cena). */
 export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean): SaFarola {
   const m = new Merger();
-  // Suelos con textura: calle del paseo, paseo marítimo y plataforma de marès
-  const asphalt = asphaltTexture();
-  const paving = pavingTexture();
-  const mares = maresTexture();
-  sc.add(plane(asphalt, 6, 54, -20, 0.01, -14, [3, 27])); // calle que baja al mar
-  sc.add(plane(paving, 120, 5, -10, 0.02, COAST_Z + 3.5, [60, 2.5])); // paseo
-  sc.add(plane(paving, 1.6, 54, -16.2, 0.04, -14, [1, 27])); // acera
-  sc.add(plane(paving, 1.6, 54, -23.8, 0.04, -14, [1, 27]));
-  const rocks = plane(mares, 120, 16, -10, -0.1, COAST_Z - 7, [24, 4]);
-  sc.add(rocks);
-  // Bordillos
-  for (const x of [-17, -23]) m.add(G.box, 0xd8d2c4, x, 0.06, -14, 0, 0, 0, 0.16, 0.14, 54);
-  m.add(G.box, 0xd8d2c4, -10, 0.06, COAST_Z + 6.1, 0, 0, 0, 120, 0.14, 0.16);
-
-  // Chalets a los dos lados de la calle que baja al paseo
+  // Como en Street View: la calle de la casa baja hasta el Camí de sa Farola, que va pegado al mar
+  // (asfalto gastado, arcén de tierra y un pretil bajo de marès sobre las rocas) con casas detrás de
+  // muros de piedra seca con pilares blancos, adelfas, palmeras datileras, pinos y postes de madera.
+  // Al final, la placita del faro: adoquín, bancos, un árbol grande, el panel, la casita blanca de
+  // tejado de teja blanca y el faro.
+  const ROAD_Z = COAST_Z + 5.5;
+  m.add(G.box, 0x4a4a50, -20, -0.03, -14, 0, 0, 0, 6, 0.1, 54); // calle que baja al mar
+  m.add(G.box, 0x4a4a50, 13, -0.02, ROAD_Z, 0, 0, 0, 74, 0.1, 6); // Camí de sa Farola
+  for (let x = -22; x < 50; x += 3) m.add(G.box, 0xe8e4da, x, 0.035, ROAD_Z, 0, 0, 0, 1.6, 0.01, 0.12); // línea discontinua
+  m.add(G.box, 0xc9b48a, 13, -0.01, COAST_Z + 1.85, 0, 0, 0, 74, 0.1, 1.3); // arcén de tierra
+  // Pretil bajo de marès sobre las rocas
+  m.add(G.box, 0xc9b48f, 13, 0.25, COAST_Z + 1.0, 0, 0, 0, 74, 0.5, 0.45);
+  m.add(G.box, 0xb8a37e, 13, 0.52, COAST_Z + 1.0, 0, 0, 0, 74, 0.06, 0.5);
+  colliders.push({ minX: -21.5, maxX: 50, minZ: COAST_Z + 0.7, maxZ: COAST_Z + 1.3 });
+  // Matorral seco en el arcén y alguna señal
+  for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0x7d8a52 : 0x8f9a5e, -12 + i * 5.1 + Math.sin(i) * 1.2, 0.35, COAST_Z + 1.9, 0, i, 0, 1.2, 0.7, 0.8);
+  for (const x of [-14, 22]) {
+    m.add(G.cyl, 0x9a9ea2, x, 1.2, COAST_Z + 2.2, 0, 0, 0, 0.07, 2.4, 0.07);
+    m.add(G.cone, 0xf4f4f2, x, 2.5, COAST_Z + 2.2, 0, 0, 0, 0.9, 0.8, 0.1);
+  }
+  // Lado de tierra: muros de piedra seca con pilares blancos y cancelas, adelfas, palmeras y pinos
+  const LAND_Z = ROAD_Z + 3.4;
+  for (let x = -16.5; x < 50; x += 9) {
+    m.add(G.box, 0xbfae92, x + 4.5, 0.6, LAND_Z, 0, 0, 0, 7.6, 1.2, 0.6);
+    m.add(G.box, WHITE, x, 0.75, LAND_Z, 0, 0, 0, 0.6, 1.5, 0.7);
+    m.add(G.box, WHITE, x + 9 - 0.6, 0.75, LAND_Z, 0, 0, 0, 0.6, 1.5, 0.7);
+    m.add(G.box, 0x8a6a44, x + 9 - 0.3 - 0.6, 0.6, LAND_Z, 0, 0, 0, 0.1, 1.1, 0.06); // cancela
+    for (let k = 0; k < 5; k++) m.add(G.bush, k % 2 ? 0xe0457b : 0x3d6e34, x + 1.5 + k * 1.3, 1.6 + (k % 2) * 0.3, LAND_Z + 0.8, 0, k, 0, 1.4, 1.3, 1.0); // adelfas
+  }
+  colliders.push({ minX: -17, maxX: 50, minZ: LAND_Z - 0.35, maxZ: LAND_Z + 4 });
+  const palm = (x: number, z: number, h: number) => {
+    // Palmera datilera: tronco grueso escamado y copa densa de hojas arqueadas
+    for (let k = 0; k < 5; k++) m.add(G.cyl, k % 2 ? 0x7a6448 : 0x6b5a40, x, (k + 0.5) * (h / 5), z, 0, 0, 0, 0.75 - k * 0.04, h / 5, 0.75 - k * 0.04);
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2;
+      const up = k % 2 ? 0.25 : -0.35;
+      m.add(G.box, k % 3 ? 0x4f7a3a : 0x5f8a44, x + Math.cos(a) * 1.7, h + 0.2 + up, z + Math.sin(a) * 1.7, 0, -a, up - 0.15, 3.6, 0.06, 0.7);
+    }
+  };
+  for (const [x, z, h] of [[-12, LAND_Z + 3, 6], [8, LAND_Z + 2.5, 7], [27, LAND_Z + 3.5, 5.5], [41, LAND_Z + 2.8, 6.5]] as [number, number, number][]) palm(x, z, h);
+  for (const [x, z] of [[-4, LAND_Z + 7], [17, LAND_Z + 6], [35, LAND_Z + 7]] as [number, number][]) {
+    m.add(G.cyl, 0x6b4a32, x, 4, z, 0.1, 0, 0.06, 0.45, 8, 0.45);
+    for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x2f5a2c : 0x3a6a34, x + Math.cos(k) * 2.4, 8.4 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 2.4, 0, k, 0, 3.6, 1.7, 3.2);
+  }
+  // Chalets blancos detrás de los muros (y los de la calle que baja)
   let seed = 1;
   for (const z of [-6, -19, -31]) villa(m, -31, z, 1, colliders, seed++);
   for (const z of [-19, -31]) villa(m, -8.5, z, -1, colliders, seed++);
-  // Coches aparcados (cajas redondeadas sencillas)
-  for (const [z, c] of [[-10, 0xb8c4d0], [-26, 0x8a2a2a], [-36, 0xf0f0f0]] as [number, number][]) {
-    m.add(G.rbox, c, -17.9, 0.7, z, 0, 0, 0, 1.7, 0.9, 3.9);
-    m.add(G.rbox, 0x9fb8c8, -17.9, 1.35, z - 0.2, 0, 0, 0, 1.5, 0.5, 2.1);
-    colliders.push({ minX: -18.8, maxX: -17, minZ: z - 2, maxZ: z + 2 });
+  for (let x = 2; x < 50; x += 12) {
+    const h = seed % 2 ? 5.6 : 3.2;
+    m.add(G.box, WHITE, x, h / 2, LAND_Z + 9, 0, 0, 0, 8, h, 7);
+    if (seed % 3) m.add(ROOF_GEO, 0xb8623e, x, h, LAND_Z + 9, 0, 0, 0, 8.4, 1.4, 7.4);
+    else m.add(G.box, WHITE, x, h + 0.25, LAND_Z + 9, 0, 0, 0, 8.2, 0.5, 7.2);
+    for (const wx of [-2, 2]) {
+      m.add(G.box, 0x30384a, x + wx, 1.4, LAND_Z + 5.48, 0, 0, 0, 0.9, 1.1, 0.05);
+      for (const sx of [-1, 1]) m.add(G.box, SHUTTER, x + wx + sx * 0.7, 1.4, LAND_Z + 5.45, 0, 0, 0, 0.48, 1.2, 0.05);
+    }
+    seed++;
   }
-
-  // Paseo: muro bajo encalado con remate, bancos, farolas y tamarindos
-  m.add(G.box, WHITE, -10, 0.45, COAST_Z + 0.9, 0, 0, 0, 120, 0.9, 0.45);
-  m.add(G.box, 0xe8e0cc, -10, 0.93, COAST_Z + 0.9, 0, 0, 0, 120, 0.08, 0.6);
-  colliders.push({ minX: -70, maxX: -30.5, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2 }, { minX: -21.5, maxX: 50, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2 });
+  // Coches aparcados en el lado de las casas
+  for (const [x, c] of [[-2, 0x2a2e3a], [11, 0xf0f0f0], [33, 0x8a2a2a]] as [number, number][]) {
+    m.add(G.rbox, c, x, 0.7, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.7, 0.9, 3.9);
+    m.add(G.rbox, 0x9fb8c8, x - 0.2, 1.35, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.5, 0.5, 2.1);
+    for (const dx of [-1.3, 1.3]) for (const dz of [-0.85, 0.85]) m.add(G.cyl, 0x1e1e22, x + dx, 0.32, LAND_Z - 1.2 + dz, Math.PI / 2, 0, 0, 0.64, 0.2, 0.64);
+    colliders.push({ minX: x - 2, maxX: x + 2, minZ: LAND_Z - 2.1, maxZ: LAND_Z - 0.3 });
+  }
+  // Postes de madera con el cable a lo largo del camino, y un par de farolas
   const lampPos: number[] = [];
-  for (let x = -60; x <= 46; x += 12) {
-    m.add(G.cyl, 0x2b2f36, x, 1.9, COAST_Z + 1.6, 0, 0, 0, 0.12, 3.8, 0.12);
-    m.add(G.sphere, 0xf4f0e0, x, 3.95, COAST_Z + 1.6, 0, 0, 0, 0.42, 0.42, 0.42);
-    lampPos.push(x, 3.95, COAST_Z + 1.6);
-    m.add(G.box, 0x7a5a3a, x + 6, 0.45, COAST_Z + 1.7, 0, 0, 0, 1.8, 0.08, 0.5); // banco
-    m.add(G.box, 0x7a5a3a, x + 6, 0.75, COAST_Z + 1.45, 0, 0, 0, 1.8, 0.4, 0.06);
-    m.add(G.box, 0x2b2f36, x + 6, 0.22, COAST_Z + 1.7, 0, 0, 0, 1.6, 0.44, 0.4);
-    colliders.push({ minX: x + 5, maxX: x + 7, minZ: COAST_Z + 1.3, maxZ: COAST_Z + 2 });
-    if (Math.abs(x + 20) > 6) tamarisk(m, x + 2.5, COAST_Z + 5.2, 0.9 + ((x / 12) % 2) * 0.15);
+  for (let x = -10; x <= 46; x += 14) {
+    m.add(G.cyl, 0x8a7a60, x, 4.2, LAND_Z - 0.7, 0, 0, 0, 0.22, 8.4, 0.22);
+    m.add(G.box, 0x6a5a48, x, 8.1, LAND_Z - 0.7, 0, 0, 0, 0.1, 0.1, 0.9);
+    m.add(G.box, 0x2b2f36, x + 0.6, 6.0, LAND_Z - 1.2, 0, 0, -0.3, 0.06, 1.0, 0.06);
+    m.add(G.sphere, 0xf4f0e0, x + 0.8, 5.5, LAND_Z - 1.4, 0, 0, 0, 0.3, 0.2, 0.3);
+    lampPos.push(x + 0.8, 5.4, LAND_Z - 1.4);
   }
+  m.add(G.box, 0x1e1e22, 18, 8.0, LAND_Z - 0.7, 0, 0, 0, 56, 0.03, 0.03);
   if (!day) {
     const lamps = new THREE.Points(
       new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lampPos, 3)),
@@ -190,11 +158,41 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
     sc.add(lamps);
   }
 
+  // La placita del faro: adoquín gris, acera de hormigón impreso rojizo, bancos de madera y hierro,
+  // el árbol grande con su alcorque, el panel informativo, la papelera y el muro blanco con seto
+  m.add(G.box, 0xa9a39a, -29, -0.01, COAST_Z + 5, 0, 0, 0, 16, 0.1, 9);
+  m.add(G.box, 0xc4977e, -29, 0.04, COAST_Z + 9.8, 0, 0, 0, 16, 0.1, 1.6);
+  m.add(G.box, 0xe0d6c4, -29, 0.12, COAST_Z + 9.0, 0, 0, 0, 16, 0.16, 0.2); // bordillo
+  for (const [x, z, ry] of [[-34, COAST_Z + 2.4, 0], [-30.5, COAST_Z + 2.0, 0.1], [-24.5, COAST_Z + 2.3, -0.1]] as [number, number, number][]) {
+    m.add(G.box, 0x8a6a44, x, 0.45, z, 0, ry, 0, 1.8, 0.07, 0.45);
+    m.add(G.box, 0x8a6a44, x, 0.72, z - 0.22, 0.2, ry, 0, 1.8, 0.35, 0.05);
+    for (const sx of [-0.8, 0.8]) m.add(G.box, 0x2b2f36, x + sx, 0.25, z, 0, ry, 0, 0.06, 0.5, 0.45);
+    colliders.push({ minX: x - 1, maxX: x + 1, minZ: z - 0.4, maxZ: z + 0.4 });
+  }
+  m.add(G.box, 0xd8cfbd, -27.5, 0.08, COAST_Z + 4.6, 0, 0, 0, 3.2, 0.16, 3.2); // alcorque
+  m.add(G.box, 0x4f7a3a, -27.5, 0.17, COAST_Z + 4.6, 0, 0, 0, 2.9, 0.02, 2.9);
+  m.add(G.cyl, 0x7a6a56, -27.5, 1.4, COAST_Z + 4.6, 0.12, 0, 0.1, 0.5, 2.8, 0.5);
+  for (let k = 0; k < 9; k++) m.add(G.bush, k % 3 ? 0x4f8a3a : 0x5f9a44, -27.5 + Math.cos(k * 0.7) * 2.6, 3.6 + Math.sin(k * 1.9) * 0.6, COAST_Z + 4.6 + Math.sin(k * 0.7) * 2.6, 0, k, 0, 2.6, 1.6, 2.4);
+  colliders.push({ minX: -28.2, maxX: -26.8, minZ: COAST_Z + 3.9, maxZ: COAST_Z + 5.3 });
+  m.add(G.box, 0x6b5a46, -32.5, 0.6, COAST_Z + 1.6, 0, 0, 0, 0.08, 1.2, 0.08); // panel
+  m.add(G.box, 0xd8cfb4, -32.5, 1.2, COAST_Z + 1.6, -0.5, 0, 0, 1.0, 0.04, 0.7);
+  m.add(G.cyl, 0x2b2f36, -26.4, 0.45, COAST_Z + 1.7, 0, 0, 0, 0.45, 0.9, 0.45); // papelera
+  // Muro bajo de piedra seca hacia el agua, en la plaza
+  m.add(G.box, 0xbfae92, -29, 0.35, COAST_Z + 0.9, 0, 0, 0, 16, 0.7, 0.5);
+  colliders.push({ minX: -37, maxX: -30.5, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2 });
+  // Casita blanca con tejado de teja pintada de blanco, seto delante y muro encalado
+  m.add(G.box, WHITE, -24, 1.7, COAST_Z + 14, 0, 0, 0, 9, 3.4, 5);
+  m.add(ROOF_GEO, 0xeeebe4, -24, 3.4, COAST_Z + 14, 0, 0, 0, 9.4, 1.5, 5.4);
+  for (const x of [-26.5, -21.5]) m.add(G.box, 0x2a3138, x, 1.6, COAST_Z + 11.47, 0, 0, 0, 1.0, 1.0, 0.05);
+  m.add(G.box, WHITE, -24, 0.5, COAST_Z + 10.6, 0, 0, 0, 10, 1.0, 0.3);
+  for (let k = 0; k < 9; k++) m.add(G.bush, 0x3d6e34, -28 + k * 1.0, 1.25, COAST_Z + 10.9, 0, k, 0, 1.2, 0.8, 0.7);
+  colliders.push({ minX: -29, maxX: -19, minZ: COAST_Z + 10.4, maxZ: COAST_Z + 16.5 });
+
   // Plataforma de rocas de marès que baja al agua, con charcos
   for (let i = 0; i < 26; i++) {
     const x = -66 + i * 4.6 + Math.sin(i * 7) * 1.5;
     const z = COAST_Z - 4 - Math.abs(Math.sin(i * 3.1)) * 6;
-    m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xc9a36a : 0xb48a54, x, -0.6, z, Math.sin(i), i, 0, 4 + (i % 4), 1.4 + (i % 3) * 0.4, 3 + (i % 3));
+    m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, x, -0.9, z, Math.sin(i) * 0.3, i, 0, 4 + (i % 4), 1.2 + (i % 3) * 0.3, 3 + (i % 3));
   }
   for (let i = 0; i < 6; i++) m.add(G.cyl, 0x3a7a9a, -50 + i * 15, -0.05, COAST_Z - 5 - (i % 2) * 2, 0, 0, 0, 1.2 + (i % 2), 0.02, 0.9);
 

@@ -123,7 +123,7 @@ export class LevelEclipse implements Level {
     sc.fog = new THREE.Fog(fog, 110, 420);
     this.sky = new Sky(sky);
     sc.add(this.sky.group);
-    this.hemi = new THREE.HemisphereLight(0xd8e6ff, 0x6a5a48, 1.15);
+    this.hemi = new THREE.HemisphereLight(0xd8e6ff, 0x6a5a48, 0.75);
     sc.add(this.hemi);
     this.sun = new Sun(sc, sunCol, sunI, dir, 26);
     this.fx = new Particles(sc);
@@ -197,7 +197,7 @@ export class LevelEclipse implements Level {
   }
 
   private buildAzul() {
-    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 2.2, new THREE.Vector3(0.4, 1, 0.6));
+    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(0.4, 1, 0.6));
     const place = buildAzulHouse(sc, this.colliders, true);
     place.beam.visible = false;
     place.steam.forEach((s) => (s.visible = false));
@@ -236,7 +236,7 @@ export class LevelEclipse implements Level {
   }
 
   private buildMarc() {
-    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 2.2, new THREE.Vector3(-0.4, 1, -0.5));
+    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(-0.4, 1, -0.5));
     const street = buildStreet(sc, { gateOpen: true });
     street.lamps.visible = false;
     this.colliders.push(...street.colliders, { minX: -4.6, maxX: 4.6, minZ: -15.05, maxZ: -12 }, { minX: -40, maxX: 40, minZ: -28.2, maxZ: -27.8 });
@@ -264,7 +264,7 @@ export class LevelEclipse implements Level {
   /** Cocina de casa de los padres de Gas: baldosa de barro, paredes encaladas, vigas, encimera, mesa y ventana. */
   private buildKitchen() {
     const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.6, new THREE.Vector3(-0.5, 1, 0.6));
-    this.hemi.intensity = 1.5;
+    this.hemi.intensity = 1.0;
     const W = 4.6, D = 3.4, H = 2.8;
     const tiles = canvasTex((ctx, w, h) => {
       ctx.fillStyle = '#9c5a3a';
@@ -902,7 +902,7 @@ export class LevelEclipse implements Level {
       new THREE.Color(0xf0985a).lerp(new THREE.Color(0x2a2a4a), dark).getHex(),
       new THREE.Color(0xffcf8a).lerp(new THREE.Color(0xc06a40), dark).getHex(),
     );
-    this.hemi.intensity = 1.15 - dark * 0.8;
+    this.hemi.intensity = 0.75 - dark * 0.5;
     this.sun.light.intensity = 1.8 * (1 - dark * 0.9);
     if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = dark;
     (this.corona.material as THREE.SpriteMaterial).opacity = Math.max(0, (k - 0.85) / 0.15) * 0.9;

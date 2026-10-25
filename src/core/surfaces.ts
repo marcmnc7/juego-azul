@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import photoUrl from '../assets/surf-photo.jpg';
 
 // Texturas de superficie para todo el decorado, sin descargar imágenes: cada material del mundo
 // (encalado, teja árabe, marès, piedra seca, asfalto, madera, losas, adoquín, arena…) se dibuja en
@@ -28,7 +29,7 @@ const LAYERS = 16;
 const N = 256;
 
 /** Metros que ocupa cada repetición de la textura, y cuánto se nota sobre el color. */
-export const SURF_SCALE = [1, 2.6, 2.2, 2.4, 3, 3.5, 2, 1.6, 2.5, 0.9, 2.4, 1.2, 4, 1.6, 2.6, 1.2];
+export const SURF_SCALE = [1, 2.6, 2.2, 2.4, 3, 5, 2, 1.6, 2.5, 0.9, 2.4, 1.2, 4, 1.6, 2.6, 1.2];
 export const SURF_STRENGTH = [0, 0.75, 0.85, 0.9, 0.9, 0.8, 0.8, 0.85, 0.8, 0.75, 0.75, 0.8, 0.6, 0.9, 0.95, 0.9];
 
 type Ctx = CanvasRenderingContext2D;
@@ -399,6 +400,7 @@ export function surfaceTexture() {
     surfMeans[l] = Math.max(0.05, sum / (N * N) / 255);
     data.set(px, l * N * N * 4);
   }
+  if (photo) applyPhoto(data);
   tex = new THREE.DataArrayTexture(data, N, N, LAYERS);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -407,6 +409,54 @@ export function surfaceTexture() {
   tex.anisotropy = 4;
   tex.needsUpdate = true;
   return tex;
+}
+
+// ---------- Texturas fotográficas ----------
+// Detalle sacado de fotos reales (arena, tierra, césped, madera, adoquín, baldosa de barro y la piedra
+// seca del Camí de sa Farola): una tira en escala de grises con una capa por superficie. Las capas
+// negras de la tira se quedan con el dibujo procedural (teja, persiana, corteza).
+let photo: Uint8ClampedArray | null = null;
+let photoLoading: Promise<void> | null = null;
+
+function applyPhoto(data: Uint8Array) {
+  if (!photo) return;
+  for (let l = 0; l < LAYERS; l++) {
+    const src = photo.subarray(l * N * N * 4, (l + 1) * N * N * 4);
+    let sum = 0;
+    for (let i = 0; i < src.length; i += 4) sum += src[i];
+    const mean = sum / (N * N) / 255;
+    if (mean < 0.05) continue;
+    data.set(src, l * N * N * 4);
+    surfMeans[l] = mean;
+  }
+}
+
+/** Carga la tira de fotos una vez (al arrancar el juego) y, si la textura ya existe, la actualiza. */
+export function loadSurfacePhotos() {
+  if (photoLoading) return photoLoading;
+  photoLoading = new Promise<void>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = N;
+        c.height = N * LAYERS;
+        const ctx = c.getContext('2d', { willReadFrequently: true })!;
+        ctx.drawImage(img, 0, 0, N, N * LAYERS);
+        photo = ctx.getImageData(0, 0, N, N * LAYERS).data;
+        if (tex) {
+          applyPhoto(tex.image.data as Uint8Array);
+          tex.needsUpdate = true;
+        }
+      } catch {
+        photo = null;
+      }
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = photoUrl;
+  });
+  return photoLoading;
 }
 
 // ---------- Qué superficie corresponde a cada color ----------
@@ -435,6 +485,20 @@ setSurface(0x7a5a3a, Surf.Wood);
 setSurface(0x8f877a, Surf.DryStone); // pared seca
 setSurface(0x6f6a62, Surf.Stone); // pizarra del Cap de Creus
 setSurface(0x7d766b, Surf.Stone);
+// Casa de Azul y Camí de sa Farola (fotos de Street View)
+setSurface(0xd2245a, Surf.Foliage); // buganvilla
+setSurface(0xe33a6e, Surf.Foliage);
+setSurface(0xd9cfbd, Surf.Paving);
+setSurface(0xb5b0a6, Surf.Asphalt); // calle de hormigón
+setSurface(0xbfae92, Surf.DryStone);
+setSurface(0x8a7a66, Surf.Wood); // cancela de acebuche
+setSurface(0x7a6a56, Surf.Wood);
+setSurface(0x24603a, Surf.Louvre);
+setSurface(0x2c6a48, Surf.None); // lona del toldo
+setSurface(0xc9b48a, Surf.Sand); // arcén de tierra
+setSurface(0xa9a39a, Surf.Cobble); // adoquín de la placita del faro
+setSurface(0xc4977e, Surf.Terracotta); // hormigón impreso
+setSurface(0xeeebe4, Surf.Roof); // teja pintada de blanco
 
 const hsl = { h: 0, s: 0, l: 0 };
 const tmp = new THREE.Color();

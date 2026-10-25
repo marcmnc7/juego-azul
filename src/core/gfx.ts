@@ -57,7 +57,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
     sh.uniforms.surfTex = { value: surfaceTexture() };
     sh.uniforms.surfScale = { value: SURF_SCALE.map((v) => 1 / v) };
     sh.uniforms.surfStrength = { value: SURF_STRENGTH };
-    sh.uniforms.surfMean = { value: Array.from(surfMeans) };
+    sh.uniforms.surfMean = { value: surfMeans };
     sh.uniforms.uSurf = { value: (m.userData.surf as number) ?? 0 };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
@@ -107,7 +107,11 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
           float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
                    + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
                    + texture(surfTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).r * bw.z;
-          diffuseColor.rgb *= mix(1.0, sd / surfMean[sIdx], surfStrength[sIdx]);
+          // Segunda muestra a escala grande (y girada) en el plano dominante: rompe la repetición
+          // y da las manchas grandes que tienen las superficies reales
+          vec2 mp = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
+          float sm = texture(surfTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mp * 0.23 + 0.37, sl)).r;
+          diffuseColor.rgb *= mix(1.0, (sd * 0.65 + sm * 0.35) / surfMean[sIdx], surfStrength[sIdx]);
         }
         // Suciedad y humedad al pie de las paredes, y desgaste en las aristas altas: lo que hace que
         // un muro encalado parezca de verdad y no una caja

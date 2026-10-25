@@ -15,6 +15,7 @@ import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
+import { loadSurfacePhotos } from './core/surfaces';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -236,6 +237,8 @@ function goMap() {
 
 // En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, la moto por la Costa Brava,
 // Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
+// Las texturas fotográficas se cargan ya, mientras se ve la portada
+void loadSurfacePhotos();
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
 function startLevel(n: number) {
@@ -313,6 +316,13 @@ function frame() {
   renderer.info.reset();
   if (level) {
     level.update(dt);
+    // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
+    const camQ = TEST ? new URLSearchParams(location.search).get('cam') : null;
+    if (camQ) {
+      const v = camQ.split(',').map(Number);
+      camera.position.set(v[0], v[1], v[2]);
+      camera.lookAt(v[3], v[4], v[5]);
+    }
     draw(level.threeScene);
     if (shaderFailed) safeStep();
   } else {

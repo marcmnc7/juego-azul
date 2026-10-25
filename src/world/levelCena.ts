@@ -617,33 +617,128 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   const m = new Merger();
   const WHITE = 0xf6f1e6;
   const SHUTTER = 0x2f7a4a; // persianas verdes menorquinas
-  // Suelo: terraza de baldosa, calle de asfalto y acera
-  m.add(G.box, 0xd9c7a6, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
-  m.add(G.box, 0x3a3a40, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 5);
-  m.add(G.box, 0xbdb4a4, 0, 0.0, STREET_Z - 2.9, 0, 0, 0, 140, 0.12, 1.2);
+  // Como en la foto de Street View: casa blanca de dos plantas con azotea, el cuerpo del primer piso
+  // en esquina con ventanales y persianas beis, toldo verde, persianas verdes abajo, porche con la cocina
+  // de fuera, escalera blanca a la derecha, pérgola cubierta de buganvilla, limonero, cancela de
+  // madera de acebuche entre pilares blancos y un seto de adelfas tras el muro.
+  const SAND = 0xd9cfbd; // losas claras del patio
+  m.add(G.box, SAND, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
+  m.add(G.box, 0xb5b0a6, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 6.4); // calle de hormigón claro
   m.add(G.box, 0x9a8a68, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
-  // Casa: planta baja y primer piso, blanca, con tejado de teja
-  m.add(G.box, WHITE, 0, 2.7, -4, 0, 0, 0, 10, 5.4, 8);
-  m.add(ROOF_GEO, 0xb8623e, 0, 5.4, -4, 0, Math.PI / 2, 0, 8.4, 1.6, 10.6);
-  colliders.push({ minX: -5, maxX: 5, minZ: -8, maxZ: 0 });
-  const lit = new Merger();
-  for (const [x, y] of [[-3, 1.5], [3, 1.5], [-3, 4], [0, 4], [3, 4]] as [number, number][]) {
-    lit.add(G.box, y < 3 ? 0xffd9a0 : 0x6a6a80, x, y, 0.02, 0, 0, 0, 1.1, 1.3, 0.05);
-    for (const s of [-1, 1]) m.add(G.box, SHUTTER, x + s * 0.85, y, 0.08, 0, s * 0.35, 0, 0.55, 1.4, 0.06);
+  // Planta baja
+  m.add(G.box, WHITE, 0, 1.55, -4, 0, 0, 0, 10, 3.1, 8);
+  m.add(G.box, 0xe9e4d8, 0, 3.15, -3.9, 0, 0, 0, 10.2, 0.14, 8.2); // forjado
+  // Primer piso más estrecho, con el cuerpo en esquina que vuela sobre el toldo
+  m.add(G.box, WHITE, 1.4, 4.6, -4.6, 0, 0, 0, 7.2, 2.9, 6.8);
+  m.add(G.box, WHITE, -1.6, 4.65, -0.4, 0, 0, 0, 4.6, 2.6, 2.2); // cuerpo saliente
+  m.add(G.box, 0xe9e4d8, -1.6, 3.32, -0.4, 0, 0, 0, 4.7, 0.18, 2.3);
+  // Ventanales con persianas enrollables beis a media altura y barandilla de acero
+  for (const [x, z, w, ry] of [[-2.4, 0.72, 1.9, 0], [-0.4, 0.72, 1.6, 0], [-3.92, -0.4, 1.4, Math.PI / 2]] as [number, number, number, number][]) {
+    m.add(G.box, 0x2a3138, x, 4.4, z, 0, ry, 0, w, 1.7, 0.05);
+    m.add(G.box, 0xcbb894, x, 4.85, z + (ry ? 0 : 0.02), 0, ry, 0, w - 0.1, 0.85, 0.05);
+    for (let k = 0; k < 6; k++) m.add(G.box, 0xb8a37e, x, 4.5 + k * 0.14, z + (ry ? 0 : 0.03), 0, ry, 0, w - 0.1, 0.02, 0.05);
   }
-  lit.add(G.box, 0xffcf8a, 0, 1.1, 0.02, 0, 0, 0, 1.2, 2.2, 0.05); // puerta abierta con luz
+  m.add(G.box, 0xc8ccd0, -1.6, 4.25, 0.95, 0, 0, 0, 4.7, 0.05, 0.05);
+  m.add(G.box, 0xc8ccd0, -1.6, 3.95, 0.95, 0, 0, 0, 4.7, 0.04, 0.04);
+  for (let k = 0; k <= 10; k++) m.add(G.box, 0xc8ccd0, -3.9 + k * 0.46, 3.85, 0.95, 0, 0, 0, 0.03, 0.8, 0.03);
+  // Ventana pequeña del primer piso a la derecha
+  m.add(G.box, 0x2a3138, 3.2, 4.4, -1.18, 0, 0, 0, 1.0, 1.2, 0.05);
+  for (const sx of [-1, 1]) m.add(G.box, SHUTTER, 3.2 + sx * 0.75, 4.4, -1.15, 0, 0, 0, 0.5, 1.25, 0.05);
+  // Azotea: pretil, barandilla tubular y la antena
+  m.add(G.box, WHITE, 0.9, 6.2, -3.6, 0, 0, 0, 8.4, 0.3, 8.6);
+  for (let k = 0; k <= 14; k++) m.add(G.box, 0xc8ccd0, -3.3 + k * 0.6, 6.75, 0.62, 0, 0, 0, 0.04, 0.8, 0.04);
+  m.add(G.box, 0xc8ccd0, 0.9, 7.15, 0.62, 0, 0, 0, 8.4, 0.05, 0.05);
+  m.add(G.box, 0xc8ccd0, 4.8, 7.15, -3.6, 0, 0, 0, 0.05, 0.05, 8.4);
+  m.add(G.box, 0x9a9ea2, 3.6, 7.6, -2.2, 0, 0, 0, 0.05, 2.4, 0.05);
+  for (let k = 0; k < 5; k++) m.add(G.box, 0x9a9ea2, 3.6, 8.2 + k * 0.08, -2.2 - k * 0.1, 0, 0, 0, 0.9 - k * 0.12, 0.02, 0.02);
+  m.add(G.box, 0xf2f2f0, -3.8, 7.0, -6.5, 0, 0, 0, 0.7, 1.2, 0.7); // chimenea
+  colliders.push({ minX: -5, maxX: 5, minZ: -8, maxZ: 0 });
+  // Planta baja: persianas verdes de lamas (porticones), puerta del porche y escalera blanca
+  for (const x of [-4.1, -2.9]) {
+    m.add(G.box, SHUTTER, x, 1.2, 0.06, 0, 0, 0, 1.15, 2.4, 0.08);
+    for (let k = 0; k < 14; k++) m.add(G.box, 0x24603a, x, 0.2 + k * 0.155, 0.11, 0, 0, 0, 1.05, 0.03, 0.03);
+  }
+  m.add(G.box, 0x1e1e22, 0, 1.05, 0.04, 0, 0, 0, 1.0, 2.1, 0.06); // puerta oscura
+  m.add(G.box, 0xe9e4d8, 0, 2.18, 0.08, 0, 0, 0, 1.2, 0.1, 0.12);
+  m.add(G.box, 0xd84a3a, 0.9, 2.35, 0.08, 0, 0, 0, 0.28, 0.28, 0.03); // la placa roja con la cruz de Malta
+  // Escalera exterior: peldaños de barro sobre obra blanca, subiendo hacia la derecha
+  for (let k = 0; k < 10; k++) {
+    const sx = 1.9 + k * 0.3;
+    m.add(G.box, WHITE, sx, (k + 1) * 0.15, 0.55, 0, 0, 0, 0.3, (k + 1) * 0.3, 1.0);
+    m.add(G.box, 0xb5603b, sx, (k + 1) * 0.3 + 0.02, 0.55, 0, 0, 0, 0.32, 0.04, 1.02);
+  }
+  m.add(G.box, WHITE, 4.85, 1.6, 0.55, 0, 0, 0, 0.3, 3.2, 1.0);
+  colliders.push({ minX: 1.7, maxX: 5, minZ: 0, maxZ: 1.1 });
+  // Toldo verde sobre armazón metálico, a la izquierda
+  m.add(G.box, 0x2c6a48, -3.0, 3.0, 1.6, -0.32, 0, 0, 4.2, 0.05, 3.3);
+  m.add(G.box, 0x2c6a48, -3.0, 2.48, 3.2, 0, 0, 0, 4.2, 0.28, 0.03);
+  for (const x of [-5.0, -1.0]) m.add(G.box, 0x2c6a48, x, 2.0, 3.2, 0, 0, 0, 0.05, 4.0, 0.05);
+  const lit = new Merger();
+  lit.add(G.box, 0xffcf8a, 0, 1.05, 0.08, 0, 0, 0, 0.9, 2.0, 0.02); // luz que sale de la puerta
+  for (const [x, z, w] of [[-2.4, 0.76, 1.8], [-0.4, 0.76, 1.5]] as [number, number, number][]) lit.add(G.box, 0xffd9a0, x, 4.15, z, 0, 0, 0, w, 0.5, 0.02);
   sc.add(new THREE.Mesh(lit.build(), new THREE.MeshBasicMaterial({ vertexColors: true })));
-  // Muro del jardín con cancela y buganvilla
-  for (const [x0, x1] of [[-5.2, -0.9], [0.9, 5.2]]) {
-    m.add(G.box, WHITE, (x0 + x1) / 2, 0.55, 10.3, 0, 0, 0, x1 - x0, 1.1, 0.3);
+  // Pérgola de hierro verde cubierta de buganvilla, del porche hasta la valla de la derecha
+  for (const [x, z] of [[1.6, 6.4], [4.8, 6.4], [4.8, 9.7]] as [number, number][]) {
+    m.add(G.box, 0x2c5a40, x, 1.35, z, 0, 0, 0, 0.1, 2.7, 0.1);
+    colliders.push({ minX: x - 0.12, maxX: x + 0.12, minZ: z - 0.12, maxZ: z + 0.12 });
+  }
+  m.add(G.box, 0x2c5a40, 3.2, 2.7, 6.4, 0, 0, 0, 3.3, 0.08, 0.08);
+  m.add(G.box, 0x2c5a40, 4.8, 2.7, 3.2, 0, 0, 0, 0.08, 0.08, 13);
+  for (let i = 0; i < 90; i++) {
+    const t = i / 90;
+    // De la fachada (izquierda) a la pérgola de la derecha, colgando por delante del porche
+    const x = -3.6 + t * 8.8 + Math.sin(i * 2.3) * 0.5;
+    const z = 0.9 + Math.abs(Math.sin(i * 1.7)) * (x > 1.4 ? 8.6 : 2.2);
+    const y = 2.6 + Math.sin(i * 3.1) * 0.35 + (x < 1.4 ? 0.3 : 0);
+    const c = i % 4 === 0 ? 0x3a6a32 : i % 3 ? 0xd2245a : 0xe33a6e;
+    m.add(G.bush, c, x, y, z, 0, i, 0, 0.6 + (i % 3) * 0.18, 0.45, 0.55 + (i % 2) * 0.2);
+  }
+  for (let i = 0; i < 8; i++) m.add(G.bush, i % 2 ? 0xd2245a : 0xe33a6e, -0.8 + (i % 4) * 0.35, 1.7 - Math.floor(i / 4) * 0.6, 0.9 + (i % 3) * 0.1, 0, i, 0, 0.5, 0.6, 0.4); // cayendo sobre el porche
+  // Limonero y ficus a la izquierda del patio, contenedor verde, moto blanca y una maceta de barro
+  const tree = (x: number, z: number, h: number, c: number, fruit?: number) => {
+    m.add(G.cyl, 0x6b5a46, x, h * 0.3, z, 0.05, 0, 0.04, 0.18, h * 0.6, 0.18);
+    for (let k = 0; k < 5; k++) m.add(G.bush, c, x + Math.cos(k * 1.3) * 0.7, h * 0.72 + Math.sin(k * 2.1) * 0.4, z + Math.sin(k * 1.3) * 0.7, 0, k, 0, 1.6, 1.3, 1.5);
+    if (fruit) for (let k = 0; k < 10; k++) m.add(G.sphere, fruit, x + Math.cos(k * 2.4) * 1.1, h * 0.62 + Math.sin(k * 1.7) * 0.6, z + Math.sin(k * 2.4) * 1.1, 0, 0, 0, 0.13, 0.15, 0.13);
+    colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
+  };
+  tree(-4.3, 5.6, 3.6, 0x4f8a3a, 0xe8d24a);
+  tree(-4.4, 8.6, 2.6, 0x3f7a34);
+  m.add(G.rbox, 0x2f6b3a, -3.2, 0.55, 8.9, 0, 0.1, 0, 0.6, 1.1, 0.7); // contenedor
+  m.add(G.cyl, 0x222222, -3.45, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
+  m.add(G.cyl, 0x222222, -2.95, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
+  // Escúter blanco con baúl
+  m.add(G.cyl, 0x1e1e22, -2.7, 0.25, 7.3, 0, 0, Math.PI / 2, 0.5, 0.12, 0.5);
+  m.add(G.cyl, 0x1e1e22, -2.7, 0.25, 6.0, 0, 0, Math.PI / 2, 0.5, 0.12, 0.5);
+  m.add(G.rbox, 0xf4f4f2, -2.7, 0.6, 6.8, 0, 0, 0, 0.45, 0.6, 1.3);
+  m.add(G.rbox, 0xf4f4f2, -2.7, 0.95, 6.1, 0.3, 0, 0, 0.42, 0.9, 0.3);
+  m.add(G.box, 0x2a2a2e, -2.7, 0.95, 7.0, 0, 0, 0, 0.36, 0.1, 0.6);
+  m.add(G.rbox, 0x2a2a2e, -2.7, 1.2, 7.5, 0, 0, 0, 0.42, 0.34, 0.42);
+  colliders.push({ minX: -3.0, maxX: -2.4, minZ: 5.7, maxZ: 7.7 });
+  m.add(G.cyl, 0xb5603b, 1.3, 0.25, 2.4, 0, 0, 0, 0.45, 0.5, 0.45);
+  m.add(G.bush, 0x4f8a3a, 1.3, 0.75, 2.4, 0, 0, 0, 0.6, 0.6, 0.6);
+  // Muro bajo encalado con pilares gordos, la cancela de acebuche (abierta a ratos) y adelfas detrás
+  for (const [x0, x1] of [[-5.2, -1.0], [1.0, 5.2]]) {
+    m.add(G.box, WHITE, (x0 + x1) / 2, 0.5, 10.3, 0, 0, 0, x1 - x0, 1.0, 0.3);
     colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5 });
   }
+  for (const x of [-1.1, 1.1]) {
+    m.add(G.box, WHITE, x, 0.7, 10.3, 0, 0, 0, 0.6, 1.4, 0.6);
+    m.add(G.box, 0xefeae0, x, 1.45, 10.3, 0, 0, 0, 0.72, 0.1, 0.72);
+  }
+  m.add(G.box, 0xd9cfa6, 2.2, 0.75, 10.47, 0, 0, 0, 0.5, 0.3, 0.03); // placa con el nombre de la casa
+  m.add(G.box, 0x7a6a56, 1.6, 0.5, 10.48, 0, 0, 0, 0.04, 0.4, 0.04); // tirador
+  for (let k = 0; k < 6; k++) {
+    // Cancela de madera de acebuche: travesaños curvos (aquí, tablas ligeramente inclinadas)
+    m.add(G.box, 0x8a7a66, 0, 0.18 + k * 0.2, 10.3, 0, 0, Math.sin(k * 1.9) * 0.08, 1.6, 0.09, 0.07);
+  }
+  m.add(G.box, 0x7a6a56, -0.72, 0.65, 10.3, 0, 0, 0, 0.1, 1.3, 0.09);
+  m.add(G.box, 0x7a6a56, 0.72, 0.65, 10.3, 0, 0, 0, 0.1, 1.3, 0.09);
+  m.add(G.box, 0x7a6a56, 0, 0.65, 10.3, 0, 0, 0.62, 0.08, 1.75, 0.08);
+  for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.35 + Math.sin(i) * 0.1, 9.9, 0, i, 0, 0.7, 0.9, 0.6);
   for (const sx of [-5.2, 5.2]) {
     m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
     colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5 });
   }
-  m.add(G.box, SHUTTER, 0, 0.5, 10.3, 0, 0, 0, 1.7, 1.0, 0.08); // cancela de madera verde (abierta a ratos)
-  for (let i = 0; i < 14; i++) m.add(G.bush, i % 3 ? 0xc2307a : 0x2f6b3a, -4.8 + i * 0.35, 1.2 + Math.sin(i) * 0.12, 10.25, 0, 0, 0, 0.55, 0.45, 0.4);
   // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
   m.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
   m.add(G.box, 0x7a6a58, STOVE.x, 0.92, STOVE.z - 1.0, 0, 0, 0, 2.7, 0.06, 0.85);
@@ -686,14 +781,41 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     b.scale.setScalar(0.35);
     sc.add(b);
   }
-  // Calle: casas vecinas y farolas
-  for (const sx of [-1, 1]) {
-    m.add(G.box, 0xf1eadc, sx * 11.5, 2.4, -2, 0, 0, 0, 10.6, 4.8, 12);
-    m.add(ROOF_GEO, 0xb8623e, sx * 11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 11);
-    m.add(G.box, 0xf6f1e6, sx * 11.5, 0.75, 10.3, 0, 0, 0, 10.6, 1.5, 0.3);
-    colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: -8, maxZ: 4 });
+  // Calle: a la izquierda la casa vecina con tejado de teja y chimenea, a la derecha pinos y la
+  // araucaria; postes de madera con el cable y alguna farola
+  m.add(G.box, 0xf1eadc, -11.5, 2.4, -2, 0, 0, 0, 10.6, 4.8, 12);
+  m.add(ROOF_GEO, 0xb8623e, -11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 11);
+  m.add(G.box, 0xf2f2f0, -8.6, 6.0, -3, 0, 0, 0, 0.7, 2.0, 0.7);
+  m.add(ROOF_GEO, 0xb8623e, -8.6, 7.0, -3, 0, 0, 0, 0.9, 0.4, 0.9);
+  for (const [x, y] of [[-14, 1.5], [-9, 1.5], [-14, 3.6], [-9, 3.6]] as [number, number][]) {
+    m.add(G.box, 0x2a3138, x, y, 4.02, 0, 0, 0, 1.0, 1.2, 0.05);
+    for (const s2 of [-1, 1]) m.add(G.box, SHUTTER, x + s2 * 0.75, y, 4.06, 0, 0, 0, 0.5, 1.25, 0.05);
   }
-  for (const x of [-14, 6, 26]) {
+  m.add(G.box, 0xf6f1e6, -11.5, 0.6, 10.3, 0, 0, 0, 10.6, 1.2, 0.3);
+  colliders.push({ minX: -16.8, maxX: -6.2, minZ: -8, maxZ: 4 });
+  // Derecha: muro de piedra seca, pinos y la araucaria
+  m.add(G.box, 0xbfae92, 11.5, 0.7, 10.3, 0, 0, 0, 10.6, 1.4, 0.6);
+  m.add(G.box, 0xf6f1e6, 11.5, 2.2, -2, 0, 0, 0, 9, 4.4, 10);
+  m.add(G.box, 0xf6f1e6, 11.5, 4.6, -2, 0, 0, 0, 9.2, 0.4, 10.2);
+  colliders.push({ minX: 6.2, maxX: 16.8, minZ: -8, maxZ: 10.6 });
+  const pine = (x: number, z: number, h: number) => {
+    m.add(G.cyl, 0x6b4a32, x, h / 2, z, 0.08, 0, 0.06, 0.45, h, 0.45);
+    for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x2f5a2c : 0x3a6a34, x + Math.cos(k) * 2.2, h + Math.sin(k * 2) * 0.6, z + Math.sin(k) * 2.2, 0, k, 0, 3.4, 1.6, 3.0);
+  };
+  pine(10, 6, 9);
+  pine(15, 2, 10);
+  pine(-20, -4, 9);
+  // Araucaria (pino de Norfolk): tronco recto y pisos de ramas horizontales
+  m.add(G.cyl, 0x6b4a32, 8.4, 7, -7, 0, 0, 0, 0.35, 14, 0.35);
+  for (let k = 0; k < 9; k++) m.add(G.cone, 0x2c5a30, 8.4, 4 + k * 1.25, -7, 0, k * 0.5, 0, 3.6 - k * 0.35, 0.5, 3.6 - k * 0.35);
+  // Postes de madera con el cable
+  for (const x of [-16, 7, 30]) {
+    m.add(G.cyl, 0x8a7a60, x, 4.5, STREET_Z - 3.0, 0, 0, 0, 0.24, 9, 0.24);
+    m.add(G.box, 0x6a5a48, x, 8.6, STREET_Z - 3.0, 0, 0, 0, 0.1, 0.1, 1.0);
+  }
+  m.add(G.box, 0x1e1e22, 7, 8.5, STREET_Z - 3.0, 0, 0, 0, 46, 0.03, 0.03);
+  m.add(G.box, 0x1e1e22, 2.2, 7.4, 2.0, -0.28, -0.35, 0, 0.03, 0.03, 13); // el cable que baja a la casa
+  for (const x of [-26, 20]) {
     m.add(G.cyl, 0x333338, x, 2, STREET_Z - 3.2, 0, 0, 0, 0.12, 4, 0.12);
     const l = new THREE.Sprite(bulbs);
     l.position.set(x, 4.1, STREET_Z - 3.2);
