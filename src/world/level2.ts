@@ -139,7 +139,7 @@ export class Level2 implements Level {
   private hud: Hud;
   private fx: Particles;
   private phase: Phase = 'intro';
-  private car = makeCar(0xd7263d);
+  private car = makeCar(0xd7263d, { joy: false });
   private carZ = 0;
   private carX = 0;
   private carVX = 0;
@@ -659,8 +659,6 @@ export class Level2 implements Level {
     if (!this.rig) this.rig = new CarRig(car);
     this.rig.update(dt, this.speed, latAccel);
     if (this.hitT > 0) car.body.rotation.z += Math.sin(this.t * 30) * 0.05 * Math.min(1, this.hitT * 2);
-    car.joy.rotation.y = Math.sin(this.t * 3) * 0.3;
-    car.joy.position.y = 1.18 + Math.sin(this.t * 6) * 0.03 + (this.combo % 5 === 0 && this.combo > 0 ? Math.abs(Math.sin(this.t * 14)) * 0.12 : 0);
 
     // Mundo que sigue al coche
     this.ground.position.z = this.carZ;

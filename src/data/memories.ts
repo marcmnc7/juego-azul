@@ -3,7 +3,6 @@ import diadema from '../assets/recuerdos/diadema.jpg';
 import cocacola from '../assets/recuerdos/cocacola.jpg';
 import ruta from '../assets/recuerdos/ruta.jpg';
 import trenes from '../assets/recuerdos/trenes.jpg';
-import joy from '../assets/recuerdos/joy.jpg';
 import vueloLpa from '../assets/recuerdos/vuelo-lpa.jpg';
 import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 import carnaval from '../assets/recuerdos/carnaval.jpg';
@@ -31,8 +30,6 @@ export const MEMORIES: Memory[] = [
   { level: 2, src: cocacola, caption: 'Una Coca-Cola con mi nombre. Como en el Imperi, pero oficial.' },
   { level: 3, src: ruta, caption: 'El planning: 1.454 km. «A Coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
-  { level: 3, src: joy, caption: 'Joy. El que manda en Madrid.' },
-  { level: 3, src: stPerroPiscina, caption: 'Joy, a la espera de su invitación.', sticker: true },
   { level: 4, src: vueloLpa, caption: '«¿VOY TARDE?» «Tú vas pronto.»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },

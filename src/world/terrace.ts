@@ -2,14 +2,14 @@ import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { Sky, Sun, toon, vibrate } from '../core/gfx';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeDog, makeScallop, animatePerson, Person, Dog } from '../entities/models';
+import { G, Merger, makePerson, makeScallop, animatePerson, Person } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { canvasTex } from './deco';
 
 // Mitad del capítulo 2: la terraza de El Ancla, en San Vicente de la Barquera (sacada de la foto de
 // Marc: soportales de piedra, toldos de rayas azules y blancas con "⚓ EL ANCLA · TABLAS" y
 // "ARROCERÍA · PICOTEO", balcones de madera, sábanas tendidas, mesas de madera y sillas azules).
-// Azul y Gas se comen allí sus zamburiñas, con Joy al lado de la mesa.
+// Azul y Gas se comen allí sus zamburiñas.
 
 function stoneWall() {
   const t = canvasTex((ctx, w, h) => {
@@ -32,7 +32,6 @@ export class Terrace {
   private fx: Particles;
   private azul: Person;
   private gas: Person;
-  private joy: Dog;
   private plate = new THREE.Group();
   private bite: THREE.Group;
   private t = 0;
@@ -199,7 +198,7 @@ export class Terrace {
     sc.add(this.plate);
     this.bite = this.plate.children[1] as THREE.Group;
 
-    // Azul y Gas sentados uno frente al otro, Joy debajo de la mesa
+    // Azul y Gas sentados uno frente al otro
     this.azul = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
@@ -207,10 +206,6 @@ export class Terrace {
       p.root.rotation.y = -sx * Math.PI / 2;
       sc.add(p.root);
     }
-    this.joy = makeDog();
-    this.joy.root.position.set(-1.45, 0, -0.55);
-    this.joy.root.rotation.y = Math.PI * 0.75;
-    sc.add(this.joy.root);
   }
 
   /** Coloca la cámara en el plano de la mesa. */
@@ -242,7 +237,6 @@ export class Terrace {
     this.sit(this.gas);
     this.gas.armR.rotation.x = -0.6 + Math.sin(this.t * 2) * 0.05;
     this.gas.head.rotation.z = Math.sin(this.t * 0.8) * 0.05;
-    this.joy.tail.rotation.z = Math.sin(this.t * 12) * 0.6;
     if (this.eatT >= 0) {
       this.eatT += dt;
       const k = Math.min(1, this.eatT / 1.0);

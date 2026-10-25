@@ -253,7 +253,6 @@ export const NIGHT = {
     { who: 'Marc', text: '(WhatsApp) Creo que te he visto. Patrássss' },
     { who: 'Margaux', text: '(WhatsApp) ¿Coche? ¿Moto?' },
     { who: 'Marc', text: '(WhatsApp) Coche azul. Gira' },
-    { who: 'Narrador', text: 'Te subes con un chiste de Uber. Él todavía se ríe.' },
   ] as Line[],
   arrive: [
     { who: 'Marc', text: '(susurrando) Silencio full.' },
@@ -277,8 +276,6 @@ export const NIGHT = {
     { who: 'Margaux', text: '(WhatsApp) Soy una mujer con muchas sorpresas' },
     { who: 'Margaux', text: '(WhatsApp) Me caíste bien, borracho y sobrio. 10/10' },
     { who: 'Margaux', text: '(WhatsApp) Tb el césped con vista estrellas 10/10 💫' },
-    { who: 'Marc', text: '(WhatsApp) Me voy a quedar sobre todo con tu chiste inicial del Uber' },
-    { who: 'Marc', text: '(WhatsApp) Es broma. Con tus ojazos' },
     { who: 'Marc', text: '(WhatsApp) Por aquí todo parece correcto. Siguen roncando' },
     { who: 'Margaux', text: '(WhatsApp) Solo el césped sabe qué pasó' },
     { who: 'Margaux', text: '(WhatsApp) Me gustas tú' },
