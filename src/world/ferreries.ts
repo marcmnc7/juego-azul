@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { G, Merger, personGeometry, vertexMat, PersonLook } from '../entities/models';
+import { buildSurroundings, collidersBox } from './surround';
+import { G, Merger, CrowdPeople, crowdPose, newCrowdPose, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture } from '../core/gfx';
 import type { Circle } from '../core/walker';
 import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
@@ -15,10 +16,10 @@ export interface Box2 {
 }
 
 export interface Crowd {
-  mesh: THREE.InstancedMesh;
+  people: CrowdPeople;
   base: { x: number; z: number; ry: number; phase: number; speed: number }[];
-  /** Bailarines de los bares: segunda postura que se alterna con la primera. */
-  alt?: THREE.InstancedMesh;
+  /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
+  dance?: boolean;
 }
 
 /** Sitio de un balcón donde colgar una bandera. */
@@ -565,10 +566,9 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
   const crowds: Crowd[] = looks.map((look, li) => {
     const mine = spots.filter((_, i) => i % looks.length === li);
-    const mesh = new THREE.InstancedMesh(personGeometry(look, li % 2 === 1), vertexMat(), mine.length);
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    group.add(mesh);
-    return { mesh, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
+    const people = new CrowdPeople(look, mine.length);
+    group.add(people.group);
+    return { people, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
   });
 
   // Gente bailando delante de cada bar (alternan brazos arriba y abajo al ritmo)
@@ -598,15 +598,16 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   partyLooks.forEach((look, li) => {
     const mine = dancers.filter((_, i) => i % partyLooks.length === li);
     if (!mine.length) return;
-    const up = new THREE.InstancedMesh(personGeometry(look, true), vertexMat(), mine.length);
-    const down = new THREE.InstancedMesh(personGeometry(look, false), vertexMat(), mine.length);
-    for (const im of [up, down]) {
-      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      group.add(im);
-    }
-    crowds.push({ mesh: up, alt: down, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
+    const people = new CrowdPeople(look, mine.length);
+    group.add(people.group);
+    crowds.push({ people, dance: true, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
   });
 
+  // Fuera del centro, el pueblo sigue: manzanas de casas, y al fondo las lomas (no un suelo infinito)
+  {
+    const core = collidersBox(colliders);
+    buildSurroundings(scene, { keepOut: [core], half: 110, center: { x: (core.minX + core.maxX) / 2, z: (core.minZ + core.maxZ) / 2 }, cell: 11, town: true, field: false, seed: 5 });
+  }
   scene.add(group);
   return {
     group,
@@ -628,12 +629,9 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   };
 }
 
-const tm = new THREE.Matrix4();
 const tq = new THREE.Quaternion();
-const tv = new THREE.Vector3();
-const ts = new THREE.Vector3(1, 1, 1);
-const zero = new THREE.Vector3(0.0001, 0.0001, 0.0001);
 const up = new THREE.Vector3(0, 1, 0);
+const pose = newCrowdPose();
 export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }, dt = 1 / 60, avoid: readonly { x: number; z: number; r: number }[] = []) {
   const k = Math.min(1, dt * 5);
   for (const c of crowds) {
@@ -648,24 +646,15 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
       const bb = b as typeof b & { ox?: number; oz?: number };
       bb.ox = (bb.ox ?? 0) + (tx - (bb.ox ?? 0)) * k;
       bb.oz = (bb.oz ?? 0) + (tz - (bb.oz ?? 0)) * k;
-      const bx = b.x + bb.ox, bz = b.z + bb.oz;
-      if (c.alt) {
-        // Bailarines: saltan más, giran y alternan postura
-        const ph = t * b.speed * 0.5 + b.phase;
-        const bounce = Math.abs(Math.sin(ph)) * 0.35 * energy;
-        tq.setFromAxisAngle(up, b.ry + Math.sin(t * 2 + b.phase) * 1.2);
-        tv.set(bx, bounce, bz);
-        const armsUp = Math.sin(ph * 0.5) > 0;
-        c.mesh.setMatrixAt(i, tm.compose(tv, tq, armsUp ? ts : zero));
-        c.alt.setMatrixAt(i, tm.compose(tv, tq, armsUp ? zero : ts));
-        return;
+      // De pie, gesticulando; los bailarines con más energía y girando un poco sobre sí mismos
+      crowdPose(pose, t, b.phase, c.dance ? 0.55 + energy * 0.35 : energy * 0.45);
+      if (c.dance) {
+        pose.sway *= 2.4;
+        pose.shift = Math.sin(t * b.speed * 0.5 + b.phase) * 0.07;
       }
-      const bounce = Math.abs(Math.sin(t * b.speed * 0.5 + b.phase)) * 0.22 * energy;
-      tq.setFromAxisAngle(up, b.ry + Math.sin(t * 1.5 + b.phase) * 0.35);
-      tv.set(bx, bounce, bz);
-      c.mesh.setMatrixAt(i, tm.compose(tv, tq, ts));
+      tq.setFromAxisAngle(up, b.ry + (c.dance ? Math.sin(t * 0.8 + b.phase) * 0.6 : Math.sin(t * 0.4 + b.phase) * 0.2));
+      c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose);
     });
-    c.mesh.instanceMatrix.needsUpdate = true;
-    if (c.alt) c.alt.instanceMatrix.needsUpdate = true;
+    c.people.commit();
   }
 }

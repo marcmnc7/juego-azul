@@ -4,11 +4,10 @@ import { toon, glowTexture } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 
-// La calle del capítulo 4: el Bar Imperi (donde Gas recoge a Azul), la carretera y la fachada
-// de casa vista desde la calle, sacadas de las fotos que pasó Marc:
+// La calle de casa de Gas, la carretera y la fachada vista desde la calle, sacadas de las fotos
+// que pasó Marc (las texturas del Bar Imperi se usan en el Born, born.ts):
 // - Bar Imperi: fachada amarilla, zócalo y marco de puerta blancos, puerta verde de dos hojas con
-//   cristales, rótulo "Bar Imperi" en letra cursiva, farolillos, persianas verdes, toldo blanco y
-//   terraza de adoquines con mesas de madera y sillas de director verdes.
+//   cristales, rótulo "Bar Imperi" en letra cursiva, farolillos y persianas verdes.
 // - Casa: dos plantas amarilla con alero de teja, ventanas con contraventanas blancas y garaje;
 //   delante, muro blanco con pilares, puerta corredera blanca, paño de piedra seca con placa,
 //   puerta peatonal y buzón negro. Palmeras y seto al lado, vecinos blancos de teja.
@@ -20,32 +19,12 @@ export const CORRIDOR = { minX: -6.3, maxX: -4.6, wallX: -6.45 };
 export const STREET = {
   wallZ: -19,
   laneZ: -21.8,
-  bar: new THREE.Vector3(-62, 0, -15),
   door: new THREE.Vector3(-3.3, 0, -15.6),
   gate: { minX: -3.65, maxX: -2.4 },
 };
 
 const YELLOW = 0xeec26a;
-const BAR_YELLOW = 0xf0c24f;
 const WHITE = 0xf7f4ec;
-
-function cobbleTexture() {
-  const t = canvasTex((ctx, w, h) => {
-    ctx.fillStyle = '#8f887c';
-    ctx.fillRect(0, 0, w, h);
-    const s = 16;
-    for (let y = 0; y < h; y += s)
-      for (let x = (y / s) % 2 ? -s / 2 : 0; x < w; x += s) {
-        const v = 170 + Math.random() * 40;
-        ctx.fillStyle = `rgb(${v},${v - 4},${v - 12})`;
-        ctx.beginPath();
-        ctx.roundRect(x + 1.5, y + 1.5, s - 3, s - 3, 4);
-        ctx.fill();
-      }
-  });
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
 
 function tileTexture() {
   const t = canvasTex((ctx, w, h) => {
@@ -65,7 +44,7 @@ function tileTexture() {
   return t;
 }
 
-function barSignTexture() {
+export function barSignTexture() {
   return canvasTex(
     (ctx, w, h) => {
       ctx.fillStyle = '#f3efe4';
@@ -84,7 +63,7 @@ function barSignTexture() {
   );
 }
 
-function barDoorTexture() {
+export function barDoorTexture() {
   return canvasTex(
     (ctx, w, h) => {
       ctx.fillStyle = '#1d4537';
@@ -127,7 +106,7 @@ function barDoorTexture() {
   );
 }
 
-function shutterTexture(color = '#1f5a45') {
+export function shutterTexture(color = '#1f5a45') {
   return canvasTex(
     (ctx, w, h) => {
       ctx.fillStyle = color;
@@ -319,85 +298,11 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   }
   for (const x of [-60, -50, -40, -30, -20, -10, 0, 10, 20, 30]) genericHouse(m, x, -30, 1, tones[k++ % tones.length], colliders);
 
-  // --- Bar Imperi ---
-  const B = S.bar;
-  m.add(G.box, BAR_YELLOW, B.x, 3.6, B.z + 5, 0, 0, 0, 14, 7.2, 10);
-  m.add(G.box, WHITE, B.x, 0.15, B.z - 0.03, 0, 0, 0, 14, 0.3, 0.08); // zócalo
-  m.add(G.box, 0xd9b04a, B.x, 7.3, B.z + 5, 0, 0, 0, 14.2, 0.2, 10.2);
-  // Marco blanco de la puerta
-  m.add(G.box, WHITE, B.x, 1.6, B.z - 0.04, 0, 0, 0, 2.6, 3.2, 0.08);
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.7), new THREE.MeshBasicMaterial({ map: barDoorTexture(), color: 0xe6e6e6 }));
-  door.position.set(B.x, 1.35, B.z - 0.1);
-  door.rotation.y = Math.PI;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ map: barSignTexture(), color: 0xf0f0f0 }));
-  sign.position.set(B.x, 3.75, B.z - 0.12);
-  sign.rotation.y = Math.PI;
-  m.add(G.box, 0x2b2b2b, B.x, 3.75, B.z - 0.07, 0, 0, 0, 3.5, 0.84, 0.06);
-  const shutter = toon({ map: shutterTexture(), color: 0xffffff });
-  const sh1 = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.4), shutter);
-  sh1.position.set(B.x, 6.0, B.z - 0.1);
-  sh1.rotation.y = Math.PI;
-  m.add(G.box, WHITE, B.x, 6.0, B.z - 0.05, 0, 0, 0, 2.4, 1.7, 0.06);
-  const sh2 = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.5), shutter);
-  sh2.position.set(B.x - 3.4, 1.35, B.z - 0.1);
-  sh2.rotation.y = Math.PI;
-  m.add(G.box, WHITE, B.x - 3.4, 0.9, B.z - 0.05, 0, 0, 0, 4.4, 1.8, 0.06); // zócalo blanco de la derecha
-  sc.add(door, sign, sh1, sh2);
-  // Farolillos de pared
-  for (const sx of [-1, 1]) {
-    m.add(G.box, 0x2b2b2b, B.x + sx * 2.3, 3.75, B.z - 0.25, 0, 0, 0, 0.06, 0.06, 0.5);
-    m.add(G.cone, 0x2b2b2b, B.x + sx * 2.3, 3.65, B.z - 0.5, 0, 0, 0, 0.42, 0.22, 0.42);
+  // Más casas hacia el oeste (el Bar Imperi está en el Born, en Ciutadella)
+  for (const x of [-51, -61]) {
+    genericHouse(m, x, -15, -1, tones[k++ % tones.length], colliders);
+    m.add(G.box, WHITE, x, 0.65, S.wallZ, 0, 0, 0, 9, 1.3, 0.3);
   }
-  // Toldo blanco a la izquierda de la puerta
-  m.add(G.box, 0xf2efe6, B.x + 4.6, 3.05, B.z - 1.3, -0.28, 0, 0, 4.4, 0.06, 2.7);
-  m.add(G.box, 0xe0dccf, B.x + 4.6, 2.62, B.z - 2.6, 0, 0, 0, 4.4, 0.3, 0.04);
-  m.add(G.box, 0x9a9a9a, B.x + 4.6, 3.3, B.z - 0.06, 0, 0, 0, 4.4, 0.12, 0.12);
-  // Edificios vecinos del bar, blancos con persianas verdes
-  for (const sx of [-1, 1]) {
-    const x = B.x + sx * 12;
-    m.add(G.box, sx < 0 ? WHITE : 0xf3ead8, x, 3.4, B.z + 5, 0, 0, 0, 10, 6.8, 10);
-    for (const wx of [-2.5, 2.5]) {
-      window_(m, x + wx, 4.8, B.z, 1.0, 1.4, 0x2f6b46, false);
-      window_(m, x + wx, 1.6, B.z, 1.0, 1.4, 0x2f6b46, false);
-    }
-  }
-  colliders.push({ minX: B.x - 17, maxX: B.x + 17, minZ: B.z - 0.2, maxZ: B.z + 10 });
-  // Terraza de adoquines con mesas de madera y sillas de director verdes
-  const cob = cobbleTexture();
-  cob.repeat.set(9, 1.8);
-  const terrace = new THREE.Mesh(new THREE.PlaneGeometry(24, 4.4).rotateX(-Math.PI / 2), toon({ map: cob, color: 0xffffff }));
-  terrace.position.set(B.x, 0.03, B.z - 2.2);
-  terrace.userData.noCast = true;
-  sc.add(terrace);
-  const chair = (x: number, z: number, ry: number) => {
-    const c = Math.cos(ry);
-    const s = Math.sin(ry);
-    const at = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
-    const p = (lx: number, y: number, lz: number, w: number, h: number, d: number, color: number, rz = 0) => {
-      const [wx, wz] = at(lx, lz);
-      m.add(G.box, color, wx, y, wz, 0, ry, rz, w, h, d);
-    };
-    for (const sx of [-1, 1]) {
-      p(sx * 0.25, 0.24, 0, 0.04, 0.6, 0.04, 0x8a5a34, 0.7);
-      p(sx * 0.25, 0.24, 0, 0.04, 0.6, 0.04, 0x8a5a34, -0.7);
-      p(sx * 0.27, 0.7, -0.18, 0.05, 0.6, 0.05, 0x8a5a34);
-      p(sx * 0.27, 0.66, 0.02, 0.06, 0.04, 0.46, 0x8a5a34);
-    }
-    p(0, 0.46, 0, 0.5, 0.04, 0.42, 0x1f5a45);
-    p(0, 0.86, -0.19, 0.52, 0.24, 0.03, 0x1f5a45);
-  };
-  const table = (x: number, z: number) => {
-    m.add(G.box, 0x9a6a40, x, 0.72, z, 0, 0, 0, 0.8, 0.05, 0.8);
-    for (const [dx, dz] of [[-0.34, -0.34], [0.34, -0.34], [-0.34, 0.34], [0.34, 0.34]]) m.add(G.box, 0x8a5a34, x + dx, 0.36, z + dz, 0, 0, 0, 0.05, 0.72, 0.05);
-    m.add(G.cyl, 0xffffff, x + 0.15, 0.78, z, 0, 0, 0, 0.12, 0.08, 0.12); // café
-    chair(x - 0.65, z, Math.PI / 2);
-    chair(x + 0.65, z, -Math.PI / 2);
-    chair(x, z - 0.7, 0);
-    colliders.push({ minX: x - 1.0, maxX: x + 1.0, minZ: z - 1.0, maxZ: z + 0.5 });
-  };
-  table(B.x + 5.6, B.z - 1.5);
-  table(B.x + 3.2, B.z - 2.4);
-  table(B.x - 4.6, B.z - 1.6);
 
   // Farolas de la calle
   const lampPos: number[] = [];
@@ -410,17 +315,15 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
     lampPos.push(x, 4.15, -20.8);
   }
   // Brillos: farolas, farolillos del bar y de casa
-  lampPos.push(B.x - 2.3, 3.55, B.z - 0.5, B.x + 2.3, 3.55, B.z - 0.5, S.door.x, 2.6, FZ - 0.3);
+  lampPos.push(S.door.x, 2.6, FZ - 0.3);
   const lamps = new THREE.Points(
     new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lampPos, 3)),
     new THREE.PointsMaterial({ map: glowTexture(), color: 0xffd38a, size: 1.6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   sc.add(lamps);
-  const barLight = new THREE.PointLight(0xffc27a, 16, 12, 1.5);
-  barLight.position.set(B.x, 3.2, B.z - 2.5);
   const homeLight = new THREE.PointLight(0xffc27a, 9, 9, 1.5);
   homeLight.position.set(-1.5, 2.6, -17.5);
-  sc.add(barLight, homeLight);
+  sc.add(homeLight);
 
   const mesh = m.mesh();
   sc.add(mesh);

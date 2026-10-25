@@ -9,7 +9,8 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
-import { buildSaFarola } from './saFarola';
+import { buildSaFarola, COAST_Z } from './saFarola';
+import { buildSurroundings } from './surround';
 import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { radar } from '../ui/minis';
 import { ROOF_GEO, type Box2 } from './ferreries';
@@ -70,8 +71,9 @@ export class LevelCena implements Level {
   private waitT = 0;
   private beats: Beat[] = [];
   private beatI = 0;
-  private dadTo: THREE.Vector3 | null = null;
-  private momTo: THREE.Vector3 | null = null;
+  // Camino de cada uno: puntos por los que pasa (por la puerta del jardín, nunca a través del muro)
+  private dadPath: THREE.Vector3[] = [];
+  private momPath: THREE.Vector3[] = [];
   private carGoing = false;
   private carSpeed = 0;
   private gasCarT = -1;
@@ -394,6 +396,21 @@ export class LevelCena implements Level {
 
   // ---------------- Bucle ----------------
 
+  /** Ruta de un padre: del jardín a la calle (o al revés) siempre por la cancela, recto por el camino. */
+  private route(from: THREE.Vector3, to: THREE.Vector3) {
+    const wallZ = GATE.z + 0.1;
+    const inside = (z: number) => z < wallZ;
+    const side = Math.sign(to.x - GATE.x || from.x - GATE.x) * 0.35;
+    const path: THREE.Vector3[] = [];
+    if (inside(from.z) !== inside(to.z)) {
+      // Primero al eje del camino, luego cruza la cancela y sigue por la acera
+      if (inside(from.z)) path.push(new THREE.Vector3(GATE.x + side, 0, Math.min(from.z, GATE.z - 0.9)), new THREE.Vector3(GATE.x + side, 0, GATE.z + 1.2));
+      else path.push(new THREE.Vector3(GATE.x + side, 0, Math.max(from.z, GATE.z + 1.2)), new THREE.Vector3(GATE.x + side, 0, GATE.z - 0.9));
+    }
+    path.push(to.clone());
+    return path;
+  }
+
   private moveTo(p: Person, to: THREE.Vector3, dt: number, speed = 2.2, reach = 0.08) {
     const d = this.v1.subVectors(to, p.root.position).setY(0);
     const len = d.length();
@@ -426,12 +443,12 @@ export class LevelCena implements Level {
         if (b.dad === 'hide') this.dad.root.visible = false;
         else if (b.dad) {
           this.dad.root.visible = true;
-          this.dadTo = b.dad;
+          this.dadPath = this.route(this.dad.root.position, b.dad);
         }
         if (b.mom === 'hide') this.mom.root.visible = false;
         else if (b.mom) {
           this.mom.root.visible = true;
-          this.momTo = b.mom;
+          this.momPath = this.route(this.mom.root.position, b.mom);
         }
         if (b.carGo) {
           this.carGoing = true;
@@ -441,10 +458,12 @@ export class LevelCena implements Level {
         }
       }
     }
-    if (this.dadTo && this.dad.root.visible && this.moveTo(this.dad, this.dadTo, dt)) this.dadTo = null;
-    else if (this.dad.root.visible && !this.dadTo) animatePerson(this.dad, dt, 'idle');
-    if (this.momTo && this.mom.root.visible && this.moveTo(this.mom, this.momTo, dt, 1.9)) this.momTo = null;
-    else if (this.mom.root.visible && !this.momTo) animatePerson(this.mom, dt, this.phase === 'wait' && this.beatI >= 6 && this.beatI < 8 ? 'talk' : 'idle');
+    if (this.dadPath.length && this.dad.root.visible) {
+      if (this.moveTo(this.dad, this.dadPath[0], dt, 2.2, this.dadPath.length > 1 ? 0.35 : 0.08)) this.dadPath.shift();
+    } else if (this.dad.root.visible) animatePerson(this.dad, dt, 'idle');
+    if (this.momPath.length && this.mom.root.visible) {
+      if (this.moveTo(this.mom, this.momPath[0], dt, 1.9, this.momPath.length > 1 ? 0.35 : 0.08)) this.momPath.shift();
+    } else if (this.mom.root.visible) animatePerson(this.mom, dt, this.phase === 'wait' && this.beatI >= 6 && this.beatI < 8 ? 'talk' : 'idle');
     if (this.carGoing) {
       this.carSpeed = Math.min(12, this.carSpeed + dt * 6);
       this.parentCar.root.position.x -= this.carSpeed * dt;
@@ -827,6 +846,23 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
   // Al fondo, bajando por la calle, el paseo y Sa Farola con su haz girando
   const farola = buildSaFarola(sc, colliders, day);
+  // Alrededores: la urbanización sigue tierra adentro y a los lados, y al fondo lomas; hacia el norte, el mar
+  buildSurroundings(sc, {
+    keepOut: [
+      { minX: -200, maxX: 200, minZ: 10, maxZ: 17 }, // la calle
+      { minX: -18, maxX: 19, minZ: -10, maxZ: 17 }, // casa de Azul y vecinos
+      { minX: -25, maxX: -15, minZ: -45, maxZ: 17 }, // calle que baja al mar
+      { minX: -200, maxX: 200, minZ: -60, maxZ: -23 }, // Camí de sa Farola, casas de detrás y faro
+      { minX: -38, maxX: -2, minZ: -38, maxZ: 0 }, // chalets de la calle que baja
+    ],
+    half: 110,
+    center: { x: 0, z: 0 },
+    night: !day,
+    seed: 23,
+    colliders,
+    water: (_x, z) => z < COAST_Z + 2,
+    hole: { minX: -1e4, maxX: 1e4, minZ: -1e4, maxZ: COAST_Z + 1 },
+  });
   const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   lamp.position.copy(farola.lamp);
   lamp.scale.setScalar(5);

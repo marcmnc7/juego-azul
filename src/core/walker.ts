@@ -35,7 +35,7 @@ export class Walker {
   yaw = 0;
   /** Fase del ciclo de paso: avanza con la distancia recorrida, así los pies no patinan. */
   walk = 0;
-  speed = 5.8;
+  speed = 5.2;
   /** Agarre: 1 en suelo; en el agua bajo, para que se deslice y cueste arrancar y frenar. */
   traction = 1;
   knock = new THREE.Vector3();
@@ -61,6 +61,8 @@ export class Walker {
   private camLook = new THREE.Vector3();
   private lookVel = new THREE.Vector3();
   private camInit = false;
+  /** Distancia real de la cámara: se acerca rápido si algo tapa y se aleja despacio (sin tirones). */
+  private camD = -1;
   private baseFov = 0;
   private shakeT = 0;
 
@@ -70,7 +72,7 @@ export class Walker {
   turn(delta: number) {
     if (delta !== 0) {
       this.yaw -= delta;
-      this.manualCam = 1.5;
+      this.manualCam = 2.5;
     }
   }
 
@@ -139,7 +141,8 @@ export class Walker {
       tz = (mz / len) * this.speed * mag * turnPenalty;
       // La cámara se recoloca sola detrás, salvo si se camina hacia ella
       this.manualCam -= dt;
-      if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * 1.6 * mag);
+      // (más rápido cuanto más corres, y nada en el primer instante para que girar sobre sí no maree)
+      if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * (0.6 + 1.6 * Math.min(1, spd / this.speed)) * mag);
     }
     this.turnRate = wrap(this.facing - prevFacing) / dt;
     this.wish.set(tx, tz);
@@ -236,11 +239,17 @@ export class Walker {
     for (; d < dist; d += 0.25) {
       const x = p.x + sx * d;
       const z = p.z + sz * d;
-      if (walls.some((c) => c.maxX - c.minX > 2 && c.maxZ - c.minZ > 2 && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
+      // Edificios y también muros largos y finos (antes la cámara los atravesaba)
+      if (walls.some((c) => (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
     }
+    if (this.camD < 0 || !this.camInit) this.camD = d;
+    else this.camD += (d - this.camD) * Math.min(1, dt * (d < this.camD ? 14 : 2.2));
+    d = this.camD;
     const run = Math.min(1, this.currentSpeed / this.speed);
-    this.camPos.set(p.x + sx * d, h + (dist - d) * 0.3, p.z + sz * d);
-    this.camLook.set(p.x - sx * 1.5, 1.3, p.z - sz * 1.5);
+    // Alturas relativas a los pies (en el agua, en una explanada o en una escalera la cámara sigue igual);
+    // si una pared la acerca, sube solo un poco para no acabar mirando desde arriba
+    this.camPos.set(p.x + sx * d, p.y + h + (dist - d) * 0.15, p.z + sz * d);
+    this.camLook.set(p.x - sx * 1.5, p.y + 1.3, p.z - sz * 1.5);
     if (!this.camInit || cam.position.distanceToSquared(this.camPos) > 400) {
       // Primera vez o teletransporte: sin muelle
       this.camInit = true;

@@ -499,6 +499,13 @@ setSurface(0xc9b48a, Surf.Sand); // arcén de tierra
 setSurface(0xa9a39a, Surf.Cobble); // adoquín de la placita del faro
 setSurface(0xc4977e, Surf.Terracotta); // hormigón impreso
 setSurface(0xeeebe4, Surf.Roof); // teja pintada de blanco
+// Jardines y campo de alrededor
+setSurface(0x3f7a3a, Surf.Grass);
+setSurface(0x4a7a40, Surf.Grass);
+setSurface(0x5f6f3c, Surf.Grass);
+setSurface(0x4c5e34, Surf.Grass);
+setSurface(0x56683a, Surf.Grass);
+setSurface(0xf4efe2, Surf.Plaster);
 
 const hsl = { h: 0, s: 0, l: 0 };
 const tmp = new THREE.Color();
@@ -520,6 +527,9 @@ export function surfaceFor(color: number): Surf {
   else if (l < 0.3 && s < 0.12 && l > 0.12) r = Surf.Asphalt;
   else if (h >= 18 && h <= 40 && s > 0.25 && l > 0.17 && l < 0.42) r = Surf.Wood;
   else if (h >= 70 && h <= 160 && s > 0.15 && l > 0.12 && l < 0.55) r = Surf.Foliage;
+  // Grises medios: hormigón, bordillos, piedra de banco (antes quedaban lisos)
+  else if (s < 0.1 && l >= 0.42 && l <= 0.72) r = Surf.Paving;
+  else if (h >= 40 && h <= 70 && s > 0.2 && s < 0.6 && l > 0.3 && l < 0.6) r = Surf.Grass;
   cache.set(color, r);
   return r;
 }

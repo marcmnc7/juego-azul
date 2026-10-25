@@ -6,7 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, Person, CrowdPeople, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
@@ -18,20 +18,19 @@ import type { Level, LevelDone } from './level';
 import { disposeObj } from './level';
 
 // Capítulo 4 · Fito en Gran Canaria.
-// Pista en la barra (tabaco opcional a la papelera) → la cola eterna del lavabo, donde la gente intenta
-// colarse (y suena un temón que grabar para Gas) → se apagan las luces entre canción y canción y Gas no
-// la encuentra: hay que encenderle el flash cuando mire hacia ella → minijuego de ritmo → fuegos.
+// Aeropuerto (Azul esquiva hamburguesas) → en el estadio juegas con Gas, que tiene que ir al baño una y
+// otra vez: cola de los WC, y mientras Azul le graba el temón → al volver está oscuro entre canciones y
+// cuesta encontrarla entre la gente (ella hace flash con el móvil) y cada canción que pasa buscándola
+// se la pierde → minijuego de ritmo juntos en primera fila → fuegos.
 
-type Phase = 'airport' | 'intro' | 'queue' | 'inQueue' | 'film' | 'flash' | 'meet' | 'rhythm' | 'ending' | 'done';
+type Phase = 'airport' | 'intro' | 'toWc' | 'film' | 'seek' | 'found' | 'rhythm' | 'ending' | 'done';
 
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = CONCERT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
 const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta');
 const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🍔 ¡Buu! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó']);
-const T_QUEUE_CUT_IN = () => txt<string[]>('queueCutIn', ['😤 Se os ha colado uno', '😤 «Es que voy con mi amiga, que está ahí delante»', '😤 Colado. Y encima sonríe']);
-const T_QUEUE_BLOCK = () => txt<string[]>('queueCut', ['✋ «Eh, eh. La cola empieza allí atrás»', '✋ «¿Tú también vas con tu amiga? Al final»', '✋ Se va al final, refunfuñando']);
-const T_QUEUE_DONE = () => txt<string>('queueDone', '🚻 ¡Por fin le toca! Y fuera suena un temón…');
+const T_WC_AGAIN = () => txt<string[]>('wcAgain', ['🚻 Otra vez a la cola del baño…', '🚻 Y otra vez. Cola eterna', '🚻 La última, lo promete']);
 const T_FILM_INTRO = () =>
   txt<Line[]>('filmIntro', [
     { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en el baño.' },
@@ -39,13 +38,26 @@ const T_FILM_INTRO = () =>
     { who: 'Narrador', text: 'Grábale la canción: mantén a Fito dentro del encuadre aunque la gente salte delante.' },
   ]);
 const T_FILM_DONE = () => txt<string>('filmDone', '🎥 Vídeo guardado. Gas no se lo pierde (casi)');
-const T_FLASH_HIT = () => txt<string[]>('flashHit', ['📱 ¡Te ha visto! Viene hacia ti', '📱 Un poco más cerca…', '📱 «¡Ya casi!»', '📱 «¡Te veo!»']);
-const T_FLASH_MISS = () => txt<string[]>('flashWrong', ['🙈 Gas mira hacia otro lado…', '🙈 Se va hacia otro flash', '🙈 Has deslumbrado a un señor de Telde']);
-const T_FLASH_HINT = () => txt<string>('flashHint', 'Enciende el flash cuando la linterna de Gas te apunte');
-
+const T_SEEK_HINT = () => txt<string>('seekHint', 'Busca a Azul: hace doble flash ✨✨ con el móvil');
+const T_SONG_LOST = () => txt<string[]>('songLost', ['🎵 Una canción que Gas se pierde', '🎵 Y otra… Gas sigue buscando', '🎵 Fito ya va por la siguiente']);
+const T_FOUND = () =>
+  txt<Line[][]>('foundLines', [
+    [
+      { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
+      { who: 'Azul', text: 'Te he grabado el temón. Toma.' },
+    ],
+    [{ who: 'Gas', text: '¡Aquí estás! Te has movido…' }],
+    [{ who: 'Gas', text: 'Ahora sí. No me muevo de aquí.' }],
+  ]);
+const T_GO_AGAIN = () =>
+  txt<Line[][]>('goAgain', [
+    [],
+    [{ who: 'Narrador', text: 'Dos canciones después, Gas tiene que volver al baño.' }],
+    [{ who: 'Narrador', text: 'Y otra vez. La cola, eterna.' }],
+  ]);
 const BAR_POS = new THREE.Vector3(-17, 0, -8);
 const GAS_POS = new THREE.Vector3(-8.5, 0, 24.2);
-const SMOKE_POS = new THREE.Vector3(-12.5, 0, 2);
+const SMOKE_POS = new THREE.Vector3(292.2, 0, 7);
 const AISLE_X = -8.5;
 // WC portátiles a la derecha, con la puerta mirando al recinto
 const WC_X = 17;
@@ -60,7 +72,10 @@ const WC_BROKEN = [0, 4, 5];
 const Q_X0 = WC_X - 3.2;
 const Q_GAP = 0.85;
 const FLASH_SPOT = new THREE.Vector3(AISLE_X, 0, 4);
-const FLASH_NEED = 4;
+// Dónde está Azul cada vez que Gas vuelve del baño (en el pasillo, entre el público)
+const AZUL_SPOTS = [FLASH_SPOT, new THREE.Vector3(-6, 0, 18), new THREE.Vector3(-10, 0, 13.5)];
+const TRIPS = AZUL_SPOTS.length;
+const SONG_SECS = 36;
 const wrapA = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const LOOKS: PersonLook[] = [
   { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'short' },
@@ -74,7 +89,7 @@ const LOOKS: PersonLook[] = [
 /** Alguien del público con vida propia: hace cola, entra al baño, sale, o intenta colarse. */
 interface Npc extends SteerState {
   p: Person;
-  mode: 'free' | 'queue' | 'toWc' | 'leave' | 'cut' | 'tail';
+  mode: 'free' | 'queue' | 'toWc' | 'leave' | 'tail';
   tx: number;
   tz: number;
   wc: number;
@@ -341,8 +356,10 @@ export class Level3 implements Level {
   private fx: Particles;
   private fireworks = new Fireworks();
   private phase: Phase = 'intro';
+  /** El personaje que se controla: Azul en el aeropuerto, Gas en el estadio. */
   private player: Person;
   private walker: Walker;
+  private azul: Person;
   private gas: Person;
   private barman: Person;
   private smoke: THREE.Group;
@@ -363,18 +380,23 @@ export class Level3 implements Level {
   private wcBusyT = WC_Z.map((_, i) => (WC_BROKEN.includes(i) ? Infinity : 4 + Math.random() * 16));
   private wcRes = WC_Z.map(() => false);
   private wcLights: THREE.MeshBasicMaterial[] = [];
-  // La cola: 'azul' es ella; el resto, gente que avanza, entra, sale y se intenta colar
+  // La cola de los baños: gente que avanza, entra, sale y se une al final (Gas también, varias veces)
   private npcs: Npc[] = [];
-  private queue: (Npc | 'azul' | 'gas')[] = [];
+  private queue: Npc[] = [];
   private allPeople: Circle[] = [];
-  private cutter: Npc | null = null;
-  private cutT = 4;
   private headT = 0;
   private joinT = 0;
-  private azWalk = { walk: 0 };
-  private gasQWalk = { walk: 0 };
   private playerCircle: Circle = { x: 0, z: 0, r: 0.38 };
   private movingAvoid: Circle[] = [];
+  private azCircle!: Circle;
+  private trip = 0;
+  private songT = 0;
+  private missed = 0;
+  private seekT = 0;
+  private flashT = 1;
+  private flashPulse = 0;
+  private decoyT = 0;
+  private decoys: { light: THREE.PointLight; t: number }[] = [];
   private filmT = 0;
   private filmIn = 0;
   private filmYaw = 0;
@@ -387,32 +409,17 @@ export class Level3 implements Level {
   private burgerT = 1;
   private burgerHits = 0;
   private invuln = 0;
-  private cutsBlocked = 0;
-  private cutsLost = 0;
-  private queueT = 0;
   private recordT = 0;
-  private shoutT = 0;
   private hudChips = '-';
   private hudObj = '';
-  // A oscuras: Gas busca con la linterna del móvil y ella le enciende el flash
+  // A oscuras entre canciones: Azul hace flash con el móvil
   private hemi!: THREE.HemisphereLight;
-  private torch!: THREE.Mesh;
-  private flashLight = new THREE.PointLight(0xf4f8ff, 0, 18, 1.4);
-  private flashHits = 0;
-  private flashMiss = 0;
-  private flashCd = 0;
-  private gaze = 1.2;
-  private gazeTgt = 1.2;
-  private gazeT = 0;
-  private gasS = 0;
-  private gasTargetS = 0;
-  private gasSpd = 0;
-  private gasPath: THREE.Vector3[] = [];
-  private gasPathLen = 0;
-  private gasCircle!: Circle;
+  private flashLight = new THREE.PointLight(0xf4f8ff, 0, 22, 1.3);
+  private flashSprite!: THREE.Sprite;
   private v1 = new THREE.Vector3();
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
-  private crowds: { mesh: THREE.InstancedMesh; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private pose = newCrowdPose();
+  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private spots: { mesh: THREE.Mesh; ph: number }[] = [];
   private band: Person[] = [];
   private marker: THREE.Mesh;
@@ -430,10 +437,8 @@ export class Level3 implements Level {
   private endT = 0;
   private camTarget = new THREE.Vector3();
   private camLook = new THREE.Vector3();
-  private tmpM = new THREE.Matrix4();
   private tmpQ = new THREE.Quaternion();
   private tmpV = new THREE.Vector3();
-  private one = new THREE.Vector3(1, 1, 1);
   private up = new THREE.Vector3(0, 1, 0);
 
   constructor(
@@ -455,18 +460,20 @@ export class Level3 implements Level {
     this.fx = new Particles(sc);
     sc.add(this.fireworks.points);
 
-    this.player = makePerson(MARGAUX_LOOK);
+    this.azul = makePerson(MARGAUX_LOOK);
+    this.player = this.azul;
     this.walker = new Walker(this.player.root.position);
     this.player.root.position.set(0, 0, -18);
     sc.add(this.player.root);
 
+    // Gas vuela por su cuenta: aparece ya en el estadio
     this.gas = makePerson(MARC_LOOK);
-    this.gas.root.position.copy(GAS_POS);
-    this.gas.root.rotation.y = Math.PI;
+    this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);
     sc.add(this.gas.root);
-    // El público y Gas no se pueden atravesar
+    // El público y Azul (cuando no la llevas tú) no se pueden atravesar
     this.people = this.crowds.flatMap((c) => c.base.map((b) => ({ x: b.x, z: b.z, r: 0.35 })));
-    this.people.push({ x: GAS_POS.x, z: GAS_POS.z, r: 0.35 });
+    this.azCircle = { x: 1e4, z: 1e4, r: 0.35 };
+    this.people.push(this.azCircle);
     this.initCrowdPhysics();
     this.buildProps();
     this.buildQueue();
@@ -617,6 +624,12 @@ export class Level3 implements Level {
 
   private startAirport() {
     this.phase = 'airport';
+    if (this.player !== this.azul) {
+      this.player = this.azul;
+      this.walker = new Walker(this.azul.root.position);
+      this.azCircle.x = this.azCircle.z = 1e4;
+      this.gas.root.visible = false;
+    }
     this.player.root.position.set((AIR.minX + AIR.maxX) / 2, 0, AIR.minZ + 1);
     this.walker.yaw = this.walker.facing = 0;
     this.walker.stop();
@@ -705,10 +718,7 @@ export class Level3 implements Level {
         t.p.root.visible = false;
         t.c.x = t.c.z = 1e4;
       }
-      this.player.root.position.set(0, 0, -18);
-      this.walker.yaw = this.walker.facing = 0;
-      this.walker.stop();
-      this.camera.position.set(0, 5, -27);
+      this.toStadium();
       this.updateHud();
     }, 700);
     later(
@@ -717,13 +727,33 @@ export class Level3 implements Level {
           phoneChat(CHATS.vasTarde, () =>
             dialogue(CONCERT.stadium, () => {
               this.busy = false;
-              this.phase = 'queue';
+              this.phase = 'toWc';
               this.updateHud();
             }),
           ),
         ),
       1500,
     );
+  }
+
+  /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
+  private toStadium() {
+    this.player = this.gas;
+    this.walker = new Walker(this.gas.root.position);
+    this.gas.root.visible = true;
+    this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);
+    this.walker.yaw = this.walker.facing = Math.PI * 0.75;
+    this.walker.stop();
+    this.placeAzul(AZUL_SPOTS[0]);
+    this.camera.position.set(AISLE_X + 6, 5, FLASH_SPOT.z - 5);
+  }
+
+  private placeAzul(at: THREE.Vector3) {
+    this.azul.root.visible = true;
+    this.azul.root.position.copy(at);
+    this.azul.root.rotation.y = 0;
+    this.azCircle.x = at.x;
+    this.azCircle.z = at.z;
   }
 
   private buildWorld() {
@@ -946,10 +976,9 @@ export class Level3 implements Level {
     }
     looks.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % looks.length === li);
-      const mesh = new THREE.InstancedMesh(personGeometry(lk, li % 2 === 0), vertexMat(), mine.length);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      sc.add(mesh);
-      this.crowds.push({ mesh, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });
+      const people = new CrowdPeople(lk, mine.length);
+      sc.add(people.group);
+      this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });
     });
     // Mecheros (y móviles) en alto entre el público
     const lp = new Float32Array(pts.length * 3);
@@ -1202,15 +1231,7 @@ export class Level3 implements Level {
     return out.set(Q_X0 - k * Q_GAP, 0, Q_Z);
   }
 
-  private get azIdx() {
-    return this.queue.indexOf('azul');
-  }
-
-  private get gIdx() {
-    return this.queue.indexOf('gas');
-  }
-
-  /** Gente para la cola (Gas ya está en ella) y una reserva para entrar, salir y colarse. */
+  /** Gente para la cola de los baños y una reserva para entrar, salir y unirse al final. */
   private buildQueue() {
     for (let i = 0; i < 13; i++) {
       const lk = LOOKS[i % LOOKS.length];
@@ -1221,20 +1242,13 @@ export class Level3 implements Level {
       const n: Npc = { p, mode: 'free', tx: 0, tz: 0, wc: -1, walk: Math.random() * 6, circle: { x: 1e4, z: 1e4, r: 0.32 } };
       this.npcs.push(n);
     }
-    for (let k = 0; k < 9; k++) {
-      if (k === 6) {
-        this.queue.push('gas');
-        this.gas.root.position.copy(this.slot(k));
-        this.gas.root.rotation.y = Math.PI / 2;
-        continue;
-      }
+    for (let k = 0; k < 7; k++) {
       const n = this.spawn(this.slot(k).x, Q_Z + (Math.random() - 0.5) * 0.15);
       n.mode = 'queue';
       n.p.root.rotation.y = Math.PI / 2;
       this.queue.push(n);
     }
     this.allPeople = [...this.people, ...this.npcs.map((n) => n.circle)];
-    this.gasCircle = this.people[this.people.length - 1];
   }
 
   private spawn(x: number, z: number) {
@@ -1270,15 +1284,10 @@ export class Level3 implements Level {
     return left < 0.08;
   }
 
-  /** La cola viva: los baños se ocupan y se vacían, la cabeza entra, la gente se une al final o se cuela. */
+  /** La cola viva: los baños se ocupan y se vacían, la cabeza entra y la gente se une al final. */
   private stepQueue(dt: number) {
-    if (this.phase === 'film' || this.phase === 'flash' || this.phase === 'meet' || this.phase === 'rhythm' || this.phase === 'ending' || this.phase === 'done') {
-      for (const n of this.npcs) if (n.mode !== 'free') this.hide(n);
-      return;
-    }
-    if (this.phase === 'airport' || (this.phase === 'intro' && this.player.root.position.x > 100)) {
+    if (this.phase === 'airport' || this.phase === 'rhythm' || this.phase === 'ending' || this.phase === 'done' || (this.phase === 'intro' && this.player.root.position.x > 100)) {
       for (const n of this.npcs) if (n.mode === 'queue') animatePerson(n.p, dt, 'idle');
-      animatePerson(this.gas, dt, 'idle');
       return;
     }
     const pp = this.player.root.position;
@@ -1295,10 +1304,9 @@ export class Level3 implements Level {
         if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 180, 0.08);
       }
     }
-    // La cabeza de la cola entra en cuanto se libera uno (Gas espera su turno)
     this.headT -= dt;
     const head = this.queue[0];
-    if (head && typeof head !== 'string' && this.headT <= 0) {
+    if (head && this.headT <= 0) {
       const i = this.freeToilet();
       if (i >= 0) {
         this.queue.shift();
@@ -1310,41 +1318,19 @@ export class Level3 implements Level {
         this.headT = 0.8;
       }
     }
-    // Siempre llega gente nueva al final
+    // Siempre llega gente nueva al final (la cola nunca se acaba)
     this.joinT -= dt;
-    const last = Math.max(this.azIdx, this.gIdx);
-    if (this.joinT <= 0 && this.queue.length < last + 3) {
-      this.joinT = this.azIdx >= 0 ? 2.5 + Math.random() * 3 : 0.8 + Math.random();
+    if (this.joinT <= 0 && this.queue.length < 7) {
+      this.joinT = 1.5 + Math.random() * 2.5;
       const n = this.spawn(6 + Math.random() * 4, -4 - Math.random() * 3);
       n.mode = 'tail';
     }
-    // Colarse: alguien va directo al hueco de delante de Gas
-    if (this.gIdx >= 1 && !this.cutter && this.phase === 'inQueue') {
-      this.cutT -= dt;
-      if (this.cutT <= 0) {
-        this.cutT = 4 + Math.random() * 3.5;
-        const side = Math.random() < 0.5 ? -1 : 1;
-        const n = this.spawn(this.slot(this.gIdx - 0.5).x + (Math.random() - 0.5) * 2, Q_Z + side * (5 + Math.random()));
-        n.mode = 'cut';
-        this.cutter = n;
-        audio.warn();
-      }
-    }
-    // Lugar de cada uno en la cola
     this.queue.forEach((e, k) => {
-      if (typeof e === 'string') return;
       this.slot(k);
       e.tx = this.v1.x;
       e.tz = Q_Z;
     });
-    const gi = this.gIdx;
-    if (gi >= 0) {
-      this.slot(gi, this.tmpV);
-      this.stepTo(this.gas, this.gasQWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2);
-      this.gasCircle.x = this.gas.root.position.x;
-      this.gasCircle.z = this.gas.root.position.z;
-    }
-    // Los que andan sueltos esquivan a la jugadora y a los que caminan (no a la cola, que es apretada)
+    // Los que andan sueltos esquivan a Gas y a los que caminan (no a la cola, que es apretada)
     this.playerCircle.x = pp.x;
     this.playerCircle.z = pp.z;
     this.movingAvoid.length = 0;
@@ -1370,28 +1356,6 @@ export class Level3 implements Level {
           n.mode = 'queue';
           this.queue.push(n);
         }
-      } else if (n.mode === 'cut') {
-        const k = this.gIdx;
-        if (k < 1) {
-          n.mode = 'tail';
-          this.cutter = null;
-          continue;
-        }
-        this.slot(k - 0.5);
-        const gx = this.v1.x;
-        const d = Math.hypot(r.x - gx, r.z - Q_Z);
-        // Se acerca disimulando y el último tramo, deprisa
-        if (this.stepTo(n.p, n, gx, Q_Z, d > 3 ? 1.2 : 2.6, dt)) {
-          this.queue.splice(k, 0, n);
-          n.mode = 'queue';
-          this.cutter = null;
-          this.cutsLost++;
-          audio.hit();
-          vibrate(30);
-          const lines = T_QUEUE_CUT_IN();
-          toast(lines[(this.cutsLost - 1) % lines.length]);
-          this.updateHud();
-        }
       }
       n.circle.x = r.x;
       n.circle.z = r.z;
@@ -1400,70 +1364,42 @@ export class Level3 implements Level {
     this.paintToilets();
   }
 
-  /** ¿El que se cuela está a tiro para pararle los pies? */
-  private cutterNear() {
-    const n = this.cutter;
-    if (!n) return false;
-    this.slot(this.gIdx - 0.5, this.tmpV);
-    return Math.hypot(n.p.root.position.x - this.tmpV.x, n.p.root.position.z - Q_Z) < 3.4;
+  /** Final de la cola, donde Gas se pone. */
+  private tailSpot(out = this.tmpV) {
+    return this.slot(this.queue.length + 0.3, out);
   }
 
-  private blockCutter() {
-    const n = this.cutter;
-    if (!n) return;
-    this.cutter = null;
-    n.mode = 'tail';
-    this.cutsBlocked++;
-    this.shoutT = 1.2;
-    audio.luck();
-    vibrate(15);
-    const lines = T_QUEUE_BLOCK();
-    toast(lines[(this.cutsBlocked - 1) % lines.length]);
-    this.fx.burst(n.p.root.position.clone().setY(2.2), '✋', 1, 0.6, 0.5);
-    this.updateHud();
-  }
-
-  /** Gas sigue en la cola del baño y empieza un temón: ella se lo graba. */
-  private goFilm() {
+  /**
+   * Gas se pone a la cola (otra vez). La primera, mientras espera, Fito toca un temón y Azul se lo graba;
+   * las otras pasan rápido, pero cada cola es una canción que se pierde.
+   */
+  private wcTrip() {
     this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
     this.walker.stop();
-    audio.cheer(0.35);
+    this.trip++;
+    if (this.trip > 1) toast(T_WC_AGAIN()[Math.min(this.trip - 2, 2)]);
+    audio.whoosh();
+    const chat = CHATS.temon;
     fadeFlash(() => {
       this.gas.root.visible = false;
-      this.gasCircle.x = this.gasCircle.z = 1e4;
-      this.player.root.position.copy(FLASH_SPOT);
-      this.phase = 'film';
+      this.playerCircle.x = this.playerCircle.z = 1e4;
       this.updateHud();
     }, 500);
-    const chat = CHATS.temon;
-    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(0, 6) }, () => dialogue(CONCERT.filmIntro, () => this.startFilm())), 1100);
-  }
-
-  /** Le toca a Gas: él entra y fuera empieza un temón. */
-  private gasTurn() {
-    this.busy = true;
-    this.input.reset();
-    this.hud.setAction(null);
-    if (this.cutter) {
-      this.cutter.mode = 'tail';
-      this.cutter = null;
-    }
-    toast(T_QUEUE_DONE());
-    audio.cheer(0.35);
-    later(() => {
-      fadeFlash(() => {
-        this.queue = this.queue.filter((e) => typeof e !== 'string');
-        this.gas.root.visible = false;
-        this.gasCircle.x = this.gasCircle.z = 1e4;
-        this.player.root.position.copy(FLASH_SPOT);
-        this.walker.stop();
+    if (this.trip === 1) {
+      // Fito empieza el temón: Azul lo graba desde su sitio
+      later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(0, 6) }, () => {
         this.phase = 'film';
-        this.updateHud();
-      }, 500);
-      later(() => dialogue(T_FILM_INTRO(), () => this.startFilm()), 1100);
-    }, 1200);
+        dialogue(T_FILM_INTRO(), () => this.startFilm());
+      }), 1100);
+    } else {
+      later(() => {
+        this.missed++;
+        toast(T_SONG_LOST()[Math.min(this.missed - 1, 2)]);
+        this.startSeek();
+      }, 1800);
+    }
   }
 
   /** Grabar el temón con el móvil: la cámara es el móvil y Fito no para de moverse por el escenario. */
@@ -1475,7 +1411,7 @@ export class Level3 implements Level {
     this.filmYaw = 0;
     this.filmPitch = 0.12;
     if (!this.filmUi) this.baseFov = this.camera.fov;
-    this.player.root.visible = false;
+    this.azul.root.visible = false;
     audio.startMusic('road');
     this.filmUi?.remove();
     const ui = document.createElement('div');
@@ -1501,7 +1437,7 @@ export class Level3 implements Level {
     const ax = this.input.axes();
     this.filmYaw = THREE.MathUtils.clamp(this.filmYaw - ax.x * 1.6 * dt - this.input.consumeCam() * 0.6, -0.9, 0.9);
     this.filmPitch = THREE.MathUtils.clamp(this.filmPitch + ax.y * 1.0 * dt, -0.1, 0.5);
-    const pp = this.player.root.position;
+    const pp = this.azul.root.position;
     const shake = Math.sin(this.filmT * 23) * 0.006 + Math.sin(this.filmT * 7) * 0.01;
     this.camera.position.set(pp.x + 0.15, 1.75, pp.z + 0.3);
     this.camera.fov += (34 - this.camera.fov) * Math.min(1, dt * 4);
@@ -1536,166 +1472,156 @@ export class Level3 implements Level {
     this.filmUi = null;
     this.filmDone = true;
     this.band[0].root.position.x = 0;
-    this.player.root.visible = true;
+    this.azul.root.visible = true;
     this.camera.fov = (this.camera.userData.baseFov ?? this.baseFov);
     this.camera.updateProjectionMatrix();
     toast(`${T_FILM_DONE()} · ${this.filmPct()}%`);
     audio.luck();
-    this.startFlash();
+    this.missed++;
+    this.startSeek();
   }
 
   private filmPct() {
     return Math.round((this.filmIn / Math.max(0.1, Math.min(this.filmT, FILM_SECS))) * 100);
   }
 
-  /** Linterna del móvil de Gas (un cono que barre a oscuras) y el flash de Azul. */
+  /** El flash del móvil de Azul (luz y destello) y los flashes de otra gente que despistan. */
   private buildFlash() {
-    const geo = new THREE.ConeGeometry(1.5, 9, 18, 1, true).translate(0, -4.5, 0).rotateX(-Math.PI / 2);
-    this.torch = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff4d6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
-    this.torch.position.set(0.25, 1.55, 0.3);
-    this.torch.visible = false;
-    this.gas.root.add(this.torch);
     this.scene.add(this.flashLight);
-    // Camino de Gas por el pasillo, de primera fila hasta donde está ella
-    this.gasPath = [...CROWD_PATH].reverse().map(([x, z]) => new THREE.Vector3(x, 0, z));
-    this.gasPath[this.gasPath.length - 1].copy(FLASH_SPOT);
-    for (let i = 1; i < this.gasPath.length; i++) this.gasPathLen += this.gasPath[i].distanceTo(this.gasPath[i - 1]);
-    this.gasPathLen -= 1.2;
-  }
-
-  private gasPathAt(s: number, out: THREE.Vector3) {
-    for (let i = 1; i < this.gasPath.length; i++) {
-      const a = this.gasPath[i - 1];
-      const b = this.gasPath[i];
-      const l = a.distanceTo(b);
-      if (s <= l) return out.copy(a).lerp(b, s / l);
-      s -= l;
+    this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xf4f8ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    this.flashSprite.scale.setScalar(2.4);
+    this.scene.add(this.flashSprite);
+    for (let i = 0; i < 3; i++) {
+      const light = new THREE.PointLight(0xfff2dc, 0, 14, 1.5);
+      this.scene.add(light);
+      this.decoys.push({ light, t: 0 });
     }
-    return out.copy(this.gasPath[this.gasPath.length - 1]);
   }
 
   private setDark(dark: boolean) {
-    this.hemi.intensity = dark ? 0.3 : 1.5;
-    this.sun.light.intensity = dark ? 0.2 : 1.6;
+    this.hemi.intensity = dark ? 0.42 : 1.5;
+    this.sun.light.intensity = dark ? 0.3 : 1.6;
     this.spots.forEach((s) => (s.mesh.visible = !dark));
-    this.torch.visible = dark;
   }
 
-  private startFlash() {
-    this.phase = 'flash';
-    this.busy = true;
-    this.input.reset();
-    this.walker.stop();
-    this.player.root.position.copy(FLASH_SPOT);
-    this.gas.root.position.copy(GAS_POS);
+  /** Gas sale del baño: entre canción y canción está oscuro y tiene que encontrar a Azul entre la gente. */
+  private startSeek() {
+    // Sale del baño hacia el público (de espaldas a las cabinas, para que la cámara no quede detrás)
     this.gas.root.visible = true;
-    this.gasS = this.gasTargetS = 0;
-    this.flashHits = this.flashMiss = 0;
-    this.gaze = this.gazeTgt = 1.3;
-    this.gazeT = 1.5;
+    this.gas.root.position.set(WC_X - 4.5, 0, Q_Z + 2.2);
+    this.walker.stop();
+    this.walker.yaw = this.walker.facing = -0.75;
+    this.placeAzul(AZUL_SPOTS[(this.trip - 1) % TRIPS]);
+    this.phase = 'seek';
+    this.songT = 0;
+    this.seekT = 0;
+    this.flashT = 1.2;
     this.setDark(true);
     audio.stopMusic();
     audio.ambience(0.25);
+    this.busy = true;
     this.updateHud();
     const chat = CHATS.temon;
-    phoneChat({ ...chat, msgs: chat.msgs.slice(6) }, () =>
-      dialogue(CONCERT.flashIntro, () => {
-        this.busy = false;
-        this.updateHud();
-      }),
-    );
+    const go = () => dialogue([{ who: 'Narrador', text: T_SEEK_HINT() }], () => {
+      this.busy = false;
+      this.updateHud();
+    });
+    // La primera vez, lo que le escribió al salir
+    if (this.trip === 1) phoneChat({ ...chat, msgs: chat.msgs.slice(6) }, go);
+    else go();
   }
 
-  /** ¿Gas está mirando hacia ella ahora mismo (y quieto)? */
-  private gasLooking() {
-    return this.gasS === this.gasTargetS && Math.abs(this.gazeTgt) < 0.3 && Math.abs(this.gaze) < 0.3;
-  }
-
-  private stepFlash(dt: number) {
-    const gp = this.gas.root.position;
+  /** Buscando a Azul: ella hace doble flash cada poco; otros móviles despistan; las canciones pasan. */
+  private stepSeek(dt: number) {
+    const ap = this.azul.root.position;
     const pp = this.player.root.position;
-    const toAz = Math.atan2(pp.x - gp.x, pp.z - gp.z);
-    this.flashLight.intensity *= Math.exp(-dt * 7);
-    this.flashLight.position.set(pp.x, 2.1, pp.z);
-    this.flashCd -= dt;
-    if (Math.abs(this.gasS - this.gasTargetS) > 1e-3) {
-      // Ha visto el flash: viene hacia ella (o se va detrás de otro flash)
-      const prev = this.gasPathAt(this.gasS, this.tmpV).clone();
-      const dir = Math.sign(this.gasTargetS - this.gasS);
-      // Arranca y frena como una persona (no a velocidad constante desde el primer fotograma)
-      const rem = Math.abs(this.gasTargetS - this.gasS);
-      this.gasSpd = Math.min(2.4, this.gasSpd + 3.5 * dt, Math.sqrt(2 * 3 * rem) + 0.3);
-      this.gasS += dir * Math.min(rem, this.gasSpd * dt);
-      this.gasPathAt(this.gasS, gp);
-      const dx = gp.x - prev.x;
-      const dz = gp.z - prev.z;
-      if (dx * dx + dz * dz > 1e-8) this.gas.root.rotation.y += wrapA(Math.atan2(dx, dz) - this.gas.root.rotation.y) * Math.min(1, dt * 10);
-      animatePerson(this.gas, dt, 'walk');
-      this.gaze = 0;
-      if (Math.abs(this.gasS - this.gasTargetS) <= 1e-3) {
-        this.gasS = this.gasTargetS;
-        this.gasSpd = 0;
-        // Llega a donde la vio y la vuelve a perder entre la gente
-        if (this.flashHits >= FLASH_NEED) {
-          this.phase = 'meet';
-          this.meetGas();
-        } else {
-          this.gazeTgt = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.6);
-          this.gazeT = 1 + Math.random();
-        }
-      }
-    } else {
-      // Busca: barre con la linterna a un lado y a otro, y a veces se queda mirando hacia ella
-      this.gazeT -= dt;
-      if (this.gazeT <= 0) {
-        const lookHer = Math.random() < 0.38;
-        this.gazeTgt = lookHer ? (Math.random() - 0.5) * 0.25 : (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 1.1);
-        this.gazeT = lookHer ? 0.9 + Math.random() * 0.6 - this.flashHits * 0.12 : 0.8 + Math.random() * 1.4;
-      }
-      this.gaze += (this.gazeTgt - this.gaze) * Math.min(1, dt * 3.2);
-      this.gas.root.rotation.y += wrapA(toAz + this.gaze - this.gas.root.rotation.y) * Math.min(1, dt * 8);
-      animatePerson(this.gas, dt, 'idle');
+    this.seekT += dt;
+    this.songT += dt;
+    if (this.songT > SONG_SECS) {
+      this.songT = 0;
+      this.missed++;
+      toast(T_SONG_LOST()[Math.min(this.missed - 1, 2)]);
+      audio.cheer(0.25);
+      this.updateHud();
     }
-    const look = this.gasLooking();
-    const mat = this.torch.material as THREE.MeshBasicMaterial;
-    mat.opacity += ((look ? 0.42 : 0.13) - mat.opacity) * Math.min(1, dt * 8);
-    // Azul mira hacia donde está Gas, y la cámara detrás de ella
-    this.walker.facing = this.walker.yaw = toAz + Math.PI;
+    // Doble flash de Azul: más a menudo cuanto más tarda (ella también le busca)
+    this.flashT -= dt;
+    if (this.flashT <= 0) {
+      this.flashT = Math.max(1.4, 3.2 - this.seekT * 0.04) + Math.random() * 0.8;
+      this.flashPulse = 0.45;
+    }
+    const prevPulse = this.flashPulse;
+    this.flashPulse = Math.max(0, this.flashPulse - dt);
+    const on = (this.flashPulse > 0.33 && this.flashPulse <= 0.45) || (this.flashPulse > 0.05 && this.flashPulse <= 0.17);
+    if (on && !(prevPulse > 0.33 && prevPulse <= 0.45) && this.flashPulse > 0.33) audio.pop();
+    this.flashLight.position.set(ap.x, 2.3, ap.z);
+    this.flashLight.intensity = on ? 60 : 0;
+    this.flashSprite.position.set(ap.x + 0.25, 2.25, ap.z + 0.2);
+    const sm = this.flashSprite.material as THREE.SpriteMaterial;
+    sm.opacity = on ? 1 : 0;
+    this.recordT = 0.3; // Azul con el móvil en alto
+    // Otros móviles: flashes sueltos por el público
+    this.decoyT -= dt;
+    if (this.decoyT <= 0) {
+      this.decoyT = 0.5 + Math.random() * 0.9;
+      const d = this.decoys.find((x) => x.t <= 0);
+      const c = this.people[Math.floor(Math.random() * (this.people.length - 1))];
+      if (d && c) {
+        d.t = 0.12;
+        d.light.position.set(c.x, 2.2, c.z);
+      }
+    }
+    for (const d of this.decoys) {
+      d.t -= dt;
+      d.light.intensity = d.t > 0 ? 40 : 0;
+    }
+    // Azul mira hacia Gas cuando está cerca
+    const toG = Math.atan2(pp.x - ap.x, pp.z - ap.z);
+    const near = Math.hypot(pp.x - ap.x, pp.z - ap.z);
+    this.azul.root.rotation.y += wrapA((near < 6 ? toG : 0) - this.azul.root.rotation.y) * Math.min(1, dt * 4);
+    if (near < 1.7) this.foundAzul();
   }
 
-  private flash() {
-    if (this.flashCd > 0 || this.phase !== 'flash' || this.gasS !== this.gasTargetS) return;
-    this.flashCd = 0.9;
-    this.flashLight.intensity = 70;
-    this.recordT = 0.5;
-    audio.pop();
-    this.fx.burst(this.player.root.position.clone().setY(2.3), '✨', 3, 0.8, 0.6);
-    if (this.gasLooking()) {
-      this.flashHits++;
-      const lines = T_FLASH_HIT();
-      toast(lines[Math.min(lines.length - 1, this.flashHits - 1)]);
-      audio.luck();
-      vibrate(20);
-      this.gasTargetS = (this.gasPathLen * this.flashHits) / FLASH_NEED;
-    } else {
-      this.flashMiss++;
-      // Se va hacia otro flash: retrocede un poco
-      if (this.gasS > 0.5) this.gasTargetS = Math.max(0, this.gasS - this.gasPathLen / 10);
-      const lines = T_FLASH_MISS();
-      toast(lines[(this.flashMiss - 1) % lines.length]);
-      audio.warn();
-    }
-    this.updateHud();
+  private foundAzul() {
+    this.phase = 'found';
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.flashLight.intensity = 0;
+    (this.flashSprite.material as THREE.SpriteMaterial).opacity = 0;
+    for (const d of this.decoys) d.light.intensity = d.t = 0;
+    const pp = this.player.root.position;
+    const ap = this.azul.root.position;
+    this.walker.facing = Math.atan2(ap.x - pp.x, ap.z - pp.z);
+    this.azul.root.rotation.y = Math.atan2(pp.x - ap.x, pp.z - ap.z);
+    audio.luck();
+    vibrate(25);
+    this.fx.burst(ap.clone().lerp(pp, 0.5).setY(2.3), '❤️', 3, 0.8, 0.6);
+    const lines = [...T_FOUND()[Math.min(this.trip - 1, 2)], ...(this.trip === 1 && this.smokeThrown ? [CONCERT.gasSmoke] : [])];
+    dialogue(lines, () => {
+      if (this.trip >= TRIPS) {
+        this.startRhythm();
+        return;
+      }
+      // Vuelve la luz, suena otra canción y Gas tiene que volver al baño
+      this.setDark(false);
+      audio.startMusic('road');
+      later(() => dialogue(T_GO_AGAIN()[Math.min(this.trip, 2)], () => {
+        this.busy = false;
+        this.phase = 'toWc';
+        this.updateHud();
+      }), 900);
+    });
   }
 
   private updateHud() {
     const h = this.hud;
     let chips = '';
-    const gi = this.gIdx;
-    if (this.phase === 'inQueue' && gi >= 0) chips += `<span class="chip">🧍 Gas va ${gi + 1}º</span>`;
-    if (this.cutsBlocked + this.cutsLost > 0 && this.phase === 'inQueue') chips += `<span class="chip">✋ ${this.cutsBlocked}</span>`;
-    if (this.filmDone && this.phase !== 'flash') chips += '<span class="chip">📹</span>';
-    if (this.phase === 'flash') chips += `<span class="chip">📸 ${this.flashHits}/${FLASH_NEED}</span>`;
+    if (this.trip > 0 || this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
+    if (this.missed > 0) chips += `<span class="chip">🎵 se pierde ${this.missed}</span>`;
+    if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
+    if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🍔 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
@@ -1707,18 +1633,15 @@ export class Level3 implements Level {
         setObj(T_AIRPORT_HINT());
         break;
       case 'intro':
-      case 'queue':
-        setObj('Busca un buen sitio para grabar a Fito');
-        break;
-      case 'inQueue':
-        setObj('Que no se le cuele nadie a Gas');
+      case 'toWc':
+        setObj(this.trip === 0 ? 'Gas: ve a la cola del baño (al fondo, a la derecha)' : 'Otra vez al baño: a la cola');
         break;
       case 'film':
         setObj('Mantén a Fito dentro del recuadro');
         break;
-      case 'flash':
-      case 'meet':
-        setObj(T_FLASH_HINT());
+      case 'seek':
+      case 'found':
+        setObj(T_SEEK_HINT());
         break;
       case 'rhythm':
         setObj(CONCERT.rhythm);
@@ -1730,14 +1653,14 @@ export class Level3 implements Level {
 
   private target(): THREE.Vector3 | null {
     if (this.phase === 'airport') return this.v1.set((AIR.minX + AIR.maxX) / 2, 0, AIR.maxZ - 1);
-    if (this.phase === 'queue') return FLASH_SPOT;
+    if (this.phase === 'toWc') return this.tailSpot(this.v1);
     return null;
   }
 
   /** Pantallas del escenario: ecualizador, nombre y luces al ritmo. */
   private drawScreens(beat: number, pulse: number) {
     const live = this.phase === 'rhythm' || this.phase === 'ending';
-    const dark = this.phase === 'flash' || this.phase === 'meet';
+    const dark = this.phase === 'seek' || this.phase === 'found';
     for (const ctx of this.screenCtx) {
       const w = 512;
       const h = 256;
@@ -1788,8 +1711,8 @@ export class Level3 implements Level {
     const beat = this.rhythm ? this.rhythm.beat : this.t * 2;
     const pulse = Math.pow(1 - (beat % 1), 3);
 
-    // Público y banda
-    const jump = this.phase === 'rhythm' || this.phase === 'ending' ? 0.35 : 0.12;
+    // Público y banda: de pie, gesticulando; en pleno concierto con los brazos arriba
+    const energy = this.phase === 'rhythm' || this.phase === 'ending' ? 1 : this.phase === 'seek' ? 0.25 : 0.55;
     let gi = 0;
     for (const c of this.crowds) {
       c.base.forEach((b, i) => {
@@ -1799,17 +1722,17 @@ export class Level3 implements Level {
         const vx = this.cVel[2 * k] ?? 0;
         const vz = this.cVel[2 * k + 1] ?? 0;
         const pushed = Math.hypot(vx, vz);
-        // Si le empujan deja de saltar y se tambalea hacia donde le llevan
-        const y = Math.abs(Math.sin(beat * Math.PI + b.ph * (this.phase === 'rhythm' ? 0.15 : 1))) * jump * Math.max(0, 1 - pushed * 2);
+        // Si le empujan se tambalea hacia donde le llevan y baja los brazos
+        crowdPose(this.pose, this.t, b.ph, energy * Math.max(0.2, 1 - pushed * 2));
         this.tmpQ.setFromAxisAngle(this.up, b.ry);
         if (pushed > 0.01) {
           this.tiltAx.set(vz / pushed, 0, -vx / pushed);
           this.tiltQ.setFromAxisAngle(this.tiltAx, Math.min(0.35, pushed * 0.2 + Math.hypot(ox, oz) * 0.12));
           this.tmpQ.premultiply(this.tiltQ);
         }
-        c.mesh.setMatrixAt(i, this.tmpM.compose(this.tmpV.set(b.x + ox, y, b.z + oz), this.tmpQ, this.one));
+        c.people.set(i, b.x + ox, b.z + oz, this.tmpQ, this.pose);
       });
-      c.mesh.instanceMatrix.needsUpdate = true;
+      c.people.commit();
     }
     this.band.forEach((b, i) => {
       b.body.position.y = pulse * 0.1;
@@ -1823,19 +1746,17 @@ export class Level3 implements Level {
       (s.mesh.material as THREE.MeshBasicMaterial).color.setHSL(hue, 0.9, 0.55 + pulse * 0.15);
     });
 
-    // Jugadora (en la cola avanza sola con la cola; a oscuras se queda quieta haciendo señales)
-    const walking = !this.busy && (this.phase === 'queue' || this.phase === 'airport');
+    // Personaje que se lleva (Azul en el aeropuerto, Gas en el estadio)
+    const walking = !this.busy && (this.phase === 'toWc' || this.phase === 'airport' || this.phase === 'seek');
     this.invuln -= dt;
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
-    const az = this.azIdx;
-    const inQueue = this.phase === 'inQueue' && az >= 0 && !this.busy;
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.allPeople);
+    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.player === this.gas ? this.allPeople : []);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);
     this.stepQueue(dt);
-    if (this.phase === 'flash' || this.phase === 'meet') this.stepFlash(dt);
+    if (this.phase === 'seek' && !this.busy) this.stepSeek(dt);
     if (this.phase === 'film') this.stepFilm(dt);
     {
       const pp0 = this.player.root.position;
@@ -1852,24 +1773,19 @@ export class Level3 implements Level {
       }
     }
     const live = this.phase === 'rhythm' || this.phase === 'ending';
-    if (inQueue) {
-      this.slot(az, this.tmpV);
-      this.stepTo(this.player, this.azWalk, this.tmpV.x, Q_Z, 1.5, dt, Math.PI / 2, this.shoutT <= 0);
-      this.walker.facing = this.player.root.rotation.y;
-      if (this.shoutT > 0) animatePerson(this.player, dt, 'talk');
-    } else {
-      this.player.root.rotation.y = this.walker.facing;
-      if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
-      else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : this.phase === 'flash' && this.flashCd > 0 ? 'wave' : 'idle', mag, this.walker.walk, this.walker);
+    this.player.root.rotation.y = this.walker.facing;
+    if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
+    else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+    // Azul (si no la llevas): en su sitio, bailando o con el móvil en alto haciendo flash
+    if (this.player !== this.azul) {
+      if (live) animatePerson(this.azul, dt, 'dance', 0, beat * Math.PI + 1);
+      else animatePerson(this.azul, dt, this.phase === 'found' ? 'talk' : 'idle');
+      this.recordT -= dt;
+      if (this.recordT > 0) {
+        this.azul.armR.rotation.x = -2.5;
+        this.azul.elbowR.rotation.x = -0.5;
+      }
     }
-    // Móvil en alto: grabando el temón o haciendo flash
-    this.shoutT -= dt;
-    this.recordT -= dt;
-    if (this.recordT > 0) {
-      this.player.armR.rotation.x = -2.5;
-      this.player.elbowR.rotation.x = -0.5;
-    }
-    if (live) animatePerson(this.gas, dt, 'dance', 0, beat * Math.PI + 1);
 
     animatePerson(this.barman, dt, this.player.root.position.distanceTo(BAR_POS) < 4 ? 'talk' : 'idle');
 
@@ -1887,7 +1803,7 @@ export class Level3 implements Level {
         ((l as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.6;
       });
     }
-    this.lighters.visible = live || this.phase === 'flash' || this.phase === 'meet';
+    this.lighters.visible = live || this.phase === 'seek' || this.phase === 'found';
     (this.lighters.material as THREE.PointsMaterial).size = 0.6 + Math.sin(this.t * 13) * 0.08;
     this.lighters.position.x = Math.sin(this.t * 1.2) * 0.25;
 
@@ -1899,43 +1815,33 @@ export class Level3 implements Level {
     let label: string | null = null;
     let action: (() => void) | null = null;
     const pp = this.player.root.position;
-    if (walking && this.phase === 'airport') {
+    if (walking && !this.smokeThrown && this.phase === 'airport' && pp.distanceTo(SMOKE_POS) < 1.8) {
+      // El tabaco, a la papelera (opcional; Gas se fijará)
+      label = 'Tirar 🚭';
+      action = () => {
+        this.smokeThrown = true;
+        audio.luck();
+        toast(CONCERT.smokeFound);
+        this.fx.burst(SMOKE_POS.clone().setY(1), '✨', 8);
+        this.updateHud();
+      };
+    } else if (walking && this.phase === 'airport') {
       if (pp.z > AIR.maxZ - 2.5) {
         label = '🛫 Embarcar';
         action = () => this.board();
       }
-    } else if (walking) {
-      if (!this.smokeThrown && pp.distanceTo(SMOKE_POS) < 1.8) {
-        label = 'Tirar 🚭';
-        action = () => {
-          this.smokeThrown = true;
-          audio.luck();
-          toast(CONCERT.smokeFound);
-          this.fx.burst(SMOKE_POS.clone().setY(1), '✨', 8);
-          this.updateHud();
-        };
-      } else if (this.phase === 'queue' && pp.distanceTo(FLASH_SPOT) < 2.2) {
-        label = '📱 Grabar a Fito';
-        action = () => this.goFilm();
+    } else if (walking && this.phase === 'toWc') {
+      if (pp.distanceTo(this.tailSpot()) < 1.6) {
+        label = '🚻 A la cola';
+        action = () => this.wcTrip();
       } else if (pp.distanceTo(BAR_POS) < 3.2) {
         label = 'Hablar';
         action = () => this.talk(CONCERT.barmanAgain, () => this.phase);
       }
-    } else if (inQueue) {
-      // En la cola: parar a los que se cuelan hasta que le toque a Gas
-      this.queueT += dt;
-      if (this.gIdx === 0 && this.queueT > 3) this.gasTurn();
-      else if (this.cutterNear()) {
-        label = '✋ ¡A la cola!';
-        action = () => this.blockCutter();
-      }
-    } else if (this.phase === 'flash' && !this.busy && this.gasS === this.gasTargetS) {
-      label = '📸 Flash';
-      action = () => this.flash();
     }
-    if (inQueue) this.updateHud();
-    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!' || label === '🛫 Embarcar' || label === '📱 Grabar a Fito');
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '🛫 Embarcar' || label === '🚻 A la cola');
     if (this.input.consumeAction() && action) action();
+    if (this.phase === 'seek') this.updateHud();
 
     // Marcador y flecha
     const tgt = this.target();
@@ -1970,30 +1876,18 @@ export class Level3 implements Level {
     });
   }
 
-  private meetGas() {
-    this.busy = true;
-    this.input.reset();
-    this.hud.setAction(null);
-    const pp = this.player.root.position;
-    const gp = this.gas.root.position;
-    this.walker.facing = Math.atan2(gp.x - pp.x, gp.z - pp.z);
-    this.gas.root.rotation.y = Math.atan2(pp.x - gp.x, pp.z - gp.z);
-    // Que no vuelva a barrer con la linterna mientras hablan
-    this.gaze = this.gazeTgt = 0;
-    this.gazeT = 1e9;
-    dialogue([...CONCERT.gasFound, ...(this.smokeThrown ? [CONCERT.gasSmoke] : [])], () => this.startRhythm());
-  }
-
   private startRhythm() {
     this.busy = true;
     this.phase = 'rhythm';
-    // Se vuelve la luz y Gas la lleva a su sitio en primera fila
+    // Se vuelve la luz y se van juntos a primera fila
     this.setDark(false);
     this.flashLight.intensity = 0;
-    this.player.root.position.set(GAS_POS.x + 1.1, 0, GAS_POS.z);
-    this.walker.facing = 0;
+    if (this.player !== this.gas) this.toStadium();
     this.gas.root.position.copy(GAS_POS);
-    this.gas.root.rotation.y = 0;
+    this.walker.stop();
+    this.walker.facing = this.walker.yaw = 0;
+    this.placeAzul(this.v1.set(GAS_POS.x + 1.1, 0, GAS_POS.z));
+    this.gas.root.visible = true;
     this.hud.setAction(null);
     this.updateHud();
     audio.stopMusic();
@@ -2037,7 +1931,7 @@ export class Level3 implements Level {
               ['Perfectas', `${perfects} · racha x${maxCombo}`],
               ['Hamburguesas esquivadas', this.burgerHits ? `te dieron ${this.burgerHits} 🍔` : 'todas 🍔'],
               ['Vídeo del temón', `${this.filmPct()}% con Fito en plano 📹`],
-              ['Flashes', `${this.flashHits}/${this.flashHits + this.flashMiss}`],
+              ['Viajes al baño', `${TRIPS} 🚻 · se perdió ${this.missed} ${this.missed === 1 ? 'canción' : 'canciones'}`],
               ['Tabaco', this.smokeThrown ? 'a la papelera 🚭' : 'sigue ahí… 🚬'],
             ],
           });
@@ -2069,23 +1963,19 @@ export class Level3 implements Level {
       if (this.filmUi) {
         this.filmUi.remove();
         this.filmUi = null;
-        this.player.root.visible = true;
+        this.azul.root.visible = true;
         this.camera.fov = this.camera.userData.baseFov ?? this.baseFov;
         this.camera.updateProjectionMatrix();
       }
       this.setDark(false);
       this.flashLight.intensity = 0;
     };
-    const tp = (x: number, z: number, yaw = 0) => {
-      this.player.root.position.set(x, 0, z);
-      this.walker.yaw = yaw;
-      this.walker.facing = yaw;
-    };
     return [
       { label: '0 · Aeropuerto', run: () => { stop(); this.startAirport(); } },
-      { label: '1 · Estadio (buscar sitio)', run: () => { stop(); if (!this.queue.includes('gas')) this.queue.splice(Math.min(6, this.queue.length), 0, 'gas'); this.queue = this.queue.filter((q) => q !== 'azul'); this.gas.root.visible = true; this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
-      { label: '2 · Grabar el temón', run: () => { stop(); this.phase = 'film'; this.gas.root.visible = false; this.player.root.position.copy(FLASH_SPOT); this.startFilm(); } },
-      { label: '3 · Flash a oscuras', run: () => { stop(); this.filmUi?.remove(); this.filmUi = null; this.player.root.visible = true; this.startFlash(); } },
+      { label: '1 · Estadio: al baño', run: () => { stop(); this.toStadium(); this.trip = 0; this.phase = 'toWc'; this.updateHud(); } },
+      { label: '2 · Grabar el temón', run: () => { stop(); this.toStadium(); this.trip = 1; this.gas.root.visible = false; this.phase = 'film'; this.startFilm(); } },
+      { label: '3 · Buscar a Azul a oscuras', run: () => { stop(); this.toStadium(); this.trip = 1; this.startSeek(); } },
+      { label: '3b · Tercera vez al baño', run: () => { stop(); this.toStadium(); this.trip = 3; this.missed = 2; this.startSeek(); } },
       { label: '4 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
       {
         label: '5 · Final con fuegos',

@@ -6,13 +6,14 @@ import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, Fireworks, Confetti, glowTexture, toon, vibrate } from '../core/gfx';
 import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeHorse, animatePerson, personGeometry, vertexMat, type Person, type Donkey, type PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, CrowdPeople, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
-import { Surf } from '../core/surfaces';
+import { buildSurroundings, collidersBox } from './surround';
+import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 5 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
@@ -24,14 +25,13 @@ import { clock, type Level, type LevelDone, disposeObj } from './level';
 type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'ending' | 'done';
 
 // Plano (metros): el Born en el origen, Ses Voltes hacia el este y la Plaça Espanya al final
-const BORN = { minX: -18, maxX: 18, minZ: -13, maxZ: 13 };
 const STREET = { minX: 18, maxX: 70, minZ: -4.4, maxZ: 4.4 };
 const ESPANYA = { minX: 70, maxX: 90, minZ: -12, maxZ: 12 };
-const PINS = [new THREE.Vector3(5, 0, -10.6)]; // Correus
+const PINS = [new THREE.Vector3(CORREUS.x + 2, 0, CORREUS.z - 1.2)]; // Correus
 const START = new THREE.Vector3(82, 0, 0); // Plaça Espanya
 const STREET_HORSES = 2;
 const REACH = 6;
-const AISLES: [number, number][] = [[19, 0], [5.5, -14], [-4, 14], [-19, 7]];
+const AISLES: [number, number][] = [[19, 0], [2, 14.5], [-19, -6.5], [-19, 7]];
 /** Distancia de (x, z) al segmento que va del obelisco a (ax, az). */
 function segDist(x: number, z: number, ax: number, az: number) {
   const t = Math.max(0, Math.min(1, (x * ax + z * az) / (ax * ax + az * az)));
@@ -99,7 +99,9 @@ export class LevelSantJoan implements Level {
   private horses: Horse[] = [];
   private colliders: Box2[] = [];
   private people: Circle[] = [];
-  private crowds: { mesh: THREE.InstancedMesh; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private pose = newCrowdPose();
+  private cheer = 0.35;
+  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
   private bagCount = 0;
   private luck = 0;
@@ -119,9 +121,7 @@ export class LevelSantJoan implements Level {
   private endT = 0;
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
-  private tmpM = new THREE.Matrix4();
   private tmpQ = new THREE.Quaternion();
-  private one = new THREE.Vector3(1, 1, 1);
   private up = new THREE.Vector3(0, 1, 0);
   private bounds: Box2 = { minX: BORN.minX + 0.5, maxX: ESPANYA.maxX - 0.5, minZ: BORN.minZ + 0.5, maxZ: BORN.maxZ - 0.5 };
 
@@ -140,6 +140,11 @@ export class LevelSantJoan implements Level {
     this.sun = new Sun(sc, 0xfff0d8, 1.7, new THREE.Vector3(-0.5, 0.8, 0.4), 24);
 
     this.buildTown();
+    {
+      // Ciutadella sigue alrededor: manzanas de casas y lomas al fondo
+      const core = collidersBox(this.colliders);
+      buildSurroundings(sc, { keepOut: [core], half: 120, center: { x: (core.minX + core.maxX) / 2, z: (core.minZ + core.maxZ) / 2 }, cell: 11, town: true, field: false, seed: 9 });
+    }
     this.buildCrowd();
     this.buildHorses();
     this.buildBags();
@@ -280,116 +285,11 @@ export class LevelSantJoan implements Level {
     ground.userData.noCast = true;
     sc.add(ground);
 
+    // El Born (compartido con el capítulo 2): explanada alta con el obelisco y calle alrededor
+    buildBorn(sc, this.colliders, new THREE.Vector3(0, 0, 0), { voltes: true });
     const m = new Merger();
-    // El Born, como en las fotos: adoquín rojizo, dos parterres de césped con su dibujo circular
-    // y verja baja en los lados largos, la gran araucaria y los ficus junto al Ajuntament y las
-    // farolas negras de fundición
-    const born = new THREE.Mesh(new THREE.PlaneGeometry(BORN.maxX - BORN.minX, BORN.maxZ - BORN.minZ).rotateX(-Math.PI / 2), toon({ color: 0xc09478, roughness: 0.95, surf: Surf.Cobble }));
-    born.position.y = 0.012;
-    born.userData.noCast = true;
-    sc.add(born);
     const SAND = 0xe6d2a8;
-    const OCHRE = 0xd8b483;
     const WHITE = 0xf4f0e6;
-
-    // Obelisco del Born (1857, homenaje a la resistencia de 1558): 22 m de marès sobre un zócalo
-    // escalonado con cuatro lápidas en latín, y una verja de hierro alrededor
-    for (let i = 0; i < 3; i++) m.add(G.box, 0xc9b48c, 0, 0.15 + i * 0.3, 0, 0, 0, 0, 4.2 - i * 0.6, 0.3, 4.2 - i * 0.6);
-    m.add(G.box, 0xd6c29a, 0, 2.05, 0, 0, 0, 0, 2.2, 2.2, 2.2);
-    for (const [dx, dz, ry] of [[0, 1.11, 0], [0, -1.11, 0], [1.11, 0, Math.PI / 2], [-1.11, 0, Math.PI / 2]] as [number, number, number][])
-      for (const o of [-0.5, 0.5]) {
-        const ox = ry ? 0 : o, oz = ry ? o : 0;
-        m.add(G.box, 0xc4b08a, dx + ox, 2.1, dz + oz, 0, ry, 0, 0.7, 0.95, 0.04); // lápidas
-        m.add(G.box, 0xb5a07a, dx + ox, 2.1, dz + oz, 0, ry, 0, 0.6, 0.85, 0.05);
-      }
-    for (const [cx, cz] of [[0.75, 0.75], [-0.75, 0.75], [0.75, -0.75], [-0.75, -0.75]]) m.add(G.box, 0xcdb994, cx, 4.15, cz, 0, Math.PI / 4, 0, 0.5, 0.6, 0.5); // trofeos en relieve
-    m.add(G.cyl, 0x4f7a3a, 0, 0.03, 0, 0, 0, 0, 6.0, 0.04, 6.0); // césped dentro de la verja
-    m.add(G.box, 0xcdb994, 0, 3.3, 0, 0, 0, 0, 2.5, 0.3, 2.5); // cornisa
-    m.add(G.box, 0xd6c29a, 0, 3.9, 0, 0, 0, 0, 1.7, 0.9, 1.7);
-    m.add(new THREE.CylinderGeometry(0.42, 0.78, 1, 4), 0xdcc8a2, 0, 11.4, 0, 0, Math.PI / 4, 0, 1, 14.2, 1);
-    m.add(new THREE.ConeGeometry(0.5, 1, 4), 0xdcc8a2, 0, 19.2, 0, 0, Math.PI / 4, 0, 0.62, 1.4, 0.62);
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      m.add(G.cyl, 0x1e1e1e, Math.cos(a) * 3.1, 0.6, Math.sin(a) * 3.1, 0, 0, 0, 0.05, 1.2, 0.05);
-      m.add(new THREE.ConeGeometry(0.06, 0.16, 4), 0x1e1e1e, Math.cos(a) * 3.1, 1.28, Math.sin(a) * 3.1, 0, 0, 0, 1, 1, 1);
-    }
-    m.add(new THREE.TorusGeometry(3.1, 0.04, 4, 48), 0x1e1e1e, 0, 1.05, 0, Math.PI / 2, 0, 0, 1, 1, 1);
-    m.add(new THREE.TorusGeometry(3.1, 0.04, 4, 48), 0x1e1e1e, 0, 0.25, 0, Math.PI / 2, 0, 0, 1, 1, 1);
-    for (const [fx, fz] of [[3.1, 3.1], [-3.1, 3.1], [3.1, -3.1], [-3.1, -3.1]].map(([x, z]) => [x * 0.707, z * 0.707])) {
-      m.add(G.cyl, 0x1e1e1e, fx, 2, fz, 0, 0, 0, 0.12, 4, 0.12); // farolas de la verja
-      m.add(G.box, 0xf4e6c0, fx, 4.2, fz, 0, Math.PI / 4, 0, 0.45, 0.6, 0.45);
-    }
-    this.colliders.push({ minX: -3.2, maxX: 3.2, minZ: -3.2, maxZ: 3.2 });
-
-    // Norte: el Ajuntament (antiguo alcázar real), fachada de principios del XX: almenas, ventanas
-    // ojivales, galería de arcos arriba y una torre almenada; delante, palmeras
-    this.block(m, -14, 8, 13.5, 22, 11, OCHRE);
-    for (let x = -13.6; x <= 7.6; x += 1.2) m.add(G.box, OCHRE, x, 11.6, 13.7, 0, 0, 0, 0.7, 1.2, 0.5);
-    m.add(G.box, OCHRE, -3, 8, 15, 0, 0, 0, 5, 16, 3.4); // torre
-    for (let x = -5.1; x <= -0.9; x += 1.05) m.add(G.box, OCHRE, x, 16.5, 13.4, 0, 0, 0, 0.6, 1, 0.5);
-    m.add(G.box, 0x4a3020, -3, 2.2, 13.3, 0, 0, 0, 3, 4.4, 0.1);
-    m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, -3, 4.4, 13.3, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
-    m.add(G.box, 0xb8955f, -3, 5.6, 13.25, 0, 0, 0, 3.8, 0.25, 0.3); // imposta
-    m.add(G.cyl, 0xf4efe2, -3, 13.6, 13.27, Math.PI / 2, 0, 0, 1.6, 0.06, 1.6); // reloj de la torre
-    m.add(G.cyl, 0x2a2a2a, -3, 13.6, 13.22, Math.PI / 2, 0, 0, 0.16, 0.05, 0.16);
-    m.add(G.box, 0x2a2a2a, -3, 13.85, 13.21, 0, 0, 0, 0.05, 0.55, 0.02);
-    m.add(G.box, 0x2a2a2a, -2.82, 13.6, 13.21, 0, 0, 0, 0.4, 0.05, 0.02);
-    for (let x = -12.5; x <= 7; x += 2.4) {
-      if (Math.abs(x + 3) < 2.5) continue;
-      for (const y of [2.6, 6.4]) {
-        m.add(G.box, 0x3a2a20, x, y, 13.46, 0, 0, 0, 0.9, 1.8, 0.06);
-        m.add(new THREE.ConeGeometry(0.62, 0.7, 4), 0xb8955f, x, y + 1.15, 13.44, 0, Math.PI / 4, 0, 1, 1, 0.12); // ojiva
-      }
-      m.add(G.box, 0x2a2a2a, x, 5.3, 13.1, 0, 0, 0, 1.3, 0.08, 0.6); // balconcillo
-    }
-    for (let x = -13; x <= 7.4; x += 1.1) m.add(G.box, 0x3a2a20, x, 9.6, 13.46, 0, 0, 0, 0.6, 1.3, 0.06); // galería alta
-    for (const px of [-11, 5]) {
-      m.add(G.cyl, 0x8a7a5a, px, 4.5, 11.4, 0, 0, 0, 0.45, 9, 0.45);
-      for (let k = 0; k < 9; k++) {
-        const a = (k / 9) * Math.PI * 2;
-        m.add(G.box, 0x4f7a3a, px + Math.cos(a) * 1.6, 8.9, 11.4 + Math.sin(a) * 1.6, Math.sin(a) * 0.5, -a, Math.cos(a) * 0.5, 3.4, 0.1, 0.6);
-      }
-      this.colliders.push({ minX: px - 0.4, maxX: px + 0.4, minZ: 11, maxZ: 11.8 });
-    }
-    this.block(m, 8, 18, 13.5, 20, 9, SAND);
-    this.facade(m, 8, 18, 13.5, -1, 2);
-    // Oeste: Palau de Torre-Saura (neoclásico, con logia de arcos en lo alto y frontón) y Palau Salort
-    this.block(m, -26, -18.5, -13, 0, 12, SAND);
-    this.block(m, -26, -18.5, 0, 13.5, 13, 0xe9dcbc);
-    this.facade(m, -13, 0, -18.5, 1, 3, false);
-    for (let z = 1.5; z <= 12; z += 2.1) {
-      m.add(G.box, 0x3a2a20, -18.44, 10.2, z, 0, 0, 0, 0.06, 2, 1.2);
-      m.add(new THREE.CylinderGeometry(0.6, 0.6, 0.08, 12, 1, false, 0, Math.PI), 0x3a2a20, -18.44, 11.2, z, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
-      m.add(G.box, 0xf2ead6, -18.3, 10.2, z + 1.05, 0, 0, 0, 0.3, 2.6, 0.3); // columnas
-    }
-    m.add(new THREE.ConeGeometry(1, 1, 3), 0xe9dcbc, -18.6, 14.3, 6.75, Math.PI / 2, 0, Math.PI / 2, 2.4, 0.4, 7);
-    this.facade(m, 0, 9, -18.5, 1, 2, false);
-    this.sign('Palau Torre-Saura', -18.35, 4, 6.75, Math.PI / 2, 3.6);
-    // Sur: casas con Correus
-    // Teatre des Born (1875): fachada clasicista a lo Palladio, columnas, frontón y escalinata
-    this.block(m, -18, -6, -21, -13.5, 11, 0xe7d3b0);
-    for (let x = -16.6; x <= -7.4; x += 1.84) m.add(G.cyl, 0xf3ead6, x, 4.2, -13.2, 0, 0, 0, 0.55, 8.4, 0.55);
-    m.add(G.box, 0xf3ead6, -12, 8.7, -13.2, 0, 0, 0, 11, 0.6, 0.9);
-    m.add(new THREE.ConeGeometry(1, 1, 3), 0xf3ead6, -12, 10.1, -13.4, Math.PI / 2, 0, 0, 6.4, 0.5, 2.2);
-    for (let i = 0; i < 3; i++) m.add(G.box, 0xcdb994, -12, 0.1 + i * 0.2, -13.1 + i * 0.25 - 0.5, 0, 0, 0, 10, 0.2, 1);
-    for (const x of [-14.2, -12, -9.8]) m.add(G.box, 0x3a2a20, x, 2, -13.47, 0, 0, 0, 1.3, 3, 0.06);
-    // Correus, en la casa del medio
-    this.block(m, -6, 10, -21, -13.5, 10, 0xf1d9a0);
-    this.facade(m, -6, 10, -13.5, -1 as 1 | -1, 2);
-    // Sant Francesc: fachada de marès alta, rosetón, portal y campanario de espadaña
-    this.block(m, 10, 18.5, -24, -13.5, 14, 0xd2b27a);
-    m.add(new THREE.CylinderGeometry(1.3, 1.3, 0.12, 24), 0x5a4a3a, 14.25, 9.5, -13.45, Math.PI / 2, 0, 0, 1, 1, 1);
-    m.add(new THREE.TorusGeometry(1.35, 0.14, 6, 24), 0xe3c991, 14.25, 9.5, -13.4, 0, 0, 0, 1, 1, 1);
-    m.add(G.box, 0x4a3020, 14.25, 2.2, -13.46, 0, 0, 0, 2.4, 4.4, 0.08);
-    m.add(new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16, 1, false, 0, Math.PI), 0x4a3020, 14.25, 4.4, -13.46, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
-    m.add(G.box, 0xd2b27a, 16.8, 15.6, -18, 0, 0, 0, 2.2, 3.2, 1.2); // espadaña
-    m.add(G.box, 0x2a2420, 16.8, 15.4, -17.38, 0, 0, 0, 0.9, 1.5, 0.05);
-    this.sign('Teatre des Born', -12, 6.6, -13.05, 0, 3.4);
-    // Este: dos manzanas y entre ellas la entrada a Ses Voltes
-    this.block(m, 18.5, 30, -13.5, STREET.minZ - 0.2, 10, 0xeee3c8);
-    this.block(m, 18.5, 30, STREET.maxZ + 0.2, 13.5, 10, SAND);
-    this.facade(m, -13.5, STREET.minZ, 18.5, -1, 2, false);
-    this.facade(m, STREET.maxZ, 13.5, 18.5, -1, 2, false);
 
     // Ses Voltes: calle de arcos blancos a los dos lados
     for (const side of [-1, 1] as const) {
@@ -433,12 +333,8 @@ export class LevelSantJoan implements Level {
     sc.add(m.mesh());
 
     // Rótulos de verdad
-    this.sign('AJUNTAMENT', -3, 7.2, 13.4, Math.PI, 5);
-    this.sign('CORREUS', 2, 3.6, -13.4, 0, 3.6, '#f6c700', '#1f3f8f');
-    this.sign('Plaça des Born', 17.9, 3, -6, -Math.PI / 2, 3.2);
     this.sign('Ses Voltes', 30.4, 4.4, 0, -Math.PI / 2, 3);
     this.sign('Plaça Espanya', 70.6, 3, -6.5, -Math.PI / 2, 3.4);
-    this.sign('Bar Imperi', -18.4, 3.1, 6, Math.PI / 2, 3);
     this.sign('Maramao', 40, 3.6, 4.55, Math.PI, 2.6);
 
     // Banderas de fiesta cruzando el Born y Ses Voltes
@@ -458,26 +354,9 @@ export class LevelSantJoan implements Level {
     fm.userData.noCast = true;
     sc.add(fm);
 
-    // Farolas fernandinas negras bajo cada luz, la araucaria y los ficus del Born
-    const posts = new Merger();
-    for (const [x, z] of [[-17.3, -8], [-17.3, 8], [17.3, -10], [17.3, 10], [-10, 12.8], [8, -12.8]]) {
-      posts.add(G.cyl, 0x1e1e1e, x, 0.3, z, 0, 0, 0, 0.4, 0.6, 0.4);
-      posts.add(G.cyl, 0x1e1e1e, x, 2.1, z, 0, 0, 0, 0.14, 3.6, 0.14);
-      posts.add(G.box, 0xf4e6c0, x, 4.2, z, 0, Math.PI / 4, 0, 0.42, 0.6, 0.42);
-      posts.add(G.cone, 0x1e1e1e, x, 4.65, z, 0, Math.PI / 4, 0, 0.7, 0.35, 0.7);
-    }
-    posts.add(G.cyl, 0x6b4a32, -16, 8, -11, 0, 0, 0, 0.4, 16, 0.4);
-    for (let k = 0; k < 11; k++) posts.add(G.cone, 0x2c5a30, -16, 5 + k * 1.2, -11, 0, k * 0.5, 0, 4.2 - k * 0.36, 0.45, 4.2 - k * 0.36);
-    for (const [x, z] of [[12, 11.5], [-15.5, 11.2], [15.5, -11.5]]) {
-      posts.add(G.cyl, 0x7a6a56, x, 1.8, z, 0, 0, 0, 0.5, 3.6, 0.5);
-      for (let k = 0; k < 6; k++) posts.add(G.bush, k % 2 ? 0x3d7a34 : 0x4a8a3c, x + Math.cos(k) * 1.8, 4.6 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 1.4, 0, k, 0, 2.6, 1.8, 2.2);
-      this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
-    }
-    this.colliders.push({ minX: -16.4, maxX: -15.6, minZ: -11.4, maxZ: -10.6 });
-    sc.add(posts.mesh());
     // Farolas: luces cálidas
     const lamp = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    for (const [x, z] of [[-17.3, -8], [-17.3, 8], [17.3, -10], [17.3, 10], [-10, 12.8], [8, -12.8], [40, 3.9], [55, -3.9], [72, 0], [88, 0]]) {
+    for (const [x, z] of [[40, 3.9], [55, -3.9], [72, 0], [88, 0]]) {
       const s = new THREE.Sprite(lamp);
       s.position.set(x, 4.2, z);
       s.scale.setScalar(2.2);
@@ -510,11 +389,10 @@ export class LevelSantJoan implements Level {
     }
     LOOKS.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % LOOKS.length === li);
-      const mesh = new THREE.InstancedMesh(personGeometry(lk, li % 2 === 0), vertexMat(), mine.length);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      this.scene.add(mesh);
+      const people = new CrowdPeople(lk, mine.length);
+      this.scene.add(people.group);
       // Miran hacia el centro del Born (o hacia la calle)
-      this.crowds.push({ mesh, base: mine.map((p) => ({ ...p, ry: p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
+      this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
     });
     this.people = pts.map((p) => ({ x: p.x, z: p.z, r: 0.33 }));
   }
@@ -684,16 +562,16 @@ export class LevelSantJoan implements Level {
     this.invuln -= dt;
     const pp = this.player.root.position;
 
-    // Gente saltando; más cuando un caballo se pone de manos
+    // Gente de pie gesticulando; levantan los brazos cuando un caballo se pone de manos
     const rearing = this.horses.some((h) => h.rearT > 0);
-    const energy = this.phase === 'ending' ? 0.45 : rearing ? 0.3 : 0.12;
+    this.cheer += ((this.phase === 'ending' ? 1 : rearing ? 0.85 : 0.35) - this.cheer) * Math.min(1, dt * 3);
     for (const c of this.crowds) {
       c.base.forEach((b, i) => {
-        const y = Math.abs(Math.sin(this.t * 4 + b.ph)) * energy;
+        crowdPose(this.pose, this.t, b.ph, this.cheer);
         this.tmpQ.setFromAxisAngle(this.up, b.ry);
-        c.mesh.setMatrixAt(i, this.tmpM.compose(this.v1.set(b.x, y, b.z), this.tmpQ, this.one));
+        c.people.set(i, b.x, b.z, this.tmpQ, this.pose, bornHeight(b.x, b.z));
       });
-      c.mesh.instanceMatrix.needsUpdate = true;
+      c.people.commit();
     }
     const rearNear = this.updateHorses(dt);
 
@@ -702,6 +580,8 @@ export class LevelSantJoan implements Level {
     this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
+    // La explanada del obelisco está un escalón más alta que la calle
+    for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z);
     this.player.root.rotation.y = this.walker.facing;
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'dance', 0, this.t * 6);
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');
@@ -734,7 +614,7 @@ export class LevelSantJoan implements Level {
     for (const b of this.bags) {
       if (b.taken) continue;
       b.obj.rotation.y += dt * 2;
-      b.obj.position.y = 0.1 + Math.abs(Math.sin(this.t * 2 + b.obj.position.x)) * 0.15;
+      b.obj.position.y = bornHeight(b.obj.position.x, b.obj.position.z) + 0.1 + Math.abs(Math.sin(this.t * 2 + b.obj.position.x)) * 0.15;
       if (Math.hypot(b.obj.position.x - pp.x, b.obj.position.z - pp.z) < 1) {
         b.taken = true;
         b.obj.visible = false;
@@ -841,7 +721,7 @@ export class LevelSantJoan implements Level {
         } else {
           s.v = (s.v ?? 0.28) + (0.28 - (s.v ?? 0)) * Math.min(1, dt * 0.8);
           s.angle += dt * s.v;
-          r.position.set(Math.cos(s.angle) * HORSE_R, 0, Math.sin(s.angle) * HORSE_R);
+          r.position.set(Math.cos(s.angle) * HORSE_R, BORN_RISE, Math.sin(s.angle) * HORSE_R);
           r.rotation.y = -s.angle;
           sp = s.v * HORSE_R;
         }

@@ -149,8 +149,8 @@ export const CONCERT = {
   burgerHit: ['🍔 ¡Plaf! «NUNCA más»', '🍔 «Todo malo y caro, hasta la fanta»', '🍔 Gas ya te avisó'],
   landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria. Él ha llegado antes.' }] as Line[],
   stadium: [
-    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de tocar y Gas se ha ido a la cola del baño.' },
-    { who: 'Narrador', text: 'Busca un buen sitio en el pasillo del centro.' },
+    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
+    { who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas. Ahora juegas con él.' },
   ] as Line[],
   filmIntro: [{ who: 'Narrador', text: 'Grábaselo: mantén a Fito dentro del recuadro aunque la gente salte delante.' }] as Line[],
   filmDone: '🎥 Vídeo guardado para Gas',

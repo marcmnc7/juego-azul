@@ -119,8 +119,11 @@ const GL: typeof G = {
   sphere: new THREE.SphereGeometry(0.5, 7, 5),
   ball: new THREE.SphereGeometry(0.5, 9, 6),
   capsule: new THREE.CapsuleGeometry(0.5, 1, 2, 6),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 7),
   dome: new THREE.SphereGeometry(0.5, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.56),
 };
+// Piezas pequeñas de la multitud (ojos, rodillas, hombros, manos): aún menos polígonos
+const GS = new THREE.SphereGeometry(0.5, 6, 4);
 
 
 /** Caja con cantos biselados (cuesta poco y queda mucho más "juguete"). */
@@ -583,27 +586,146 @@ function prevHeadY(p: Person) {
   return (p.head.userData.lookY as number | undefined) ?? 0;
 }
 
-/** Geometría estática de una persona para la multitud (InstancedMesh). */
-export function personGeometry(look: PersonLook, armsUp = false) {
+/** Cuerpo de una persona de la multitud sin brazos: piernas con rodillas, hombros y cabeza. */
+function crowdBodyGeometry(look: PersonLook) {
   const m = new Merger(false);
   const shoes = look.shoes ?? 0x3a2a20;
+  const legC = look.skirt ? look.skin : look.pants;
   if (look.skirt) m.add(new THREE.CylinderGeometry(0.2, 0.42, 0.5, 7), look.pants, 0, 0.78, 0);
   m.add(GL.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.46, 0.3, 0.32);
   const hy = HEAD_Y + 0.3;
   m.add(GL.sphere, look.skin, 0, hy, 0, 0, 0, 0, 0.6, 0.58, 0.56);
   hairInto(m, look, hy, 0, GL);
   for (const s of [-1, 1]) {
-    m.add(GL.sphere, 0x2a2020, s * 0.11, hy + 0.03, 0.26, 0, 0, 0, 0.07, 0.1, 0.04);
-    m.add(GL.sphere, 0xf2a3a3, s * 0.17, hy - 0.07, 0.22, 0, 0, 0, 0.1, 0.06, 0.04);
-    m.add(GL.capsule, look.skirt ? look.skin : look.pants, s * 0.11, 0.4, 0, 0, 0, 0, 0.15, 0.24, 0.15);
-    m.add(GL.box, shoes, s * 0.11, 0.08, 0.04, 0, 0, 0, 0.17, 0.12, 0.28);
-    const a = armsUp ? 2.7 : 0.15;
-    const sx = s * (0.29 + Math.sin(a) * 0.25);
-    const sy = 1.17 - Math.cos(a) * 0.25;
-    m.add(GL.capsule, look.shirt, sx, sy, 0, 0, 0, s * a, 0.13, 0.26, 0.13);
-    m.add(GL.sphere, look.skin, s * (0.29 + Math.sin(a) * 0.5), 1.17 - Math.cos(a) * 0.5, 0, 0, 0, 0, 0.13, 0.14, 0.13);
+    m.add(GS, 0x2a2020, s * 0.11, hy + 0.03, 0.26, 0, 0, 0, 0.07, 0.1, 0.04);
+    // Hombro redondeado
+    m.add(GS, look.shirt, s * 0.27, 1.17, 0, 0, 0, 0, 0.19, 0.17, 0.19);
+    // Muslo, rodilla (algo flexionada y marcada) y espinilla
+    m.add(GL.capsule, legC, s * 0.11, 0.54, 0.01, 0.06, 0, 0, 0.15, 0.13, 0.15);
+    m.add(GS, legC, s * 0.11, 0.4, 0.035, 0, 0, 0, 0.165, 0.15, 0.165);
+    m.add(GL.capsule, look.skirt ? look.skin : legC, s * 0.11, 0.25, 0.01, -0.06, 0, 0, 0.14, 0.12, 0.14);
+    m.add(GL.box, shoes, s * 0.11, 0.07, 0.05, 0, 0, 0, 0.17, 0.12, 0.28);
   }
   return m.build();
+}
+
+/** Brazo de la multitud con el pivote en el hombro: brazo, codo algo doblado, antebrazo y mano. */
+function crowdArmGeometry(look: PersonLook) {
+  const m = new Merger(false);
+  const bend = 0.45;
+  m.add(GL.capsule, look.shirt, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14);
+  m.add(GS, look.skin, 0, -0.25, 0, 0, 0, 0, 0.12, 0.12, 0.12);
+  m.add(GL.capsule, look.skin, 0, -0.25 - Math.cos(bend) * 0.1, Math.sin(bend) * 0.1, -bend, 0, 0, 0.1, 0.11, 0.1);
+  m.add(GS, look.skin, 0, -0.25 - Math.cos(bend) * 0.22, Math.sin(bend) * 0.22, 0, 0, 0, 0.13, 0.14, 0.13);
+  return m.build();
+}
+
+/** Postura de una persona de la multitud: brazos (adelante/lado) y balanceo del cuerpo. */
+export interface CrowdPose {
+  lf: number; ls: number; rf: number; rs: number;
+  sway: number; twist: number; shift: number;
+}
+
+const _m = new THREE.Matrix4();
+const _a = new THREE.Matrix4();
+const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _e = new THREE.Euler();
+const _v = new THREE.Vector3();
+const _one = new THREE.Vector3(1, 1, 1);
+const _Y = new THREE.Vector3(0, 1, 0);
+const _Z = new THREE.Vector3(0, 0, 1);
+
+/**
+ * Multitud instanciada con brazos articulados: cada persona está de pie y gesticula
+ * (habla, bebe, aplaude, levanta los brazos), sin saltar. Un InstancedMesh para el cuerpo
+ * y otro por brazo, que giran sobre el hombro.
+ */
+export class CrowdPeople {
+  readonly group = new THREE.Group();
+  readonly body: THREE.InstancedMesh;
+  readonly armL: THREE.InstancedMesh;
+  readonly armR: THREE.InstancedMesh;
+  constructor(look: PersonLook, count: number) {
+    const mat = vertexMat();
+    this.body = new THREE.InstancedMesh(crowdBodyGeometry(look), mat, count);
+    const arm = crowdArmGeometry(look);
+    this.armL = new THREE.InstancedMesh(arm, mat, count);
+    this.armR = new THREE.InstancedMesh(arm, mat, count);
+    for (const im of [this.body, this.armL, this.armR]) {
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.frustumCulled = false;
+      this.group.add(im);
+    }
+    // Los brazos no proyectan sombra (cientos de personas: la sombra del cuerpo basta)
+    this.armL.userData.noCast = this.armR.userData.noCast = true;
+  }
+  /** Coloca a la persona i en (x, z) mirando según q (giro y, si se tambalea, inclinación). */
+  set(i: number, x: number, z: number, q: THREE.Quaternion, p: CrowdPose, y = 0) {
+    _q.copy(q).multiply(_q2.setFromAxisAngle(_Y, p.twist)).multiply(_q2.setFromAxisAngle(_Z, p.sway));
+    _v.set(p.shift, 0, 0).applyQuaternion(q);
+    _m.compose(_v.set(x + _v.x, y, z + _v.z), _q, _one);
+    this.body.setMatrixAt(i, _m);
+    for (const s of [-1, 1]) {
+      const f = s < 0 ? p.lf : p.rf;
+      const sd = s < 0 ? p.ls : p.rs;
+      _e.set(-f, 0, s * sd, 'ZXY');
+      _a.makeRotationFromEuler(_e).setPosition(s * 0.29, 1.17, 0);
+      (s < 0 ? this.armL : this.armR).setMatrixAt(i, _a.premultiply(_m));
+    }
+  }
+  commit() {
+    this.body.instanceMatrix.needsUpdate = true;
+    this.armL.instanceMatrix.needsUpdate = true;
+    this.armR.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/**
+ * Gesto de pie según el tipo de persona (ph decide quién hace qué) y la energía del momento:
+ * con poca energía charlan y beben; con mucha aplauden o levantan los brazos, sin saltar.
+ */
+export function crowdPose(out: CrowdPose, t: number, ph: number, energy = 0.5) {
+  const kind = Math.floor(ph * 7.31) % 5;
+  const w = t * (0.9 + (ph % 1) * 0.5) + ph * 3;
+  out.sway = Math.sin(w * 0.8) * 0.035 * (0.6 + energy);
+  out.twist = Math.sin(w * 0.37 + ph) * 0.12;
+  out.shift = Math.sin(w * 0.5) * 0.03;
+  // Reposo: brazos caídos, algo separados
+  out.lf = 0.05; out.rf = 0.05; out.ls = 0.12; out.rs = 0.12;
+  const hype = Math.max(0, Math.min(1, (energy - 0.4) * 2.2 + Math.sin(w * 0.21) * 0.4));
+  if (kind === 0) {
+    // Habla con las manos
+    out.rf = 0.7 + Math.sin(w * 2.1) * 0.35;
+    out.rs = 0.2 + Math.sin(w * 1.3) * 0.15;
+    out.lf = 0.25 + Math.max(0, Math.sin(w * 1.7 + 1)) * 0.4;
+  } else if (kind === 1) {
+    // Bebe: sube el vaso de vez en cuando
+    const sip = Math.max(0, Math.sin(w * 0.6)) ** 3;
+    out.rf = 0.55 + sip * 1.25;
+    out.rs = 0.1;
+    out.lf = 0.12;
+  } else if (kind === 2) {
+    // Aplaude delante del pecho
+    const c = Math.sin(w * 6) * 0.5 + 0.5;
+    out.lf = out.rf = 1.0 + hype * 0.5;
+    out.ls = out.rs = -0.25 + c * 0.35;
+  } else if (kind === 3) {
+    // Brazos arriba al ritmo (agita las manos sobre la cabeza)
+    const up = hype * (2.5 + Math.sin(w * 3) * 0.25);
+    out.ls = Math.max(0.12, up);
+    out.rs = Math.max(0.12, hype * (2.5 + Math.sin(w * 3 + 1.4) * 0.25));
+    out.lf = out.rf = 0.15;
+  } else {
+    // Brazos cruzados o en jarra, mirando
+    out.lf = out.rf = 0.35;
+    out.ls = out.rs = 0.4 + Math.sin(w * 0.4) * 0.05;
+  }
+  return out;
+}
+
+export function newCrowdPose(): CrowdPose {
+  return { lf: 0, ls: 0, rf: 0, rs: 0, sway: 0, twist: 0, shift: 0 };
 }
 
 export interface Donkey {

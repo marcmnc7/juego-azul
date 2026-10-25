@@ -15,6 +15,7 @@ import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena'
 import { FAROLA_WALK, COAST_Z } from './saFarola';
 import { canvasTex } from './deco';
 import { buildStreet } from './homeStreet';
+import { buildSurroundings } from './surround';
 import type { Box2 } from './ferreries';
 import { disposeObj, type Level, type LevelDone } from './level';
 
@@ -287,8 +288,18 @@ export class LevelEclipse implements Level {
     yard.position.y = -0.02;
     yard.userData.noCast = true;
     sc.add(yard);
+    // Y alrededor, el barrio: casas, muros y árboles hasta las lomas (nada de horizonte vacío)
+    buildSurroundings(sc, { keepOut: [{ minX: -W - 7, maxX: W + 7, minZ: -D - 6, maxZ: D + 9 }], half: 70, seed: 31, groundY: -0.03 });
     const m = new Merger();
     const WALL = 0xf6f1e6;
+    // Patio delante de la cocina: muro bajo encalado con macetas
+    for (const sx of [-1, 1]) m.add(G.box, WALL, sx * (W + 2.5), 0.5, D + 3, 0, 0, 0, 0.25, 1.0, 6.5);
+    m.add(G.box, WALL, 0, 0.5, D + 6.2, 0, 0, 0, W * 2 + 5, 1.0, 0.25);
+    for (const sx of [-1, 1]) {
+      m.add(G.box, WALL, sx * (W + 1.25), H / 2, -D, 0, 0, 0, 2.5, H, 0.2);
+      m.add(G.cyl, 0xb5603b, sx * (W + 1.4), 0.25, D + 5.3, 0, 0, 0, 0.6, 0.5, 0.6);
+      m.add(G.bush, 0x3e7a3a, sx * (W + 1.4), 0.8, D + 5.3, 0, 0, 0, 0.9, 0.8, 0.9);
+    }
     // Paredes (la de delante no, para que se vea la cocina), zócalo y vigas de madera
     m.add(G.box, WALL, 0, H / 2, -D, 0, 0, 0, W * 2, H, 0.2);
     for (const sx of [-1, 1]) m.add(G.box, WALL, sx * W, H / 2, 1, 0, 0, 0, 0.2, H, D * 2 + 2);

@@ -9,6 +9,8 @@ import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
+import { buildSurroundings } from './surround';
+import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
@@ -34,13 +36,19 @@ const WATER_Y = -0.22;
 const SWIM_Y = -1.12;
 const TOWELS = new THREE.Vector3(-1.6, 0, 11.0);
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
-// Calle: zona del bar y zona delante de casa
-const BAR_AREA = { minX: STREET.bar.x - 12, maxX: STREET.bar.x + 20, minZ: -26.6, maxZ: STREET.bar.z - 0.4 };
+// El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
+// de la carretera, así el coche azul usa el mismo carril en los dos sitios
+const BORN_O = new THREE.Vector3(-600, 0, STREET.laneZ - BORN_SOUTH_LANE);
+const BAR_AREA = { minX: BORN_O.x + BORN.minX + 0.4, maxX: BORN_O.x + 29.6, minZ: BORN_O.z + BORN.minZ + 0.4, maxZ: BORN_O.z + BORN.maxZ - 0.4 };
+const BAR_START = new THREE.Vector3(BORN_O.x + IMPERI.x + 3.2, 0, BORN_O.z + IMPERI.z - 1);
 /** Llegada a casa: calle, patio delantero y el pasillo lateral hasta el jardín. */
 const HOME_AREA = PLOT;
-const PINS = new THREE.Vector3(STREET.bar.x + 14, 0, STREET.laneZ + 1.7);
+// «Ve hacia Pins»: la esquina sureste de la explanada, junto a la calle por donde llega el coche
+const PINS = new THREE.Vector3(BORN_O.x + 11, 0, STREET.laneZ + 1.9);
 const CAR_START_X = PINS.x + 1.2;
-const CAR_FAR_X = PINS.x - 34;
+const CAR_FAR_X = BORN_O.x - 14;
+/** En la calle de casa, el coche entra desde aquí. */
+const DRIVE_FROM_X = -46;
 const CAR_STOP_X = -0.6;
 const DRIVE_TIME = 7;
 // Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
@@ -156,6 +164,12 @@ export class Level4 implements Level {
     this.fx = new Particles(sc);
 
     const street = buildStreet(sc);
+    buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
+    for (const [x, z, i] of [[-8, 9, 14], [8, -9, 14], [IMPERI.x + 2, IMPERI.z, 12]]) {
+      const l = new THREE.PointLight(0xffc27a, i, 16, 1.5);
+      l.position.set(BORN_O.x + x, 4, BORN_O.z + z);
+      sc.add(l);
+    }
     this.colliders.push(...street.colliders, this.carBox);
     this.car.root.rotation.y = Math.PI / 2;
     this.car.azul.visible = false;
@@ -168,7 +182,7 @@ export class Level4 implements Level {
     this.car.root.add(beams);
 
     this.player = makePerson(MARGAUX_LOOK);
-    this.player.root.position.set(STREET.bar.x - 0.6, 0, STREET.bar.z - 1.1);
+    this.player.root.position.copy(BAR_START);
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI / 2;
@@ -223,8 +237,8 @@ export class Level4 implements Level {
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
     this.updateHud();
-    this.camera.position.set(STREET.bar.x - 1, 2.4, -27);
-    this.camLook.set(STREET.bar.x, 2.2, STREET.bar.z);
+    this.camera.position.set(BAR_START.x + 6, 2.4, BAR_START.z - 1);
+    this.camLook.set(BORN_O.x + IMPERI.x, 2.2, BORN_O.z + IMPERI.z);
     this.busy = true;
     later(() => {
       if (this.phase !== 'intro') return;
@@ -303,27 +317,26 @@ export class Level4 implements Level {
     const WALL = 0xeec26a; // amarillo, como la fachada a la calle
 
     // Suelo: césped alrededor del hueco de la piscina, y los jardines vecinos
-    const grassTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 2500; i++) {
-        const v = 170 + Math.random() * 85;
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
-        ctx.fillRect(Math.random() * w, Math.random() * h, 2, 5);
-      }
-    });
-    grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-    grassTex.repeat.set(4, 4);
     const lawn = new Merger();
     this.ground(lawn, -4.5, POOL.minX - 0.35, 1.5, 14.5, GRASS);
     this.ground(lawn, POOL.maxX + 0.35, 4.5, 1.5, 14.5, GRASS);
     this.ground(lawn, POOL.minX - 0.35, POOL.maxX + 0.35, 1.5, POOL.minZ - 0.35, GRASS);
     this.ground(lawn, POOL.minX - 0.35, POOL.maxX + 0.35, POOL.maxZ + 0.35, 14.5, GRASS);
-    for (const [x0, x1] of [[-40, CORRIDOR.wallX], [4.5, 40]]) this.ground(lawn, x0, x1, 0, 30, NEIGH);
-    this.ground(lawn, -40, 40, 14.5, 40, NEIGH);
-    const lawnMesh = new THREE.Mesh(lawn.build(), toon({ vertexColors: true, map: grassTex }));
+    for (const [x0, x1] of [[-16, CORRIDOR.wallX], [4.5, 13.6]]) this.ground(lawn, x0, x1, 0, 14.7, NEIGH);
+    this.ground(lawn, -16, 13.6, 14.5, 15, NEIGH);
+    const lawnMesh = lawn.mesh();
     lawnMesh.userData.noCast = true;
     sc.add(lawnMesh);
+    // Alrededores: el resto de la urbanización, con casas, pinos y lomas al fondo (nada de horizonte vacío)
+    buildSurroundings(sc, {
+      keepOut: [{ minX: -66, maxX: 36, minZ: -40, maxZ: -5 }, { minX: -16.5, maxX: 14, minZ: -6, maxZ: 15.2 }],
+      half: 90,
+      center: { x: -15, z: -10 },
+      night: true,
+      seed: 11,
+      colliders: this.colliders,
+      hole: { minX: POOL.minX - 0.4, maxX: POOL.maxX + 0.4, minZ: POOL.minZ - 0.4, maxZ: POOL.maxZ + 0.4 },
+    });
 
     // Terraza y borde de la piscina
     this.ground(m, -4.5, 4.5, 0, 1.5, 0xd8c7a5, 0.02);
@@ -459,8 +472,11 @@ export class Level4 implements Level {
       m.add(G.box, 0xf4efe2, x + sx * 4.5, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
       m.add(G.box, 0xf4efe2, x, 0.9, 14.6, 0, 0, 0, 9, 1.8, 0.25);
     }
-    m.add(G.box, 0x7fd3ef, -12.1, 0.03, 6.5, 0, 0, 0, 3.2, 0.03, 5); // piscina vecina (más clara)
-    m.add(G.box, 0x7fd3ef, -10.9, 0.03, 12.2, 0, 0, 0, 2.6, 0.03, 2.4);
+    // Piscinas vecinas: agua con su borde de piedra blanca
+    for (const [x, z, w, d] of [[-12.1, 6.5, 3.2, 5], [-10.9, 12.2, 2.6, 2.4], [9.5, 8.5, 3, 4.6]]) {
+      m.add(G.box, 0xe8e2d4, x, 0.04, z, 0, 0, 0, w + 0.7, 0.08, d + 0.7);
+      m.add(G.box, 0x2f8fc0, x, 0.06, z, 0, 0, 0, w, 0.06, d);
+    }
     // Palmera junto a la casa del vecino
     for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -8.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
     for (let k = 0; k < 7; k++) {
@@ -596,8 +612,8 @@ export class Level4 implements Level {
     else if (this.phase === 'drive') this.updateDrive(dt);
     else if (this.phase === 'hug') this.updateHug(dt);
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
-      this.walker.speed = swimming ? 3.0 : 5.0;
-      this.walker.traction = swimming ? 0.22 : 1;
+      this.walker.speed = swimming ? 3.4 : 5.0;
+      this.walker.traction = swimming ? 0.45 : 1;
       this.solids.length = 0;
       if (swimming) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       else this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
@@ -609,6 +625,8 @@ export class Level4 implements Level {
             ? HOME_AREA
             : PLOT;
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
+      // En el Born, la explanada del obelisco está un escalón más alta que la calle
+      if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z);
       this.player.root.rotation.y = this.walker.facing;
       if (swimming) {
         this.swimPose(this.player, move);
@@ -679,7 +697,7 @@ export class Level4 implements Level {
     } else {
       // En el pasillo estrecho, cámara alta y cerca para no tapar con las paredes
       const inCorridor = pp.x < -4.4 && pp.x > CORRIDOR.wallX && pp.z < 8;
-      this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.5 : inCorridor ? 4.2 : 6.5, swimming ? 3.2 : inCorridor ? 8 : 3.6);
+      this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.2 : inCorridor ? 4.2 : 6.5, swimming ? 2.7 : inCorridor ? 8 : 3.6);
     }
     this.sun.follow(this.phase === 'drive' ? this.car.root.position : pp);
     this.sky.update(this.camera, dt);
@@ -878,6 +896,9 @@ export class Level4 implements Level {
       this.phase = 'drive';
       this.driveT = 0;
       this.driveTalkDone = false;
+      // Del Born a casa: el coche aparece ya en la calle de casa
+      this.placeCar(DRIVE_FROM_X);
+      this.camera.position.set(DRIVE_FROM_X - 7.5, 3.2, STREET.laneZ - 4.2);
       this.camLook.copy(this.car.root.position);
       this.driveTalkDone = true;
       this.updateHud();
@@ -889,7 +910,7 @@ export class Level4 implements Level {
     const k = Math.min(1, this.driveT / DRIVE_TIME);
     const e = k * k * (3 - 2 * k);
     const prev = this.car.root.position.x;
-    this.placeCar(THREE.MathUtils.lerp(CAR_START_X, CAR_STOP_X, e));
+    this.placeCar(THREE.MathUtils.lerp(DRIVE_FROM_X, CAR_STOP_X, e));
     const dx = this.car.root.position.x - prev;
     if (!this.rig) this.rig = new CarRig(this.car);
     this.rig.update(dt, dt > 0 ? dx / dt : 0, 0, 1.4); // calle de pueblo: algo más de bache
@@ -1273,7 +1294,7 @@ export class Level4 implements Level {
           this.car.azul.visible = false;
           this.player.root.visible = true;
           this.gas.root.visible = false;
-          this.player.root.position.set(STREET.bar.x - 0.6, 0, STREET.bar.z - 1.1);
+          this.player.root.position.copy(BAR_START);
           this.walker.yaw = this.walker.facing = Math.PI / 2;
           this.updateHud();
         },
