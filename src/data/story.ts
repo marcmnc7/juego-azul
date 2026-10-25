@@ -162,61 +162,34 @@ export const ROAD = {
 };
 
 export const CONCERT = {
-  barmanAgain: [{ who: 'Camarero', text: '¿Otra? Tu chico lleva un rato en la cola del baño.' }] as Line[],
-  smokeFound: '🚭 ¡A la papelera! Gas va a estar orgulloso',
-  gasFound: [
-    { who: 'Gas', text: '¡Azul!' },
-    { who: 'Azul', text: 'Te he grabado el temón. Don’t worry.' },
-  ] as Line[],
-  gasSmoke: { who: 'Gas', text: '¿Y el tabaco? ¿A la papelera? Esa es mi Azul.' } as Line,
-  gasNoSmoke: { who: 'Gas', text: '¿No estarás fumando, eh?' } as Line,
+  barmanAgain: [{ who: 'Camarero', text: '¿Buscas sitio? Desde el pasillo del centro se ve a Fito de lujo.' }] as Line[],
+  smokeFound: '🚭 Tabaco a la papelera',
   airport: [
-    { who: 'Narrador', text: '12 de marzo de 2026. Él vuela desde Barcelona; tú, una hora después desde Madrid. Destino: Gran Canaria, Fito.' },
-    { who: 'Azul', text: '(WhatsApp) Gasssss estoy demasiado emocionada' },
-    { who: 'Gas', text: '(WhatsApp) Qué puto asco el burger. NUNCA más' },
-    { who: 'Gas', text: '(WhatsApp) Todo malo y caro, hasta la Fanta' },
-    { who: 'Gas', text: '(WhatsApp) Me han cambiado el asiento. Ahora 3B' },
-    { who: 'Azul', text: '(WhatsApp) Yo tengo 26D. 26 palo pero D top ✨pasillo✨' },
+    { who: 'Narrador', text: 'Jueves 12 de marzo de 2026. Gas vuela desde Barcelona y Azul, desde Madrid. Destino: Gran Canaria, a ver a Fito.' },
   ] as Line[],
-  airportHint: 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta',
-  burgerHit: ['🍔 ¡Plaf! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó', '🍔 26D ✨pasillo✨… pero con kétchup'],
-  queueIntro: [
-    { who: 'Narrador', text: '13 de marzo. Estadio de Gran Canaria. Fito a punto de salir y Gas se va al baño.' },
-    { who: 'Gas', text: '(WhatsApp) Toy cola lavabos ya' },
-    { who: 'Gas', text: '(WhatsApp) Pfffff temón' },
+  airportHint: 'Esquiva las hamburguesas 🍔 y llega a la puerta de embarque',
+  burgerHit: ['🍔 ¡Plaf! «NUNCA más»', '🍔 «Todo malo y caro, hasta la fanta»', '🍔 Gas ya te avisó'],
+  landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria. Él ha llegado antes.' }] as Line[],
+  stadium: [
+    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de tocar y Gas se ha ido a la cola del baño.' },
+    { who: 'Narrador', text: 'Busca un buen sitio en el pasillo del centro.' },
   ] as Line[],
-  queueCut: ['¡Que se cuela! ✋', '¡Eh, que estábamos antes!', '«Solo voy a lavarme las manos»… sí, claro', '¡Ni de broma! ✋'],
-  queueDone: '🚻 ¡Por fin! (¿Ese que ha entrado al baño era Fito?)',
-  queueJoin: '🧍 Con Gas en la cola. «Pfffff temón»',
-  queueCutIn: ['😤 Se os ha colado uno', '😤 «Es que voy con mi amiga, que está ahí delante»', '😤 Colado. Y fuera, el temón'],
-  filmIntro: [
-    { who: 'Azul', text: '(WhatsApp) Noooo. Qué penaaaa' },
-    { who: 'Azul', text: '(WhatsApp) Hize vídeo don’t worry' },
-  ] as Line[],
-  filmDone: '🎥 Vídeo guardado. Para Gas',
+  filmIntro: [{ who: 'Narrador', text: 'Grábaselo: mantén a Fito dentro del recuadro aunque la gente salte delante.' }] as Line[],
+  filmDone: '🎥 Vídeo guardado para Gas',
   flashIntro: [
-    { who: 'Narrador', text: 'Gas sale del baño. Se ha hecho de noche y hay miles de personas.' },
-    { who: 'Gas', text: '(WhatsApp) Flash' },
-    { who: 'Gas', text: '(WhatsApp) Pls' },
-    { who: 'Gas', text: '(WhatsApp) Estoy' },
-    { who: 'Gas', text: '(WhatsApp) Xo no veo' },
+    { who: 'Narrador', text: 'Gas ya ha salido, pero entre canción y canción está todo a oscuras y no te encuentra.' },
+    { who: 'Narrador', text: 'Enciende el flash cuando mire hacia ti.' },
   ] as Line[],
   flashHint: 'Enciende el flash cuando Gas mire hacia ti',
-  flashHit: ['📱 «Flash» ¡Te ha visto!', '📱 «Pls» Viene hacia ti…', '📱 «Estoy» ¡Ya casi!', '📱 «Xo no veo»… ¡ya sí!'],
-  flashWrong: ['Ese no era tu flash… 🙃', 'Gas se va hacia una señora con linterna', '¡Ahora no, que mira al otro lado!'],
-  flashFound: [
-    { who: 'Gas', text: 'Ahí estás.' },
-    { who: 'Azul', text: 'Te he grabado el temón. Me debes una.' },
+  flashHit: ['📸 Te ha visto', '📸 Viene hacia ti', '📸 Ya casi', '📸 ¡Aquí!'],
+  flashWrong: ['Ahora no, que mira hacia otro lado', 'Gas va hacia otro flash', 'Has deslumbrado a un señor de Telde'],
+  gasFound: [
+    { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
+    { who: 'Azul', text: 'Te he grabado el temón. Toma.' },
   ] as Line[],
+  gasSmoke: { who: 'Gas', text: '¿Y el tabaco? ¿A la papelera? Esa es mi Azul.' } as Line,
   rhythm: 'Toca los botones cuando las notas lleguen a la línea',
-  ending: [
-    { who: 'Narrador', text: '16 de marzo. Aeropuerto. Él sale antes.' },
-    { who: 'Gas', text: '(WhatsApp) Ha ido súper, ¡no se puede estar triste!!!!' },
-    { who: 'Azul', text: '(WhatsApp) Ya sé, ha sido top' },
-    { who: 'Azul', text: '(WhatsApp) Pero no quiero no verte' },
-    { who: 'Gas', text: '(WhatsApp) Tengo que pasar esta resaca emocional' },
-    { who: 'Azul', text: '(WhatsApp) Hablar mal del finde es IMPOSIBLE cuando todo lo que fuimos fue icónico' },
-  ] as Line[],
+  ending: [{ who: 'Narrador', text: 'Lunes 16 de marzo. Cada uno vuelve a su ciudad.' }] as Line[],
 };
 
 // Capítulo 2: los chats de esa noche van tal cual en src/data/chats.ts (imperi, pins, cesped, meGustas).

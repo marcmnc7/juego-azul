@@ -8,7 +8,8 @@ import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
+import { CHATS } from '../data/chats';
 import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
@@ -24,21 +25,8 @@ type Phase = 'airport' | 'intro' | 'queue' | 'inQueue' | 'film' | 'flash' | 'mee
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = CONCERT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
-const T_AIRPORT = () =>
-  txt<Line[]>('airport', [
-    { who: 'Narrador', text: 'Jueves 12 de marzo. Gas vuela desde Barcelona; Azul, una hora después desde Madrid.' },
-    { who: 'Gas', text: '(WhatsApp) Qué puto asco el burger. NUNCA más. Todo malo y caro, hasta la Fanta.' },
-    { who: 'Azul', text: '(WhatsApp) Yo 26D. 26 palo, pero D top: ✨pasillo✨.' },
-  ]);
 const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta');
 const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🍔 ¡Buu! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó']);
-const T_QUEUE_INTRO = () =>
-  txt<Line[]>('queueIntro', [
-    { who: 'Narrador', text: 'Viernes 13. Estadio de Gran Canaria. Gas se va al baño justo antes del concierto.' },
-    { who: 'Gas', text: '(WhatsApp) Toy cola lavabos ya. Pfffff. Temón.' },
-    { who: 'Narrador', text: 'Ve con él a la cola y que no se le cuele nadie.' },
-  ]);
-const T_QUEUE_JOIN = () => txt<string>('queueJoin', '🧍 Con Gas en la cola. Esto va para largo…');
 const T_QUEUE_CUT_IN = () => txt<string[]>('queueCutIn', ['😤 Se os ha colado uno', '😤 «Es que voy con mi amiga, que está ahí delante»', '😤 Colado. Y encima sonríe']);
 const T_QUEUE_BLOCK = () => txt<string[]>('queueCut', ['✋ «Eh, eh. La cola empieza allí atrás»', '✋ «¿Tú también vas con tu amiga? Al final»', '✋ Se va al final, refunfuñando']);
 const T_QUEUE_DONE = () => txt<string>('queueDone', '🚻 ¡Por fin le toca! Y fuera suena un temón…');
@@ -49,15 +37,8 @@ const T_FILM_INTRO = () =>
     { who: 'Narrador', text: 'Grábale la canción: mantén a Fito dentro del encuadre aunque la gente salte delante.' },
   ]);
 const T_FILM_DONE = () => txt<string>('filmDone', '🎥 Vídeo guardado. Gas no se lo pierde (casi)');
-const T_FLASH_INTRO = () =>
-  txt<Line[]>('flashIntro', [
-    { who: 'Narrador', text: 'Gas sale del baño. El estadio está a oscuras y hay miles de personas.' },
-    { who: 'Gas', text: '(WhatsApp) Flash. Pls. Estoy. Xo no veo.' },
-    { who: 'Narrador', text: 'Enciende el flash cuando Gas mire hacia ti.' },
-  ]);
 const T_FLASH_HIT = () => txt<string[]>('flashHit', ['📱 ¡Te ha visto! Viene hacia ti', '📱 Un poco más cerca…', '📱 «¡Ya casi!»', '📱 «¡Te veo!»']);
 const T_FLASH_MISS = () => txt<string[]>('flashWrong', ['🙈 Gas mira hacia otro lado…', '🙈 Se va hacia otro flash', '🙈 Has deslumbrado a un señor de Telde']);
-const T_FLASH_FOUND = () => txt<Line[] | undefined>('flashFound', undefined);
 const T_FLASH_HINT = () => txt<string>('flashHint', 'Enciende el flash cuando la linterna de Gas te apunte');
 
 const BAR_POS = new THREE.Vector3(-17, 0, -8);
@@ -517,11 +498,13 @@ export class Level3 implements Level {
     this.phase = 'intro';
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(T_AIRPORT(), () => {
-        this.busy = false;
-        this.phase = 'airport';
-        this.updateHud();
-      });
+      dialogue(CONCERT.airport, () =>
+        phoneChat(CHATS.burger, () => {
+          this.busy = false;
+          this.phase = 'airport';
+          this.updateHud();
+        }),
+      );
     }, 500);
   }
 
@@ -708,11 +691,15 @@ export class Level3 implements Level {
     }, 700);
     later(
       () =>
-        dialogue(T_QUEUE_INTRO(), () => {
-          this.busy = false;
-          this.phase = 'queue';
-          this.updateHud();
-        }),
+        dialogue(CONCERT.landed, () =>
+          phoneChat(CHATS.vasTarde, () =>
+            dialogue(CONCERT.stadium, () => {
+              this.busy = false;
+              this.phase = 'queue';
+              this.updateHud();
+            }),
+          ),
+        ),
       1500,
     );
   }
@@ -1335,15 +1322,22 @@ export class Level3 implements Level {
     this.updateHud();
   }
 
-  /** Se pone con Gas: justo detrás de él. */
-  private joinQueue() {
-    this.queue.splice(this.gIdx + 1, 0, 'azul');
-    this.phase = 'inQueue';
+  /** Gas sigue en la cola del baño y empieza un temón: ella se lo graba. */
+  private goFilm() {
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
     this.walker.stop();
-    this.queueT = 0;
-    this.cutT = 2.5;
-    toast(T_QUEUE_JOIN());
-    this.updateHud();
+    audio.cheer(0.35);
+    fadeFlash(() => {
+      this.gas.root.visible = false;
+      this.gasCircle.x = this.gasCircle.z = 1e4;
+      this.player.root.position.copy(FLASH_SPOT);
+      this.phase = 'film';
+      this.updateHud();
+    }, 500);
+    const chat = CHATS.temon;
+    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(0, 6) }, () => dialogue(CONCERT.filmIntro, () => this.startFilm())), 1100);
   }
 
   /** Le toca a Gas: él entra y fuera empieza un temón. */
@@ -1502,10 +1496,13 @@ export class Level3 implements Level {
     audio.stopMusic();
     audio.ambience(0.25);
     this.updateHud();
-    dialogue(T_FLASH_INTRO(), () => {
-      this.busy = false;
-      this.updateHud();
-    });
+    const chat = CHATS.temon;
+    phoneChat({ ...chat, msgs: chat.msgs.slice(6) }, () =>
+      dialogue(CONCERT.flashIntro, () => {
+        this.busy = false;
+        this.updateHud();
+      }),
+    );
   }
 
   /** ¿Gas está mirando hacia ella ahora mismo (y quieto)? */
@@ -1607,7 +1604,7 @@ export class Level3 implements Level {
         break;
       case 'intro':
       case 'queue':
-        setObj('Ponte con Gas en la cola del lavabo');
+        setObj('Busca un buen sitio para grabar a Fito');
         break;
       case 'inQueue':
         setObj('Que no se le cuele nadie a Gas');
@@ -1629,7 +1626,7 @@ export class Level3 implements Level {
 
   private target(): THREE.Vector3 | null {
     if (this.phase === 'airport') return this.v1.set((AIR.minX + AIR.maxX) / 2, 0, AIR.maxZ - 1);
-    if (this.phase === 'queue') return this.gas.root.position;
+    if (this.phase === 'queue') return FLASH_SPOT;
     return null;
   }
 
@@ -1812,9 +1809,9 @@ export class Level3 implements Level {
           this.fx.burst(SMOKE_POS.clone().setY(1), '✨', 8);
           this.updateHud();
         };
-      } else if (pp.distanceTo(this.gas.root.position) < 1.9) {
-        label = '🧍 Con Gas';
-        action = () => this.joinQueue();
+      } else if (this.phase === 'queue' && pp.distanceTo(FLASH_SPOT) < 2.2) {
+        label = '📱 Grabar a Fito';
+        action = () => this.goFilm();
       } else if (pp.distanceTo(BAR_POS) < 3.2) {
         label = 'Hablar';
         action = () => this.talk(CONCERT.barmanAgain, () => this.phase);
@@ -1832,7 +1829,7 @@ export class Level3 implements Level {
       action = () => this.flash();
     }
     if (inQueue) this.updateHud();
-    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!' || label === '🛫 Embarcar');
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '✋ ¡A la cola!' || label === '🛫 Embarcar' || label === '📱 Grabar a Fito');
     if (this.input.consumeAction() && action) action();
 
     // Marcador y flecha
@@ -1879,7 +1876,7 @@ export class Level3 implements Level {
     // Que no vuelva a barrer con la linterna mientras hablan
     this.gaze = this.gazeTgt = 0;
     this.gazeT = 1e9;
-    dialogue([...(T_FLASH_FOUND() ?? CONCERT.gasFound), this.smokeThrown ? CONCERT.gasSmoke : CONCERT.gasNoSmoke], () => this.startRhythm());
+    dialogue([...CONCERT.gasFound, ...(this.smokeThrown ? [CONCERT.gasSmoke] : [])], () => this.startRhythm());
   }
 
   private startRhythm() {
@@ -1921,7 +1918,7 @@ export class Level3 implements Level {
     audio.fanfare();
     later(() => {
       if (this.phase !== 'ending') return;
-      dialogue(CONCERT.ending, () => {
+      dialogue(CONCERT.ending, () => phoneChat([CHATS.noQuieroNoVerte, { ...CHATS.iconico, msgs: CHATS.iconico.msgs.slice(-1) }], () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
@@ -1934,14 +1931,13 @@ export class Level3 implements Level {
               ['Notas', `${hits}/${total}`],
               ['Perfectas', `${perfects} · racha x${maxCombo}`],
               ['Hamburguesas esquivadas', this.burgerHits ? `te dieron ${this.burgerHits} 🍔` : 'todas 🍔'],
-              ['Colados frenados', `${this.cutsBlocked}/${this.cutsBlocked + this.cutsLost}`],
               ['Vídeo del temón', `${this.filmPct()}% con Fito en plano 📹`],
               ['Flashes', `${this.flashHits}/${this.flashHits + this.flashMiss}`],
               ['Tabaco', this.smokeThrown ? 'a la papelera 🚭' : 'sigue ahí… 🚬'],
             ],
           });
         }, 2500);
-      });
+      }));
     }, 2500);
   }
 
@@ -1982,7 +1978,7 @@ export class Level3 implements Level {
     };
     return [
       { label: '0 · Aeropuerto', run: () => { stop(); this.startAirport(); } },
-      { label: '1 · Cola del lavabo', run: () => { stop(); if (!this.queue.includes('gas')) this.queue.splice(Math.min(6, this.queue.length), 0, 'gas'); this.queue = this.queue.filter((q) => q !== 'azul'); this.gas.root.visible = true; this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
+      { label: '1 · Estadio (buscar sitio)', run: () => { stop(); if (!this.queue.includes('gas')) this.queue.splice(Math.min(6, this.queue.length), 0, 'gas'); this.queue = this.queue.filter((q) => q !== 'azul'); this.gas.root.visible = true; this.phase = 'queue'; tp(this.gas.root.position.x - 2.5, Q_Z, Math.PI / 2); this.updateHud(); } },
       { label: '2 · Grabar el temón', run: () => { stop(); this.phase = 'film'; this.gas.root.visible = false; this.player.root.position.copy(FLASH_SPOT); this.startFilm(); } },
       { label: '3 · Flash a oscuras', run: () => { stop(); this.filmUi?.remove(); this.filmUi = null; this.player.root.visible = true; this.startFlash(); } },
       { label: '4 · Concierto (ritmo)', run: () => { stop(); this.startRhythm(); } },
