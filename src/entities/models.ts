@@ -142,6 +142,8 @@ export interface PersonLook {
   eyes?: number;
   shoes?: number;
   beard?: boolean;
+  /** Mono de una pieza ajustado: mangas y perneras largas del mismo color, cintura marcada. */
+  jumpsuit?: boolean;
 }
 
 export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
@@ -231,8 +233,16 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   const shoes = look.shoes ?? 0x3a2a20;
 
   const torso = new Merger();
-  if (look.skirt) torso.add(new THREE.CylinderGeometry(0.2, 0.42, 0.5, 14), look.pants, 0, 0.78, 0);
-  torso.add(G.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.46, 0.3, 0.32);
+  if (look.jumpsuit) {
+    // Ajustado: torso estrecho, cadera que enlaza con las perneras y escote en pico
+    torso.add(G.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.4, 0.3, 0.27);
+    torso.add(G.sphere, look.shirt, 0, 0.74, 0, 0, 0, 0, 0.38, 0.22, 0.26);
+    torso.add(G.box, look.skin, 0, 1.15, 0.13, 0.25, 0, Math.PI / 4, 0.09, 0.09, 0.02);
+    torso.add(G.box, 0x3a3a44, 0, 0.86, 0.135, 0, 0, 0, 0.36, 0.035, 0.02); // cinturón fino
+  } else {
+    if (look.skirt) torso.add(new THREE.CylinderGeometry(0.2, 0.42, 0.5, 14), look.pants, 0, 0.78, 0);
+    torso.add(G.capsule, look.shirt, 0, 1.0, 0, 0, 0, 0, 0.46, 0.3, 0.32);
+  }
   torso.add(G.cyl, look.skin, 0, 1.26, 0, 0, 0, 0, 0.14, 0.12, 0.14);
   body.add(torso.mesh());
 
@@ -256,11 +266,12 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   // Pierna: muslo desde la cadera, rodilla, espinilla y tobillo con el zapato
   const leg = () => {
     const hip = new THREE.Group();
-    const skinLeg = look.skirt ? look.skin : look.pants;
-    hip.add(new Merger().add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155, 0.135, 0.155).mesh());
+    const skinLeg = look.skirt && !look.jumpsuit ? look.skin : look.pants;
+    const w = look.jumpsuit ? 0.88 : 1;
+    hip.add(new Merger().add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155 * w, 0.135, 0.155 * w).mesh());
     const knee = new THREE.Group();
     knee.position.y = -0.26;
-    knee.add(new Merger().add(G.capsule, skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14, 0.13, 0.14).mesh());
+    knee.add(new Merger().add(G.capsule, skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14 * w, 0.13, 0.14 * w).mesh());
     const foot = new THREE.Group();
     foot.position.y = -0.25;
     foot.add(new Merger().add(G.rbox, shoes, 0, -0.07, 0.04, 0, 0, 0, 0.17, 0.12, 0.28).mesh());
@@ -276,7 +287,7 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
     elbow.position.y = -0.24;
     elbow.add(
       new Merger()
-        .add(G.capsule, look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
+        .add(G.capsule, look.jumpsuit ? look.shirt : look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
         .add(G.sphere, look.skin, 0, -0.23, 0.01, 0, 0, 0, 0.13, 0.14, 0.13)
         .mesh(),
     );

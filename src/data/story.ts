@@ -46,6 +46,13 @@ export const FERRERIES = {
     { who: 'Margaux', text: 'Margaux.' },
     { who: 'Marc', text: 'Margaux. Increïble.' },
   ] as Line[],
+  smallTalk: [
+    { who: 'Marc', text: 'I què, ets d’aquí?' },
+    { who: 'Margaux', text: 'Visc a Madrid. Però som una mica de tot: francesa, italiana i espanyola.' },
+    { who: 'Marc', text: 'I havies vingut mai a ses festes de Ferreries, o és sa primera vegada?' },
+    { who: 'Margaux', text: 'Sa primera.' },
+    { who: 'Marc', text: 'Idò benvinguda. Ja veus que aquí es balla com es pot.' },
+  ] as Line[],
   hints: {
     pomada: 'Pomada! 🍋',
     luck: 'Carícia de sort! 🍀',

@@ -626,15 +626,21 @@ const tv = new THREE.Vector3();
 const ts = new THREE.Vector3(1, 1, 1);
 const zero = new THREE.Vector3(0.0001, 0.0001, 0.0001);
 const up = new THREE.Vector3(0, 1, 0);
-export function animateCrowd(crowds: Crowd[], t: number, energy = 1) {
+export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }) {
   for (const c of crowds) {
     c.base.forEach((b, i) => {
+      // La gente se aparta para dejar un claro (p. ej. alrededor de una pareja)
+      let bx = b.x, bz = b.z;
+      if (clear && clear.r > 0) {
+        const dx = b.x - clear.x, dz = b.z - clear.z, d = Math.hypot(dx, dz) || 0.01;
+        if (d < clear.r) { bx = clear.x + (dx / d) * clear.r; bz = clear.z + (dz / d) * clear.r; }
+      }
       if (c.alt) {
         // Bailarines: saltan más, giran y alternan postura
         const ph = t * b.speed * 0.5 + b.phase;
         const bounce = Math.abs(Math.sin(ph)) * 0.35 * energy;
         tq.setFromAxisAngle(up, b.ry + Math.sin(t * 2 + b.phase) * 1.2);
-        tv.set(b.x, bounce, b.z);
+        tv.set(bx, bounce, bz);
         const armsUp = Math.sin(ph * 0.5) > 0;
         c.mesh.setMatrixAt(i, tm.compose(tv, tq, armsUp ? ts : zero));
         c.alt.setMatrixAt(i, tm.compose(tv, tq, armsUp ? zero : ts));
@@ -642,7 +648,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1) {
       }
       const bounce = Math.abs(Math.sin(t * b.speed * 0.5 + b.phase)) * 0.22 * energy;
       tq.setFromAxisAngle(up, b.ry + Math.sin(t * 1.5 + b.phase) * 0.35);
-      tv.set(b.x, bounce, b.z);
+      tv.set(bx, bounce, bz);
       c.mesh.setMatrixAt(i, tm.compose(tv, tq, ts));
     });
     c.mesh.instanceMatrix.needsUpdate = true;

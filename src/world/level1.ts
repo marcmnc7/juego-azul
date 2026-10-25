@@ -47,7 +47,7 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   statHits: 'Envestides d’ase',
 };
 
-type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'ending' | 'done';
+type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
 const REAR = 1.8;
@@ -106,6 +106,10 @@ export class Level1 implements Level {
   private carme: Person;
   private marcTo: THREE.Vector3 | null = null;
   private barT = 0;
+  private kissT = 0;
+  private clearR = 0;
+  private carmeTo: THREE.Vector3 | null = null;
+  private readonly clear = { x: 0, z: 0, r: 0 };
   private donkeys: DonkeyState[] = [];
   // Vasos de plástico de pomada por el suelo: se patean, se vuelcan, ruedan y los ases los arrollan
   private phys = new PhysicsWorld();
@@ -156,7 +160,9 @@ export class Level1 implements Level {
     this.fx = new Particles(this.scene);
     this.buildCups();
 
-    this.player = makePerson(MARGAUX_LOOK);
+    // Esa noche, Margaux y Carme van con un mono negro de una pieza, ajustado
+    const MONO = { shirt: 0x141418, pants: 0x141418, shoes: 0x111111, skirt: false, jumpsuit: true };
+    this.player = makePerson({ ...MARGAUX_LOOK, ...MONO });
     this.player.root.position.copy(this.world.spawn);
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
@@ -175,7 +181,7 @@ export class Level1 implements Level {
     this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : MARC_LOOK);
     if (V.horses) this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
-    this.carme = makePerson({ skin: 0xf3d2b6, shirt: 0xf2f2f2, pants: 0x3b5a8a, hair: 0xf3dc8f, hairStyle: 'short', skirt: true, eyes: 0x3a6ea8 });
+    this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
     this.carme.root.position.copy(this.world.marcPos);
     this.carme.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.carme.root);
@@ -328,6 +334,11 @@ export class Level1 implements Level {
         break;
       case 'findMarc':
         h.setObjective(this.V.hud.find);
+        h.setCounters('');
+        break;
+      case 'kiss':
+      case 'kissing':
+        h.setObjective('💋');
         h.setCounters('');
         break;
       case 'barDance':
@@ -554,7 +565,11 @@ export class Level1 implements Level {
   update(dt: number) {
     this.t += dt;
     const ending = this.stage === 'ending' || this.stage === 'done';
-    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1);
+    const close0 = this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing';
+    this.clearR += ((close0 ? 4.2 : 0) - this.clearR) * Math.min(1, dt * 1.5);
+    const cm = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
+    Object.assign(this.clear, { x: cm.x, z: cm.z, r: this.clearR });
+    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear);
     this.fx.update(dt);
     (this.world.lights.material as THREE.PointsMaterial).size = 0.9 + Math.sin(this.t * 3) * 0.08;
     // Guirnaldas de los bares que cambian de color con la música
@@ -579,7 +594,7 @@ export class Level1 implements Level {
 
     const pp = this.player.root.position;
     this.walker.turn(this.input.consumeCam());
-    const ax = this.busy || ending || this.stage === 'meet' || this.stage === 'barDance' ? { x: 0, y: 0 } : this.input.axes();
+    const ax = this.busy || ending || this.stage === 'meet' || this.stage === 'barDance' || this.stage === 'kiss' || this.stage === 'kissing' ? { x: 0, y: 0 } : this.input.axes();
     // Obstáculos redondos: el público y los ases (dos círculos a lo largo del cuerpo)
     this.solids.length = this.world.people.length;
     let k = this.solids.length;
@@ -596,7 +611,7 @@ export class Level1 implements Level {
     this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
 
     if (ending || this.stage === 'barDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
-    else if (this.stage === 'meet') animatePerson(this.player, dt, 'idle');
+    else if (this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
     else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     // Con una pomada en la mano, el brazo va un poco adelantado
     const carrying = this.pomadaCount > 0 && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc');
@@ -622,8 +637,21 @@ export class Level1 implements Level {
         this.meetMarc();
       }
     } else if (this.stage === 'meet') animatePerson(this.marc, dt, 'talk');
+    else if (this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.marc, dt, 'idle');
     else animatePerson(this.marc, dt, 'dance', 0, this.t * 8 + 1);
-    animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
+    if (this.carmeTo) {
+      const cp = this.carme.root.position, d = this.v2.subVectors(this.carmeTo, cp).setY(0), l = d.length();
+      if (l > 0.05) {
+        cp.addScaledVector(d, Math.min(1, (dt * 1.6) / l));
+        this.carme.root.rotation.y = Math.atan2(d.x, d.z);
+        animatePerson(this.carme, dt, 'walk', 1.6);
+      } else {
+        const m = this.v2.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
+        this.carme.root.rotation.y = Math.atan2(m.x - cp.x, m.z - cp.z);
+        animatePerson(this.carme, dt, this.stage === 'ending' ? 'dance' : 'idle', 0, this.t * 7);
+      }
+    } else animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
+    if (this.stage === 'kissing') this.updateKiss(dt);
     if (this.stage === 'barDance') {
       this.barT += dt;
       animatePerson(this.player, dt, 'dance', 0, this.t * 8);
@@ -670,6 +698,10 @@ export class Level1 implements Level {
         pulse = true;
         const s = rearingNear;
         this.pendingAction = () => this.touchDonkey(s);
+      } else if (this.stage === 'kiss') {
+        label = '💋 Fer-li un petó';
+        pulse = true;
+        this.pendingAction = () => this.startKiss();
       } else if (dT < 3.5) {
         label = 'Xerrar';
         this.pendingAction = () => this.talkTofol();
@@ -726,8 +758,9 @@ export class Level1 implements Level {
     if (this.confetti.mesh.visible) this.confetti.update(dt, this.world.marcPos, this.t);
 
     const intro = this.stage === 'intro';
-    const close = this.stage === 'meet';
-    this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 7.5, close ? 2.3 : ending ? 4.2 : intro ? 6 : 3.8);
+    const close = this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing';
+    if (this.stage === 'kiss' || this.stage === 'kissing') this.kissCamera(dt);
+    else this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 7.5, close ? 2.3 : ending ? 4.2 : intro ? 6 : 3.8);
     this.world.sun.follow(pp);
     this.world.sky.update(this.camera, dt);
   }
@@ -796,16 +829,81 @@ export class Level1 implements Level {
     this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
     this.walker.yaw = this.walker.facing - Math.PI / 2;
     this.updateHud();
-    dialogue(this.T.marcMeet, () => {
+    dialogue([...this.T.marcMeet, ...this.T.smallTalk], () => {
+      this.busy = false;
+      // Se acercan: cara a cara, a un palmo, y la cámara de lado
+      const dir = this.v1.subVectors(pp, mp).setY(0).normalize();
+      pp.copy(mp).addScaledVector(dir, 0.95);
+      this.walker.knock.set(0, 0, 0);
+      this.walker.facing = Math.atan2(-dir.x, -dir.z);
+      this.walker.yaw = this.walker.facing - Math.PI / 2;
+      this.marc.root.rotation.y = Math.atan2(dir.x, dir.z);
+      // Carme se aparta discretamente al otro lado para no tapar la escena
+      const mid = this.v2.copy(pp).lerp(mp, 0.5);
+      this.carmeTo = new THREE.Vector3(mid.x - dir.z * 2.2 + dir.x * 0.6, 0, mid.z + dir.x * 2.2 + dir.z * 0.6);
+      this.stage = 'kiss';
+      this.updateHud();
+    });
+  }
+
+  /** Plano de perfil de la pareja, que se acerca poco a poco durante el beso. */
+  private kissCamera(dt: number) {
+    const pp = this.player.root.position, mp = this.marc.root.position;
+    const mid = this.v1.copy(pp).lerp(mp, 0.5);
+    const dx = mp.x - pp.x, dz = mp.z - pp.z, l = Math.hypot(dx, dz) || 1;
+    const dist = this.stage === 'kissing' ? 3.4 - Math.min(1, this.kissT / 2) * 0.9 : 3.4;
+    const target = this.v2.set(mid.x - (dz / l) * dist, 1.75, mid.z + (dx / l) * dist);
+    this.camera.position.lerp(target, Math.min(1, dt * 3));
+    this.camera.lookAt(mid.x, 1.45, mid.z);
+  }
+
+  private startKiss() {
+    this.stage = 'kissing';
+    this.kissT = 0;
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    audio.stopMusic();
+    audio.ambience(0.04);
+  }
+
+  /** El beso: se inclinan el uno hacia el otro, corazones y fuegos artificiales. */
+  private updateKiss(dt: number) {
+    this.kissT += dt;
+    const k = Math.min(1, this.kissT / 1.2);
+    const lean = Math.sin(k * Math.PI * 0.5) * 0.22;
+    for (const p of [this.player, this.marc]) {
+      p.body.rotation.x = lean;
+      p.head.rotation.x = lean * 0.6;
+      p.armL.rotation.x = p.armR.rotation.x = -0.5 * k;
+      p.eyes.scale.y = k > 0.8 ? 0.15 : 1; // ojos cerrados
+    }
+    this.marc.head.rotation.z = 0.15 * k;
+    this.player.head.rotation.z = -0.15 * k;
+    if (this.kissT > 1.2 && this.kissT - dt <= 1.2) {
+      const mid = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5).setY(2.5);
+      this.fx.burst(mid, '❤️', 14, 3, 1.2);
+      this.fx.burst(mid, '💋', 3, 1, 0.8);
+      audio.fanfare();
+      audio.cheer(0.7);
+      vibrate([60, 40, 120]);
+      for (let i = 0; i < 3; i++) this.fireworks.burst(this.v2.set(-12 + i * 12, 22 + Math.random() * 5, 38));
+    }
+    if (this.kissT > 3.4) {
+      for (const p of [this.player, this.marc]) {
+        p.body.rotation.x = p.head.rotation.x = p.head.rotation.z = 0;
+        p.eyes.scale.y = 1;
+      }
       this.busy = false;
       this.stage = 'ending';
       this.endingT = 0;
       this.confetti.mesh.visible = true;
       this.confetti.active = true;
-      audio.fanfare();
+      audio.startMusic();
+      audio.ambience(0.12);
       audio.cheer(0.6);
       this.updateHud();
-    });
+    }
   }
 
   debug(): DebugItem[] {
