@@ -684,6 +684,49 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   return { root, body, joy, wheels, azul };
 }
 
+/** Moto (la de Gas) con él montado y casco. Mira hacia +Z. */
+export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
+  const root = new THREE.Group();
+  const m = new Merger();
+  // Chasis, depósito, asiento, colín y horquilla
+  m.add(G.rbox, color, 0, 0.72, 0.15, 0, 0, 0, 0.36, 0.3, 0.75); // depósito
+  m.add(G.rbox, 0x111111, 0, 0.8, -0.45, 0, 0, 0, 0.32, 0.12, 0.7); // asiento
+  m.add(G.rbox, color, 0, 0.78, -0.92, -0.25, 0, 0, 0.26, 0.12, 0.35); // colín
+  m.add(G.box, 0x3a3a3e, 0, 0.5, -0.1, 0, 0, 0, 0.28, 0.3, 0.8); // motor
+  m.add(G.cyl, 0x9a9aa2, 0.2, 0.38, -0.55, Math.PI / 2 - 0.15, 0, 0, 0.1, 0.8, 0.1); // escape
+  for (const sx of [-0.09, 0.09]) m.add(G.cyl, 0xb8b8c0, sx, 0.65, 0.68, -0.35, 0, 0, 0.05, 0.75, 0.05); // horquilla
+  m.add(G.cyl, 0x222222, 0, 1.02, 0.62, 0, 0, Math.PI / 2, 0.04, 0.75, 0.04); // manillar
+  m.add(G.sphere, 0xfff3b0, 0, 0.9, 0.82, 0, 0, 0, 0.2, 0.2, 0.12); // faro
+  m.add(G.box, 0xff3030, 0, 0.82, -1.1, 0, 0, 0, 0.14, 0.06, 0.04); // piloto
+  const wGeo = new Merger().add(G.cyl, 0x151515, 0, 0, 0, 0, 0, Math.PI / 2, 0.66, 0.14, 0.66).add(G.cyl, 0xa8a8b0, 0, 0, 0, 0, 0, Math.PI / 2, 0.3, 0.16, 0.3).build();
+  const wheels: THREE.Object3D[] = [];
+  for (const z of [0.8, -0.78]) {
+    const w = new THREE.Mesh(wGeo, vertexMat());
+    w.position.set(0, 0.33, z);
+    root.add(w);
+    wheels.push(w);
+  }
+  root.add(m.mesh());
+  let person: Person | null = null;
+  if (rider) {
+    person = makePerson(rider);
+    person.root.position.set(0, 0.42, -0.42);
+    // Sentado con las manos en el manillar
+    person.legL.rotation.x = person.legR.rotation.x = -1.2;
+    person.kneeL.rotation.x = person.kneeR.rotation.x = 1.5;
+    person.legL.rotation.z = -0.15;
+    person.legR.rotation.z = 0.15;
+    person.armL.rotation.x = person.armR.rotation.x = -1.1;
+    person.body.rotation.x = 0.25;
+    const helmet = new Merger().add(G.ball, 0x1b1d22, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh();
+    person.head.add(helmet);
+    root.add(person.root);
+  }
+  addOutline(root, 0.02);
+  root.add(blobShadow(1.4));
+  return { root, wheels, rider: person };
+}
+
 /** Zamburiña en su concha. Devuelve la concha y la carne (cuyo color cambia al cocinarse). */
 export function makeScallop() {
   const g = new THREE.Group();

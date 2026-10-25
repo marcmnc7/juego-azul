@@ -6,7 +6,8 @@ import { G, Merger, makeCar, makeScallop, vertexMat, CarRig } from '../entities/
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, addOutline, applyShadows } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
+import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
@@ -14,7 +15,7 @@ import { clock, type Level, type LevelDone, disposeObj } from './level';
 // Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
 // → carretera entre viñedos → Logroño.
 
-type Phase = 'intro' | 'drive1' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
+type Phase = 'intro' | 'drive1' | 'marcial' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
 type Region = 'madrid' | 'meseta' | 'cantabria' | 'rioja';
 
 const LANES = [-2.6, 0, 2.6];
@@ -30,6 +31,14 @@ const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; t
   rioja: { ground: 0x9a7a4a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
 };
 const TURBO = 1.45;
+// El juego del viaje: parar en el primer restaurante que empiece por M
+const EATERIES: { name: string; z: number; m?: boolean }[] = [
+  { name: 'Asador El Cruce', z: 520 },
+  { name: 'Bar Los Arcos', z: 610 },
+  { name: 'Hostal La Parada', z: 690 },
+  { name: 'Cafetería Marcial', z: 770, m: true },
+];
+const MARCIAL_Z = 770;
 
 function canvasTex(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 256, h = 256) {
   const c = document.createElement('canvas');
@@ -198,6 +207,8 @@ export class Level2 implements Level {
   private prevAx = 0;
   private photoTex: THREE.Texture;
   private obstacleGeos: Record<Region, { geo: THREE.BufferGeometry; speed: number }[]>;
+  private marcialDone = false;
+  private eateryTried = new Set<string>();
   private raycaster = new THREE.Raycaster();
   private camTarget = new THREE.Vector3();
   private camLook = new THREE.Vector3();
@@ -299,6 +310,11 @@ export class Level2 implements Level {
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
     sv.position.set(6, 0, LEG1 - 20);
     sc.add(sv);
+    for (const e of EATERIES) {
+      const r = this.buildEatery(e.name, !!e.m);
+      r.position.set(0, 0, e.z);
+      sc.add(r);
+    }
     const a1 = makeSign(['A-1 Burgos', 'Santander 390'], '#1f5fbf');
     a1.position.set(6, 0, 80);
     sc.add(a1);
@@ -324,10 +340,18 @@ export class Level2 implements Level {
     audio.startMusic('road');
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(ROAD.intro, () => {
-        this.phase = 'drive1';
-        this.updateHud();
-      });
+      dialogue(ROAD.intro, () =>
+        phoneChat(CHATS.pacto, () =>
+          dialogue(ROAD.introTrain, () =>
+            phoneChat([CHATS.muyJusto, CHATS.helado, CHATS.aparcao], () =>
+              dialogue(ROAD.introGo, () => {
+                this.phase = 'drive1';
+                this.updateHud();
+              }),
+            ),
+          ),
+        ),
+      );
     }, 500);
   }
 
@@ -411,8 +435,58 @@ export class Level2 implements Level {
 
   private buildObstacles(): Record<Region, { geo: THREE.BufferGeometry; speed: number }[]> {
     const cone = new Merger().add(G.cone, 0xff7a1a, 0, 0.45, 0, 0, Math.PI / 4, 0, 0.6, 0.9, 0.6).add(G.box, 0xffffff, 0, 0.45, 0, 0, 0, 0, 0.36, 0.12, 0.36).build();
-    const otherCar = (c: number) =>
-      new Merger().add(G.box, c, 0, 0.6, 0, 0, 0, 0, 1.8, 0.6, 3.8).add(G.box, c, 0, 1.12, -0.3, 0, 0, 0, 1.6, 0.5, 2).add(G.box, 0x9fd3e8, 0, 1.12, -0.3, 0, 0, 0, 1.62, 0.36, 1.8).add(G.box, 0x1a1a1a, 0, 0.32, 0, 0, 0, 0, 1.9, 0.5, 2.6).build();
+    // Tráfico: turismos, monovolumen y furgoneta con ruedas, lunas tintadas, pilotos y matrícula
+    const otherCar = (c: number, kind: 'hatch' | 'sedan' | 'suv' | 'van' = 'sedan') => {
+      const m = new Merger();
+      const glass = 0x2b3a48;
+      const L = kind === 'van' ? 4.6 : kind === 'hatch' ? 3.6 : 4.2;
+      const W = kind === 'van' ? 1.9 : 1.78;
+      const lowH = kind === 'suv' ? 0.75 : 0.6;
+      const lowY = (kind === 'suv' ? 0.42 : 0.32) + lowH / 2;
+      // Carrocería baja (capó + maletero), redondeada
+      m.add(G.rbox, c, 0, lowY, 0, 0, 0, 0, W, lowH, L);
+      if (kind === 'van') {
+        // Furgoneta: caja alta casi entera, con cabina delante
+        m.add(G.rbox, c, 0, 1.55, -0.35, 0, 0, 0, W - 0.02, 1.3, L - 1.0);
+        m.add(G.box, glass, 0, 1.45, L / 2 - 1.0, -0.5, 0, 0, W - 0.25, 0.7, 0.05);
+        m.add(G.box, 0x444448, 0, 1.45, -L / 2 + 0.16, 0, 0, 0, 0.03, 1.1, 0.02); // junta de puertas traseras
+      } else {
+        const cabL = kind === 'hatch' ? 2.1 : kind === 'suv' ? 2.5 : 2.2;
+        const cabZ = kind === 'hatch' ? -0.35 : kind === 'suv' ? -0.3 : -0.2;
+        const cabY = lowY + lowH / 2 + 0.27;
+        m.add(G.rbox, c, 0, cabY, cabZ, 0, 0, 0, W - 0.16, 0.56, cabL);
+        // Lunas: trasera, laterales y parabrisas
+        m.add(G.box, glass, 0, cabY + 0.02, cabZ - cabL / 2 - 0.01, kind === 'hatch' ? 0.1 : 0.35, 0, 0, W - 0.4, 0.4, 0.04);
+        m.add(G.box, glass, 0, cabY + 0.02, cabZ + cabL / 2 + 0.01, -0.35, 0, 0, W - 0.4, 0.4, 0.04);
+        for (const sx of [-1, 1]) m.add(G.box, glass, sx * (W / 2 - 0.07), cabY + 0.04, cabZ, 0, 0, 0, 0.03, 0.34, cabL - 0.35);
+        // Cabezas del conductor y acompañante (se ven por la luna trasera)
+        m.add(G.sphere, 0x2a1f18, 0.38, cabY + 0.05, cabZ + 0.25, 0, 0, 0, 0.3, 0.32, 0.3);
+        if (c % 3 === 0) m.add(G.sphere, 0x8a6a40, -0.38, cabY + 0.05, cabZ + 0.25, 0, 0, 0, 0.3, 0.32, 0.3);
+        // Retrovisores
+        for (const sx of [-1, 1]) m.add(G.rbox, c, sx * (W / 2 + 0.08), cabY - 0.12, cabZ + cabL / 2 - 0.15, 0, 0, 0, 0.14, 0.12, 0.08);
+      }
+      // Parte trasera: pilotos, matrícula europea, paragolpes y tubo de escape
+      const rz = -L / 2 - 0.01;
+      for (const sx of [-1, 1]) {
+        m.add(G.rbox, 0xd0202a, sx * (W / 2 - 0.22), lowY + 0.12, rz, 0, 0, 0, 0.34, 0.14, 0.04);
+        m.add(G.box, 0xff9a2a, sx * (W / 2 - 0.22), lowY + 0.02, rz - 0.005, 0, 0, 0, 0.3, 0.04, 0.03);
+      }
+      m.add(G.box, 0xf4f4f0, 0, lowY - 0.05, rz - 0.01, 0, 0, 0, 0.52, 0.12, 0.02);
+      m.add(G.box, 0x1f4fbf, -0.23, lowY - 0.05, rz - 0.02, 0, 0, 0, 0.06, 0.12, 0.02);
+      m.add(G.rbox, 0x2a2a2e, 0, lowY - lowH / 2 + 0.06, -L / 2 + 0.02, 0, 0, 0, W + 0.04, 0.16, 0.18);
+      m.add(G.rbox, 0x2a2a2e, 0, lowY - lowH / 2 + 0.06, L / 2 - 0.02, 0, 0, 0, W + 0.04, 0.16, 0.18);
+      m.add(G.cyl, 0x8a8a90, 0.5, lowY - lowH / 2 + 0.02, rz - 0.04, Math.PI / 2, 0, 0, 0.08, 0.12, 0.08);
+      // Faros delanteros
+      for (const sx of [-1, 1]) m.add(G.rbox, 0xfff6d8, sx * (W / 2 - 0.25), lowY + 0.08, L / 2 + 0.01, 0, 0, 0, 0.36, 0.14, 0.04);
+      // Ruedas con llanta
+      const wy = 0.34;
+      const wz = L / 2 - 0.75;
+      for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+        m.add(G.cyl, 0x151515, sx * (W / 2 - 0.08), wy, sz * wz, 0, 0, Math.PI / 2, 0.68, 0.26, 0.68);
+        m.add(G.cyl, 0xb8bcc4, sx * (W / 2 - 0.02), wy, sz * wz, 0, 0, Math.PI / 2, 0.38, 0.06, 0.38);
+      }
+      return m.build();
+    };
     const tractor = new Merger()
       .add(G.box, 0x2f8f3a, 0, 1.1, 0.3, 0, 0, 0, 1.4, 1, 2)
       .add(G.box, 0x9fd3e8, 0, 2, -0.4, 0, 0, 0, 1.2, 1, 1)
@@ -431,10 +505,10 @@ export class Level2 implements Level {
     const barrel = new Merger().add(G.cyl, 0x8a5a36, 0, 0.6, 0, 0, 0, 0, 1, 1.2, 1).add(G.cyl, 0x333333, 0, 0.3, 0, 0, 0, 0, 1.03, 0.08, 1.03).add(G.cyl, 0x333333, 0, 0.9, 0, 0, 0, 0, 1.03, 0.08, 1.03).build();
     // speed > 0: va en nuestro sentido, más lento que nosotros
     return {
-      madrid: [{ geo: cone, speed: 0 }, { geo: otherCar(0x3a6ab0), speed: 10 }, { geo: otherCar(0xf4f1ea), speed: 12 }],
-      meseta: [{ geo: otherCar(0xf4d35e), speed: 11 }, { geo: tractor, speed: 5 }, { geo: cone, speed: 0 }],
-      cantabria: [{ geo: cow, speed: 0 }, { geo: cow, speed: 0 }, { geo: otherCar(0x2f6b46), speed: 10 }],
-      rioja: [{ geo: barrel, speed: 0 }, { geo: otherCar(0x7a1f3d), speed: 11 }, { geo: barrel, speed: 0 }],
+      madrid: [{ geo: cone, speed: 0 }, { geo: otherCar(0x2f4f86, 'sedan'), speed: 10 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }, { geo: otherCar(0x9a9ea6, 'hatch'), speed: 12 }],
+      meseta: [{ geo: otherCar(0x1d1f24, 'suv'), speed: 11 }, { geo: tractor, speed: 5 }, { geo: cone, speed: 0 }, { geo: otherCar(0xc8c2b4, 'sedan'), speed: 12 }],
+      cantabria: [{ geo: cow, speed: 0 }, { geo: cow, speed: 0 }, { geo: otherCar(0x3d5a4a, 'suv'), speed: 10 }, { geo: otherCar(0xf2f2f2, 'hatch'), speed: 11 }],
+      rioja: [{ geo: barrel, speed: 0 }, { geo: otherCar(0x6e1a2e, 'sedan'), speed: 11 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }],
     };
   }
 
@@ -548,7 +622,7 @@ export class Level2 implements Level {
 
   private updateRoute() {
     let k = 0;
-    if (this.phase === 'drive1' || this.phase === 'intro') k = (this.dist / LEG1) * 0.55;
+    if (this.phase === 'drive1' || this.phase === 'intro' || this.phase === 'marcial') k = (this.dist / LEG1) * 0.55;
     else if (this.phase === 'arriveSV' || this.phase === 'grill' || this.phase === 'zambDone') k = 0.55;
     else if (this.phase === 'drive2') k = 0.55 + (this.dist / LEG2) * 0.45;
     else k = 1;
@@ -572,6 +646,10 @@ export class Level2 implements Level {
     const reg = this.regionAt(z);
     const end = this.phase === 'drive1' ? LEG1 - 60 : this.legStart + LEG2 - 60;
     if (z > end) return;
+    if (!this.marcialDone && Math.abs(z - MARCIAL_Z) < 25) {
+      this.nextSpawn += 30;
+      return;
+    }
     const lanes = [0, 1, 2].sort(() => Math.random() - 0.5);
     // Una o dos fotos y, a veces, un obstáculo (nunca bloquea los tres carriles)
     const obstacle = Math.random() < 0.7;
@@ -628,7 +706,7 @@ export class Level2 implements Level {
       if (ax < -0.5 && this.prevAx >= -0.5) this.steer(-1);
     }
     this.prevAx = ax;
-    this.input.consumeAction();
+    const acted = this.input.consumeAction();
     this.input.consumeCam();
 
     // Velocidad
@@ -769,6 +847,7 @@ export class Level2 implements Level {
     if (this.phase === 'drive2' && this.dist >= LEG2) this.arriveLogrono();
     if (drive && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
 
+    if (this.phase === 'drive1' && !this.marcialDone) this.updateEateries(acted);
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
     this.updateRoute();
     this.updateCamera(dt);
@@ -859,7 +938,13 @@ export class Level2 implements Level {
     this.phase = 'logrono';
     this.updateHud();
     audio.bark();
-    later(() => dialogue(ROAD.arriveLogrono, () => this.finish()), 1500);
+    later(
+      () =>
+        dialogue(ROAD.arriveLogrono, () =>
+          phoneChat(CHATS.vuelta, () => dialogue(ROAD.threeDays, () => phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => this.finish()))),
+        ),
+      1500,
+    );
   }
 
   /** En San Vicente: sentados en la terraza de El Ancla comiéndose una zamburiña. */
@@ -895,6 +980,69 @@ export class Level2 implements Level {
         }, 400),
       );
     });
+  }
+
+  /** Restaurante de carretera con su cartel. */
+  private buildEatery(name: string, isM: boolean) {
+    const g = new THREE.Group();
+    const wall = isM ? 0xf2e6c8 : [0xe8d9c0, 0xd9cfc0, 0xf0e2c8][name.length % 3];
+    g.add(
+      new Merger()
+        .add(G.box, wall, 16, 2.4, 0, 0, 0, 0, 8, 4.8, 10)
+        .add(G.box, 0xa9573a, 16, 5.0, 0, 0, 0, 0, 8.6, 0.4, 10.6)
+        .add(G.box, 0x7a8fa6, 11.98, 1.8, -2, 0, 0, 0, 0.05, 1.6, 2.4)
+        .add(G.box, 0x7a8fa6, 11.98, 1.8, 2.2, 0, 0, 0, 0.05, 1.6, 2.4)
+        .add(G.box, 0x6b4428, 11.98, 1.3, 0, 0, 0, 0, 0.06, 2.6, 1.2)
+        .add(G.box, isM ? 0xc0392b : 0x2f6b46, 11.4, 3.2, 0, 0, 0, 0, 1.2, 0.14, 8) // toldo
+        .add(G.box, 0x9a9a9a, 9, 0.03, 0, 0, 0, 0, 6, 0.05, 12) // aparcamiento
+        .mesh(),
+    );
+    const sign = makeSign(isM ? ['CAFETERÍA', 'MARCIAL'] : name.split(' ').length > 2 ? [name.split(' ')[0], name.split(' ').slice(1).join(' ')] : [name], isM ? '#b8322a' : '#5a4632');
+    sign.position.set(6.2, 0, -6);
+    g.add(sign);
+    return g;
+  }
+
+  /** Avisa de cada restaurante de carretera y para en el primero que empieza por M. */
+  private updateEateries(acted: boolean) {
+    const near = EATERIES.find((e) => e.z - this.carZ < 55 && e.z - this.carZ > -4);
+    if (near && !this.eateryTried.has(near.name)) {
+      this.hud.setAction(`🍴 ¡Parar en ${near.name}!`, !!near.m);
+      if (acted) {
+        this.eateryTried.add(near.name);
+        if (near.m) this.stopMarcial();
+        else {
+          audio.boo();
+          toast(ROAD.notM(near.name));
+          this.hud.setAction(null);
+        }
+      }
+    } else this.hud.setAction(null);
+    // Si se pasa de largo, Gas frena igualmente: es la primera con M
+    if (!this.marcialDone && this.carZ > MARCIAL_Z + 6) {
+      toast(ROAD.missedM);
+      this.stopMarcial();
+    }
+  }
+
+  private stopMarcial() {
+    this.marcialDone = true;
+    this.phase = 'marcial';
+    this.hud.setAction(null);
+    this.showLaneButtons(false);
+    this.lane = 0;
+    audio.fanfare();
+    this.things.forEach((t) => this.scene.remove(t.obj));
+    this.things = [];
+    later(
+      () =>
+        dialogue(ROAD.marcial, () => {
+          this.nextSpawn = this.carZ + 70;
+          this.phase = 'drive1';
+          this.updateHud();
+        }),
+      1400,
+    );
   }
 
   private finish() {
@@ -977,6 +1125,18 @@ export class Level2 implements Level {
           this.reset(0);
           this.speed = 0;
           this.photos = 0;
+          this.phase = 'drive1';
+          this.updateHud();
+        },
+      },
+      {
+        label: '1b · Cafetería Marcial',
+        run: () => {
+          clean();
+          this.legStart = 0;
+          this.marcialDone = false;
+          this.eateryTried.clear();
+          this.reset(MARCIAL_Z - 120);
           this.phase = 'drive1';
           this.updateHud();
         },

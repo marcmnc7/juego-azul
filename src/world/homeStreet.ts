@@ -14,6 +14,9 @@ import { canvasTex } from './deco';
 //   puerta peatonal y buzón negro. Palmeras y seto al lado, vecinos blancos de teja.
 
 /** El lado de la casa que da a la calle está en z = -15; el muro de la calle en z = -19. */
+/** Pasillo lateral de casa (a la derecha mirando desde la calle): de la calle a la piscina sin entrar en casa. */
+export const CORRIDOR = { minX: -6.3, maxX: -4.6, wallX: -6.45 };
+
 export const STREET = {
   wallZ: -19,
   laneZ: -21.8,
@@ -258,11 +261,12 @@ export function buildStreet(sc: THREE.Scene): StreetWorld {
   m.add(G.box, 0x222222, S.door.x, 2.65, FZ - 0.16, 0, 0, 0, 0.18, 0.26, 0.14); // farolillo
   // Patio delantero
   m.add(G.box, 0xd9d0bd, 0, 0.0, -17, 0, 0, 0, 9, 0.04, 4);
-  // Muros laterales del patio
-  for (const sx of [-4.6, 4.6]) {
-    m.add(G.box, WHITE, sx, 0.65, -17, 0, 0, 0, 0.25, 1.3, 4);
-    colliders.push({ minX: sx - 0.15, maxX: sx + 0.15, minZ: -19, maxZ: -15 });
-  }
+  // Muro lateral del patio (derecha mirando desde la calle, -x): de él sale el pasillo hasta la piscina
+  m.add(G.box, WHITE, 4.6, 0.65, -17, 0, 0, 0, 0.25, 1.3, 4);
+  colliders.push({ minX: 4.45, maxX: 4.75, minZ: -19, maxZ: -15 });
+  m.add(G.box, 0xd9d0bd, -5.5, 0.0, -17, 0, 0, 0, 1.9, 0.04, 4);
+  m.add(G.box, WHITE, CORRIDOR.wallX, 1.0, -17, 0, 0, 0, 0.25, 2.0, 4);
+  colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -19.3, maxZ: -15 });
   // Muro a la calle: pilar · corredera · pilar · piedra · pilar · puerta · pilar (buzón) · muro
   const pillar = (x: number) => {
     m.add(G.box, WHITE, x, 0.8, S.wallZ, 0, 0, 0, 0.6, 1.6, 0.6);
@@ -276,27 +280,51 @@ export function buildStreet(sc: THREE.Scene): StreetWorld {
   // Muro de piedra seca con remate blanco
   m.add(G.box, WHITE, -0.8, 0.65, S.wallZ, 0, 0, 0, 2.2, 1.3, 0.3);
   m.add(G.box, WHITE, -0.8, 1.35, S.wallZ, 0, 0, 0, 2.3, 0.12, 0.36);
-  // Muro corto tras el buzón
-  m.add(G.box, WHITE, -4.4, 0.65, S.wallZ, 0, 0, 0, 0.5, 1.3, 0.3);
+  // Muro tras el buzón, hasta el muro del pasillo
+  m.add(G.box, WHITE, (-3.95 + CORRIDOR.wallX) / 2, 0.65, S.wallZ, 0, 0, 0, -3.95 - CORRIDOR.wallX, 1.3, 0.3);
   m.add(G.box, 0x1b1b1b, -3.95, 1.25, S.wallZ - 0.36, 0, 0, 0, 0.36, 0.42, 0.12); // buzón negro
   // Puerta peatonal abierta hacia dentro
   m.add(G.box, 0xf2f2ee, S.gate.minX + 0.05, 0.75, S.wallZ + 0.6, 0, 0, 0, 0.06, 1.35, 1.1);
   colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
-  colliders.push({ minX: -4.7, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
+  colliders.push({ minX: CORRIDOR.wallX - 0.2, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
 
   const stone = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.15), toon({ map: stoneTexture(), color: 0xffffff }));
   stone.position.set(-0.8, 0.62, S.wallZ - 0.16);
   stone.rotation.y = Math.PI;
   sc.add(stone);
-  m.add(G.box, 0x8d8a82, -0.65, 0.65, S.wallZ - 0.19, 0, 0, 0, 0.42, 0.32, 0.03); // placa
+  // Placa con la dirección
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.42),
+    toon({
+      map: canvasTex(
+        (ctx, w, h) => {
+          ctx.fillStyle = '#f4efe2';
+          ctx.fillRect(0, 0, w, h);
+          ctx.strokeStyle = '#1f3a6b';
+          ctx.lineWidth = 8;
+          ctx.strokeRect(6, 6, w - 12, h - 12);
+          ctx.fillStyle = '#1f3a6b';
+          ctx.font = 'bold 58px Georgia, serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('Sa Son 69 B4', w / 2, h / 2 + 2);
+        },
+        512,
+        196,
+      ),
+    }),
+  );
+  plate.position.set(-0.75, 0.85, S.wallZ - 0.2);
+  plate.rotation.y = Math.PI;
+  sc.add(plate);
   m.add(G.box, 0xf4f4f4, 1.0, 1.25, S.wallZ - 0.32, 0, 0, 0, 0.3, 0.26, 0.02); // cartel de la alarma
 
   // Palmeras y seto junto a la casa, vecinos blancos con teja
-  palm(m, -6.0, -16.6, 8.5);
-  palm(m, -7.3, -14.4, 7.6);
-  m.add(G.box, 0x2c5a2a, -9, 1.2, -17.8, 0, 0, 0, 8.4, 2.4, 0.9);
+  palm(m, -7.6, -16.9, 8.5);
+  palm(m, -8.4, -14.4, 7.6);
+  m.add(G.box, 0x2c5a2a, -11, 1.2, -17.8, 0, 0, 0, 7, 2.4, 0.9);
   for (const sx of [-1, 1]) {
-    const x = sx * 9;
+    const x = sx < 0 ? -11.5 : 9;
     m.add(G.box, WHITE, x, 3, -13.5, 0, 0, 0, 9, 6, 3);
     m.add(G.box, WHITE, x, 0.65, S.wallZ, 0, 0, 0, 9, 1.3, 0.3);
     window_(m, x - 1.5, 1.6, -15, 1.4, 1.1, 0xc9a77c, true);

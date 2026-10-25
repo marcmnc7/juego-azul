@@ -5,7 +5,8 @@ import { Walker } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { CENA } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeCar, animatePerson, Person, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, Person, PersonLook } from '../entities/models';
+import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
@@ -16,7 +17,7 @@ import { disposeObj } from './level';
 // Es el espejo de la piscinita: aquella noche se coló Azul en casa de los padres de Gas; ahora se cuela él.
 // Bucle: vigilar a los padres y decirle «Ven» solo cuando se hayan ido → Gas llega en 30 segundos →
 // cocinar la carbonara en la cocina de fuera (guanciale, pasta y crema, sin nata) → Gas pone nota →
-// cenar en la terraza → 22:50, Gas se va → 23:49, el WhatsApp de Azul.
+// cenar en la terraza → 22:50, Gas se va en su moto → 23:39, el WhatsApp real de esa noche.
 
 type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'leaving' | 'done';
 
@@ -57,7 +58,7 @@ export class LevelCena implements Level {
   private colliders: Box2[] = [];
   private marker: THREE.Group;
   private parentCar = makeCar(0x8c8f94, { luggage: false, joy: false });
-  private gasCar = makeCar(0x1f3a6b, { luggage: false, joy: false });
+  private gasCar = makeMoto(0x1b1d22, MARC_LOOK);
   private beam!: THREE.Mesh;
   private pan!: THREE.Group;
   private steam: THREE.Sprite[] = [];
@@ -118,10 +119,10 @@ export class LevelCena implements Level {
     this.mom.root.position.set(-0.5, 0, 0.6);
     sc.add(this.dad.root, this.mom.root);
 
-    for (const [car, x, lights] of [[this.parentCar, PARENT_CAR_X, true], [this.gasCar, GAS_CAR_X, false]] as const) {
+    this.parentCar.azul.visible = false;
+    for (const [car, x, lights] of [[this.parentCar, PARENT_CAR_X, true], [this.gasCar, GAS_CAR_X, true]] as const) {
       car.root.rotation.y = -Math.PI / 2; // mira hacia -X (hacia el faro)
       car.root.position.set(x, 0, STREET_Z);
-      car.azul.visible = false;
       if (lights) {
         const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff3c0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
         head.position.set(0, 0.7, 2.4);
@@ -145,7 +146,7 @@ export class LevelCena implements Level {
     this.camLook.set(0, 1.5, 4);
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(CENA.intro, () => this.phase === 'intro' && this.startWait());
+      dialogue(CENA.intro, () => phoneChat([CHATS.cenaMenu, CHATS.cenaEspera], () => this.phase === 'intro' && this.startWait()));
     }, 2300);
     audio.startMusic('night');
     audio.ambience(0.03);
@@ -311,7 +312,6 @@ export class LevelCena implements Level {
     ];
     this.hud.setAction('📱 «Ven»', false);
     this.updateHud();
-    dialogue(CENA.waitIntro, () => {});
   }
 
   private parentsGone() {
@@ -328,22 +328,26 @@ export class LevelCena implements Level {
       for (const p of [this.dad, this.mom]) if (p.root.visible) p.root.rotation.y = Math.atan2(this.player.root.position.x - p.root.position.x, this.player.root.position.z - p.root.position.z);
       this.updateHud();
       this.busy = true;
-      dialogue(CENA.tooSoon, () => (this.busy = false));
+      phoneChat(CHATS.cenaPronto, () => (this.busy = false));
       return;
     }
     this.phase = 'gasComing';
     this.hud.setAction(null);
     this.busy = true;
     audio.pickup();
-    dialogue(CENA.comeIn, () => {});
-    // El coche de Gas llega desde el fondo de la calle y aparca delante de la cancela
-    this.gasCarT = 0;
-    const lights = this.gasCar.root.getObjectByName('lights');
-    if (lights) lights.visible = true;
     this.updateHud();
+    phoneChat(CHATS.cenaVen, () => {
+      // La moto de Gas llega desde el fondo de la calle y para delante de la cancela
+      this.gasCarT = 0;
+      const lights = this.gasCar.root.getObjectByName('lights');
+      if (lights) lights.visible = true;
+      audio.whoosh();
+    });
   }
 
   private gasArrived() {
+    // Se baja de la moto y entra
+    if (this.gasCar.rider) this.gasCar.rider.root.visible = false;
     this.gas.root.visible = true;
     this.gas.root.position.set(2.5, 0, STREET_Z - 1.6);
     this.gasWalk = [GATE.clone().setZ(11), GATE.clone().setZ(8.6), new THREE.Vector3(-1.3, 0, 4.2)];
@@ -471,12 +475,9 @@ export class LevelCena implements Level {
     this.gasCar.root.visible = false;
     this.minutes = 23 * 60 + 49;
     this.updateHud();
-    const lines = CENA.leave;
-    dialogue(lines.slice(0, 2), () => {
+    dialogue(CENA.leave, () => {
       phoneChat(
-        '23:49',
-        'Gas 💙',
-        lines.slice(2).map((l) => ({ me: true, text: l.text.replace('(WhatsApp) ', '') })),
+        [CHATS.teQuiero, CHATS.jazzbah],
         () => {
           const stars = this.scares === 0 && this.tries === 1 && this.grade >= 9 ? 3 : this.scares <= 1 && this.grade >= 8 ? 2 : 1;
           this.onComplete({
@@ -521,7 +522,7 @@ export class LevelCena implements Level {
       this.waitT += dt;
       while (this.beatI < this.beats.length && this.waitT >= this.beats[this.beatI].at) {
         const b = this.beats[this.beatI++];
-        if (b.msg) toast(`📱 ${b.msg}`);
+        if (b.msg) toast(`📱 Tú: «${b.msg}»`);
         if (b.dad === 'hide') this.dad.root.visible = false;
         else if (b.dad) {
           this.dad.root.visible = true;

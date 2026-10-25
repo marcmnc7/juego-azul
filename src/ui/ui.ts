@@ -1,10 +1,11 @@
 import { GIFTS, Gift } from '../data/gifts';
-import { LEVELS, Line, FINAL_LETTER, CROSSWORD, EPILOGUE } from '../data/story';
+import { LEVELS, Line, FINAL_LETTER, CROSSWORD, EPILOGUE, type CrossClue } from '../data/story';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
+import { CHATS, type ChatFrag } from '../data/chats';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -87,7 +88,7 @@ export function epilogue(onDone: () => void) {
   o.append(el('div', 'hearts', '🫏 💙'), el('h1', '', EPILOGUE.title), el('p', '', EPILOGUE.place));
   root.append(o);
   audio.fanfare();
-  setTimeout(() => dialogue(EPILOGUE.lines, onDone), 900);
+  setTimeout(() => phoneChat([CHATS.veintidos, CHATS.asesOnce, CHATS.bocata, CHATS.fecha], onDone), 900);
 }
 
 /** Quita tildes y espacios para comparar respuestas (la Ñ se respeta). */
@@ -100,7 +101,7 @@ function norm(t: string) {
     .replace(/\u0001/g, 'Ñ');
 }
 
-/** Crucigrama antes de la carta: las letras marcadas forman el mensaje escondido. */
+/** Crucigrama de verdad antes de la carta: casillas cruzadas, y las del círculo forman el mensaje. */
 export function crossword(onSolved: () => void, onBack: () => void) {
   clearScreens();
   const o = el('div', 'screen crossword-screen');
@@ -113,71 +114,168 @@ export function crossword(onSolved: () => void, onBack: () => void) {
     if (ch !== ' ') slots.push(sl);
     hidden.append(sl);
   }
-  card.append(hidden);
+  const clues = CROSSWORD.clues;
+  // Numeración clásica: por orden de lectura de las casillas donde empieza alguna palabra
+  const starts = [...new Set(clues.map((c) => c.row * 100 + c.col))].sort((x, y) => x - y);
+  const num = (c: CrossClue) => starts.indexOf(c.row * 100 + c.col) + 1;
+  const cellsOf = (c: CrossClue) => [...c.answer].map((_, k) => (c.dir === 'A' ? [c.row, c.col + k] : [c.row + k, c.col]) as [number, number]);
+  const key = (r: number, c: number) => r * 100 + c;
+  const cells = new Map<number, { div: HTMLElement; ch: string; words: number[]; val: string; mark: boolean }>();
+  const grid = el('div', 'cw-grid');
+  grid.style.setProperty('--cols', String(CROSSWORD.cols));
+  grid.style.setProperty('--rows', String(CROSSWORD.rows));
+  clues.forEach((c, wi) =>
+    cellsOf(c).forEach(([r, col], k) => {
+      let cell = cells.get(key(r, col));
+      if (!cell) {
+        const div = el('div', 'cw-c');
+        div.style.gridRow = String(r + 1);
+        div.style.gridColumn = String(col + 1);
+        grid.append(div);
+        cell = { div, ch: c.answer[k], words: [], val: '', mark: false };
+        cells.set(key(r, col), cell);
+      }
+      cell.words.push(wi);
+      if (k === c.mark) {
+        cell.mark = true;
+        cell.div.classList.add('mark');
+      }
+    }),
+  );
+  for (const n of starts) {
+    const c = cells.get(n)!;
+    c.div.append(el('i', 'cw-n', String(starts.indexOf(n) + 1)));
+  }
+  for (const c of cells.values()) c.div.append(el('b', 'cw-v'));
+  const bar = el('div', 'cw-bar');
+  const input = el('input', 'cw-key') as HTMLInputElement;
+  input.autocapitalize = 'characters';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'Escribe aquí');
+  const list = el('div', 'cw-list');
+  const items: HTMLElement[] = [];
+  for (const dir of ['A', 'D'] as const) {
+    const col = el('div', 'cw-col', `<h3>${dir === 'A' ? 'Horizontales' : 'Verticales'}</h3>`);
+    clues
+      .map((c, i) => ({ c, i }))
+      .filter((x) => x.c.dir === dir)
+      .sort((x, y) => num(x.c) - num(y.c))
+      .forEach(({ c, i }) => {
+        const it = el('button', 'cw-item', `<b>${num(c)}</b> ${c.clue} <small>(${c.answer.length})</small>`);
+        it.onclick = () => select(i, 0);
+        items[i] = it;
+        col.append(it);
+      });
+    list.append(col);
+  }
   const solved = new Set<number>();
-  const rows: HTMLElement[] = [];
+  let cur = 0;
+  let pos = 0;
+  const paint = () => {
+    for (const c of cells.values()) {
+      c.div.classList.remove('sel', 'cur');
+      (c.div.querySelector('.cw-v') as HTMLElement).textContent = c.val;
+    }
+    cellsOf(clues[cur]).forEach(([r, c], k) => {
+      const cell = cells.get(key(r, c))!;
+      cell.div.classList.add('sel');
+      if (k === pos) cell.div.classList.add('cur');
+    });
+    items.forEach((it, i) => it.classList.toggle('on', i === cur));
+    const c = clues[cur];
+    bar.innerHTML = `<b>${num(c)} ${c.dir === 'A' ? '→' : '↓'}</b> ${c.clue}`;
+  };
+  const select = (wi: number, k: number) => {
+    cur = wi;
+    pos = Math.max(0, Math.min(clues[wi].answer.length - 1, k));
+    paint();
+    input.focus({ preventScroll: true });
+  };
+  for (const [k, cell] of cells) {
+    cell.div.onclick = () => {
+      const r = Math.floor(k / 100);
+      const c = k % 100;
+      // Si la casilla es de dos palabras, tocarla otra vez cambia de sentido
+      const opts = cell.words;
+      const wi = opts.includes(cur) && opts.length > 1 && cellsOf(clues[cur]).some(([rr, cc], j) => rr === r && cc === c && j === pos) ? opts.find((w) => w !== cur)! : opts.includes(cur) ? cur : opts[0];
+      const idx = cellsOf(clues[wi]).findIndex(([rr, cc]) => rr === r && cc === c);
+      select(wi, idx);
+    };
+  }
+  const check = () => {
+    clues.forEach((c, wi) => {
+      if (solved.has(wi)) return;
+      const ok = cellsOf(c).every(([r, col], k) => cells.get(key(r, col))!.val === c.answer[k]);
+      if (!ok) return;
+      solved.add(wi);
+      cellsOf(c).forEach(([r, col]) => cells.get(key(r, col))!.div.classList.add('ok'));
+      items[wi].classList.add('ok');
+      if (c.hiddenIdx >= 0) {
+        slots[c.hiddenIdx].textContent = c.answer[c.mark];
+        slots[c.hiddenIdx].classList.add('on');
+      }
+      audio.chime(solved.size % 8);
+      vibrate(30);
+    });
+    if (solved.size === clues.length) {
+      input.blur();
+      audio.fanfare();
+      hidden.classList.add('done');
+      finish.hidden = false;
+      toast(CROSSWORD.solved);
+    }
+  };
+  const write = (ch: string) => {
+    const [r, c] = cellsOf(clues[cur])[pos];
+    const cell = cells.get(key(r, c))!;
+    if (!cell.div.classList.contains('ok')) cell.val = ch;
+    audio.talk();
+    if (pos < clues[cur].answer.length - 1) pos++;
+    paint();
+    check();
+  };
+  input.oninput = () => {
+    const v = norm(input.value);
+    input.value = '';
+    for (const ch of v) if (/[A-ZÑ]/.test(ch)) write(ch);
+  };
+  input.onkeydown = (e) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      const [r, c] = cellsOf(clues[cur])[pos];
+      const cell = cells.get(key(r, c))!;
+      if (cell.val && !cell.div.classList.contains('ok')) cell.val = '';
+      else if (pos > 0) {
+        pos--;
+        const [r2, c2] = cellsOf(clues[cur])[pos];
+        const c2c = cells.get(key(r2, c2))!;
+        if (!c2c.div.classList.contains('ok')) c2c.val = '';
+      }
+      paint();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') select(cur, pos + 1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') select(cur, pos - 1);
+  };
+  const hint = el('button', 'cw-hint', '💡 Pista');
+  hint.onclick = () => {
+    // Pone la primera letra que falte o esté mal de la palabra elegida
+    const c = clues[cur];
+    const k = cellsOf(c).findIndex(([r, col], j) => cells.get(key(r, col))!.val !== c.answer[j]);
+    if (k < 0) return;
+    pos = k;
+    write(c.answer[k]);
+  };
   const finish = el('button', 'big-btn', 'Abrir la carta 💌');
   finish.hidden = true;
   finish.onclick = onSolved;
-  CROSSWORD.clues.forEach((c, i) => {
-    const row = el('div', 'cw-row');
-    const boxes = el('div', 'cw-boxes');
-    const cells: HTMLElement[] = [];
-    for (let k = 0; k < c.answer.length; k++) {
-      const b = el('span', 'cw-cell' + (k === c.mark ? ' mark' : ''));
-      cells.push(b);
-      boxes.append(b);
-    }
-    const input = el('input', 'cw-input') as HTMLInputElement;
-    input.maxLength = c.answer.length + 4;
-    input.autocapitalize = 'characters';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.setAttribute('aria-label', c.clue);
-    const paint = () => {
-      const v = norm(input.value);
-      cells.forEach((b, k) => (b.textContent = v[k] ?? ''));
-    };
-    input.oninput = () => {
-      paint();
-      if (norm(input.value) === c.answer && !solved.has(i)) {
-        solved.add(i);
-        row.classList.add('ok');
-        input.disabled = true;
-        slots[i].textContent = c.answer[c.mark];
-        slots[i].classList.add('on');
-        audio.talk();
-        vibrate(30);
-        const next = rows.find((_, j) => !solved.has(j));
-        (next?.querySelector('input') as HTMLInputElement | null)?.focus();
-        if (solved.size === CROSSWORD.clues.length) {
-          input.blur();
-          audio.fanfare();
-          hidden.classList.add('done');
-          finish.hidden = false;
-          toast(CROSSWORD.solved);
-        }
-      }
-    };
-    const hint = el('button', 'cw-hint', 'Pista');
-    hint.onclick = () => {
-      if (solved.has(i)) return;
-      // Rellena la primera letra que falte o esté mal
-      const v = norm(input.value).slice(0, c.answer.length);
-      let k = 0;
-      while (k < v.length && v[k] === c.answer[k]) k++;
-      input.value = c.answer.slice(0, k + 1);
-      input.dispatchEvent(new Event('input'));
-    };
-    boxes.onclick = () => input.focus();
-    row.append(el('div', 'cw-clue', `${i + 1}. ${c.clue} <small>(${c.answer.length})</small>`), hint, boxes, input);
-    rows.push(row);
-    card.append(row);
-  });
+  const tools = el('div', 'cw-tools');
+  tools.append(bar, hint);
+  card.append(hidden, tools, grid, input, list);
   const back = el('button', 'link-btn', 'Volver');
   back.onclick = onBack;
   o.append(card, finish, back);
   root.append(o);
+  paint();
 }
 
 export function finalLetter(onClose: () => void) {
@@ -206,14 +304,24 @@ function sticker(src: string, cls: string) {
 
 /** Foto del chat como polaroid con su pie escrito a mano. */
 function polaroid(m: Memory, tilt: number, withCaption = true) {
-  const f = el('figure', 'polaroid' + (m.sticker ? ' is-sticker' : ''));
+  const f = el('figure', 'polaroid' + (m.sticker ? ' is-sticker' : '') + (m.chat ? ' is-chat' : '') + (m.pending ? ' is-pending' : ''));
   f.style.setProperty('--tilt', `${tilt}deg`);
-  const img = el('img') as HTMLImageElement;
-  img.src = m.src;
-  img.alt = m.caption;
-  img.draggable = false;
-  img.decoding = 'async';
-  f.append(img);
+  if (m.chat) {
+    const c = el('div', 'mini-chat');
+    for (const msg of m.chat) {
+      c.append(el('div', 'bubble' + (msg.me ? ' me' : ''), `<span class="bt">${msg.text}</span><span class="bm">${msg.t}</span>`));
+    }
+    f.append(c);
+  } else if (m.pending || !m.src) {
+    f.append(el('div', 'photo-slot', '📷<br><small>Foto pendiente</small>'));
+  } else {
+    const img = el('img') as HTMLImageElement;
+    img.src = m.src;
+    img.alt = m.caption;
+    img.draggable = false;
+    img.decoding = 'async';
+    f.append(img);
+  }
   if (withCaption) f.append(el('figcaption', '', m.caption));
   return f;
 }
@@ -576,39 +684,85 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
 }
 
 /** Pantalla de móvil con un chat de WhatsApp que se va escribiendo. Toca para cerrar al final. */
-export function phoneChat(time: string, contact: string, msgs: { me: boolean; text: string }[], onDone: () => void) {
+/**
+ * WhatsApp en pantalla: uno o varios fragmentos literales del chat, mensaje a mensaje.
+ * Tocar enseña el siguiente al momento; «Saltar» los enseña todos.
+ */
+export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
+  const frags = Array.isArray(input) ? input : [input];
   const o = el('div', 'phone-overlay');
   const ph = el('div', 'phone');
-  ph.append(el('div', 'phone-bar', `<span>${time}</span><b>${contact}</b><span>🔋</span>`));
+  const contact = frags[0].contact;
+  ph.append(
+    el('div', 'phone-bar', `<span class="pb-back">‹</span><span class="pb-avatar">${contact[0]}</span><span class="pb-name"><b>${contact}</b><small>en línea</small></span><span class="pb-icons">📹 📞</span>`),
+  );
   const chat = el('div', 'phone-chat');
   ph.append(chat);
-  const hint = el('div', 'phone-hint', 'toca para continuar ▸');
-  hint.style.visibility = 'hidden';
-  o.append(ph, hint);
+  const skip = el('button', 'phone-skip', 'Saltar ⏭');
+  const hint = el('div', 'phone-hint', 'Toca para seguir');
+  o.append(ph, hint, skip);
   root.append(o);
-  let i = 0;
-  const next = () => {
-    if (i >= msgs.length) {
-      hint.style.visibility = 'visible';
-      return;
+  type Item = { kind: 'date'; text: string } | { kind: 'msg'; me: boolean; t: string; text: string; first: boolean };
+  const items: Item[] = [];
+  for (const f of frags) {
+    items.push({ kind: 'date', text: f.date });
+    let prev: boolean | null = null;
+    for (const m of f.msgs) {
+      items.push({ kind: 'msg', me: m.me, t: m.t, text: m.text, first: prev !== m.me });
+      prev = m.me;
     }
-    const typing = el('div', 'bubble typing' + (msgs[i].me ? ' me' : ''), '<i></i><i></i><i></i>');
-    chat.append(typing);
-    setTimeout(() => {
-      typing.remove();
-      chat.append(el('div', 'bubble' + (msgs[i].me ? ' me' : ''), msgs[i].text));
-      audio.pop();
-      i++;
-      setTimeout(next, 700);
-    }, 900);
+  }
+  let i = 0;
+  let timer = 0;
+  let typing: HTMLElement | null = null;
+  const done = () => i >= items.length;
+  const scroll = () => (chat.scrollTop = chat.scrollHeight);
+  const show = (it: Item) => {
+    if (it.kind === 'date') chat.append(el('div', 'chat-date', it.text));
+    else {
+      const b = el('div', 'bubble' + (it.me ? ' me' : '') + (it.first ? ' first' : ''), `<span class="bt">${it.text}</span><span class="bm">${it.t}${it.me ? ' <i class="ticks">✓✓</i>' : ''}</span>`);
+      chat.append(b);
+    }
   };
-  setTimeout(next, 400);
+  const step = () => {
+    clearTimeout(timer);
+    typing?.remove();
+    typing = null;
+    if (done()) return finish();
+    show(items[i++]);
+    audio.pop();
+    scroll();
+    if (done()) return finish();
+    const nx = items[i];
+    if (nx.kind === 'msg' && !nx.me) {
+      typing = el('div', 'bubble typing', '<i></i><i></i><i></i>');
+      chat.append(typing);
+      scroll();
+    }
+    timer = window.setTimeout(step, nx.kind === 'date' ? 500 : 650 + Math.min(900, (nx.kind === 'msg' ? nx.text.length : 0) * 12));
+  };
+  const finish = () => {
+    clearTimeout(timer);
+    typing?.remove();
+    hint.textContent = 'Toca para continuar ▸';
+    hint.classList.add('ready');
+    skip.hidden = true;
+  };
+  skip.onpointerdown = (e) => {
+    e.stopPropagation();
+    while (!done()) show(items[i++]);
+    scroll();
+    finish();
+  };
   o.onpointerdown = (e) => {
     e.stopPropagation();
-    if (i < msgs.length) return;
+    if (!done()) return step();
+    if (!hint.classList.contains('ready')) return;
+    clearTimeout(timer);
     o.remove();
     onDone();
   };
+  timer = window.setTimeout(step, 350);
 }
 
 export interface DebugItem {

@@ -4,12 +4,13 @@ import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { NIGHT, type Line } from '../data/story';
+import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person } from '../entities/models';
-import { buildStreet, STREET } from './homeStreet';
+import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person, type PersonLook } from '../entities/models';
+import { buildStreet, STREET, CORRIDOR } from './homeStreet';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, toast, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
@@ -17,41 +18,43 @@ import { clock, type Level, type LevelDone, disposeObj } from './level';
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
 // jardín de césped con camino de losas por la derecha y la piscina al fondo.
-// Empieza en la puerta del Bar Imperi: Azul sube al coche de Gas, van a casa, entra por la
-// puerta peatonal y sale al jardín.
-// Bucle: cruzar el jardín sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden
-// las ventanas de arriba) → tirarse a la piscina → recoger 6 velitas → tumbarse en el césped →
-// unir las estrellas que forman un corazón → estrella fugaz → final. Joy no estaba aquella noche.
+// Empieza en el Bar Imperi con el chat real de esa noche. Azul va hacia Pins, Gas llega en el coche azul,
+// van a Sa Son 69 B4 y no entran por la puerta: por el pasillo de la derecha hasta la piscina.
+// Bucle: cruzar sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden las
+// ventanas de arriba) → desnudarse, al agua y abrazarse → recoger 6 velitas → tumbarse en el césped →
+// unir las estrellas → el chat real de la 01:01.
 
-type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
+type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
 
 // Piscina (interior del vaso)
-const POOL = { minX: -1.5, maxX: 2.5, minZ: 8.8, maxZ: 13.6 };
+// La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
+const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 9.6 };
 const WATER_Y = -0.22;
 const SWIM_Y = -1.12;
-const TOWELS = new THREE.Vector3(-2.6, 0, 5.4);
-const PLOT = { minX: -4.1, maxX: 4.1, minZ: 0.25, maxZ: 14.1 };
+const TOWELS = new THREE.Vector3(-1.6, 0, 11.0);
+const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
 // Calle: zona del bar y zona delante de casa
-const BAR_AREA = { minX: STREET.bar.x - 12, maxX: STREET.bar.x + 14, minZ: -26.6, maxZ: STREET.bar.z - 0.4 };
-const HOME_AREA = { minX: -6, maxX: 5, minZ: -26.6, maxZ: -15.35 };
-const CAR_START_X = STREET.bar.x + 3.2;
+const BAR_AREA = { minX: STREET.bar.x - 12, maxX: STREET.bar.x + 20, minZ: -26.6, maxZ: STREET.bar.z - 0.4 };
+/** Llegada a casa: calle, patio delantero y el pasillo lateral hasta el jardín. */
+const HOME_AREA = PLOT;
+const PINS = new THREE.Vector3(STREET.bar.x + 14, 0, STREET.laneZ + 1.7);
+const CAR_START_X = PINS.x + 1.2;
+const CAR_FAR_X = PINS.x - 34;
 const CAR_STOP_X = -0.6;
 const DRIVE_TIME = 7;
 // Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
-const GRAVEL = { minX: -4.4, maxX: 4.4, minZ: 2.4, maxZ: 4.6 };
-const STONES: [number, number][] = [[3.425, 2.7], [3.35, 3.5], [3.275, 4.3], [-1.7, 2.75], [-1.1, 3.55], [-1.6, 4.35]];
+const GRAVEL = { minX: CORRIDOR.minX, maxX: 4.4, minZ: 1.9, maxZ: 4.6 };
+const STONES: [number, number][] = [[-5.5, 2.2], [-5.35, 3.0], [-5.5, 3.8], [1.7, 2.75], [2.3, 3.55], [1.8, 4.35]];
+const GAS_POOL = new THREE.Vector3(-5.45, 0, 8.6);
 const NOISE_LIGHT = 0.55;
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = NIGHT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
 const T_SNEAK_HINT = () => txt<string>('sneakHint', 'Llega a la piscina sin hacer ruido: despacio y por las losas');
 const T_LIGHT_ON = () => txt<string>('lightOn', '💡 Se ha encendido una luz arriba… ¡quieta!');
-const T_CAUGHT = () =>
-  txt<Line[]>('caught', [
-    { who: 'Madre de Gas', text: '(desde la ventana) ¿Marc? ¿Eres tú?' },
-    { who: 'Gas', text: '¡Sí, mamá! ¡Bajaba a por agua! Buenas noches…' },
-    { who: 'Gas', text: '(susurrando) Silencio full, te dije. Vuelve a la terraza y otra vez, despacito.' },
-  ]);
+const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga.' }]);
+// Sin ropa: el mismo muñeco con todo del color de la piel
+const nude = (l: PersonLook): PersonLook => ({ ...l, shirt: l.skin, pants: l.skin, shoes: l.skin, skirt: false });
 
 interface Candle {
   obj: THREE.Group;
@@ -67,6 +70,12 @@ export class Level4 implements Level {
   private player: Person;
   private walker: Walker;
   private gas: Person;
+  private looks!: { azul: [Person, Person]; gas: [Person, Person] };
+  private clothes!: THREE.Object3D;
+  private nudeOn = false;
+  private pickedUp = false;
+  private carT = 0;
+  private hugT = 0;
   // Sigilo: ruido acumulado, ventanas de los padres y las veces que casi os pillan
   private noise = 0;
   private lightOn = false;
@@ -149,7 +158,7 @@ export class Level4 implements Level {
     this.colliders.push(...street.colliders, this.carBox);
     this.car.root.rotation.y = Math.PI / 2;
     this.car.azul.visible = false;
-    this.placeCar(CAR_START_X);
+    this.placeCar(CAR_FAR_X);
     sc.add(this.car.root);
     // Faros encendidos
     const beams = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff3c0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -164,10 +173,24 @@ export class Level4 implements Level {
     this.walker.facing = this.walker.yaw = Math.PI / 2;
 
     this.gas = makePerson(MARC_LOOK);
-    this.gas.root.position.set(1.0, 0, 7.9);
+    this.gas.root.position.copy(GAS_POOL);
     this.gas.root.rotation.y = Math.PI;
     this.gas.root.visible = false; // va en el coche
     sc.add(this.gas.root);
+    // Versiones sin ropa para la piscina
+    this.looks = { azul: [this.player, makePerson(nude(MARGAUX_LOOK))], gas: [this.gas, makePerson(nude(MARC_LOOK))] };
+    for (const p of [this.looks.azul[1], this.looks.gas[1]]) {
+      p.root.visible = false;
+      sc.add(p.root);
+    }
+    // La ropa en el borde de la piscina, para cuando os la quitéis
+    this.clothes = new Merger()
+      .add(G.rbox, MARGAUX_LOOK.shirt, -4.95, 0.08, 5.6, 0, 0.4, 0, 0.6, 0.14, 0.45)
+      .add(G.rbox, MARC_LOOK.shirt, -5.5, 0.08, 6.1, 0, -0.3, 0, 0.6, 0.16, 0.5)
+      .add(G.rbox, MARC_LOOK.pants, -5.45, 0.2, 6.15, 0, 0.2, 0, 0.5, 0.1, 0.4)
+      .mesh();
+    this.clothes.visible = false;
+    sc.add(this.clothes);
 
 
     // Velitas flotando en la piscina
@@ -176,7 +199,7 @@ export class Level4 implements Level {
       .add(G.cyl, 0xffffff, 0, 0.18, 0, 0, 0, 0, 0.2, 0.18, 0.2)
       .build();
     const flameMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb347, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const spots: [number, number][] = [[-0.8, 9.6], [1.8, 9.4], [0.4, 11.0], [-0.9, 12.8], [1.9, 12.6], [0.6, 13.0]];
+    const spots: [number, number][] = [[-3.2, 6.3], [-1.2, 8.8], [0.4, 6.6], [1.9, 8.9], [3.3, 6.4], [-2.6, 8.6]];
     spots.forEach(([x, z], i) => {
       const g = new THREE.Group();
       g.add(new THREE.Mesh(candleGeo, toon({ vertexColors: true, emissive: 0x2a1800 })));
@@ -204,12 +227,14 @@ export class Level4 implements Level {
     this.busy = true;
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(NIGHT.bar, () => {
-        if (this.phase !== 'intro') return;
-        this.busy = false;
-        this.phase = 'atBar';
-        this.updateHud();
-      });
+      dialogue(NIGHT.intro, () =>
+        phoneChat(CHATS.imperi, () => {
+          if (this.phase !== 'intro') return;
+          this.busy = false;
+          this.phase = 'atBar';
+          this.updateHud();
+        }),
+      );
     }, 2300);
     audio.startMusic('night');
     audio.ambience(0.03); // grillos y brisa de fondo
@@ -293,7 +318,7 @@ export class Level4 implements Level {
     this.ground(lawn, POOL.maxX + 0.35, 4.5, 1.5, 14.5, GRASS);
     this.ground(lawn, POOL.minX - 0.35, POOL.maxX + 0.35, 1.5, POOL.minZ - 0.35, GRASS);
     this.ground(lawn, POOL.minX - 0.35, POOL.maxX + 0.35, POOL.maxZ + 0.35, 14.5, GRASS);
-    for (const [x0, x1] of [[-40, -4.5], [4.5, 40]]) this.ground(lawn, x0, x1, 0, 30, NEIGH);
+    for (const [x0, x1] of [[-40, CORRIDOR.wallX], [4.5, 40]]) this.ground(lawn, x0, x1, 0, 30, NEIGH);
     this.ground(lawn, -40, 40, 14.5, 40, NEIGH);
     const lawnMesh = new THREE.Mesh(lawn.build(), toon({ vertexColors: true, map: grassTex }));
     lawnMesh.userData.noCast = true;
@@ -329,11 +354,13 @@ export class Level4 implements Level {
     this.colliders.push({ minX: POOL.minX - 0.1, maxX: POOL.maxX + 0.1, minZ: POOL.minZ - 0.1, maxZ: POOL.maxZ + 0.1 });
     this.buildPoolPhysics();
 
-    // Camino de losas por la derecha, de la terraza a la piscina
-    for (let i = 0; i < 9; i++) {
-      const t = i / 8;
-      m.add(G.box, 0xe8dcc0, 3.5 - t * 0.6, 0.02, 1.9 + t * 6.4, 0, 0.3, 0, 0.7, 0.06, 0.45);
-    }
+    // Pasillo lateral de baldosas: de la calle a la piscina sin entrar en casa
+    this.ground(m, CORRIDOR.wallX, -4.45, -15, 14.5, 0xcfc4ae, 0.015);
+    for (let z = -14.5; z < 14.5; z += 1.2) m.add(G.box, 0xb9ad96, (CORRIDOR.wallX - 4.45) / 2, 0.022, z, 0, 0, 0, 1.95, 0.01, 0.04);
+    // Muro del pasillo con apliques bajos
+    m.add(G.box, 0xf4efe2, CORRIDOR.wallX, 1.0, -0.25, 0, 0, 0, 0.25, 2.0, 29.5);
+    this.colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -15, maxZ: 14.6 });
+    for (const z of [-11, -5, 1]) m.add(G.box, 0xffd9a0, CORRIDOR.wallX + 0.15, 1.6, z, 0, 0, 0, 0.06, 0.18, 0.3);
 
     // La casa: adosado de tejado plano. Cuerpo delantero (2 plantas) y trasero más alto.
     m.add(G.box, WALL, 0, 3.2, -4.5, 0, 0, 0, 9, 6.4, 9);
@@ -383,7 +410,7 @@ export class Level4 implements Level {
     gravel.position.set((GRAVEL.minX + GRAVEL.maxX) / 2, 0.025, (GRAVEL.minZ + GRAVEL.maxZ) / 2);
     gravel.userData.noCast = true;
     sc.add(gravel);
-    for (const [x, z] of STONES.slice(3)) m.add(G.cyl, 0xe8dcc0, x, 0.04, z, 0, 0, 0, 0.7, 0.06, 0.6);
+    for (const [x, z] of STONES) m.add(G.cyl, 0xe8dcc0, x, 0.04, z, 0, 0, 0, 0.7, 0.06, 0.6);
     for (const [x, w] of [[-2, 3.2], [2.2, 2.4]]) {
       m.add(G.box, 0x333338, x, 2.55, 0.06, 0, 0, 0, w + 0.1, 0.1, 0.08);
       m.add(G.box, 0x333338, x, 1.3, 0.07, 0, 0, 0, 0.06, 2.4, 0.06);
@@ -400,47 +427,44 @@ export class Level4 implements Level {
     m.add(G.cyl, 0xdddddd, 3.6, 1.2, 0.7, 0, 0, 0, 0.08, 2.4, 0.08);
     m.add(G.cone, 0x2b4fa0, 3.6, 2.5, 0.7, 0, 0, 0, 2.4, 0.6, 2.4);
     this.colliders.push({ minX: 3.45, maxX: 3.75, minZ: 0.55, maxZ: 0.85 });
-    // Tumbonas junto a la piscina
-    for (const z of [10, 12]) {
-      m.add(G.box, 0xf4efe2, -3.2, 0.3, z, 0, 0, 0, 0.7, 0.12, 1.8);
-      m.add(G.box, 0xf4efe2, -3.2, 0.55, z - 0.75, 0.6, 0, 0, 0.7, 0.1, 0.6);
-      m.add(G.box, 0x2b4fa0, -3.2, 0.38, z + 0.1, 0, 0, 0, 0.6, 0.04, 1.4);
-      this.colliders.push({ minX: -3.6, maxX: -2.8, minZ: z - 1, maxZ: z + 0.9 });
+    // Tumbonas al fondo del jardín, mirando a la piscina
+    for (const x of [0.7, 2.0, 3.3]) {
+      const z = 13.0;
+      m.add(G.box, 0xf4efe2, x, 0.3, z, 0, 0, 0, 0.7, 0.12, 1.6);
+      m.add(G.box, 0xf4efe2, x, 0.55, z + 0.65, -0.6, 0, 0, 0.7, 0.1, 0.6);
+      m.add(G.box, 0x2b4fa0, x, 0.38, z - 0.1, 0, 0, 0, 0.6, 0.04, 1.3);
+      this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.85, maxZ: z + 0.85 });
     }
     // Toallas en el césped para mirar las estrellas
     m.add(G.box, 0xe2547a, TOWELS.x - 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, 1.9);
     m.add(G.box, 0x5aa9e6, TOWELS.x + 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, 1.9);
 
     // Muros del jardín y setos
-    for (const sx of [-4.6, 4.6]) {
-      m.add(G.box, 0xf4efe2, sx, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
-      this.colliders.push({ minX: sx - 0.13, maxX: sx + 0.13, minZ: 0, maxZ: 14.5 });
-    }
-    m.add(G.box, 0xf4efe2, 0, 0.9, 14.6, 0, 0, 0, 9.4, 1.8, 0.25);
-    m.add(G.box, 0x2f5f2a, -4.2, 1.1, 8, 0, 0, 0, 0.55, 2.2, 7);
-    this.colliders.push({ minX: -4.5, maxX: -3.9, minZ: 4.5, maxZ: 11.5 });
-    m.add(G.box, 0x2f5f2a, 0, 1.0, 14.2, 0, 0, 0, 8, 2, 0.5);
-    for (const [x, z] of [[3.9, 13.6], [-3.8, 1.8], [3.9, 4.8]]) {
+    m.add(G.box, 0xf4efe2, 4.6, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
+    this.colliders.push({ minX: 4.47, maxX: 4.73, minZ: 0, maxZ: 14.5 });
+    m.add(G.box, 0xf4efe2, (CORRIDOR.wallX + 4.6) / 2, 0.9, 14.6, 0, 0, 0, 4.6 - CORRIDOR.wallX + 0.2, 1.8, 0.25);
+    m.add(G.box, 0x2f5f2a, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4);
+    for (const [x, z] of [[-5.5, 13.6], [-3.8, 1.8], [3.9, 4.8]]) {
       m.add(G.cyl, 0xb5603b, x, 0.3, z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, x, 0.9, z, 0, 0, 0, 0.9, 0.9, 0.9);
     }
 
     // Vecinos: casas de teja y sus piscinas
     for (const sx of [-1, 1]) {
-      const x = sx * 9;
+      const x = sx < 0 ? -11.5 : 9;
       m.add(G.box, 0xf3ead8, x, 3, -6, 0, 0, 0, 9, 6, 12);
       m.add(ROOF_GEO, 0xb8623e, x, 6, -6, 0, Math.PI / 2, 0, 12.2, 1.8, 9.4);
       m.add(G.box, 0xffd9a0, x, 1.3, 0.03, 0, 0, 0, 3, 2.2, 0.05);
       m.add(G.box, 0xf4efe2, x + sx * 4.5, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
       m.add(G.box, 0xf4efe2, x, 0.9, 14.6, 0, 0, 0, 9, 1.8, 0.25);
     }
-    m.add(G.box, 0x7fd3ef, -9.6, 0.03, 6.5, 0, 0, 0, 3.2, 0.03, 5); // piscina vecina (más clara)
-    m.add(G.box, 0x7fd3ef, -8.4, 0.03, 12.2, 0, 0, 0, 2.6, 0.03, 2.4);
+    m.add(G.box, 0x7fd3ef, -12.1, 0.03, 6.5, 0, 0, 0, 3.2, 0.03, 5); // piscina vecina (más clara)
+    m.add(G.box, 0x7fd3ef, -10.9, 0.03, 12.2, 0, 0, 0, 2.6, 0.03, 2.4);
     // Palmera junto a la casa del vecino
-    for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -6.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
+    for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -8.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
     for (let k = 0; k < 7; k++) {
       const a = (k / 7) * Math.PI * 2;
-      m.add(G.box, 0x2f5f2a, -6.4 + Math.cos(a) * 1.4, 7, 2.6 + Math.sin(a) * 1.4, 0, -a, 0.45, 2.8, 0.1, 0.7);
+      m.add(G.box, 0x2f5f2a, -8.4 + Math.cos(a) * 1.4, 7, 2.6 + Math.sin(a) * 1.4, 0, -a, 0.45, 2.8, 0.1, 0.7);
     }
     sc.add(m.mesh());
 
@@ -505,16 +529,19 @@ export class Level4 implements Level {
     switch (this.phase) {
       case 'intro':
       case 'atBar':
-        h.setObjective('Sube al coche de Gas');
+        h.setObjective(this.pickedUp ? 'Sube al coche azul' : 'Ve hacia Pins');
         break;
       case 'drive':
         h.setObjective('De camino a casa…');
         break;
       case 'arrive':
-        h.setObjective('Entra en casa');
+        h.setObjective('Por la puerta no: por el pasillo de la derecha, hasta la piscina 🤫');
         break;
       case 'toPool':
         h.setObjective(T_SNEAK_HINT());
+        break;
+      case 'hug':
+        h.setObjective('🫂');
         break;
       case 'swim':
         h.setObjective('Recoge las velitas que flotan');
@@ -531,9 +558,9 @@ export class Level4 implements Level {
   }
 
   private target(): THREE.Vector3 | null {
-    if (this.phase === 'atBar') return this.carDoor();
-    if (this.phase === 'arrive') return STREET.door;
-    if (this.phase === 'toPool') return this.v2.set(0.5, 0, POOL.minZ - 0.6);
+    if (this.phase === 'atBar') return this.pickedUp ? this.carDoor() : PINS;
+    if (this.phase === 'arrive') return this.v2.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -14.4);
+    if (this.phase === 'toPool') return this.v2.set(-4.95, 0, (POOL.minZ + POOL.maxZ) / 2);
     if (this.phase === 'toTowels') return TOWELS;
     return null;
   }
@@ -564,6 +591,7 @@ export class Level4 implements Level {
 
     if (this.phase === 'diving') this.updateDive(dt);
     else if (this.phase === 'drive') this.updateDrive(dt);
+    else if (this.phase === 'hug') this.updateHug(dt);
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
       this.walker.speed = swimming ? 3.0 : 5.0;
       this.walker.traction = swimming ? 0.22 : 1;
@@ -586,6 +614,8 @@ export class Level4 implements Level {
     }
 
     this.updateGas(dt);
+    if (this.phase === 'atBar') this.updatePickup(dt);
+    if (this.phase === 'arrive' && !this.busy && pp.x < CORRIDOR.maxX + 0.1 && pp.z > -15.2) this.enterCorridor();
     if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
     this.updatePoolPhysics(dt);
 
@@ -609,15 +639,12 @@ export class Level4 implements Level {
     // Acción contextual
     let label: string | null = null;
     let action: (() => void) | null = null;
-    if (!this.busy && this.phase === 'atBar' && pp.distanceTo(this.carDoor()) < 1.5) {
+    if (!this.busy && this.phase === 'atBar' && this.pickedUp && pp.distanceTo(this.carDoor()) < 1.5) {
       label = '🚗 Subir al coche';
       action = () => this.boardCar();
-    } else if (!this.busy && this.phase === 'arrive' && pp.distanceTo(STREET.door) < 1.5) {
-      label = '🔑 Entrar en casa';
-      action = () => this.enterHome();
     } else if (!this.busy && this.phase === 'toPool' && this.nearPoolEdge()) {
-      label = '🏊 Tirarse al agua';
-      action = () => this.startDive();
+      label = '👙 Fuera ropa';
+      action = () => this.undress();
     } else if (!this.busy && this.phase === 'toTowels' && pp.distanceTo(TOWELS) < 1.8) {
       label = '✨ Tumbarse';
       action = () => this.lieDown();
@@ -668,7 +695,7 @@ export class Level4 implements Level {
     ball.castShadow = true;
     this.scene.add(ball);
     this.ball = new Body(ball, { kind: 'ball', r: 0.3, mass: 0.12, bounce: 0.7, drag: 0.22, density: 0.06 });
-    this.ball.pos.set(1.6, WATER_Y + 0.4, 12.4);
+    this.ball.pos.set(2.6, WATER_Y + 0.4, 8.2);
     ph.add(this.ball);
     // Ondas: anillos que se abren y se desvanecen sobre el agua
     const geo = new THREE.RingGeometry(0.42, 0.5, 40).rotateX(-Math.PI / 2);
@@ -743,17 +770,19 @@ export class Level4 implements Level {
     if (!g.root.visible) return;
     if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
-      const a = this.t * 0.35;
-      const x = 0.5 + Math.cos(a) * 1.1;
-      const z = 11.2 + Math.sin(a) * 1.6;
+      const a = this.t * 0.3;
+      const x = Math.cos(a) * 2.6;
+      const z = 7.6 + Math.sin(a) * 1.1;
       g.root.position.set(x, SWIM_Y, z);
-      g.root.rotation.y = Math.atan2(-Math.sin(a) * 1.1, Math.cos(a) * 1.6);
+      g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
       this.swimPose(g, 0.6);
     } else if (this.phase === 'stars' || this.phase === 'toTowels' || this.phase === 'ending' || this.phase === 'done') {
       animatePerson(g, dt, 'idle');
       g.eyes.scale.y = 1;
     } else if (this.phase === 'diving') {
-      animatePerson(g, dt, 'cheer');
+      this.swimPose(g, 0.2);
+    } else if (this.phase === 'hug') {
+      return;
     } else {
       animatePerson(g, dt, 'wave');
       const p = this.player.root.position;
@@ -806,7 +835,7 @@ export class Level4 implements Level {
       fadeFlash(() => {
         this.noise = 0;
         this.lightOn = false;
-        this.player.root.position.set(-1.2, 0, 1.8);
+        this.player.root.position.set(-5.45, 0, -1.2);
         this.walker.yaw = this.walker.facing = 0;
         this.walker.stop();
         this.busy = false;
@@ -840,8 +869,8 @@ export class Level4 implements Level {
       this.driveT = 0;
       this.driveTalkDone = false;
       this.camLook.copy(this.car.root.position);
+      this.driveTalkDone = true;
       this.updateHud();
-      later(() => dialogue(NIGHT.drive, () => (this.driveTalkDone = true)), 900);
     }, 250);
   }
 
@@ -870,7 +899,7 @@ export class Level4 implements Level {
     this.walker.yaw = this.walker.facing = 0;
     this.camera.position.set(this.player.root.position.x, 3.6, this.player.root.position.z - 6.5);
     this.gas.root.visible = true;
-    this.gas.root.position.set(-1.9, 0, STREET.wallZ + 1.0);
+    this.gas.root.position.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -15.6);
     this.gas.root.rotation.set(0, Math.PI, 0);
     this.updateHud();
     dialogue(NIGHT.arrive, () => {
@@ -878,30 +907,115 @@ export class Level4 implements Level {
     });
   }
 
-  private enterHome() {
+  /** Entra en el pasillo: Gas va delante hasta la piscina y empieza el sigilo. */
+  private enterCorridor() {
+    this.phase = 'toPool';
+    this.gas.root.position.copy(GAS_POOL);
+    this.noise = 0;
+    this.updateHud();
+    toast('🤫 Silencio full');
+  }
+
+  /** Bar Imperi → Pins: al llegar, el chat real de la recogida mientras llega el coche azul. */
+  private updatePickup(dt: number) {
+    const pp = this.player.root.position;
+    if (!this.pickedUp && !this.busy && this.carT === 0 && Math.hypot(pp.x - PINS.x, pp.z - PINS.z) < 2.4) {
+      this.busy = true;
+      this.walker.stop();
+      this.input.reset();
+      this.hud.setAction(null);
+      this.carT = 0.001;
+      phoneChat(CHATS.pins, () => {
+        this.pickedUp = true;
+        this.busy = false;
+        this.updateHud();
+      });
+    }
+    if (this.carT > 0 && this.carT < 5) {
+      const prev = this.car.root.position.x;
+      this.carT += dt;
+      const k = Math.min(1, this.carT / 5);
+      this.placeCar(THREE.MathUtils.lerp(CAR_FAR_X, CAR_START_X, 1 - (1 - k) * (1 - k)));
+      if (!this.rig) this.rig = new CarRig(this.car);
+      this.rig.update(dt, dt > 0 ? (this.car.root.position.x - prev) / dt : 0, 0, 1.4);
+    }
+  }
+
+  /** Sin ropa (o vestidos otra vez): cambia los muñecos manteniendo sitio y postura. */
+  private setNude(on: boolean) {
+    if (on === this.nudeOn) return;
+    this.nudeOn = on;
+    const swap = (pair: [Person, Person]) => {
+      const [from, to] = on ? pair : [pair[1], pair[0]];
+      to.root.position.copy(from.root.position);
+      to.root.rotation.copy(from.root.rotation);
+      to.root.visible = from.root.visible;
+      from.root.visible = false;
+      return to;
+    };
+    this.player = swap(this.looks.azul);
+    this.gas = swap(this.looks.gas);
+    this.clothes.visible = on;
+  }
+
+  private undress() {
     this.busy = true;
     this.hud.setAction(null);
     this.input.reset();
+    this.walker.stop();
     fadeFlash(() => {
-      this.toGarden();
-      this.phase = 'toPool';
+      this.setNude(true);
+      this.gas.root.position.set(-2.4, SWIM_Y, 7.6);
+      this.startDive();
+    }, 500);
+  }
+
+  /** En el agua, Gas viene nadando y os abrazáis antes de jugar. */
+  private startHug() {
+    this.phase = 'hug';
+    this.hugT = 0;
+    this.busy = true;
+    this.updateHud();
+  }
+
+  private updateHug(dt: number) {
+    this.hugT += dt;
+    const p = this.player.root.position;
+    const g = this.gas.root.position;
+    const yaw = this.walker.facing;
+    // Gas se pone delante de ella y se miran
+    this.v1.set(p.x + Math.sin(yaw) * 0.5, SWIM_Y, p.z + Math.cos(yaw) * 0.5);
+    g.lerp(this.v1, Math.min(1, dt * (this.hugT < 1.6 ? 1.6 : 6)));
+    this.gas.root.rotation.y = Math.atan2(p.x - g.x, p.z - g.z);
+    this.player.root.rotation.y = Math.atan2(g.x - p.x, g.z - p.z);
+    const close = g.distanceTo(this.v1) < 0.15;
+    for (const q of [this.player, this.gas]) {
+      this.swimPose(q, close ? 0 : 0.5);
+      if (close) {
+        q.root.position.y = SWIM_Y + 0.12;
+        q.armL.rotation.set(-1.35, 0, 0.75);
+        q.armR.rotation.set(-1.35, 0, -0.75);
+        q.legL.rotation.x = q.legR.rotation.x = 0;
+      }
+    }
+    if (close && Math.random() < dt * 4) this.fx.burst(this.v2.copy(p).setY(0.9), '❤️', 1, 0.8, 0.6);
+    if (this.hugT > 5) {
+      this.phase = 'swim';
+      this.busy = false;
       this.updateHud();
-      dialogue(NIGHT.intro, () => {
-        this.busy = false;
-      });
-    }, 400);
+    }
   }
 
   /** Coloca a todos en el jardín, saliendo por la cristalera. */
   private toGarden() {
     this.player.root.visible = true;
-    this.player.root.position.set(-1.2, 0, 1.8);
+    this.player.root.position.set(-5.45, 0, -3);
     this.walker.yaw = this.walker.facing = 0;
-    this.camera.position.set(-1.2, 9, -6);
+    this.camera.position.set(-5.45, 4, -9);
     this.car.azul.visible = false;
     this.placeCar(CAR_STOP_X);
     this.gas.root.visible = true;
-    this.gas.root.position.set(1.0, 0, 7.9);
+    this.gas.root.position.copy(GAS_POOL);
     this.gas.root.rotation.set(0, Math.PI, 0);
     this.walker.stop();
     this.noise = 0;
@@ -982,10 +1096,7 @@ export class Level4 implements Level {
     this.player.body.rotation.x = this.divePitch;
     if (this.diveT > 0.5 && ((Math.abs(p.y - SWIM_Y) < 0.04 && Math.abs(v.y) < 0.15) || this.diveT > 2.6)) {
       this.player.body.rotation.x = 0;
-      this.phase = 'swim';
-      this.busy = true;
-      this.updateHud();
-      dialogue(NIGHT.swim, () => (this.busy = false));
+      this.startHug();
     }
   }
 
@@ -996,7 +1107,8 @@ export class Level4 implements Level {
     later(() => {
       dialogue(NIGHT.swimDone, () => {
         fadeFlash(() => {
-          // Fuera del agua, ya secos, junto a las toallas
+          // Fuera del agua, ya secos y vestidos, junto a las toallas
+          this.setNude(false);
           this.phase = 'toTowels';
           this.player.root.position.set(0.6, 0, 4.2);
           this.player.body.rotation.x = 0;
@@ -1067,7 +1179,7 @@ export class Level4 implements Level {
     vibrate([40, 60, 120]);
     for (let i = 0; i < 4; i++) later(() => this.launchShootingStar(), i * 700);
     later(() => {
-      dialogue(NIGHT.starsDone, () => {
+      phoneChat([CHATS.cesped, CHATS.meGustas], () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
@@ -1129,6 +1241,9 @@ export class Level4 implements Level {
   debug(): DebugItem[] {
     const reset = () => {
       window.removeEventListener('pointerdown', this.onTap);
+      this.setNude(false);
+      this.pickedUp = true;
+      this.carT = 5;
       this.busy = false;
       this.input.reset();
       this.player.root.rotation.set(0, 0, 0);
@@ -1142,7 +1257,9 @@ export class Level4 implements Level {
         run: () => {
           reset();
           this.phase = 'atBar';
-          this.placeCar(CAR_START_X);
+          this.pickedUp = false;
+          this.carT = 0;
+          this.placeCar(CAR_FAR_X);
           this.car.azul.visible = false;
           this.player.root.visible = true;
           this.gas.root.visible = false;
@@ -1165,8 +1282,7 @@ export class Level4 implements Level {
           reset();
           this.toGarden();
           this.phase = 'toPool';
-          this.player.root.position.set(0.5, 0, 7.2);
-          this.gas.root.position.set(1.0, 0, 7.9);
+          this.player.root.position.set(-5.0, 0, 6.4);
           this.updateHud();
         },
       },
@@ -1174,8 +1290,10 @@ export class Level4 implements Level {
         label: '2 · Nadar',
         run: () => {
           reset();
-          this.player.root.position.set(0.5, 0, 7.6);
-          this.startDive();
+          this.toGarden();
+          this.phase = 'toPool';
+          this.player.root.position.set(-4.95, 0, 7.4);
+          this.undress();
         },
       },
       {

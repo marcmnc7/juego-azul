@@ -1,6 +1,5 @@
 // Fotos y stickers sacados de nuestro chat. Cada capítulo desbloquea sus recuerdos en el álbum.
-import diadema from '../assets/recuerdos/diadema.jpg';
-import cocacola from '../assets/recuerdos/cocacola.jpg';
+import { CHATS, type ChatMsg } from './chats';
 import ruta from '../assets/recuerdos/ruta.jpg';
 import trenes from '../assets/recuerdos/trenes.jpg';
 import vueloLpa from '../assets/recuerdos/vuelo-lpa.jpg';
@@ -18,18 +17,23 @@ export const STICKERS = { oso: stOso, juzgamos: stJuzgamos, carita: stCarita, pe
 
 export interface Memory {
   level: number;
-  src: string;
+  src?: string;
   caption: string;
+  /** Recuerdo sin foto: un trozo literal del chat de ese día. */
+  chat?: ChatMsg[];
+  /** Hueco reservado para una foto que aún falta. */
+  pending?: boolean;
   /** Los stickers se pintan sin marco de polaroid. */
   sticker?: boolean;
 }
 
 export const MEMORIES: Memory[] = [
   { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Plaça. Más o menos.', sticker: true },
-  { level: 2, src: diadema, caption: '«Aún no me lo puedo creer. Qué poco me esperaba esto hoy.»' },
-  { level: 2, src: cocacola, caption: 'Una Coca-Cola con mi nombre. Como en el Imperi, pero oficial.' },
+  { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
+  { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },
   { level: 3, src: ruta, caption: 'El planning: 1.454 km. «A Coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
+  { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },
   { level: 4, src: vueloLpa, caption: '«¿VOY TARDE?» «Tú vas pronto.»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },
@@ -40,5 +44,5 @@ export const MEMORIES: Memory[] = [
 
 export const memoriesFor = (level: number) => MEMORIES.filter((m) => m.level === level);
 
-/** Las tres que acompañan a la carta final: la primera noche, Gran Canaria y Sant Joan. */
-export const LETTER_PHOTOS = [diadema, granCanaria, santJoan];
+/** Las tres que acompañan a la carta final: Gran Canaria y Sant Joan. */
+export const LETTER_PHOTOS = [granCanaria, santJoanSelfie, santJoan];
