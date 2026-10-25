@@ -48,6 +48,11 @@ export class Walker {
   wish = new THREE.Vector2();
   private turnRate = 0;
   private stumble = 0;
+  /** Choque contra una persona este fotograma (m/s de impacto; 0 si no hubo), para sonido o reacción. */
+  bump = 0;
+  /** Persona contra la que se ha chocado (el círculo), si alguna. */
+  bumped: Circle | null = null;
+  private bumpCd = 0;
   private manualCam = 0;
   private velocity = new THREE.Vector3();
   private prevSpeed = 0;
@@ -174,7 +179,11 @@ export class Walker {
         }
       }
     }
-    // Personas y animales: empujar hacia fuera del círculo
+    // Personas y animales: empujar hacia fuera del círculo. Rozar a alguien te desvía (resbalas por
+    // su lado); chocar de frente corriendo te hace rebotar un poco, como contra un cuerpo de verdad.
+    this.bump = 0;
+    this.bumped = null;
+    this.bumpCd = Math.max(0, this.bumpCd - dt);
     for (const c of circles) {
       const ex = p.x - c.x;
       const ez = p.z - c.z;
@@ -182,8 +191,18 @@ export class Walker {
       const d2 = ex * ex + ez * ez;
       if (d2 < rr * rr) {
         const d = Math.sqrt(d2) || 1e-3;
-        p.x = c.x + (ex / d) * rr;
-        p.z = c.z + (ez / d) * rr;
+        const nx = ex / d;
+        const nz = ez / d;
+        p.x = c.x + nx * rr;
+        p.z = c.z + nz * rr;
+        const vn = -(v.x * nx + v.z * nz);
+        if (vn > 2.6 && this.bumpCd <= 0) {
+          this.bump = vn;
+          this.bumped = c;
+          this.bumpCd = 0.5;
+          this.knock.set(nx * vn * 0.55, 0, nz * vn * 0.55);
+          this.shake(0.12);
+        }
       }
     }
     p.x = Math.max(b.minX, Math.min(b.maxX, p.x));

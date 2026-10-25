@@ -626,15 +626,21 @@ const tv = new THREE.Vector3();
 const ts = new THREE.Vector3(1, 1, 1);
 const zero = new THREE.Vector3(0.0001, 0.0001, 0.0001);
 const up = new THREE.Vector3(0, 1, 0);
-export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }) {
+export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }, dt = 1 / 60, avoid: readonly { x: number; z: number; r: number }[] = []) {
+  const k = Math.min(1, dt * 5);
   for (const c of crowds) {
     c.base.forEach((b, i) => {
-      // La gente se aparta para dejar un claro (p. ej. alrededor de una pareja)
-      let bx = b.x, bz = b.z;
-      if (clear && clear.r > 0) {
-        const dx = b.x - clear.x, dz = b.z - clear.z, d = Math.hypot(dx, dz) || 0.01;
-        if (d < clear.r) { bx = clear.x + (dx / d) * clear.r; bz = clear.z + (dz / d) * clear.r; }
+      // La gente se aparta: para dejar un claro (p. ej. alrededor de una pareja) y para dejar pasar
+      // a quien se le acerca. El desplazamiento es suave (se van haciendo a un lado, no saltan).
+      let tx = 0, tz = 0;
+      for (const a of clear && clear.r > 0 ? [clear, ...avoid] : avoid) {
+        const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 0.01;
+        if (d < a.r) { tx += (dx / d) * (a.r - d); tz += (dz / d) * (a.r - d); }
       }
+      const bb = b as typeof b & { ox?: number; oz?: number };
+      bb.ox = (bb.ox ?? 0) + (tx - (bb.ox ?? 0)) * k;
+      bb.oz = (bb.oz ?? 0) + (tz - (bb.oz ?? 0)) * k;
+      const bx = b.x + bb.ox, bz = b.z + bb.oz;
       if (c.alt) {
         // Bailarines: saltan más, giran y alternan postura
         const ph = t * b.speed * 0.5 + b.phase;

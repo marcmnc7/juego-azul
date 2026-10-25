@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { steerTo, type SteerState } from '../core/steer';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
@@ -49,6 +50,8 @@ interface Horse {
   rearT: number;
   nextRear: number;
   walk: number;
+  /** Velocidad con signo (calle) o angular (Born): cambia poco a poco, un caballo pesa 500 kg. */
+  v?: number;
   alert: THREE.Sprite;
   touched: boolean;
 }
@@ -91,7 +94,7 @@ export class LevelSantJoan implements Level {
   private player: Person;
   private walker: Walker;
   private gas: Person;
-  private gasWalk = { walk: 0 };
+  private gasSteer: SteerState = {};
   private horses: Horse[] = [];
   private colliders: Box2[] = [];
   private people: Circle[] = [];
@@ -603,6 +606,7 @@ export class LevelSantJoan implements Level {
     const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming');
     this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
+    if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.player.root.rotation.y = this.walker.facing;
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'dance', 0, this.t * 6);
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');
@@ -614,12 +618,9 @@ export class LevelSantJoan implements Level {
       if (this.phase === 'coming') {
         const d = g.distanceTo(pp);
         if (d > 1.3) {
-          const k = Math.min(d - 1.2, 2.2 * dt);
-          g.x += ((pp.x - g.x) / d) * k;
-          g.z += ((pp.z - g.z) / d) * k;
-          this.gas.root.rotation.y = Math.atan2(pp.x - g.x, pp.z - g.z);
-          this.gasWalk.walk += k / 0.53;
-          animatePerson(this.gas, dt, 'walk', 0.4, this.gasWalk.walk);
+          // Viene hacia ella esquivando a la gente, con su arranque y su frenada
+          steerTo(this.gas.root, this.gasSteer, pp.x - ((pp.x - g.x) / d) * 1.2, pp.z - ((pp.z - g.z) / d) * 1.2, 2.2, dt, this.people);
+          animatePerson(this.gas, dt, 'walk');
           if (Math.random() < dt * 1.2) this.fx.burst(this.v1.copy(g).setY(2.4), '👋', 1, 0.4, 0.6);
         } else this.meet();
       } else if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.gas, dt, 'dance', 0, this.t * 6 + 1);
@@ -732,21 +733,31 @@ export class LevelSantJoan implements Level {
           }
         }
       } else {
+        let sp: number;
         if (s.street) {
-          s.angle += s.street.dir * dt * 1.6;
-          if (s.angle > 68 || s.angle < 22) s.street.dir *= -1;
+          // Frena antes del final de la calle, da la vuelta despacio y vuelve a arrancar
+          if ((s.angle > 66 && s.street.dir > 0) || (s.angle < 24 && s.street.dir < 0)) s.street.dir *= -1;
+          s.v = (s.v ?? s.street.dir * 1.6) + THREE.MathUtils.clamp(s.street.dir * 1.6 - (s.v ?? 0), -1.2 * dt, 1.2 * dt);
+          s.angle += s.v * dt;
           r.position.set(s.angle, 0, 0);
-          r.rotation.y = (s.street.dir * Math.PI) / 2;
+          const face = s.v > 0.05 ? Math.PI / 2 : s.v < -0.05 ? -Math.PI / 2 : r.rotation.y;
+          r.rotation.y += Math.atan2(Math.sin(face - r.rotation.y), Math.cos(face - r.rotation.y)) * Math.min(1, dt * 2.5);
+          sp = Math.abs(s.v);
         } else {
-          s.angle += dt * 0.28;
+          s.v = (s.v ?? 0.28) + (0.28 - (s.v ?? 0)) * Math.min(1, dt * 0.8);
+          s.angle += dt * s.v;
           r.position.set(Math.cos(s.angle) * HORSE_R, 0, Math.sin(s.angle) * HORSE_R);
           r.rotation.y = -s.angle;
+          sp = s.v * HORSE_R;
         }
-        s.walk += dt * 7;
-        const w = Math.sin(s.walk) * 0.5;
+        // Paso ligado a la velocidad: las patas no patinan; cabeza y lomo cabecean con cada pisada
+        s.walk += sp * dt * 4.4;
+        const g = Math.min(1, sp / 1.2);
+        const w = Math.sin(s.walk) * 0.5 * g;
         s.d.legs[0].rotation.x = s.d.legs[3].rotation.x = w;
         s.d.legs[1].rotation.x = s.d.legs[2].rotation.x = -w;
-        s.d.pivot.rotation.x = Math.sin(s.walk * 2) * 0.015;
+        s.d.pivot.rotation.x = Math.sin(s.walk * 2) * 0.02 * g;
+        s.d.head.rotation.x = Math.sin(s.walk * 2 + 0.6) * 0.07 * g;
         s.nextRear -= dt;
         if (s.nextRear <= 0 && this.phase !== 'intro') {
           s.warnT = WARN;

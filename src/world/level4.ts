@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { faceTo } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
@@ -768,13 +769,16 @@ export class Level4 implements Level {
   private updateGas(dt: number) {
     const g = this.gas;
     if (!g.root.visible) return;
+    if (this.phase !== 'swim') g.root.rotation.z = 0;
     if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
       const a = this.t * 0.3;
       const x = Math.cos(a) * 2.6;
       const z = 7.6 + Math.sin(a) * 1.1;
-      g.root.position.set(x, SWIM_Y, z);
+      // Flota: sube y baja con cada brazada y se balancea un poco
+      g.root.position.set(x, SWIM_Y + Math.sin(this.t * 3.2) * 0.035, z);
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
+      g.root.rotation.z = Math.sin(this.t * 1.6) * 0.06;
       this.swimPose(g, 0.6);
     } else if (this.phase === 'stars' || this.phase === 'toTowels' || this.phase === 'ending' || this.phase === 'done') {
       animatePerson(g, dt, 'idle');
@@ -786,7 +790,7 @@ export class Level4 implements Level {
     } else {
       animatePerson(g, dt, 'wave');
       const p = this.player.root.position;
-      g.root.rotation.y = Math.atan2(p.x - g.root.position.x, p.z - g.root.position.z);
+      faceTo(g.root, Math.atan2(p.x - g.root.position.x, p.z - g.root.position.z), dt, 4);
     }
   }
 

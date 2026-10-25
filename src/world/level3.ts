@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
+import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, Person, personGeometry, vertexMat, PersonLook } from '../entities/models';
@@ -70,7 +71,7 @@ const LOOKS: PersonLook[] = [
 ];
 
 /** Alguien del público con vida propia: hace cola, entra al baño, sale, o intenta colarse. */
-interface Npc {
+interface Npc extends SteerState {
   p: Person;
   mode: 'free' | 'queue' | 'toWc' | 'leave' | 'cut' | 'tail';
   tx: number;
@@ -371,6 +372,8 @@ export class Level3 implements Level {
   private joinT = 0;
   private azWalk = { walk: 0 };
   private gasQWalk = { walk: 0 };
+  private playerCircle: Circle = { x: 0, z: 0, r: 0.38 };
+  private movingAvoid: Circle[] = [];
   private filmT = 0;
   private filmIn = 0;
   private filmYaw = 0;
@@ -379,7 +382,7 @@ export class Level3 implements Level {
   private filmDone = false;
   private baseFov = 0;
   private burgers: { o: THREE.Mesh; v: THREE.Vector3; live: boolean }[] = [];
-  private travelers: { p: Person; dir: number; x: number; walk: number; c: Circle }[] = [];
+  private travelers: ({ p: Person; dir: number; x: number; walk: number; c: Circle; tx?: number } & SteerState)[] = [];
   private burgerT = 1;
   private burgerHits = 0;
   private invuln = 0;
@@ -402,7 +405,7 @@ export class Level3 implements Level {
   private gazeT = 0;
   private gasS = 0;
   private gasTargetS = 0;
-  private gasWalk = { walk: 0 };
+  private gasSpd = 0;
   private gasPath: THREE.Vector3[] = [];
   private gasPathLen = 0;
   private gasCircle!: Circle;
@@ -610,13 +613,18 @@ export class Level3 implements Level {
   private stepAirport(dt: number) {
     const pp = this.player.root.position;
     // Viajeros con maleta
+    // Viajeros: van y vuelven por el pasillo esquivando a Azul y entre ellos, sin girar en seco
+    this.playerCircle.x = pp.x;
+    this.playerCircle.z = pp.z;
+    const others = [this.playerCircle, ...this.travelers.map((o) => o.c)];
     for (const t of this.travelers) {
       const r = t.p.root.position;
-      r.z += t.dir * 1.6 * dt;
-      if (r.z > AIR.maxZ + 1 || r.z < AIR.minZ - 1) t.dir *= -1;
-      t.p.root.rotation.y = t.dir > 0 ? 0 : Math.PI;
-      t.walk += (1.6 * dt) / 0.53;
-      animatePerson(t.p, dt, 'walk', 0.3, t.walk);
+      t.tx ??= t.x;
+      const tz = t.dir > 0 ? AIR.maxZ + 1 : AIR.minZ - 1;
+      if (steerTo(t.p.root, t, t.tx, tz, 1.6, dt, others, 2.5, 0.32, t.c) < 0.4) t.dir *= -1;
+      // Vuelve poco a poco a su carril tras esquivar
+      r.x += (t.tx - r.x) * Math.min(1, dt * 0.6);
+      animatePerson(t.p, dt, steerSpeed(t) > 0.1 ? 'walk' : 'idle');
       t.c.x = r.x;
       t.c.z = r.z;
     }
@@ -1145,6 +1153,7 @@ export class Level3 implements Level {
     n.p.root.position.set(x, 0, z);
     n.tx = x;
     n.tz = z;
+    n.vx = n.vz = 0;
     return n;
   }
 
@@ -1155,24 +1164,20 @@ export class Level3 implements Level {
   }
 
   /** Paso de un personaje hacia un punto, con su ciclo de andar. Devuelve true al llegar. */
-  private stepTo(p: Person, st: { walk: number }, tx: number, tz: number, speed: number, dt: number, idleFace?: number, anim = true) {
+  private stepTo(p: Person, st: { walk: number } & SteerState, tx: number, tz: number, speed: number, dt: number, idleFace?: number, anim = true, avoid: readonly Circle[] = [], self?: Circle) {
     const r = p.root.position;
-    const dx = tx - r.x;
-    const dz = tz - r.z;
-    const d = Math.hypot(dx, dz);
-    if (d < 0.06) {
-      if (idleFace !== undefined) p.root.rotation.y += wrapA(idleFace - p.root.rotation.y) * Math.min(1, dt * 6);
+    const x0 = r.x;
+    const z0 = r.z;
+    const left = steerTo(p.root, st, tx, tz, speed, dt, avoid, 3.2, 0.32, self);
+    st.walk += Math.hypot(r.x - x0, r.z - z0) / 0.53;
+    const sp = steerSpeed(st);
+    if (left < 0.08 && sp < 0.3) {
+      if (idleFace !== undefined) faceTo(p.root, idleFace, dt);
       if (anim) animatePerson(p, dt, 'idle');
       return true;
     }
-    const sp = speed * Math.min(1, d / 0.5 + 0.35);
-    const step = Math.min(d, sp * dt);
-    r.x += (dx / d) * step;
-    r.z += (dz / d) * step;
-    p.root.rotation.y += wrapA(Math.atan2(dx, dz) - p.root.rotation.y) * Math.min(1, dt * 9);
-    st.walk += step / 0.53;
-    if (anim) animatePerson(p, dt, 'walk', Math.min(1, sp / 5.8), st.walk);
-    return d - step < 0.06;
+    if (anim) animatePerson(p, dt, sp > 0.08 ? 'walk' : 'idle');
+    return left < 0.08;
   }
 
   /** La cola viva: los baños se ocupan y se vacían, la cabeza entra, la gente se une al final o se cuela. */
@@ -1249,12 +1254,18 @@ export class Level3 implements Level {
       this.gasCircle.x = this.gas.root.position.x;
       this.gasCircle.z = this.gas.root.position.z;
     }
+    // Los que andan sueltos esquivan a la jugadora y a los que caminan (no a la cola, que es apretada)
+    this.playerCircle.x = pp.x;
+    this.playerCircle.z = pp.z;
+    this.movingAvoid.length = 0;
+    this.movingAvoid.push(this.playerCircle);
+    for (const n of this.npcs) if (n.mode === 'toWc' || n.mode === 'leave' || n.mode === 'tail') this.movingAvoid.push(n.circle);
     for (const n of this.npcs) {
       if (n.mode === 'free') continue;
       const r = n.p.root.position;
       if (n.mode === 'queue') this.stepTo(n.p, n, n.tx, n.tz, 1.5, dt, Math.PI / 2);
       else if (n.mode === 'toWc') {
-        if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt)) {
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt, undefined, true, this.movingAvoid, n.circle)) {
           this.wcBusyT[n.wc] = 12 + Math.random() * 10;
           this.wcRes[n.wc] = false;
           this.hide(n);
@@ -1262,10 +1273,10 @@ export class Level3 implements Level {
           if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 160, 0.1);
         }
       } else if (n.mode === 'leave') {
-        if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt)) this.hide(n);
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt, undefined, true, this.movingAvoid, n.circle)) this.hide(n);
       } else if (n.mode === 'tail') {
         this.slot(this.queue.length);
-        if (this.stepTo(n.p, n, this.v1.x, Q_Z, 1.7, dt) || Math.hypot(r.x - this.v1.x, r.z - Q_Z) < 0.5) {
+        if (this.stepTo(n.p, n, this.v1.x, Q_Z, 1.7, dt, undefined, true, this.movingAvoid, n.circle) || Math.hypot(r.x - this.v1.x, r.z - Q_Z) < 0.5) {
           n.mode = 'queue';
           this.queue.push(n);
         }
@@ -1521,16 +1532,19 @@ export class Level3 implements Level {
       // Ha visto el flash: viene hacia ella (o se va detrás de otro flash)
       const prev = this.gasPathAt(this.gasS, this.tmpV).clone();
       const dir = Math.sign(this.gasTargetS - this.gasS);
-      this.gasS += dir * Math.min(Math.abs(this.gasTargetS - this.gasS), 2.4 * dt);
+      // Arranca y frena como una persona (no a velocidad constante desde el primer fotograma)
+      const rem = Math.abs(this.gasTargetS - this.gasS);
+      this.gasSpd = Math.min(2.4, this.gasSpd + 3.5 * dt, Math.sqrt(2 * 3 * rem) + 0.3);
+      this.gasS += dir * Math.min(rem, this.gasSpd * dt);
       this.gasPathAt(this.gasS, gp);
       const dx = gp.x - prev.x;
       const dz = gp.z - prev.z;
       if (dx * dx + dz * dz > 1e-8) this.gas.root.rotation.y += wrapA(Math.atan2(dx, dz) - this.gas.root.rotation.y) * Math.min(1, dt * 10);
-      this.gasWalk.walk += (2.4 * dt) / 0.53;
-      animatePerson(this.gas, dt, 'walk', 0.45, this.gasWalk.walk);
+      animatePerson(this.gas, dt, 'walk');
       this.gaze = 0;
       if (Math.abs(this.gasS - this.gasTargetS) <= 1e-3) {
         this.gasS = this.gasTargetS;
+        this.gasSpd = 0;
         // Llega a donde la vio y la vuelve a perder entre la gente
         if (this.flashHits >= FLASH_NEED) {
           this.phase = 'meet';
@@ -1728,6 +1742,7 @@ export class Level3 implements Level {
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.allPeople);
+    if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);
     this.stepQueue(dt);
     if (this.phase === 'flash' || this.phase === 'meet') this.stepFlash(dt);

@@ -50,8 +50,8 @@ export const FERRERIES = {
     { who: 'Marc', text: 'I què, ets d’aquí?' },
     { who: 'Margaux', text: 'Visc a Madrid. Però som una mica de tot: francesa, italiana i espanyola.' },
     { who: 'Marc', text: 'I havies vingut mai a ses festes de Ferreries, o és sa primera vegada?' },
-    { who: 'Margaux', text: 'Sa primera.' },
-    { who: 'Marc', text: 'Idò benvinguda. Ja veus que aquí es balla com es pot.' },
+    { who: 'Margaux', text: 'A Menorca hi vaig viure un any, en plena pandèmia… però festes, cap ni una. Aquestes són ses primeres.' },
+    { who: 'Marc', text: 'Idò benvinguda a ses de veres. Ja veus que aquí es balla com es pot.' },
   ] as Line[],
   hints: {
     pomada: 'Pomada! 🍋',

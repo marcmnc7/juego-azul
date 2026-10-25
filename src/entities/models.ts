@@ -173,6 +173,8 @@ export interface Person {
   /** Mirada: hacia dónde gira la cabeza en reposo y cuándo cambia. */
   lookY?: number;
   lookT?: number;
+  /** Movimiento real del cuerpo (para los que no tienen Walker): fase del paso, velocidad e inclinación. */
+  auto?: { x: number; z: number; ry: number; ph: number; v: number; acc: number; lf: number; lfV: number; ls: number; lsV: number };
 }
 
 const HEAD_Y = 1.3; // base del cuello
@@ -337,6 +339,33 @@ export interface Lean {
  */
 export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0, phase?: number, lean?: Lean) {
   p.t += dt;
+  // Sin Walker: se mide cuánto se ha movido de verdad el personaje, para que los pies no patinen
+  // (el paso avanza con la distancia) y para inclinarse al arrancar, frenar y girar.
+  const a = (p.auto ??= { x: p.root.position.x, z: p.root.position.z, ry: p.root.rotation.y, ph: Math.random() * 6, v: 0, acc: 0, lf: 0, lfV: 0, ls: 0, lsV: 0 });
+  if (dt > 0) {
+    const r = p.root.position;
+    const d = Math.hypot(r.x - a.x, r.z - a.z);
+    const sc = p.root.scale.x || 1;
+    const v = d > 2 ? a.v : d / dt; // >2 m en un fotograma = teletransporte
+    a.acc += ((v - a.v) / dt - a.acc) * Math.min(1, dt * 8);
+    a.v += (v - a.v) * Math.min(1, dt * 12);
+    if (d <= 2) a.ph += d / (0.53 * sc);
+    const turn = Math.atan2(Math.sin(p.root.rotation.y - a.ry), Math.cos(p.root.rotation.y - a.ry)) / dt;
+    a.x = r.x;
+    a.z = r.z;
+    a.ry = p.root.rotation.y;
+    if (!lean) {
+      const fwd = Math.max(-0.1, Math.min(0.16, a.acc * 0.012 + Math.min(1, a.v / 5.8) * 0.06));
+      const side = Math.max(-0.18, Math.min(0.18, -turn * a.v * 0.012));
+      [a.lf, a.lfV] = springStep(a.lf, a.lfV, fwd, 10, dt);
+      [a.ls, a.lsV] = springStep(a.ls, a.lsV, side, 9, dt);
+    }
+  }
+  if (mode === 'walk' && phase === undefined) {
+    phase = a.ph;
+    if (a.v > 0.05) move = Math.min(1.2, a.v / 5.8);
+  }
+  if (!lean && mode === 'walk') lean = { leanFwd: a.lf, leanSide: a.ls };
   const t = phase ?? p.t;
   // Parpadeo
   p.blink -= dt;
@@ -503,6 +532,14 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
     p.body.position.y = prevY + (p.body.position.y - prevY) * a;
   }
   p.head.userData.lookY = p.head.rotation.y;
+}
+
+/** Muelle amortiguado crítico (misma fórmula que en walker.ts, sin importar el Walker). */
+function springStep(x: number, v: number, target: number, omega: number, dt: number): [number, number] {
+  const f = 1 + 2 * dt * omega;
+  const hoo = dt * omega * omega;
+  const det = 1 / (f + dt * hoo);
+  return [(f * x + dt * v + dt * hoo * target) * det, (v + hoo * (target - x)) * det];
 }
 
 /** Giro de cabeza del fotograma anterior (para que la mirada se mueva con suavidad). */

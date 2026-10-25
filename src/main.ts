@@ -296,8 +296,15 @@ if (stats) {
   uiRoot.append(stats);
 }
 
+// dt suavizado: un fotograma que llega tarde (GC, carga de textura) no provoca un salto brusco,
+// pero el tiempo total se conserva para que nada vaya a cámara lenta.
+let smoothDt = 1 / 60;
+let debt = 0;
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.1);
+  const raw = Math.min(clock.getDelta(), 0.1) + debt;
+  const dt = Math.min(raw, Math.max(smoothDt * 1.6, 1 / 120), 1 / 12);
+  debt = Math.min(0.1, raw - dt);
+  smoothDt += (dt - smoothDt) * 0.15;
   renderer.info.reset();
   if (level) {
     level.update(dt);

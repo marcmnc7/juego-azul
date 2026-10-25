@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
@@ -495,17 +496,18 @@ export class LevelCena implements Level {
 
   // ---------------- Bucle ----------------
 
-  private moveTo(p: Person, to: THREE.Vector3, dt: number, speed = 2.2) {
+  private moveTo(p: Person, to: THREE.Vector3, dt: number, speed = 2.2, reach = 0.08) {
     const d = this.v1.subVectors(to, p.root.position).setY(0);
     const len = d.length();
-    if (len < 0.08) {
-      animatePerson(p, dt, 'idle');
+    if (len < reach) {
+      const st0 = p.root.userData.steer as SteerState | undefined;
+      if (st0 && reach < 0.1) st0.vx = st0.vz = 0;
+      animatePerson(p, dt, reach < 0.1 ? 'idle' : 'walk');
       return true;
     }
-    const step = Math.min(len, speed * dt);
-    p.root.position.addScaledVector(d.normalize(), step);
-    p.root.rotation.y = Math.atan2(d.x, d.z);
-    animatePerson(p, dt, 'walk', step / dt / 5);
+    const st = (p.root.userData.steer ??= {}) as SteerState;
+    steerTo(p.root, st, to.x, to.z, speed, dt);
+    animatePerson(p, dt, 'walk');
     return false;
   }
 
@@ -572,7 +574,7 @@ export class LevelCena implements Level {
     // Gas sigue su camino (entrando, a la cocina, a la mesa o yéndose)
     if (this.gas.root.visible && this.phase !== 'dinner') {
       if (this.gasWalk.length) {
-        if (this.moveTo(this.gas, this.gasWalk[0], dt, 2.6)) this.gasWalk.shift();
+        if (this.moveTo(this.gas, this.gasWalk[0], dt, 2.6, this.gasWalk.length > 1 ? 0.45 : 0.08)) this.gasWalk.shift();
       } else {
         animatePerson(this.gas, dt, this.phase === 'cook' ? 'talk' : 'idle');
         if (this.phase === 'cook' || this.phase === 'toKitchen') this.gas.root.rotation.y = Math.atan2(this.player.root.position.x - this.gas.root.position.x, this.player.root.position.z - this.gas.root.position.z);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
@@ -109,7 +110,11 @@ export class Level1 implements Level {
   private kissT = 0;
   private clearR = 0;
   private carmeTo: THREE.Vector3 | null = null;
+  private carmeSteer: SteerState = {};
+  private marcSteer: SteerState = {};
   private readonly clear = { x: 0, z: 0, r: 0 };
+  /** La gente se aparta un poco al paso de la jugadora. */
+  private readonly near = [{ x: 0, z: 0, r: 0.95 }];
   private donkeys: DonkeyState[] = [];
   // Vasos de plástico de pomada por el suelo: se patean, se vuelcan, ruedan y los ases los arrollan
   private phys = new PhysicsWorld();
@@ -569,7 +574,10 @@ export class Level1 implements Level {
     this.clearR += ((close0 ? 4.2 : 0) - this.clearR) * Math.min(1, dt * 1.5);
     const cm = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
     Object.assign(this.clear, { x: cm.x, z: cm.z, r: this.clearR });
-    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear);
+    const pp0 = this.player.root.position;
+    this.near[0].x = pp0.x;
+    this.near[0].z = pp0.z;
+    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear, dt, this.near);
     this.fx.update(dt);
     (this.world.lights.material as THREE.PointsMaterial).size = 0.9 + Math.sin(this.t * 3) * 0.08;
     // Guirnaldas de los bares que cambian de color con la música
@@ -605,6 +613,7 @@ export class Level1 implements Level {
       for (const o of [0.55, -0.5]) this.solids[k++] = { x: r.position.x + fx * o, z: r.position.z + fz * o, r: 0.5 };
     }
     const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds, this.solids);
+    if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCups(dt);
     this.invuln -= dt;
     this.player.root.rotation.y = this.walker.facing;
@@ -628,11 +637,10 @@ export class Level1 implements Level {
       const d = this.v1.subVectors(this.marcTo, this.marc.root.position).setY(0);
       const len = d.length();
       if (len > 0.08) {
-        const step = Math.min(len, 2.2 * dt);
-        this.marc.root.position.addScaledVector(d.normalize(), step);
-        this.marc.root.rotation.y = Math.atan2(d.x, d.z);
-        animatePerson(this.marc, dt, 'walk', step / dt / 5);
+        steerTo(this.marc.root, this.marcSteer, this.marcTo.x, this.marcTo.z, 2.2, dt);
+        animatePerson(this.marc, dt, 'walk');
       } else {
+        this.marcSteer.vx = this.marcSteer.vz = 0;
         this.marcTo = null;
         this.meetMarc();
       }
@@ -642,9 +650,8 @@ export class Level1 implements Level {
     if (this.carmeTo) {
       const cp = this.carme.root.position, d = this.v2.subVectors(this.carmeTo, cp).setY(0), l = d.length();
       if (l > 0.05) {
-        cp.addScaledVector(d, Math.min(1, (dt * 1.6) / l));
-        this.carme.root.rotation.y = Math.atan2(d.x, d.z);
-        animatePerson(this.carme, dt, 'walk', 1.6);
+        steerTo(this.carme.root, this.carmeSteer, this.carmeTo.x, this.carmeTo.z, 1.4, dt);
+        animatePerson(this.carme, dt, 'walk');
       } else {
         const m = this.v2.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
         this.carme.root.rotation.y = Math.atan2(m.x - cp.x, m.z - cp.z);
