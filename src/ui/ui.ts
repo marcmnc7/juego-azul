@@ -1,11 +1,12 @@
 import { GIFTS, Gift } from '../data/gifts';
-import { LEVELS, Line, FINAL_LETTER, CROSSWORD, EPILOGUE, type CrossClue } from '../data/story';
+import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
+import { MINI_GAMES } from './minis';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
-import { CHATS, type ChatFrag } from '../data/chats';
+import type { ChatFrag } from '../data/chats';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -65,7 +66,7 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const allDone = opts.test || LEVELS.every((l) => done.has(l.id));
   const fin = el('button', 'level-card final' + (allDone ? '' : ' locked'));
   fin.append(el('div', 'num', '♥'), el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines todos los capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒 Bloqueado'));
-  if (allDone) fin.onclick = () => epilogue(() => crossword(() => finalLetter(back), back));
+  if (allDone) fin.onclick = () => crossword(() => finalLetter(back), back);
   list.append(fin);
   s.append(list);
   const g = el('button', 'link-btn', `🎁 Mis regalos (${save.giftsUnlocked.length}/${GIFTS.length})`);
@@ -73,8 +74,11 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length;
   const a = el('button', 'link-btn', `📷 Nuestro álbum (${seen}/${MEMORIES.length})`);
   a.onclick = () => album(save, opts.test, back);
+  const games = MINI_GAMES.filter((m) => opts.test || done.has(m.after));
+  const mg = el('button', 'link-btn', `🎮 Minijuegos (${games.length}/${MINI_GAMES.length})`);
+  mg.onclick = () => miniList(save, opts.test, back);
   const links = el('div', 'link-row');
-  links.append(g, a);
+  links.append(g, a, mg);
   s.append(links);
   if (opts.test) {
     const r = el('button', 'link-btn', 'Borrar el progreso guardado');
@@ -82,16 +86,6 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
     s.append(r);
   }
   root.append(s);
-}
-
-/** Un año después: escena corta en Ferreries antes del crucigrama. */
-export function epilogue(onDone: () => void) {
-  clearScreens();
-  const o = el('div', 'screen epilogue-screen');
-  o.append(el('div', 'hearts', '🫏 💙'), el('h1', '', EPILOGUE.title), el('p', '', EPILOGUE.place));
-  root.append(o);
-  audio.fanfare();
-  setTimeout(() => phoneChat([CHATS.veintidos, CHATS.asesOnce, CHATS.bocata, CHATS.fecha], onDone), 900);
 }
 
 /** Quita tildes y espacios para comparar respuestas (la Ñ se respeta). */
@@ -349,6 +343,26 @@ export function memories(level: number, onClose: () => void) {
   o.append(table, b);
   root.append(o);
   audio.pop();
+}
+
+export function miniList(save: SaveData, test: boolean, onClose: () => void) {
+  clearScreens();
+  const back = () => miniList(save, test, onClose);
+  const o = el('div', 'screen memories-screen album');
+  o.append(el('h1', '', 'Minijuegos'));
+  const done = new Set(save.levelsDone);
+  const list = el('div', 'levels');
+  MINI_GAMES.forEach((m) => {
+    const open = test || done.has(m.after);
+    const card = el('button', 'level-card' + (open ? '' : ' locked'));
+    card.append(el('div', 'emoji', m.icon), el('div', 'name', open ? m.title : '???'), el('div', 'place', `Después del capítulo ${m.after}`), el('div', 'state', open ? '▶ Jugar' : '🔒 Bloqueado'));
+    if (open) card.onclick = () => m.run(back);
+    list.append(card);
+  });
+  const b = el('button', 'big-btn', 'Volver');
+  b.onclick = onClose;
+  o.append(list, b);
+  root.append(o);
 }
 
 export function album(save: SaveData, test: boolean, onClose: () => void) {
@@ -784,7 +798,9 @@ export function debugPanel(items: DebugItem[]) {
   };
   for (const it of items) {
     const b = el('button', '', it.label);
-    b.onpointerdown = (e) => {
+    // Con click (no pointerdown): si no, el toque "fantasma" cae en lo que aparezca debajo, p. ej. el mapa
+    b.onpointerdown = (e) => e.stopPropagation();
+    b.onclick = (e) => {
       e.stopPropagation();
       list.hidden = true;
       closeDialogue();

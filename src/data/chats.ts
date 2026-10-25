@@ -2473,5 +2473,824 @@ export const CHATS = {
     "text": "Tu ni la viste la vibra"
    }
   ]
+ },
+ "atesoro": {
+  "date": "30 de octubre de 2025",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "0:16",
+    "text": "No va, te la dejo pero no la lleves por Ferre 🫏"
+   },
+   {
+    "me": false,
+    "t": "0:16",
+    "text": "Que ese dia es nuestro"
+   },
+   {
+    "me": false,
+    "t": "0:16",
+    "text": "Hahahahah"
+   },
+   {
+    "me": true,
+    "t": "0:17",
+    "text": "Aaaaa"
+   },
+   {
+    "me": true,
+    "t": "0:17",
+    "text": "Es verdad"
+   },
+   {
+    "me": true,
+    "t": "0:18",
+    "text": "Este dia lo atesoro"
+   }
+  ]
+ },
+ "joyPiscina": {
+  "date": "3 de abril de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "12:37",
+    "text": "Se tiró de una sin hesitacion"
+   },
+   {
+    "me": true,
+    "t": "12:38",
+    "text": "📷 Foto"
+   },
+   {
+    "me": false,
+    "t": "12:38",
+    "text": "Hahahaha que bonito ya esta de resaca emocional"
+   }
+  ]
+ },
+ "zamburinasCumple": {
+  "date": "28 de noviembre de 2025",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "2:00",
+    "text": "Gracias por tu mensaje Gass✨ muy tierno y bonito.. <br>no te voy a mentir, me suelo emocionar en mi cumpleaños, a veces el amor que recibo me sobrepasa, pero tambien que suerte la mía. <br>Agradezco mucho haberte conocido, aunque poco por ahora, conseguiste generar un recuerdo único. Hoy volviendo a casa, el cielo estaba despejado y pude ver las estrellas, obviamente pensé en lo que me dijiste. <br> Me habría encantado tenerte por aqui. Pero bueno, ya te ire contando que tal todo! <br>Un abrazo apretado y muchos besosss 😘 ojala volver a comer esas zamburiñas otra vez, pero solo si es contigo"
+   }
+  ]
+ },
+ "sanVicente": {
+  "date": "19 de junio de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "22:16",
+    "text": "Era bastante bueno"
+   },
+   {
+    "me": true,
+    "t": "22:16",
+    "text": "Pero ya sabes donde se quedó mi corazon"
+   },
+   {
+    "me": false,
+    "t": "23:10",
+    "text": "San vicente de la barquera"
+   },
+   {
+    "me": true,
+    "t": "23:25",
+    "text": "Esoo"
+   }
+  ]
+ },
+ "somosLas": {
+  "date": "17 de enero de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Míra"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Somos las 21:52"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Pilla 2 entradas para fito"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Qualquier finde"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Ahira"
+   },
+   {
+    "me": false,
+    "t": "21:53",
+    "text": "Cualquier ciudad"
+   },
+   {
+    "me": true,
+    "t": "21:56",
+    "text": "Pilla tu"
+   },
+   {
+    "me": true,
+    "t": "21:56",
+    "text": "Te hago bizum"
+   },
+   {
+    "me": true,
+    "t": "22:00",
+    "text": "Y vengo donde sea"
+   },
+   {
+    "me": false,
+    "t": "22:13",
+    "text": "☑️"
+   }
+  ]
+ },
+ "mar": {
+  "date": "21 de junio de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "16:58",
+    "text": "MARRUECOS, era?"
+   },
+   {
+    "me": true,
+    "t": "17:04",
+    "text": "Hahaha no se"
+   },
+   {
+    "me": false,
+    "t": "17:37",
+    "text": "Como que no sabes hahahah"
+   },
+   {
+    "me": true,
+    "t": "17:37",
+    "text": "Que estaba escrito solo MAR"
+   },
+   {
+    "me": true,
+    "t": "17:38",
+    "text": "Y no creo en las coincidencias"
+   }
+  ]
+ },
+ "miManchi": {
+  "date": "27 de junio de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "19:27",
+    "text": "Me lo pasé demasiado bien, gracias por hacer de este sant joan algo muy especial"
+   },
+   {
+    "me": false,
+    "t": "19:27",
+    "text": "Espeeero que descubrieses nuevas cositas que aun no te habian enseñado"
+   },
+   {
+    "me": false,
+    "t": "19:27",
+    "text": "😘😘"
+   },
+   {
+    "me": true,
+    "t": "19:28",
+    "text": "Si, y por eso imposible de olvidar 🤍"
+   },
+   {
+    "me": true,
+    "t": "19:28",
+    "text": "Hablamos luego tiernooo"
+   },
+   {
+    "me": true,
+    "t": "19:28",
+    "text": "Baciii"
+   },
+   {
+    "me": true,
+    "t": "19:28",
+    "text": "🫂"
+   },
+   {
+    "me": false,
+    "t": "19:28",
+    "text": "Muaaa"
+   },
+   {
+    "me": true,
+    "t": "19:36",
+    "text": "Mi manchi giá"
+   },
+   {
+    "me": false,
+    "t": "19:55",
+    "text": "Eso si que es diferente en español hahahah"
+   },
+   {
+    "me": false,
+    "t": "19:55",
+    "text": "😘😘😘❤️"
+   }
+  ]
+ },
+ "motoPlan": {
+  "date": "21 de abril de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "21:13",
+    "text": "Ale, ya tenemos donde dormir y ya tenemos moto."
+   },
+   {
+    "me": false,
+    "t": "21:15",
+    "text": "- Moto de Jueves 30 por la tarde a Lunes 4 por la mañana.<br>- ⁠Jueves y Domingo dormimos en casa.<br>- ⁠Viernes y Sábado dormimos en L'Escala.<br>- ⁠Ya hacemos videollamada para concretar plan / sitios / cosas que tienes que llevar, yo tengo idea ya de todo pero aterricemos juntos.<br>- ⁠Ya me pasas horarios de tren (preferiblemente llega el jueves ya que la idea es salir pronto el viernes y sera un día bastante largo y divertito)<br>- ⁠Disfruta mucho de la feria!!!!!!"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "Que dices!!!"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "Ay es que eres lo mejor te juro"
+   }
+  ]
+ },
+ "mochila": {
+  "date": "30 de abril de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "0:44",
+    "text": "A verrrr tema mochila…"
+   },
+   {
+    "me": false,
+    "t": "0:50",
+    "text": "1 conjunto de moto (tejanos, chupa, guantes, 2 camisetas finas manga larga para tener recambio, zapatillas nike, 3 calcetines largos o de tobillo, guantes)<br>1 conjunto paseo, algo para salir del hotel recien duchados, cenar y hacer un helado<br>1 conjunto biquinis + algo fresco que te puedas poner despues de nadar sin pasar por ducha para comer o cenar (vestidito, pantalones de tela nuevos, camiseta, …)<br>1 pijama<br>1 accesorios (algunas joyitas, gafas sol, reloj, …)<br>1 conjunto puesto normal para venir mañana y salir el lunes"
+   },
+   {
+    "me": false,
+    "t": "0:50",
+    "text": "Ma menos"
+   }
+  ]
+ },
+ "motoTrip": {
+  "date": "4 de mayo de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "7:38",
+    "text": "❤️❤️❤️"
+   },
+   {
+    "me": false,
+    "t": "7:49",
+    "text": "MotoTrip4life"
+   },
+   {
+    "me": true,
+    "t": "8:20",
+    "text": "De lejos uno de nuestros viajes más especiales ✨🫰🏼"
+   },
+   {
+    "me": true,
+    "t": "8:21",
+    "text": "Gracias por empujarme a atreverme"
+   },
+   {
+    "me": true,
+    "t": "8:21",
+    "text": "Me ha encantado 🥹"
+   },
+   {
+    "me": true,
+    "t": "8:21",
+    "text": "Sigue haciendolo siempre!"
+   },
+   {
+    "me": false,
+    "t": "9:16",
+    "text": "❤️❤️❤️"
+   },
+   {
+    "me": false,
+    "t": "9:16",
+    "text": "Eres fantástica!!"
+   },
+   {
+    "me": false,
+    "t": "9:17",
+    "text": "Moto devuelta!!! Inexplicable la sensación de volver a coger mi moto"
+   },
+   {
+    "me": false,
+    "t": "9:17",
+    "text": "QUE PEQUEÑA"
+   },
+   {
+    "me": true,
+    "t": "9:26",
+    "text": "Ayyyyy"
+   },
+   {
+    "me": true,
+    "t": "9:26",
+    "text": "Hahahaha"
+   },
+   {
+    "me": true,
+    "t": "9:26",
+    "text": "A ver cuanto tardas en comprar una nueva"
+   },
+   {
+    "me": true,
+    "t": "9:26",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "9:42",
+    "text": "📷 Foto"
+   },
+   {
+    "me": false,
+    "t": "9:43",
+    "text": "Porque no te quedas?"
+   },
+   {
+    "me": true,
+    "t": "9:51",
+    "text": "Hasta cuando ?"
+   },
+   {
+    "me": false,
+    "t": "10:28",
+    "text": "Siempre?"
+   },
+   {
+    "me": true,
+    "t": "10:46",
+    "text": "🥹"
+   },
+   {
+    "me": true,
+    "t": "10:47",
+    "text": "Ojalá amor, ojalá.."
+   }
+  ]
+ },
+ "eclipseReady": {
+  "date": "12 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "10:16",
+    "text": "Morningg"
+   },
+   {
+    "me": false,
+    "t": "10:17",
+    "text": "Ready para un dia que vas a recordar toda tu vida?"
+   },
+   {
+    "me": true,
+    "t": "10:20",
+    "text": "Heeeellooo"
+   },
+   {
+    "me": true,
+    "t": "10:20",
+    "text": "Estoy euforicaaaa"
+   },
+   {
+    "me": true,
+    "t": "10:20",
+    "text": "Y tu?"
+   }
+  ]
+ },
+ "eclipseCoche": {
+  "date": "12 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "11:56",
+    "text": "Vamos con tu coche ?"
+   },
+   {
+    "me": false,
+    "t": "11:58",
+    "text": "Si"
+   },
+   {
+    "me": true,
+    "t": "11:58",
+    "text": "Oki"
+   },
+   {
+    "me": false,
+    "t": "12:28",
+    "text": "Estoy"
+   },
+   {
+    "me": true,
+    "t": "12:28",
+    "text": "Donde"
+   }
+  ]
+ },
+ "eclipseFin": {
+  "date": "13 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "1:03",
+    "text": "Que dia mas perfecto"
+   },
+   {
+    "me": true,
+    "t": "1:03",
+    "text": "Y especial"
+   },
+   {
+    "me": false,
+    "t": "1:13",
+    "text": "Cama"
+   },
+   {
+    "me": false,
+    "t": "1:13",
+    "text": "Cosas han pasado ciertamente hahaha"
+   },
+   {
+    "me": true,
+    "t": "1:14",
+    "text": "Sii dia cargado"
+   },
+   {
+    "me": true,
+    "t": "1:14",
+    "text": "Pero bonito"
+   }
+  ]
+ },
+ "luna": {
+  "date": "16 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "21:11",
+    "text": "Ahora cada vez que veo la luna pienso en ti"
+   },
+   {
+    "me": true,
+    "t": "21:11",
+    "text": "Es heavy ahahah"
+   }
+  ]
+ },
+ "tarde": {
+  "date": "18 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "20:04",
+    "text": "Piensas enamorarte en el festival?"
+   },
+   {
+    "me": true,
+    "t": "20:04",
+    "text": "Te hacia más exigente"
+   },
+   {
+    "me": false,
+    "t": "20:05",
+    "text": "Depende"
+   },
+   {
+    "me": true,
+    "t": "20:05",
+    "text": "Respuesta incorrecta"
+   },
+   {
+    "me": true,
+    "t": "20:05",
+    "text": "Bloquear usuario"
+   },
+   {
+    "me": false,
+    "t": "20:06",
+    "text": "Pues era la más correcta pero no has seguido el rollo"
+   },
+   {
+    "me": false,
+    "t": "20:06",
+    "text": "Asi que te quedas sin saberla"
+   },
+   {
+    "me": true,
+    "t": "20:06",
+    "text": "Venga defiendela"
+   },
+   {
+    "me": false,
+    "t": "20:07",
+    "text": "Si claro ahora"
+   },
+   {
+    "me": false,
+    "t": "20:07",
+    "text": "Estoy bloqueado"
+   },
+   {
+    "me": true,
+    "t": "20:07",
+    "text": "BUUUU"
+   },
+   {
+    "me": false,
+    "t": "20:07",
+    "text": "."
+   },
+   {
+    "me": false,
+    "t": "20:07",
+    "text": "No mi cabeza eh"
+   },
+   {
+    "me": false,
+    "t": "20:07",
+    "text": "Sino pq has dicho esto"
+   },
+   {
+    "me": true,
+    "t": "20:08",
+    "text": "Usuario desbloqueado"
+   },
+   {
+    "me": true,
+    "t": "20:08",
+    "text": "💟 Sticker"
+   },
+   {
+    "me": false,
+    "t": "20:10",
+    "text": "T"
+   },
+   {
+    "me": false,
+    "t": "20:10",
+    "text": "A"
+   },
+   {
+    "me": false,
+    "t": "20:10",
+    "text": "R"
+   },
+   {
+    "me": false,
+    "t": "20:10",
+    "text": "D"
+   },
+   {
+    "me": false,
+    "t": "20:10",
+    "text": "E"
+   },
+   {
+    "me": false,
+    "t": "20:11",
+    "text": "Era decir q solo si venias tu, pq me enamoro cada dia de ti, xo ya ni vale ni nada"
+   },
+   {
+    "me": true,
+    "t": "20:13",
+    "text": "Que dolor"
+   },
+   {
+    "me": true,
+    "t": "20:13",
+    "text": "Pero lo piensas igual no?"
+   }
+  ]
+ },
+ "loveLanguage": {
+  "date": "9 de julio de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "22:22",
+    "text": "🙄🙄🙄"
+   },
+   {
+    "me": true,
+    "t": "22:22",
+    "text": "Pensaba que era suficiente mirarte en vuelo"
+   },
+   {
+    "me": true,
+    "t": "22:22",
+    "text": "Es mi love language"
+   },
+   {
+    "me": true,
+    "t": "22:22",
+    "text": "Y esa foooooto"
+   },
+   {
+    "me": false,
+    "t": "22:25",
+    "text": "Pues no"
+   },
+   {
+    "me": false,
+    "t": "22:25",
+    "text": "Hahaha nse me aburrí"
+   },
+   {
+    "me": true,
+    "t": "22:26",
+    "text": "Hahaha esta buen"
+   },
+   {
+    "me": true,
+    "t": "22:26",
+    "text": "Me pasa tb"
+   },
+   {
+    "me": true,
+    "t": "22:26",
+    "text": "💔💔"
+   },
+   {
+    "me": true,
+    "t": "22:26",
+    "text": "Perdoname bb"
+   }
+  ]
+ },
+ "motoPerdida": {
+  "date": "2 de agosto de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "17:48",
+    "text": "No tengo NI IDEA de donde deje la moto"
+   },
+   {
+    "me": false,
+    "t": "17:48",
+    "text": "Encuentrala ahora.."
+   },
+   {
+    "me": true,
+    "t": "17:48",
+    "text": "Ahahahahha"
+   },
+   {
+    "me": true,
+    "t": "17:48",
+    "text": "Me sorprende de ti"
+   },
+   {
+    "me": false,
+    "t": "17:49",
+    "text": "Me he hechocun lio de twntas veces"
+   },
+   {
+    "me": false,
+    "t": "17:49",
+    "text": "📷 Foto<br>Animo"
+   },
+   {
+    "me": true,
+    "t": "17:49",
+    "text": "Pero gad"
+   },
+   {
+    "me": true,
+    "t": "17:49",
+    "text": "Gasssss"
+   },
+   {
+    "me": true,
+    "t": "17:49",
+    "text": "Ahahahahahaha"
+   },
+   {
+    "me": false,
+    "t": "17:49",
+    "text": "Vale ya"
+   },
+   {
+    "me": false,
+    "t": "17:49",
+    "text": "Me aacorde"
+   }
+  ]
+ },
+ "agility": {
+  "date": "6 de octubre de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "8:17",
+    "text": "Tu…"
+   },
+   {
+    "me": false,
+    "t": "8:17",
+    "text": "Este perro seria increiblemente bueno en agility"
+   },
+   {
+    "me": false,
+    "t": "8:17",
+    "text": "Nueva actividad extraescolar 100%……. A campeonatos eh"
+   },
+   {
+    "me": false,
+    "t": "8:17",
+    "text": "Te lo juro"
+   },
+   {
+    "me": false,
+    "t": "8:17",
+    "text": "Bon dia ❤️❤️"
+   },
+   {
+    "me": true,
+    "t": "8:22",
+    "text": "Ya seeeee"
+   },
+   {
+    "me": true,
+    "t": "8:22",
+    "text": "Se podria mirar en bcn"
+   }
+  ]
+ },
+ "voley": {
+  "date": "2 de septiembre de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "19:23",
+    "text": "Voley playa"
+   },
+   {
+    "me": false,
+    "t": "19:24",
+    "text": "Tienen 8 niveles, del 0 (el peor) al 7 (el mejor)"
+   },
+   {
+    "me": false,
+    "t": "19:24",
+    "text": "Me han asignado el 6 🧐"
+   },
+   {
+    "me": false,
+    "t": "19:24",
+    "text": "(Spoiler: me habia apuntado al 3)"
+   }
+  ]
  }
 } satisfies Record<string, ChatFrag>;

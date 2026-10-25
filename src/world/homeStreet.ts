@@ -215,7 +215,9 @@ export interface StreetWorld {
   lamps: THREE.Points;
 }
 
-export function buildStreet(sc: THREE.Scene): StreetWorld {
+/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). */
+export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}): StreetWorld {
+  const open = !!opts.gateOpen;
   const m = new Merger();
   const colliders: Box2[] = [];
   const S = STREET;
@@ -274,9 +276,11 @@ export function buildStreet(sc: THREE.Scene): StreetWorld {
   };
   for (const x of [4.3, 0.55, -2.15, -3.95]) pillar(x);
   // Puerta corredera blanca de lamas verticales
-  m.add(G.box, 0xf2f2ee, 2.4, 0.75, S.wallZ - 0.05, 0, 0, 0, 3.3, 1.35, 0.08);
-  for (let i = 0; i < 9; i++) m.add(G.box, 0xdcdcd6, 0.95 + i * 0.36, 0.75, S.wallZ - 0.1, 0, 0, 0, 0.03, 1.25, 0.02);
-  m.add(G.box, 0xdcdcd6, 2.4, 1.0, S.wallZ - 0.1, 0, 0, 0, 3.2, 0.04, 0.02);
+  const gx = open ? -0.9 : 2.4; // abierta, queda recogida detrás del muro de piedra
+  const gz = open ? S.wallZ + 0.3 : S.wallZ - 0.05;
+  m.add(G.box, 0xf2f2ee, gx, 0.75, gz, 0, 0, 0, 3.3, 1.35, 0.08);
+  for (let i = 0; i < 9; i++) m.add(G.box, 0xdcdcd6, gx - 1.45 + i * 0.36, 0.75, gz - 0.05, 0, 0, 0, 0.03, 1.25, 0.02);
+  m.add(G.box, 0xdcdcd6, gx, 1.0, gz - 0.05, 0, 0, 0, 3.2, 0.04, 0.02);
   // Muro de piedra seca con remate blanco
   m.add(G.box, WHITE, -0.8, 0.65, S.wallZ, 0, 0, 0, 2.2, 1.3, 0.3);
   m.add(G.box, WHITE, -0.8, 1.35, S.wallZ, 0, 0, 0, 2.3, 0.12, 0.36);
@@ -285,7 +289,10 @@ export function buildStreet(sc: THREE.Scene): StreetWorld {
   m.add(G.box, 0x1b1b1b, -3.95, 1.25, S.wallZ - 0.36, 0, 0, 0, 0.36, 0.42, 0.12); // buzón negro
   // Puerta peatonal abierta hacia dentro
   m.add(G.box, 0xf2f2ee, S.gate.minX + 0.05, 0.75, S.wallZ + 0.6, 0, 0, 0, 0.06, 1.35, 1.1);
-  colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
+  if (open) {
+    colliders.push({ minX: S.gate.maxX, maxX: 0.85, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
+    colliders.push({ minX: 3.95, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
+  } else colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
   colliders.push({ minX: CORRIDOR.wallX - 0.2, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
 
   const stone = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.15), toon({ map: stoneTexture(), color: 0xffffff }));
@@ -424,6 +431,7 @@ export function buildStreet(sc: THREE.Scene): StreetWorld {
   // Farolas de la calle
   const lampPos: number[] = [];
   for (let x = -69; x <= 41; x += 14) {
+    if (open && Math.abs(x - 2.4) < 3) continue; // la farola de delante de la corredera estorbaría al coche
     m.add(G.cyl, 0x3a3a3a, x, 2.2, -19.8, 0, 0, 0, 0.12, 4.4, 0.12);
     m.add(G.box, 0x3a3a3a, x, 4.4, -20.3, 0, 0, 0, 0.08, 0.08, 1.0);
     m.add(G.box, 0x3a3a3a, x, 4.3, -20.8, 0, 0, 0, 0.4, 0.15, 0.3);

@@ -22,9 +22,9 @@ import { disposeObj } from './level';
 
 type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'leaving' | 'done';
 
-const STREET_Z = 13.5;
-const GATE = new THREE.Vector3(0, 0, 10.2);
-const DOOR = new THREE.Vector3(0, 0, 0.4);
+export const STREET_Z = 13.5;
+export const GATE = new THREE.Vector3(0, 0, 10.2);
+export const DOOR = new THREE.Vector3(0, 0, 0.4);
 const STOVE = new THREE.Vector3(-3.1, 0, 2.3);
 const TABLE = new THREE.Vector3(2.6, 0, 5.2);
 const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
@@ -32,8 +32,8 @@ const PARENT_CAR_X = -4.5;
 const GAS_CAR_X = 24;
 const GARDEN: Box2 = { minX: -5, maxX: 5, minZ: 0.6, maxZ: 9.7 };
 
-const DAD_LOOK: PersonLook = { skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true };
-const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'bun', skirt: true };
+export const DAD_LOOK: PersonLook = { skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true };
+export const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'bun', skirt: true };
 
 /** Un paso del guion de los padres: hacia dónde va cada uno y qué pasa al llegar. */
 interface Beat {
@@ -102,7 +102,10 @@ export class LevelCena implements Level {
     kitchen.position.set(STOVE.x, 2.4, STOVE.z + 0.6);
     sc.add(kitchen);
 
-    this.buildPlace();
+    const place = buildAzulHouse(sc, this.colliders);
+    this.pan = place.pan;
+    this.steam = place.steam;
+    this.beam = place.beam;
     this.fx = new Particles(sc);
 
     this.player = makePerson(MARGAUX_LOOK);
@@ -158,116 +161,6 @@ export class LevelCena implements Level {
   }
 
   // ---------------- Construcción ----------------
-
-  private buildPlace() {
-    const sc = this.scene;
-    const m = new Merger();
-    const WHITE = 0xf6f1e6;
-    const SHUTTER = 0x2f7a4a; // persianas verdes menorquinas
-    // Suelo: terraza de baldosa, calle de asfalto y acera
-    m.add(G.box, 0xd9c7a6, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
-    m.add(G.box, 0x3a3a40, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 5);
-    m.add(G.box, 0xbdb4a4, 0, 0.0, STREET_Z - 2.9, 0, 0, 0, 140, 0.12, 1.2);
-    m.add(G.box, 0x6b6150, 0, -0.08, -30, 0, 0, 0, 140, 0.1, 80); // descampado de marès hacia el mar
-    // Casa: planta baja y primer piso, blanca, con tejado de teja
-    m.add(G.box, WHITE, 0, 2.7, -4, 0, 0, 0, 10, 5.4, 8);
-    m.add(ROOF_GEO, 0xb8623e, 0, 5.4, -4, 0, Math.PI / 2, 0, 8.4, 1.6, 10.6);
-    this.colliders.push({ minX: -5, maxX: 5, minZ: -8, maxZ: 0 });
-    const lit = new Merger();
-    for (const [x, y] of [[-3, 1.5], [3, 1.5], [-3, 4], [0, 4], [3, 4]] as [number, number][]) {
-      lit.add(G.box, y < 3 ? 0xffd9a0 : 0x6a6a80, x, y, 0.02, 0, 0, 0, 1.1, 1.3, 0.05);
-      for (const s of [-1, 1]) m.add(G.box, SHUTTER, x + s * 0.85, y, 0.08, 0, s * 0.35, 0, 0.55, 1.4, 0.06);
-    }
-    lit.add(G.box, 0xffcf8a, 0, 1.1, 0.02, 0, 0, 0, 1.2, 2.2, 0.05); // puerta abierta con luz
-    sc.add(new THREE.Mesh(lit.build(), new THREE.MeshBasicMaterial({ vertexColors: true })));
-    // Muro del jardín con cancela y buganvilla
-    for (const [x0, x1] of [[-5.2, -0.9], [0.9, 5.2]]) {
-      m.add(G.box, WHITE, (x0 + x1) / 2, 0.55, 10.3, 0, 0, 0, x1 - x0, 1.1, 0.3);
-      this.colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5 });
-    }
-    for (const sx of [-5.2, 5.2]) {
-      m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
-      this.colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5 });
-    }
-    m.add(G.box, SHUTTER, 0, 0.5, 10.3, 0, 0, 0, 1.7, 1.0, 0.08); // cancela de madera verde (abierta a ratos)
-    for (let i = 0; i < 14; i++) m.add(G.sphere, i % 3 ? 0xc2307a : 0x2f6b3a, -4.8 + i * 0.35, 1.2 + Math.sin(i) * 0.12, 10.25, 0, 0, 0, 0.55, 0.45, 0.4);
-    // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
-    m.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
-    m.add(G.box, 0x7a6a58, STOVE.x, 0.92, STOVE.z - 1.0, 0, 0, 0, 2.7, 0.06, 0.85);
-    m.add(G.box, 0x2a2a2e, STOVE.x + 0.3, 0.97, STOVE.z - 1.0, 0, 0, 0, 0.8, 0.04, 0.6);
-    m.add(G.cyl, 0xe0662a, STOVE.x + 1.6, 0.35, STOVE.z - 1.1, 0, 0, 0, 0.42, 0.7, 0.42); // butano naranja
-    m.add(G.cyl, 0x444444, STOVE.x + 1.6, 0.76, STOVE.z - 1.1, 0, 0, 0, 0.12, 0.12, 0.12);
-    m.add(G.box, 0x8a6a44, STOVE.x, 1.9, STOVE.z - 1.35, 0, 0, 0, 2.4, 0.06, 0.35);
-    for (let i = 0; i < 4; i++) m.add(G.cyl, [0xd8b04a, 0x2f6b3a, 0xc23030, 0xf4efe2][i], STOVE.x - 0.9 + i * 0.6, 2.08, STOVE.z - 1.35, 0, 0, 0, 0.18, 0.3, 0.18);
-    this.colliders.push({ minX: STOVE.x - 1.4, maxX: STOVE.x + 1.9, minZ: STOVE.z - 1.5, maxZ: STOVE.z - 0.6 });
-    // Sartén y olla sobre el fuego
-    this.pan = new THREE.Group();
-    const pm = new Merger();
-    pm.add(G.cyl, 0x2b2b2b, 0, 0, 0, 0, 0, 0, 0.5, 0.06, 0.5);
-    pm.add(G.box, 0x2b2b2b, 0.42, 0.02, 0, 0, 0, 0, 0.4, 0.04, 0.06);
-    pm.add(G.cyl, 0x9a9aa0, -0.55, 0.15, 0.05, 0, 0, 0, 0.45, 0.32, 0.45); // olla de la pasta
-    this.pan.add(pm.mesh());
-    this.pan.position.set(STOVE.x + 0.2, 1.02, STOVE.z - 1.0);
-    sc.add(this.pan);
-    const steamMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, opacity: 0.25, depthWrite: false });
-    for (let i = 0; i < 4; i++) {
-      const s = new THREE.Sprite(steamMat);
-      s.scale.setScalar(0.4);
-      s.visible = false;
-      sc.add(s);
-      this.steam.push(s);
-    }
-    // Mesa de la terraza con mantel, dos sillas y guirnalda de luces
-    m.add(G.cyl, 0xf4efe2, TABLE.x, 0.76, TABLE.z, 0, 0, 0, 1.3, 0.05, 1.3);
-    m.add(G.cyl, 0x5aa9e6, TABLE.x, 0.79, TABLE.z, 0, 0, 0, 1.0, 0.01, 1.0);
-    m.add(G.cyl, 0x777777, TABLE.x, 0.38, TABLE.z, 0, 0, 0, 0.08, 0.76, 0.08);
-    for (const sx of [-1, 1]) m.add(G.rbox, 0x8a6a44, TABLE.x + sx * 0.95, 0.45, TABLE.z, 0, 0, 0, 0.45, 0.9, 0.45);
-    for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.3, 0.82, TABLE.z, 0, 0, 0, 0.32, 0.03, 0.32); // platos
-    this.colliders.push({ minX: TABLE.x - 1.3, maxX: TABLE.x + 1.3, minZ: TABLE.z - 0.7, maxZ: TABLE.z + 0.7 });
-    for (const [x, z] of [[-4.6, 9.6], [4.6, 9.6], [4.6, 0.8]] as [number, number][]) m.add(G.cyl, 0x8a6a44, x, 1.4, z, 0, 0, 0, 0.1, 2.8, 0.1);
-    const bulbs = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    for (let i = 0; i <= 16; i++) {
-      const k = i / 16;
-      const b = new THREE.Sprite(bulbs);
-      b.position.set(4.6, 2.75 - Math.sin(k * Math.PI) * 0.4, 0.8 + k * 8.8);
-      b.scale.setScalar(0.35);
-      sc.add(b);
-    }
-    // Calle: casas vecinas y farolas
-    for (const sx of [-1, 1]) {
-      m.add(G.box, 0xf1eadc, sx * 11.5, 2.4, -2, 0, 0, 0, 12, 4.8, 12);
-      m.add(ROOF_GEO, 0xb8623e, sx * 11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 12.4);
-      m.add(G.box, 0xf6f1e6, sx * 11.5, 0.75, 10.3, 0, 0, 0, 12, 1.5, 0.3);
-    }
-    for (const x of [-14, 6, 26]) {
-      m.add(G.cyl, 0x333338, x, 2, STREET_Z - 3.2, 0, 0, 0, 0.12, 4, 0.12);
-      const l = new THREE.Sprite(bulbs);
-      l.position.set(x, 4.1, STREET_Z - 3.2);
-      l.scale.setScalar(1.2);
-      sc.add(l);
-    }
-    // Sa Farola al fondo, sobre las rocas, con su haz girando, y el mar
-    const fx = -34;
-    const fz = -46;
-    m.add(G.cyl, 0x8a7a64, fx, 1, fz, 0, 0, 0, 9, 2, 7);
-    m.add(G.cyl, 0xf6f1e6, fx, 6, fz, 0, 0, 0, 1.6, 9, 1.6);
-    m.add(G.cyl, 0x2f2f36, fx, 10.9, fz, 0, 0, 0, 1.9, 0.8, 1.9);
-    sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
-    const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    lamp.position.set(fx, 11, fz);
-    lamp.scale.setScalar(5);
-    sc.add(lamp);
-    this.beam = new THREE.Mesh(
-      new THREE.ConeGeometry(4, 60, 16, 1, true).translate(0, -30, 0).rotateZ(Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
-    );
-    this.beam.position.set(fx, 11, fz);
-    sc.add(this.beam);
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 200).rotateX(-Math.PI / 2), toon({ color: 0x0d1f45, emissive: 0x050a1c, roughness: 0.2 }));
-    sea.position.set(0, -0.4, -150);
-    sea.userData.noCast = true;
-    sc.add(sea);
-  }
 
   // ---------------- Fases ----------------
 
@@ -708,4 +601,119 @@ export class LevelCena implements Level {
     audio.ambience(0);
     this.scene.traverse(disposeObj);
   }
+}
+
+/**
+ * Casa de los padres de Azul junto a Sa Farola: jardín con cancela, cocina de fuera, terraza y la calle.
+ * La usan la cena a escondidas y el día del eclipse.
+ */
+export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
+  const steam: THREE.Sprite[] = [];
+  const m = new Merger();
+  const WHITE = 0xf6f1e6;
+  const SHUTTER = 0x2f7a4a; // persianas verdes menorquinas
+  // Suelo: terraza de baldosa, calle de asfalto y acera
+  m.add(G.box, 0xd9c7a6, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
+  m.add(G.box, 0x3a3a40, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 5);
+  m.add(G.box, 0xbdb4a4, 0, 0.0, STREET_Z - 2.9, 0, 0, 0, 140, 0.12, 1.2);
+  m.add(G.box, 0x6b6150, 0, -0.08, -30, 0, 0, 0, 140, 0.1, 80); // descampado de marès hacia el mar
+  // Casa: planta baja y primer piso, blanca, con tejado de teja
+  m.add(G.box, WHITE, 0, 2.7, -4, 0, 0, 0, 10, 5.4, 8);
+  m.add(ROOF_GEO, 0xb8623e, 0, 5.4, -4, 0, Math.PI / 2, 0, 8.4, 1.6, 10.6);
+  colliders.push({ minX: -5, maxX: 5, minZ: -8, maxZ: 0 });
+  const lit = new Merger();
+  for (const [x, y] of [[-3, 1.5], [3, 1.5], [-3, 4], [0, 4], [3, 4]] as [number, number][]) {
+    lit.add(G.box, y < 3 ? 0xffd9a0 : 0x6a6a80, x, y, 0.02, 0, 0, 0, 1.1, 1.3, 0.05);
+    for (const s of [-1, 1]) m.add(G.box, SHUTTER, x + s * 0.85, y, 0.08, 0, s * 0.35, 0, 0.55, 1.4, 0.06);
+  }
+  lit.add(G.box, 0xffcf8a, 0, 1.1, 0.02, 0, 0, 0, 1.2, 2.2, 0.05); // puerta abierta con luz
+  sc.add(new THREE.Mesh(lit.build(), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  // Muro del jardín con cancela y buganvilla
+  for (const [x0, x1] of [[-5.2, -0.9], [0.9, 5.2]]) {
+    m.add(G.box, WHITE, (x0 + x1) / 2, 0.55, 10.3, 0, 0, 0, x1 - x0, 1.1, 0.3);
+    colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5 });
+  }
+  for (const sx of [-5.2, 5.2]) {
+    m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
+    colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5 });
+  }
+  m.add(G.box, SHUTTER, 0, 0.5, 10.3, 0, 0, 0, 1.7, 1.0, 0.08); // cancela de madera verde (abierta a ratos)
+  for (let i = 0; i < 14; i++) m.add(G.sphere, i % 3 ? 0xc2307a : 0x2f6b3a, -4.8 + i * 0.35, 1.2 + Math.sin(i) * 0.12, 10.25, 0, 0, 0, 0.55, 0.45, 0.4);
+  // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
+  m.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
+  m.add(G.box, 0x7a6a58, STOVE.x, 0.92, STOVE.z - 1.0, 0, 0, 0, 2.7, 0.06, 0.85);
+  m.add(G.box, 0x2a2a2e, STOVE.x + 0.3, 0.97, STOVE.z - 1.0, 0, 0, 0, 0.8, 0.04, 0.6);
+  m.add(G.cyl, 0xe0662a, STOVE.x + 1.6, 0.35, STOVE.z - 1.1, 0, 0, 0, 0.42, 0.7, 0.42); // butano naranja
+  m.add(G.cyl, 0x444444, STOVE.x + 1.6, 0.76, STOVE.z - 1.1, 0, 0, 0, 0.12, 0.12, 0.12);
+  m.add(G.box, 0x8a6a44, STOVE.x, 1.9, STOVE.z - 1.35, 0, 0, 0, 2.4, 0.06, 0.35);
+  for (let i = 0; i < 4; i++) m.add(G.cyl, [0xd8b04a, 0x2f6b3a, 0xc23030, 0xf4efe2][i], STOVE.x - 0.9 + i * 0.6, 2.08, STOVE.z - 1.35, 0, 0, 0, 0.18, 0.3, 0.18);
+  colliders.push({ minX: STOVE.x - 1.4, maxX: STOVE.x + 1.9, minZ: STOVE.z - 1.5, maxZ: STOVE.z - 0.6 });
+  // Sartén y olla sobre el fuego
+  const pan = new THREE.Group();
+  const pm = new Merger();
+  pm.add(G.cyl, 0x2b2b2b, 0, 0, 0, 0, 0, 0, 0.5, 0.06, 0.5);
+  pm.add(G.box, 0x2b2b2b, 0.42, 0.02, 0, 0, 0, 0, 0.4, 0.04, 0.06);
+  pm.add(G.cyl, 0x9a9aa0, -0.55, 0.15, 0.05, 0, 0, 0, 0.45, 0.32, 0.45); // olla de la pasta
+  pan.add(pm.mesh());
+  pan.position.set(STOVE.x + 0.2, 1.02, STOVE.z - 1.0);
+  sc.add(pan);
+  const steamMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, opacity: 0.25, depthWrite: false });
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.Sprite(steamMat);
+    s.scale.setScalar(0.4);
+    s.visible = false;
+    sc.add(s);
+    steam.push(s);
+  }
+  // Mesa de la terraza con mantel, dos sillas y guirnalda de luces
+  m.add(G.cyl, 0xf4efe2, TABLE.x, 0.76, TABLE.z, 0, 0, 0, 1.3, 0.05, 1.3);
+  m.add(G.cyl, 0x5aa9e6, TABLE.x, 0.79, TABLE.z, 0, 0, 0, 1.0, 0.01, 1.0);
+  m.add(G.cyl, 0x777777, TABLE.x, 0.38, TABLE.z, 0, 0, 0, 0.08, 0.76, 0.08);
+  for (const sx of [-1, 1]) m.add(G.rbox, 0x8a6a44, TABLE.x + sx * 0.95, 0.45, TABLE.z, 0, 0, 0, 0.45, 0.9, 0.45);
+  for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.3, 0.82, TABLE.z, 0, 0, 0, 0.32, 0.03, 0.32); // platos
+  colliders.push({ minX: TABLE.x - 1.3, maxX: TABLE.x + 1.3, minZ: TABLE.z - 0.7, maxZ: TABLE.z + 0.7 });
+  for (const [x, z] of [[-4.6, 9.6], [4.6, 9.6], [4.6, 0.8]] as [number, number][]) m.add(G.cyl, 0x8a6a44, x, 1.4, z, 0, 0, 0, 0.1, 2.8, 0.1);
+  const bulbs = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  for (let i = 0; i <= 16; i++) {
+    const k = i / 16;
+    const b = new THREE.Sprite(bulbs);
+    b.position.set(4.6, 2.75 - Math.sin(k * Math.PI) * 0.4, 0.8 + k * 8.8);
+    b.scale.setScalar(0.35);
+    sc.add(b);
+  }
+  // Calle: casas vecinas y farolas
+  for (const sx of [-1, 1]) {
+    m.add(G.box, 0xf1eadc, sx * 11.5, 2.4, -2, 0, 0, 0, 12, 4.8, 12);
+    m.add(ROOF_GEO, 0xb8623e, sx * 11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 12.4);
+    m.add(G.box, 0xf6f1e6, sx * 11.5, 0.75, 10.3, 0, 0, 0, 12, 1.5, 0.3);
+  }
+  for (const x of [-14, 6, 26]) {
+    m.add(G.cyl, 0x333338, x, 2, STREET_Z - 3.2, 0, 0, 0, 0.12, 4, 0.12);
+    const l = new THREE.Sprite(bulbs);
+    l.position.set(x, 4.1, STREET_Z - 3.2);
+    l.scale.setScalar(1.2);
+    sc.add(l);
+  }
+  // Sa Farola al fondo, sobre las rocas, con su haz girando, y el mar
+  const fx = -34;
+  const fz = -46;
+  m.add(G.cyl, 0x8a7a64, fx, 1, fz, 0, 0, 0, 9, 2, 7);
+  m.add(G.cyl, 0xf6f1e6, fx, 6, fz, 0, 0, 0, 1.6, 9, 1.6);
+  m.add(G.cyl, 0x2f2f36, fx, 10.9, fz, 0, 0, 0, 1.9, 0.8, 1.9);
+  sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
+  const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  lamp.position.set(fx, 11, fz);
+  lamp.scale.setScalar(5);
+  sc.add(lamp);
+  const beam = new THREE.Mesh(
+    new THREE.ConeGeometry(4, 60, 16, 1, true).translate(0, -30, 0).rotateZ(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+  );
+  beam.position.set(fx, 11, fz);
+  sc.add(beam);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 200).rotateX(-Math.PI / 2), toon({ color: 0x0d1f45, emissive: 0x050a1c, roughness: 0.2 }));
+  sea.position.set(0, -0.4, -150);
+  sea.userData.noCast = true;
+  sc.add(sea);
+  return { pan, steam, beam, bulbs };
 }

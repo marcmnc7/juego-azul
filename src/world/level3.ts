@@ -502,7 +502,7 @@ export class Level3 implements Level {
     later(() => {
       if (this.phase !== 'intro') return;
       dialogue(CONCERT.airport, () =>
-        phoneChat(CHATS.burger, () => {
+        phoneChat([CHATS.somosLas, CHATS.burger], () => {
           this.busy = false;
           this.phase = 'airport';
           this.updateHud();

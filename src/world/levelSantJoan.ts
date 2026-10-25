@@ -183,7 +183,7 @@ export class LevelSantJoan implements Level {
     later(() => {
       if (this.phase !== 'intro') return;
       const ex = CHATS.dimeExacto;
-      dialogue(SANTJOAN.night, () =>
+      phoneChat(CHATS.mar, () => dialogue(SANTJOAN.night, () =>
         phoneChat(CHATS.laNoche, () =>
           dialogue(SANTJOAN.morning, () =>
             phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
@@ -198,7 +198,7 @@ export class LevelSantJoan implements Level {
             ),
           ),
         ),
-      );
+      ));
     }, 900);
   }
 
@@ -831,7 +831,7 @@ export class LevelSantJoan implements Level {
     this.updateHud();
     later(() => {
       if (this.phase !== 'ending') return;
-      dialogue(SANTJOAN.after, () => phoneChat(CHATS.deslumbras, () => {
+      dialogue(SANTJOAN.after, () => phoneChat([CHATS.deslumbras, CHATS.miManchi], () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';

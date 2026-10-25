@@ -6,12 +6,12 @@ import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
 import { FERRERIES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
-import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G } from '../entities/models';
+import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { hud, dialogue, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
-import { CHATS } from '../data/chats';
+import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Nivel 1 · Jaleo d'ases (Ferreries), con todos los textos en menorquín.
@@ -29,6 +29,11 @@ export interface JaleoVariant {
   bumped: string;
   statHits: string;
   horses?: boolean;
+  /** Chats reales que salen después de la intro y al final (por defecto, los de aquella tarde). */
+  introChats?: ChatFrag[];
+  endChats?: ChatFrag[];
+  /** Capítulo del año siguiente: Azul ya no va con el mono negro. */
+  outfit?: Partial<PersonLook>;
 }
 
 export const FERRERIES_VARIANT: JaleoVariant = {
@@ -167,7 +172,7 @@ export class Level1 implements Level {
 
     // Esa noche, Margaux y Carme van con un mono negro de una pieza, ajustado
     const MONO = { shirt: 0x141418, pants: 0x141418, shoes: 0x111111, skirt: false, jumpsuit: true };
-    this.player = makePerson({ ...MARGAUX_LOOK, ...MONO });
+    this.player = makePerson({ ...MARGAUX_LOOK, ...(V.outfit ?? MONO) });
     this.player.root.position.copy(this.world.spawn);
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
@@ -184,7 +189,7 @@ export class Level1 implements Level {
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
     this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : MARC_LOOK);
-    if (V.horses) this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
+    this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
     this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
     this.carme.root.position.copy(this.world.marcPos);
@@ -304,11 +309,12 @@ export class Level1 implements Level {
     this.busy = true;
     later(() => {
       if (this.stage !== 'intro') return;
-      dialogue(this.T.intro, () => {
+      const go = () => {
         this.busy = false;
         this.stage = 'talkTofol';
         this.updateHud();
-      });
+      };
+      dialogue(this.T.intro, () => (V.introChats ? phoneChat(V.introChats, go) : go()));
     }, 2300);
     audio.startMusic();
     audio.ambience(0.1);
@@ -750,7 +756,7 @@ export class Level1 implements Level {
         audio.ambience(0);
         const stars = 1 + (this.hits <= 2 ? 1 : 0) + (this.perfects >= 2 ? 1 : 0);
         // Esa misma tarde, a las 19:46, le escribe ella
-        phoneChat(CHATS.ferreriesTarde, () =>
+        phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () =>
           this.onComplete({
             stars,
             stats: [

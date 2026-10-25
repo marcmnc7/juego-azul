@@ -941,7 +941,7 @@ export class Level2 implements Level {
     later(
       () =>
         dialogue(ROAD.arriveLogrono, () =>
-          phoneChat(CHATS.vuelta, () => dialogue(ROAD.threeDays, () => phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => this.finish()))),
+          phoneChat(CHATS.vuelta, () => dialogue(ROAD.threeDays, () => phoneChat([CHATS.porQueGas, CHATS.tuNombre, CHATS.zamburinasCumple, CHATS.sanVicente], () => this.finish()))),
         ),
       1500,
     );

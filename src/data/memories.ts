@@ -31,15 +31,16 @@ export const MEMORIES: Memory[] = [
   { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Plaça. Más o menos.', sticker: true },
   { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
   { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },
+  { level: 2, chat: CHATS.joyPiscina.msgs, caption: 'Joy, 3 de abril de 2026. De una.' },
   { level: 3, src: ruta, caption: 'El planning. «A coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
   { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },
   { level: 4, src: vueloLpa, caption: '«VOY TARDEEEE?!» «tu vas pronto»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },
-  { level: 5, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
-  { level: 5, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
-  { level: 5, src: santJoan, caption: '«Muy dificil si…. Deslumbras»' },
+  { level: 6, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
+  { level: 6, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
+  { level: 6, src: santJoan, caption: '«Muy dificil si…. Deslumbras»' },
 ];
 
 export const memoriesFor = (level: number) => MEMORIES.filter((m) => m.level === level);

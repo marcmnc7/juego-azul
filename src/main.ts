@@ -10,6 +10,10 @@ import { Level3 } from './world/level3';
 import { Level4 } from './world/level4';
 import { LevelSantJoan } from './world/levelSantJoan';
 import { LevelCena } from './world/levelCena';
+import { LevelMoto } from './world/levelMoto';
+import { LevelEclipse } from './world/levelEclipse';
+import { LevelAniversario } from './world/levelAniversario';
+import { MINI_GAMES } from './ui/minis';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -17,7 +21,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, epilogue } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -230,8 +234,9 @@ function goMap() {
   mapScreen(data, mapOpts);
 }
 
-// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, Sant Joan y la cena a escondidas
-const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelSantJoan, LevelCena];
+// En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, la moto por la Costa Brava,
+// Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
+const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
 function startLevel(n: number) {
   clearScreens();
@@ -247,7 +252,8 @@ function startLevel(n: number) {
     closeDebug?.();
     closeDebug = null;
     const g = giftForLevel(n);
-    if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
+    const first = !data.levelsDone.includes(n);
+    if (first) data.levelsDone.push(n);
     if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
     save(data);
     const after = () => {
@@ -257,11 +263,21 @@ function startLevel(n: number) {
           level.dispose();
           level = null;
         }
-        epilogue(() => crossword(() => finalLetter(goMap), goMap));
+        crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
+    // La primera vez, los minijuegos de este capítulo salen solos antes de seguir
+    const minis = (next: () => void) => {
+      const list = first ? MINI_GAMES.filter((m) => m.after === n) : [];
+      if (list.length && level) {
+        level.dispose();
+        level = null;
+      }
+      const step = (i: number) => (i < list.length ? list[i].run(() => step(i + 1)) : next());
+      step(0);
+    };
     // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
-    const photos = () => memories(n, after);
+    const photos = () => memories(n, () => minis(after));
     if (g) showGift(g, photos, result);
     else photos();
   };
