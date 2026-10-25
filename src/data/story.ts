@@ -186,6 +186,7 @@ export const NIGHT = {
 // Capítulo 7: la cena a escondidas en casa de los padres de Azul, 13 de julio de 2026.
 // Los chats van tal cual en src/data/chats.ts (cenaMenu, cenaEspera, cenaPronto, cenaVen, teQuiero, jazzbah).
 export const CENA = {
+  radarIntro: [{ who: 'Narrador', text: '9 de julio. Gas vuela a Menorca y tú le sigues en el radar, de Barcelona a Mahón.' }] as Line[],
   intro: [{ who: 'Narrador', text: 'Sa Farola, 13 de julio de 2026. Tus padres salen a cenar. Gas espera en un lugar estratégico, con la moto.' }] as Line[],
   /** Lo que le vas escribiendo mientras tus padres no acaban de irse (mensajes tuyos de esa noche). */
   waitEvents: ['Aun estan', 'Sale mi padre ahora', 'Que hace mi padre top', 'Tio'],
@@ -310,6 +311,7 @@ export const MOTO = {
 
 // Capítulo 8: el día del eclipse, 12 de agosto de 2026. Chats: eclipseReady, eclipseCoche, eclipseFin, luna.
 export const ECLIPSE = {
+  motoIntro: [{ who: 'Narrador', text: '2 de agosto, en el parking del aeropuerto. Gas no tiene ni idea de dónde dejó la moto.' }] as Line[],
   kayakIntro: [
     { who: 'Narrador', text: 'El plan de Gas: ver el eclipse desde el mar, en kayak, de Sa Farola hacia Sa Caleta.' },
   ] as Line[],
@@ -320,8 +322,9 @@ export const ECLIPSE = {
     { who: 'Narrador', text: 'Y menos mal. Así empieza el día de verdad.' },
   ] as Line[],
   arriveAzul: [
-    { who: 'Narrador', text: 'Gas viene a buscarte a casa. Hoy conoce a tus padres.' },
+    { who: 'Narrador', text: 'Vais juntos en su coche a casa de tus padres. Hoy los conoce.' },
   ] as Line[],
+  afterMoto: [{ who: 'Narrador', text: 'Diez días después, el 12 de agosto.' }] as Line[],
   parentsHint: 'Saluda a tus padres con Gas',
   meetAzulParents: [
     { who: 'Gas', text: 'Hola, encantado. Soy Marc.' },
@@ -335,7 +338,7 @@ export const ECLIPSE = {
   parkBump: 'Uy, el muro 😬',
   parkOk: 'Aparcado. A la primera (casi) 🅿️',
   meetMarcParents: [
-    { who: 'Narrador', text: 'Sus padres salen a la puerta.' },
+    { who: 'Narrador', text: 'Entráis los dos. Sus padres están en la cocina.' },
     { who: 'Margaux', text: 'Hola, soy Margaux.' },
     { who: 'Narrador', text: 'Ahora sí: los cuatro padres, en un solo día.' },
   ] as Line[],
@@ -346,6 +349,8 @@ export const ECLIPSE = {
   afterCards: [{ who: 'Narrador', text: 'Te ha ganado ella. Como siempre. Y empieza el eclipse.' }] as Line[],
   glassesHint: 'Ponte las gafas de eclipse 🕶️',
   noGlasses: '¡Sin gafas no! Ponte las gafas 🕶️',
+  photo: '📸 Los dos, con las gafas puestas, en el momento exacto',
+  kitchenHint: 'Entra con Gas: sus padres están en la cocina',
   totality: '🌘 Ya está',
   end: [{ who: 'Narrador', text: 'La luna tapa el sol. Se hace de noche un momento.' }] as Line[],
   stats: (rounds: number, parkTries: number) => [['Partidas a La Princesa', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
@@ -359,14 +364,16 @@ export const ANIVERSARIO = {
     { who: 'Narrador', text: 'Aquesta vegada ja el coneixes. Sa setmana ha anat així:' },
   ] as Line[],
   tofolQuest: [
-    { who: 'Tòfol', text: 'Tu altra vegada! Ja saps com va: tres pomades i tres carícies.' },
-    { who: 'Tòfol', text: 'I alerta amb es ases, que no han canviat gens.' },
+    { who: 'Tòfol', text: 'Tu altra vegada! I aquest any acompanyada.' },
+    { who: 'Tòfol', text: 'Ja sabeu com va: tres pomades i tres carícies, però ara a dues mans.' },
   ] as Line[],
   tofolDone: [
-    { who: 'Tòfol', text: 'Ja ets més de Ferreries que jo.' },
-    { who: 'Tòfol', text: 'Vés an es bar. N’hi ha un que et cerca i no s’atura quiet.' },
+    { who: 'Tòfol', text: 'Ja sou més de Ferreries que jo.' },
+    { who: 'Tòfol', text: 'I ara, que és Sant Bartomeu, un petó.' },
   ] as Line[],
-  tofolAgain: [{ who: 'Tòfol', text: 'Encara aquí? Que et cerquen!' }] as Line[],
+  tofolAgain: [{ who: 'Tòfol', text: 'Encara aquí? Vinga, que es jaleo no espera!' }] as Line[],
+  september: [{ who: 'Narrador', text: 'Setembre. Gas s’apunta a vòlei platja.' }] as Line[],
+  october: [{ who: 'Narrador', text: 'Octubre. Joy, a punt per a campionats.' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ell és per aquí. Segueix sa ubicació!' }] as Line[],
   gasMoves: ['📍 Ubicació nova', '📍 I una altra', '📍 «Tinc bocata»'],
   marcMeet: [
@@ -410,6 +417,19 @@ export const MINIS = {
     hint: 'Busca la moto de Gas con la linterna',
     found: '¡Ahí está! 🏍️',
     nope: 'Esa no es…',
+  },
+  tricks: {
+    title: 'Adiestrar a Joy',
+    hint: 'Gas da la orden: toca el gesto correcto antes de que Joy se despiste',
+    commands: [
+      { say: 'Sienta', label: 'Sienta', icon: '🪑' },
+      { say: 'Tumba', label: 'Tumba', icon: '⬇️' },
+      { say: 'Pata', label: 'Pata', icon: '🐾' },
+      { say: 'Gira', label: 'Gira', icon: '🔄' },
+    ],
+    wrong: 'Joy te mira sin entender nada',
+    slow: 'Joy se ha ido a oler algo',
+    done: (ok: number) => `${ok} trucos. Ahora, el circuito 🏁`,
   },
   agility: {
     title: 'Joy, campeona de agility',

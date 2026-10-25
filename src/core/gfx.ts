@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
+import { Water } from 'three/examples/jsm/objects/Water.js';
 
 // Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
 // sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
@@ -49,14 +51,16 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
   m.onBeforeCompile = (sh) => {
     if (!quality.grain) return;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;')
+      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         #ifdef USE_INSTANCING
           vGrainPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+          vGrainN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
         #else
           vGrainPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+          vGrainN = normalize(mat3(modelMatrix) * objectNormal);
         #endif`,
       );
     sh.fragmentShader = sh.fragmentShader
@@ -64,6 +68,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         '#include <common>',
         `#include <common>
         varying highp vec3 vGrainPos;
+        varying vec3 vGrainN;
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -75,7 +80,14 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         '#include <color_fragment>',
         `#include <color_fragment>
         float gN = gNoise(vGrainPos * 0.6) * 0.6 + gNoise(vGrainPos * 4.0) * 0.3 + gNoise(vGrainPos * 19.0) * 0.1;
-        diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};`,
+        diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
+        // Suciedad y humedad al pie de las paredes, y desgaste en las aristas altas: lo que hace que
+        // un muro encalado parezca de verdad y no una caja
+        float gWall = 1.0 - abs(vGrainN.y);
+        float gFoot = (1.0 - smoothstep(0.0, 0.75, vGrainPos.y)) * step(-0.3, vGrainPos.y) * gWall;
+        diffuseColor.rgb *= 1.0 - gFoot * (0.16 + gN * 0.12);
+        float gStreak = gWall * smoothstep(0.55, 0.9, gNoise(vec3(vGrainPos.x * 3.0 + vGrainPos.z * 3.0, vGrainPos.y * 0.25, 0.0)));
+        diffuseColor.rgb *= 1.0 - gStreak * 0.06;`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -259,6 +271,8 @@ export interface SkyOptions {
   sun?: { color: number; dir: THREE.Vector3; size?: number };
   clouds?: { count: number; tint: number };
   stars?: number;
+  /** Cielo físico (dispersión atmosférica) en lugar del degradado, con el sol en esa dirección. */
+  physical?: { sunDir: THREE.Vector3; turbidity?: number; rayleigh?: number };
 }
 
 /** Cúpula de cielo con degradado, sol con halo, nubes y estrellas. Sigue a la cámara. */
@@ -280,6 +294,25 @@ export class Sky {
     dome.renderOrder = -10;
     this.group.add(dome);
     this.setColors(opts.top, opts.mid, opts.bottom);
+    if (opts.physical) {
+      const ph = new SkyMesh();
+      ph.scale.setScalar(410);
+      const u = ph.material.uniforms;
+      u.turbidity.value = opts.physical.turbidity ?? 3.2;
+      u.rayleigh.value = opts.physical.rayleigh ?? 1.4;
+      u.mieCoefficient.value = 0.004;
+      u.mieDirectionalG.value = 0.82;
+      u.sunPosition.value.copy(opts.physical.sunDir).normalize();
+      // El cielo de three.js está pensado para una exposición de 0.5: lo bajamos aquí para que no queme
+      // ni el cielo ni la luz de entorno que se saca de él
+      const sm = ph.material as THREE.ShaderMaterial;
+      sm.fragmentShader = sm.fragmentShader.replace('gl_FragColor = vec4( retColor, 1.0 );', 'gl_FragColor = vec4( retColor * 0.42, 1.0 );');
+      ph.material.depthWrite = false;
+      (ph.material as THREE.ShaderMaterial).fog = false;
+      ph.renderOrder = -10;
+      dome.visible = false;
+      this.group.add(ph);
+    }
 
     if (opts.sun) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: opts.sun.color, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -458,4 +491,81 @@ export function vibrate(ms: number | number[]) {
   } catch {
     /* sin vibración */
   }
+}
+
+/** Mapa de normales del oleaje, dibujado en un canvas (suma de ondas) para no depender de imágenes. */
+let waveNormals: THREE.Texture | null = null;
+function waveNormalTexture() {
+  if (waveNormals) return waveNormals;
+  const N = 256;
+  const h = new Float32Array(N * N);
+  const waves: [number, number, number, number][] = [];
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const k = 1 + Math.floor(Math.random() * (2 + i));
+    waves.push([Math.round(Math.cos(a) * k), Math.round(Math.sin(a) * k), 1 / (1 + i * 0.6), Math.random() * 6.28]);
+  }
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      let v = 0;
+      for (const [kx, ky, amp, ph] of waves) v += amp * Math.sin(((kx * x + ky * y) / N) * Math.PI * 2 + ph);
+      h[y * N + x] = v;
+    }
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = h[y * N + ((x + 1) % N)] - h[y * N + ((x + N - 1) % N)];
+      const dy = h[((y + 1) % N) * N + x] - h[((y + N - 1) % N) * N + x];
+      const n = new THREE.Vector3(-dx * 2.2, -dy * 2.2, 1).normalize();
+      const i = (y * N + x) * 4;
+      data[i] = (n.x * 0.5 + 0.5) * 255;
+      data[i + 1] = (n.y * 0.5 + 0.5) * 255;
+      data[i + 2] = (n.z * 0.5 + 0.5) * 255;
+      data[i + 3] = 255;
+    }
+  const t = new THREE.DataTexture(data, N, N);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.needsUpdate = true;
+  waveNormals = t;
+  return t;
+}
+
+/**
+ * Mar con reflejos del cielo, oleaje animado y brillo del sol (Water de three.js). En móviles que
+ * bajan de calidad se queda en un plano PBR brillante. El plano se tumba girando la malla, así que
+ * quien lo use solo debe tocar su posición.
+ */
+export function makeSea(size: [number, number], color: number, sunDir: THREE.Vector3, opts: { night?: boolean; emissive?: number } = {}) {
+  const geo = new THREE.PlaneGeometry(size[0], size[1]);
+  let mesh: THREE.Mesh;
+  if (quality.kind === 'standard' && quality.post) {
+    const w = new Water(geo, {
+      textureWidth: 256,
+      textureHeight: 256,
+      waterNormals: waveNormalTexture(),
+      sunDirection: sunDir.clone().normalize(),
+      sunColor: opts.night ? 0x445577 : 0xfff2d8,
+      waterColor: color,
+      distortionScale: opts.night ? 0.8 : 1.3,
+      fog: true,
+    });
+    const u = (w.material as THREE.ShaderMaterial).uniforms;
+    u.size.value = 6;
+    let last = performance.now();
+    w.onBeforeRender = ((orig) =>
+      function (this: THREE.Mesh, ...args: unknown[]) {
+        const now = performance.now();
+        u.time.value += Math.min(0.1, (now - last) / 1000) * 0.6;
+        last = now;
+        (orig as (...a: unknown[]) => void).apply(this, args);
+      })(w.onBeforeRender);
+    mesh = w;
+  } else {
+    mesh = new THREE.Mesh(geo, toon({ color, emissive: opts.emissive ?? 0x06283a, roughness: 0.12, metalness: 0.12 }));
+  }
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.userData.noCast = true;
+  return mesh;
 }

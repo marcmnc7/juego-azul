@@ -74,7 +74,7 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length;
   const a = el('button', 'link-btn', `📷 Nuestro álbum (${seen}/${MEMORIES.length})`);
   a.onclick = () => album(save, opts.test, back);
-  const games = MINI_GAMES.filter((m) => opts.test || done.has(m.after));
+  const games = MINI_GAMES.filter((m) => opts.test || done.has(m.chapter));
   const mg = el('button', 'link-btn', `🎮 Minijuegos (${games.length}/${MINI_GAMES.length})`);
   mg.onclick = () => miniList(save, opts.test, back);
   const links = el('div', 'link-row');
@@ -353,9 +353,9 @@ export function miniList(save: SaveData, test: boolean, onClose: () => void) {
   const done = new Set(save.levelsDone);
   const list = el('div', 'levels');
   MINI_GAMES.forEach((m) => {
-    const open = test || done.has(m.after);
+    const open = test || done.has(m.chapter);
     const card = el('button', 'level-card' + (open ? '' : ' locked'));
-    card.append(el('div', 'emoji', m.icon), el('div', 'name', open ? m.title : '???'), el('div', 'place', `Después del capítulo ${m.after}`), el('div', 'state', open ? '▶ Jugar' : '🔒 Bloqueado'));
+    card.append(el('div', 'emoji', m.icon), el('div', 'name', open ? m.title : '???'), el('div', 'place', `Capítulo ${m.chapter}`), el('div', 'state', open ? '▶ Jugar' : '🔒 Bloqueado'));
     if (open) card.onclick = () => m.run(back);
     list.append(card);
   });

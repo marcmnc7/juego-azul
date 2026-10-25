@@ -13,7 +13,6 @@ import { LevelCena } from './world/levelCena';
 import { LevelMoto } from './world/levelMoto';
 import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
-import { MINI_GAMES } from './ui/minis';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -91,12 +90,13 @@ function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const mat = mode === 'basic' ? new THREE.MeshBasicMaterial({ vertexColors: true }) : mode === 'uv' ? toon({ color: 0x30c050 }) : toon({ vertexColors: true });
   const box = new THREE.Mesh(geo, mat);
+  box.position.y = 3; // por encima de la suciedad del pie de las paredes
   box.castShadow = box.receiveShadow = true;
   sc.add(box);
   applyEnvironment(sc);
   const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
-  cam.position.set(0, 0, 5);
-  cam.lookAt(0, 0, 0);
+  cam.position.set(0, 3, 5);
+  cam.lookAt(0, 3, 0);
   const rt = new THREE.WebGLRenderTarget(16, 16);
   const px = new Uint8Array(4);
   try {
@@ -252,8 +252,7 @@ function startLevel(n: number) {
     closeDebug?.();
     closeDebug = null;
     const g = giftForLevel(n);
-    const first = !data.levelsDone.includes(n);
-    if (first) data.levelsDone.push(n);
+    if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
     if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
     save(data);
     const after = () => {
@@ -266,18 +265,8 @@ function startLevel(n: number) {
         crossword(() => finalLetter(goMap), goMap);
       } else goMap();
     };
-    // La primera vez, los minijuegos de este capítulo salen solos antes de seguir
-    const minis = (next: () => void) => {
-      const list = first ? MINI_GAMES.filter((m) => m.after === n) : [];
-      if (list.length && level) {
-        level.dispose();
-        level = null;
-      }
-      const step = (i: number) => (i < list.length ? list[i].run(() => step(i + 1)) : next());
-      step(0);
-    };
     // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
-    const photos = () => memories(n, () => minis(after));
+    const photos = () => memories(n, after);
     if (g) showGift(g, photos, result);
     else photos();
   };

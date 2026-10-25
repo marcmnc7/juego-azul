@@ -34,6 +34,10 @@ export interface JaleoVariant {
   endChats?: ChatFrag[];
   /** Capítulo del año siguiente: Azul ya no va con el mono negro. */
   outfit?: Partial<PersonLook>;
+  /** Un año después: primero se busca a Gas por sus ubicaciones y luego se hace el jaleo con él al lado. */
+  findFirst?: { found: ChatFrag[] };
+  /** Algo que pasa al final del capítulo, antes de cerrarlo (p. ej. un minijuego). */
+  afterEnd?: (next: () => void) => void;
 }
 
 export const FERRERIES_VARIANT: JaleoVariant = {
@@ -153,6 +157,8 @@ export class Level1 implements Level {
   /** Sant Joan: Gas se cambia de sitio cuando te acercas (no encuentra la ubicación). */
   private gasMovesLeft = 0;
   private marcBox: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
+  /** Gas va al lado de Azul (capítulo 9, después de encontrarle). */
+  private together = false;
 
   // temporales reutilizables
   private v1 = new THREE.Vector3();
@@ -311,7 +317,7 @@ export class Level1 implements Level {
       if (this.stage !== 'intro') return;
       const go = () => {
         this.busy = false;
-        this.stage = 'talkTofol';
+        this.stage = V.findFirst ? 'findMarc' : 'talkTofol';
         this.updateHud();
       };
       dialogue(this.T.intro, () => (V.introChats ? phoneChat(V.introChats, go) : go()));
@@ -664,6 +670,19 @@ export class Level1 implements Level {
         animatePerson(this.carme, dt, this.stage === 'ending' ? 'dance' : 'idle', 0, this.t * 7);
       }
     } else animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
+    if (this.together && !this.marcTo && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol')) {
+      // Gas la sigue a un paso
+      const mp = this.marc.root.position;
+      const dx = pp.x - mp.x, dz = pp.z - mp.z, d = Math.hypot(dx, dz);
+      if (d > 1.5) {
+        const step = Math.min(d - 1.5, dt * 5.2);
+        mp.x += (dx / d) * step;
+        mp.z += (dz / d) * step;
+      }
+      this.marc.root.rotation.y = Math.atan2(dx, dz);
+      animatePerson(this.marc, dt, d > 1.55 ? 'walk' : 'idle', d > 1.55 ? 0.9 : 0);
+      if (this.marcBox) Object.assign(this.marcBox, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
+    }
     if (this.stage === 'kissing') this.updateKiss(dt);
     if (this.stage === 'barDance') {
       this.barT += dt;
@@ -718,7 +737,11 @@ export class Level1 implements Level {
       } else if (dT < 3.5) {
         label = 'Xerrar';
         this.pendingAction = () => this.talkTofol();
-      } else if (dM < 3.5 && this.stage === 'findMarc') {
+      } else if (this.V.findFirst && this.stage === 'findMarc' && this.gasMovesLeft <= 0 && dM < 3.5) {
+        label = '📍 Aquí!';
+        pulse = true;
+        this.pendingAction = () => this.foundGas();
+      } else if (dM < 3.5 && this.stage === 'findMarc' && !this.V.findFirst) {
         label = this.V.hud.give;
         pulse = true;
         this.pendingAction = () => this.startBarDance();
@@ -756,7 +779,8 @@ export class Level1 implements Level {
         audio.ambience(0);
         const stars = 1 + (this.hits <= 2 ? 1 : 0) + (this.perfects >= 2 ? 1 : 0);
         // Esa misma tarde, a las 19:46, le escribe ella
-        phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () =>
+        const finish = (f: () => void) => phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () => (this.V.afterEnd ? this.V.afterEnd(f) : f()));
+        finish(() =>
           this.onComplete({
             stars,
             stats: [
@@ -815,7 +839,8 @@ export class Level1 implements Level {
     };
     if (this.stage === 'talkTofol') dialogue(this.T.tofolQuest, done('collect'));
     else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
-    else if (this.stage === 'returnTofol') dialogue(this.T.tofolDone, done('findMarc'));
+    else if (this.stage === 'returnTofol')
+      dialogue(this.T.tofolDone, this.V.findFirst ? () => { this.busy = false; this.faceToFace(); this.stage = 'kiss'; this.updateHud(); } : done('findMarc'));
     else dialogue(this.T.tofolAgain, done());
   }
 
@@ -844,19 +869,47 @@ export class Level1 implements Level {
     this.updateHud();
     dialogue([...this.T.marcMeet, ...this.T.smallTalk], () => {
       this.busy = false;
-      // Se acercan: cara a cara, a un palmo, y la cámara de lado
-      const dir = this.v1.subVectors(pp, mp).setY(0).normalize();
-      pp.copy(mp).addScaledVector(dir, 0.95);
-      this.walker.knock.set(0, 0, 0);
-      this.walker.facing = Math.atan2(-dir.x, -dir.z);
-      this.walker.yaw = this.walker.facing - Math.PI / 2;
-      this.marc.root.rotation.y = Math.atan2(dir.x, dir.z);
+      this.faceToFace();
       // Carme se aparta discretamente al otro lado para no tapar la escena
+      const dir = this.v1.subVectors(pp, mp).setY(0).normalize();
       const mid = this.v2.copy(pp).lerp(mp, 0.5);
       this.carmeTo = new THREE.Vector3(mid.x - dir.z * 2.2 + dir.x * 0.6, 0, mid.z + dir.x * 2.2 + dir.z * 0.6);
       this.stage = 'kiss';
       this.updateHud();
     });
+  }
+
+  /** Se acercan: cara a cara, a un palmo, y la cámara de lado. */
+  private faceToFace() {
+    const pp = this.player.root.position;
+    const mp = this.marc.root.position;
+    const dir = this.v1.subVectors(pp, mp).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0);
+    dir.normalize();
+    pp.copy(mp).addScaledVector(dir, 0.95);
+    this.walker.knock.set(0, 0, 0);
+    this.walker.facing = Math.atan2(-dir.x, -dir.z);
+    this.walker.yaw = this.walker.facing - Math.PI / 2;
+    this.marc.root.rotation.y = Math.atan2(dir.x, dir.z);
+  }
+
+  /** Capítulo 9: por fin le encuentras; a partir de aquí va contigo. */
+  private foundGas() {
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    const pp = this.player.root.position;
+    const mp = this.marc.root.position;
+    this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
+    dialogue([...this.T.marcMeet, ...this.T.smallTalk], () =>
+      phoneChat(this.V.findFirst!.found, () => {
+        this.together = true;
+        this.busy = false;
+        this.stage = 'talkTofol';
+        this.updateHud();
+      }),
+    );
   }
 
   /** Plano de perfil de la pareja, que se acerca poco a poco durante el beso. */

@@ -4,7 +4,7 @@ import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
 import { G, Merger, makeCar, makeScallop, vertexMat, CarRig } from '../entities/models';
 import { spring } from '../core/walker';
-import { Sky, Sun, toon, vibrate, addOutline, applyShadows } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, addOutline, applyShadows, makeSea } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
 import { CHATS } from '../data/chats';
@@ -270,7 +270,7 @@ export class Level2 implements Level {
     this.ground.userData.noCast = this.road.userData.noCast = true;
     sc.add(this.road);
 
-    this.sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 400).rotateX(-Math.PI / 2), toon({ color: 0x2f7fb5, roughness: 0.18, metalness: 0.05 }));
+    this.sea = makeSea([300, 400], 0x175f86, new THREE.Vector3(0.3, 1, 0.4));
     this.sea.position.set(170, 0.05, 0);
     this.sea.visible = false;
     sc.add(this.sea);

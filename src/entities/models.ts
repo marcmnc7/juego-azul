@@ -66,6 +66,33 @@ export class Merger {
   }
 }
 
+/** Roca irregular: icosaedro deformado con ruido, de caras planas como la piedra partida. */
+function rockGeo(seed: number, rough = 0.35, detail = 2) {
+  const g = new THREE.IcosahedronGeometry(0.5, detail);
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  const r = (x: number) => {
+    const s = Math.sin(x * 12.9898 + seed * 78.233) * 43758.5453;
+    return s - Math.floor(s);
+  };
+  // Ruido coherente: la misma posición (vértices compartidos) siempre se desplaza igual
+  const key = new Map<string, number>();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const k = `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
+    let d = key.get(k);
+    if (d === undefined) {
+      d = 1 + (r(v.x * 3.1 + v.y * 5.7 + v.z * 7.3) - 0.5) * rough + Math.sin(v.x * 7 + seed) * Math.sin(v.z * 6) * rough * 0.4;
+      key.set(k, d);
+    }
+    v.multiplyScalar(d);
+    if (v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.4; // base algo plana
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 export const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
   rbox: roundedBox(),
@@ -76,6 +103,9 @@ export const G = {
   capsule: new THREE.CapsuleGeometry(0.5, 1, 4, 10),
   dome: new THREE.SphereGeometry(0.5, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
   smile: new THREE.TorusGeometry(0.5, 0.18, 4, 10, Math.PI),
+  rock: rockGeo(1),
+  rock2: rockGeo(2, 0.45),
+  bush: rockGeo(3, 0.3, 1),
 };
 
 // Versión de pocos polígonos para la multitud (cientos de personas)
@@ -142,7 +172,7 @@ export interface PersonLook {
   eyes?: number;
   shoes?: number;
   beard?: boolean;
-  /** Mono de una pieza ajustado: mangas y perneras largas del mismo color, cintura marcada. */
+  /** Mono de una pieza ajustado y cintura marcada; antebrazos, manos y espinillas al aire. */
   jumpsuit?: boolean;
 }
 
@@ -273,7 +303,8 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
     hip.add(new Merger().add(G.capsule, skinLeg, 0, -0.13, 0, 0, 0, 0, 0.155 * w, 0.135, 0.155 * w).mesh());
     const knee = new THREE.Group();
     knee.position.y = -0.26;
-    knee.add(new Merger().add(G.capsule, skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14 * w, 0.13, 0.14 * w).mesh());
+    // El mono acaba bajo la rodilla: la espinilla va al aire
+    knee.add(new Merger().add(G.capsule, look.jumpsuit ? look.skin : skinLeg, 0, -0.12, 0, 0, 0, 0, 0.14 * w, 0.13, 0.14 * w).mesh());
     const foot = new THREE.Group();
     foot.position.y = -0.25;
     foot.add(new Merger().add(G.rbox, shoes, 0, -0.07, 0.04, 0, 0, 0, 0.17, 0.12, 0.28).mesh());
@@ -289,7 +320,7 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
     elbow.position.y = -0.24;
     elbow.add(
       new Merger()
-        .add(G.capsule, look.jumpsuit ? look.shirt : look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
+        .add(G.capsule, look.skin, 0, -0.1, 0, 0, 0, 0, 0.1, 0.11, 0.1)
         .add(G.sphere, look.skin, 0, -0.23, 0.01, 0, 0, 0, 0.13, 0.14, 0.13)
         .mesh(),
     );

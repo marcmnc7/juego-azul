@@ -331,7 +331,8 @@ export function princesaGame(onWin: (rounds: number) => void) {
 
 export interface MiniGame {
   id: string;
-  after: number;
+  /** Capítulo en el que va metido. */
+  chapter: number;
   icon: string;
   title: string;
   run: (onDone: () => void) => void;
@@ -413,7 +414,7 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, si
 }
 
 /** 9 de julio: seguir con el dedo el avión de Gas en el radar, de Barcelona a Mahón. */
-function radar(onDone: () => void) {
+export function radar(onDone: () => void) {
   const T = MINIS.radar;
   canvasScreen(T.title, T.hint, (W, H, finish) => {
     const from = { x: 140, y: 120 };
@@ -509,7 +510,7 @@ function radar(onDone: () => void) {
 }
 
 /** 2 de agosto: Gas no sabe dónde ha dejado la moto en el parking. Linterna y a buscar. */
-function lostMoto(onDone: () => void) {
+export function lostMoto(onDone: () => void) {
   const T = MINIS.moto;
   const [before, after] = split(CHATS.motoPerdida, 2);
   phoneChat(before, () =>
@@ -589,9 +590,141 @@ function lostMoto(onDone: () => void) {
 }
 
 /** 6 de octubre: Joy, campeona de agility. Toca para saltar las vallas. */
+/** Antes del circuito: enseñarle trucos. Gas dice la orden y hay que tocar el gesto que toca. */
+function tricks(onDone: () => void) {
+  const T = MINIS.tricks;
+  canvasScreen(T.title, T.hint, (W, H, finish) => {
+    const CMDS = T.commands;
+    const order = Array.from({ length: 6 }, (_, i) => (i + Math.floor(Math.random() * 4)) % CMDS.length);
+    let i = 0;
+    let t = 0;
+    let pose = -1;
+    let poseT = 0;
+    let ok = 0;
+    let msg = '';
+    let msgT = 0;
+    const BW = 150;
+    const by = H - 70;
+    const bx = (k: number) => W / 2 - (CMDS.length * BW) / 2 + k * BW + BW / 2;
+    const next = () => {
+      i++;
+      t = 0;
+      if (i >= order.length) {
+        toast(T.done(ok));
+        audio.fanfare();
+        finish();
+      }
+    };
+    return {
+      update(dt) {
+        t += dt;
+        poseT = Math.max(0, poseT - dt);
+        msgT = Math.max(0, msgT - dt);
+        if (poseT === 0) pose = -1;
+        if (i < order.length && t > 3.2) {
+          msg = T.slow;
+          msgT = 1;
+          audio.boo();
+          next();
+        }
+      },
+      draw(c) {
+        const g = c.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#bfe6ff');
+        g.addColorStop(1, '#eaf6ff');
+        c.fillStyle = g;
+        c.fillRect(0, 0, W, H);
+        c.fillStyle = '#7cc46a';
+        c.fillRect(0, 250, W, H - 250);
+        // Gas a la izquierda con el bocadillo de la orden
+        c.fillStyle = '#e07b39';
+        c.fillRect(150, 160, 34, 70);
+        c.fillStyle = '#2d2d3a';
+        c.fillRect(150, 230, 34, 40);
+        c.fillStyle = '#e8b894';
+        c.beginPath();
+        c.arc(167, 140, 20, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#2b1d14';
+        c.fillRect(148, 118, 38, 12);
+        if (i < order.length) {
+          c.fillStyle = '#fff';
+          c.beginPath();
+          c.roundRect(200, 70, 190, 54, 14);
+          c.fill();
+          text(c, `«${CMDS[order[i]].say}»`, 295, 104, 22, '#1b1f33');
+        }
+        // Joy en la postura
+        const jx = 470;
+        const jy = 255;
+        c.fillStyle = '#1d1b1f';
+        if (pose === 1) {
+          c.beginPath();
+          c.ellipse(jx, jy - 12, 38, 12, 0, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(jx + 40, jy - 18, 13, 0, Math.PI * 2);
+          c.fill();
+        } else {
+          const rot = pose === 3 ? Math.sin(poseT * 12) * 0.9 : 0;
+          c.save();
+          c.translate(jx, jy - 30);
+          c.scale(pose === 3 ? Math.cos(poseT * 10) : 1, 1);
+          c.rotate(rot * 0.1);
+          c.beginPath();
+          c.ellipse(0, pose === 0 ? 6 : 0, 30, 16, pose === 0 ? -0.5 : 0, 0, Math.PI * 2);
+          c.fill();
+          c.beginPath();
+          c.arc(30, pose === 0 ? -22 : -12, 13, 0, Math.PI * 2);
+          c.fill();
+          c.fillRect(-22, 8, 7, pose === 0 ? 10 : 22);
+          c.fillRect(pose === 2 ? 22 : 16, pose === 2 ? -6 : 8, 7, pose === 2 ? 10 : 22);
+          if (pose === 2) c.fillRect(24, -10, 18, 6);
+          c.fillStyle = '#d7263d';
+          c.fillRect(20, pose === 0 ? -14 : -4, 10, 4);
+          c.restore();
+        }
+        if (pose >= 0) text(c, '🦴', jx + 60, jy - 70, 26);
+        // Botones de gesto
+        CMDS.forEach((cmd, k) => {
+          c.fillStyle = 'rgba(27,31,51,.85)';
+          c.beginPath();
+          c.roundRect(bx(k) - 64, by - 34, 128, 64, 16);
+          c.fill();
+          text(c, `${cmd.icon} ${cmd.label}`, bx(k), by + 6, 18, '#fff');
+        });
+        text(c, `🦴 ${ok}/${order.length}`, 20, 24, 18, '#1b1f33', 'left');
+        if (msgT > 0) text(c, msg, W / 2, 40, 20, '#d7263d');
+      },
+      down(x, y) {
+        if (i >= order.length || y < by - 40) return;
+        const k = CMDS.findIndex((_, j) => Math.abs(x - bx(j)) < 64);
+        if (k < 0) return;
+        if (k === order[i]) {
+          ok++;
+          pose = k;
+          poseT = 1.1;
+          audio.pickup();
+          vibrate(15);
+        } else {
+          msg = T.wrong;
+          msgT = 1;
+          audio.boo();
+        }
+        next();
+      },
+    };
+  }, onDone);
+}
+
+/** 6 de octubre: «Este perro seria increiblemente bueno en agility». Primero trucos, luego el circuito. */
+export function joyTraining(onDone: () => void) {
+  phoneChat(CHATS.agility, () => tricks(() => agility(onDone)));
+}
+
 function agility(onDone: () => void) {
   const T = MINIS.agility;
-  phoneChat(CHATS.agility, () =>
+  {
     canvasScreen(T.title, T.hint, (W, H, finish) => {
       const GROUND = 320;
       let x = 0;
@@ -700,12 +833,12 @@ function agility(onDone: () => void) {
           }
         },
       };
-    }, onDone),
-  );
+    }, onDone);
+  }
 }
 
 /** 2 de septiembre: vóley con Gas. Toca cuando la pelota llega a tus manos. */
-function voley(onDone: () => void) {
+export function voley(onDone: () => void) {
   const T = MINIS.voley;
   phoneChat(CHATS.voley, () =>
     canvasScreen(T.title, T.hint, (W, H, finish) => {
@@ -834,8 +967,8 @@ function voley(onDone: () => void) {
 
 /** En orden real: el avión (9/7), la moto (2/8), el vóley (2/9) y el agility (6/10). */
 export const MINI_GAMES: MiniGame[] = [
-  { id: 'radar', after: 6, icon: '✈️', title: MINIS.radar.title, run: radar },
-  { id: 'moto', after: 7, icon: '🏍️', title: MINIS.moto.title, run: lostMoto },
-  { id: 'voley', after: 9, icon: '🏐', title: MINIS.voley.title, run: voley },
-  { id: 'agility', after: 9, icon: '🐕', title: MINIS.agility.title, run: agility },
+  { id: 'radar', chapter: 7, icon: '✈️', title: MINIS.radar.title, run: radar },
+  { id: 'moto', chapter: 8, icon: '🏍️', title: MINIS.moto.title, run: lostMoto },
+  { id: 'voley', chapter: 9, icon: '🏐', title: MINIS.voley.title, run: voley },
+  { id: 'joy', chapter: 9, icon: '🐕', title: MINIS.tricks.title, run: joyTraining },
 ];

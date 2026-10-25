@@ -9,7 +9,9 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
+import { buildSaFarola } from './saFarola';
 import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
+import { radar } from '../ui/minis';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeObj } from './level';
@@ -150,7 +152,10 @@ export class LevelCena implements Level {
     this.camLook.set(0, 1.5, 4);
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(CENA.intro, () => phoneChat([CHATS.cenaMenu, CHATS.cenaEspera], () => this.phase === 'intro' && this.startWait()));
+      // 9 de julio: antes de la cena, Azul sigue el vuelo de Gas en el radar
+      dialogue(CENA.radarIntro, () =>
+        radar(() => dialogue(CENA.intro, () => phoneChat([CHATS.cenaMenu, CHATS.cenaEspera], () => this.phase === 'intro' && this.startWait()))),
+      );
     }, 2300);
     audio.startMusic('night');
     audio.ambience(0.03);
@@ -607,7 +612,7 @@ export class LevelCena implements Level {
  * Casa de los padres de Azul junto a Sa Farola: jardín con cancela, cocina de fuera, terraza y la calle.
  * La usan la cena a escondidas y el día del eclipse.
  */
-export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
+export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) {
   const steam: THREE.Sprite[] = [];
   const m = new Merger();
   const WHITE = 0xf6f1e6;
@@ -616,7 +621,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
   m.add(G.box, 0xd9c7a6, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
   m.add(G.box, 0x3a3a40, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 5);
   m.add(G.box, 0xbdb4a4, 0, 0.0, STREET_Z - 2.9, 0, 0, 0, 140, 0.12, 1.2);
-  m.add(G.box, 0x6b6150, 0, -0.08, -30, 0, 0, 0, 140, 0.1, 80); // descampado de marès hacia el mar
+  m.add(G.box, 0x9a8a68, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
   // Casa: planta baja y primer piso, blanca, con tejado de teja
   m.add(G.box, WHITE, 0, 2.7, -4, 0, 0, 0, 10, 5.4, 8);
   m.add(ROOF_GEO, 0xb8623e, 0, 5.4, -4, 0, Math.PI / 2, 0, 8.4, 1.6, 10.6);
@@ -638,7 +643,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
     colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5 });
   }
   m.add(G.box, SHUTTER, 0, 0.5, 10.3, 0, 0, 0, 1.7, 1.0, 0.08); // cancela de madera verde (abierta a ratos)
-  for (let i = 0; i < 14; i++) m.add(G.sphere, i % 3 ? 0xc2307a : 0x2f6b3a, -4.8 + i * 0.35, 1.2 + Math.sin(i) * 0.12, 10.25, 0, 0, 0, 0.55, 0.45, 0.4);
+  for (let i = 0; i < 14; i++) m.add(G.bush, i % 3 ? 0xc2307a : 0x2f6b3a, -4.8 + i * 0.35, 1.2 + Math.sin(i) * 0.12, 10.25, 0, 0, 0, 0.55, 0.45, 0.4);
   // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
   m.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
   m.add(G.box, 0x7a6a58, STOVE.x, 0.92, STOVE.z - 1.0, 0, 0, 0, 2.7, 0.06, 0.85);
@@ -683,9 +688,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
   }
   // Calle: casas vecinas y farolas
   for (const sx of [-1, 1]) {
-    m.add(G.box, 0xf1eadc, sx * 11.5, 2.4, -2, 0, 0, 0, 12, 4.8, 12);
-    m.add(ROOF_GEO, 0xb8623e, sx * 11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 12.4);
-    m.add(G.box, 0xf6f1e6, sx * 11.5, 0.75, 10.3, 0, 0, 0, 12, 1.5, 0.3);
+    m.add(G.box, 0xf1eadc, sx * 11.5, 2.4, -2, 0, 0, 0, 10.6, 4.8, 12);
+    m.add(ROOF_GEO, 0xb8623e, sx * 11.5, 4.8, -2, 0, Math.PI / 2, 0, 12.2, 1.4, 11);
+    m.add(G.box, 0xf6f1e6, sx * 11.5, 0.75, 10.3, 0, 0, 0, 10.6, 1.5, 0.3);
+    colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: -8, maxZ: 4 });
   }
   for (const x of [-14, 6, 26]) {
     m.add(G.cyl, 0x333338, x, 2, STREET_Z - 3.2, 0, 0, 0, 0.12, 4, 0.12);
@@ -694,26 +700,19 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[]) {
     l.scale.setScalar(1.2);
     sc.add(l);
   }
-  // Sa Farola al fondo, sobre las rocas, con su haz girando, y el mar
-  const fx = -34;
-  const fz = -46;
-  m.add(G.cyl, 0x8a7a64, fx, 1, fz, 0, 0, 0, 9, 2, 7);
-  m.add(G.cyl, 0xf6f1e6, fx, 6, fz, 0, 0, 0, 1.6, 9, 1.6);
-  m.add(G.cyl, 0x2f2f36, fx, 10.9, fz, 0, 0, 0, 1.9, 0.8, 1.9);
   sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
+  // Al fondo, bajando por la calle, el paseo y Sa Farola con su haz girando
+  const farola = buildSaFarola(sc, colliders, day);
   const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  lamp.position.set(fx, 11, fz);
+  lamp.position.copy(farola.lamp);
   lamp.scale.setScalar(5);
+  lamp.visible = !day;
   sc.add(lamp);
   const beam = new THREE.Mesh(
     new THREE.ConeGeometry(4, 60, 16, 1, true).translate(0, -30, 0).rotateZ(Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
   );
-  beam.position.set(fx, 11, fz);
+  beam.position.copy(farola.lamp);
   sc.add(beam);
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 200).rotateX(-Math.PI / 2), toon({ color: 0x0d1f45, emissive: 0x050a1c, roughness: 0.2 }));
-  sea.position.set(0, -0.4, -150);
-  sea.userData.noCast = true;
-  sc.add(sea);
-  return { pan, steam, beam, bulbs };
+  return { pan, steam, beam, bulbs, walkers: farola.walkers };
 }

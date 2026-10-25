@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
+import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { MOTO } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makeMoto, makePerson, type Person } from '../entities/models';
@@ -65,7 +65,7 @@ export class LevelMoto implements Level {
     const sc = this.scene;
     sc.fog = new THREE.Fog(0xf2c99a, 70, 330);
     const sunDir = new THREE.Vector3(-0.6, 0.35, 0.7);
-    this.sky = new Sky({ top: 0x3d6fb8, mid: 0xf0b483, bottom: 0xf7dcb0, sun: { color: 0xffd9a0, dir: sunDir, size: 90 }, clouds: { count: 9, tint: 0xfff0e0 } });
+    this.sky = new Sky({ top: 0x3d6fb8, mid: 0xf0b483, bottom: 0xf7dcb0, sun: { color: 0xffd9a0, dir: sunDir, size: 90 }, clouds: { count: 9, tint: 0xfff0e0 }, physical: { sunDir, turbidity: 6, rayleigh: 2 } });
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0xcfe0ff, 0x6a5a40, 1.1));
     this.sun = new Sun(sc, 0xffe2b8, 2.1, sunDir, 24);
@@ -176,9 +176,8 @@ export class LevelMoto implements Level {
     asphalt.userData.noCast = true;
     sc.add(land, asphalt);
 
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400).rotateX(-Math.PI / 2), toon({ color: 0x2f7fa8, emissive: 0x0a2a40, roughness: 0.15, metalness: 0.1 }));
+    const sea = makeSea([1400, 1400], 0x14587a, new THREE.Vector3(-0.6, 0.35, 0.7));
     sea.position.set(0, -2.4, 400);
-    sea.userData.noCast = true;
     sc.add(sea);
 
     // Pinos, matas, quitamiedos, rocas, casitas de L'Escala al principio y el faro de Cap de Creus al final
@@ -198,17 +197,17 @@ export class LevelMoto implements Level {
         const y = THREE.MathUtils.lerp(0.6, 5, Math.min(1, (-d - 8) / 18));
         const hgt = 3 + rnd() * 3;
         m.add(G.cyl, 0x6b4a2e, x, y + hgt * 0.3, z, 0, 0, 0, 0.3, hgt * 0.6, 0.3);
-        m.add(G.sphere, rnd() < 0.5 ? 0x3f6a32 : 0x4d7a3a, x, y + hgt * 0.75, z, 0, rnd() * 3, 0, 3.2, 1.3, 3.2);
+        m.add(G.bush, rnd() < 0.5 ? 0x3f6a32 : 0x4d7a3a, x, y + hgt * 0.75, z, 0, rnd() * 3, 0, 3.2, 1.3, 3.2);
       }
       if (rnd() < 0.25) {
         const d = -(5 + rnd() * 3);
-        m.add(G.sphere, 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, 0, 0, 1.6, 0.9, 1.6);
+        m.add(G.bush, 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, 0, 0, 1.6, 0.9, 1.6);
       }
       // Rocas del acantilado
       if (rnd() < 0.4) {
         const d = 9 + rnd() * 8;
         const s = 1.5 + rnd() * 2.5;
-        m.add(G.sphere, rnd() < 0.5 ? 0x8a7560 : 0x9c8770, r.x + r.rx * d, -2.6 + s * 0.3, r.z + r.rz * d, rnd(), rnd() * 3, 0, s * 1.4, s, s * 1.2);
+        m.add(rnd() < 0.5 ? G.rock : G.rock2, rnd() < 0.5 ? 0x8a7560 : 0x9c8770, r.x + r.rx * d, -2.6 + s * 0.3, r.z + r.rz * d, rnd(), rnd() * 3, 0, s * 1.4, s, s * 1.2);
       }
     }
     // L'Escala: casitas blancas junto a la salida
@@ -223,7 +222,7 @@ export class LevelMoto implements Level {
     const end = ring(SAMPLES);
     const fx = end.x + end.rx * 14 + 10, fz = end.z + end.rz * 14 + 16;
     this.lighthouse.set(fx, 9, fz);
-    m.add(G.sphere, 0x8a7560, fx, -1, fz, 0, 0, 0, 22, 8, 18);
+    m.add(G.rock2, 0x8a7560, fx, -1, fz, 0, 0, 0, 22, 8, 18);
     m.add(G.box, 0xf6f1e6, fx, 4.5, fz, 0, 0, 0, 7, 3, 5);
     m.add(G.cyl, 0xf6f1e6, fx + 2, 7, fz, 0, 0, 0, 1.6, 6, 1.6);
     m.add(G.cyl, 0x2f2f36, fx + 2, 10.4, fz, 0, 0, 0, 1.9, 0.8, 1.9);
