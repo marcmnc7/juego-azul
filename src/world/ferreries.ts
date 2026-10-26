@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { buildSurroundings, collidersBox } from './surround';
-import { G, Merger, CrowdPeople, crowdPose, newCrowdPose, PersonLook } from '../entities/models';
-import { Sky, Sun, toon, glowTexture } from '../core/gfx';
+import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
+import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
+import sunsetHdr from '../assets/env/venice_sunset.hdr';
+import { FerreriesHD } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
 import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
 
@@ -16,7 +18,7 @@ export interface Box2 {
 }
 
 export interface Crowd {
-  people: CrowdPeople;
+  people: CrowdLike;
   base: { x: number; z: number; ry: number; phase: number; speed: number }[];
   /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
   dance?: boolean;
@@ -199,7 +201,7 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
 
 const darken = (c: number) => new THREE.Color(c).multiplyScalar(0.8).getHex();
 
-function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, colliders: Box2[], name: string, signs: THREE.Object3D[]) {
+function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, colliders: Box2[], name: string, signs: THREE.Object3D[], hdb: FerreriesHD | null) {
   // Toldo a rayas con faldón ondulado
   for (let i = 0; i < 7; i++) {
     const c = i % 2 ? 0xffffff : awning;
@@ -208,26 +210,31 @@ function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, co
   }
   for (const sx of [-3, 3]) m.add(G.cyl, 0x444444, x + sx, 1.5, z + facing * 0.85, 0, 0, 0, 0.08, 3, 0.08);
   // Barra
-  m.add(G.rbox, 0x8a5a36, x, 0.55, z, 0, 0, 0, 4, 1.1, 0.8);
-  m.add(G.box, 0xd9c7a5, x, 1.13, z, 0, 0, 0, 4.2, 0.06, 1);
+  if (hdb) hdb.bar(x, z, facing);
+  else {
+    m.add(G.rbox, 0x8a5a36, x, 0.55, z, 0, 0, 0, 4, 1.1, 0.8);
+    m.add(G.box, 0xd9c7a5, x, 1.13, z, 0, 0, 0, 4.2, 0.06, 1);
+  }
   colliders.push({ minX: x - 2, maxX: x + 3.05, minZ: z - 0.45, maxZ: z + 0.45 });
   // Postes del toldo
   for (const sx of [-3, 3]) colliders.push({ minX: x + sx - 0.12, maxX: x + sx + 0.12, minZ: z + facing * 0.85 - 0.12, maxZ: z + facing * 0.85 + 0.12 });
   // Botellas y vasos
-  for (let i = 0; i < 7; i++) m.add(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], x - 1.6 + i * 0.52, 1.36, z - facing * 0.25, 0, 0, 0, 0.11, 0.42, 0.11);
-  for (let i = 0; i < 4; i++) m.add(G.cyl, 0xfff4b0, x - 1 + i * 0.6, 1.24, z + facing * 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
+  if (!hdb) for (let i = 0; i < 7; i++) m.add(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], x - 1.6 + i * 0.52, 1.36, z - facing * 0.25, 0, 0, 0, 0.11, 0.42, 0.11);
+  if (!hdb) for (let i = 0; i < 4; i++) m.add(G.cyl, 0xfff4b0, x - 1 + i * 0.6, 1.24, z + facing * 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
   // Botella de gin de Menorca con su asa, para las pomadas
-  m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.45, z + facing * 0.15, 0, 0, 0, 0.26, 0.6, 0.26);
-  m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.85, z + facing * 0.15, 0, 0, 0, 0.1, 0.25, 0.1);
-  m.add(G.smile, 0x9fc9b0, x + 1.75, 1.6, z + facing * 0.15, 0, 0, Math.PI / 2, 0.22, 0.22, 0.3);
-  m.add(G.box, 0xf4efe2, x + 1.6, 1.45, z + facing * 0.29, 0, 0, 0, 0.18, 0.2, 0.01);
+  if (!hdb) {
+    m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.45, z + facing * 0.15, 0, 0, 0, 0.26, 0.6, 0.26);
+    m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.85, z + facing * 0.15, 0, 0, 0, 0.1, 0.25, 0.1);
+    m.add(G.smile, 0x9fc9b0, x + 1.75, 1.6, z + facing * 0.15, 0, 0, Math.PI / 2, 0.22, 0.22, 0.3);
+    m.add(G.box, 0xf4efe2, x + 1.6, 1.45, z + facing * 0.29, 0, 0, 0, 0.18, 0.2, 0.01);
+  }
   // Altavoz para la música del bar
   m.add(G.box, 0x222228, x - 3.6, 0.7, z, 0, 0, 0, 0.7, 1.4, 0.6);
   m.add(G.cyl, 0x555560, x - 3.6, 0.9, z + facing * 0.31, Math.PI / 2, 0, 0, 0.45, 0.02, 0.45);
   m.add(G.cyl, 0x555560, x - 3.6, 0.4, z + facing * 0.31, Math.PI / 2, 0, 0, 0.25, 0.02, 0.25);
   colliders.push({ minX: x - 3.95, maxX: x - 3.25, minZ: z - 0.3, maxZ: z + 0.3 });
   // Barril
-  m.add(G.cyl, 0x7a4a2a, x + 2.6, 0.5, z, 0, 0, 0, 0.8, 1, 0.8);
+  if (!hdb) m.add(G.cyl, 0x7a4a2a, x + 2.6, 0.5, z, 0, 0, 0, 0.8, 1, 0.8);
   // Letrero
   const tex = (() => {
     const c = document.createElement('canvas');
@@ -268,6 +275,7 @@ function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => numb
 }
 
 const MARC = new THREE.Vector3(-5.2, 0, 21.6);
+const SUNSET_DIR = new THREE.Vector3(-1, 0.18, 0.3).normalize();
 
 export function buildFerreries(scene: THREE.Scene, town?: TownDressing): FerreriesWorld {
   const group = new THREE.Group();
@@ -278,37 +286,55 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const r = rand(42);
 
   scene.fog = new THREE.Fog(0xf0a585, 35, 110);
+  const hd = hdSurfaces.value > 0;
   const sky = new Sky({
     top: 0x3b3a85,
     mid: 0xf0907e,
     bottom: 0xffd08a,
     sun: { color: 0xffc070, dir: new THREE.Vector3(-1, 0.18, 0.3), size: 140 },
     clouds: { count: 10, tint: 0xffc6b0 },
+    // Calidad de la prueba: cielo físico (dispersión atmosférica) y luz de un atardecer real (HDRI)
+    ...(hd ? { physical: { sunDir: SUNSET_DIR, turbidity: 6, rayleigh: 2.2 } } : {}),
   });
   group.add(sky.group);
+  if (hd) scene.userData.hdri = { url: sunsetHdr, intensity: 1.0, sunDir: SUNSET_DIR, hemi: 0.3 };
 
   group.add(new THREE.HemisphereLight(0xffe9d6, 0x6f5a80, 1.5));
-  const sun = new Sun(scene, 0xffc490, 2.4, new THREE.Vector3(-1, 0.9, 0.35), 24);
+  const sun = new Sun(scene, 0xffc490, hd ? 3.6 : 2.4, new THREE.Vector3(-1, 0.9, 0.35), 24);
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), toon({ map: groundTexture() }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.userData.noCast = true;
-  group.add(ground);
+  // Calidad de la prueba: casas, iglesia y suelo con materiales fotográficos (ver hd/ferreriesHD.ts)
+  const hdb = hd ? new FerreriesHD() : null;
+  if (hdb) hdb.ground(220);
+  else {
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), toon({ map: groundTexture() }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.userData.noCast = true;
+    group.add(ground);
+  }
 
   const m = new Merger();
+  const hdOut = { lamps, hangs };
 
   // Calle mayor (z -5..5) y plaza (x -12..12, z 5..26)
   let x = -50;
   while (x < 50) {
     const w = 5 + Math.floor(r() * 4);
-    house(m, x + w / 2, -9, w, 8, 1 + Math.floor(r() * 3), 1, r, colliders, lamps, hangs);
+    const floors = 1 + Math.floor(r() * 3);
+    if (hdb) {
+      hdb.house(m, x + w / 2, -9, w, 8, floors, 0, SHUTTERS[Math.floor(r() * SHUTTERS.length)], r, hdOut);
+      colliders.push({ minX: x, maxX: x + w, minZ: -13, maxZ: -5 });
+    } else house(m, x + w / 2, -9, w, 8, floors, 1, r, colliders, lamps, hangs);
     x += w;
   }
   for (const [from, to] of [[-50, -12], [12, 50]]) {
     x = from;
     while (x < to) {
       const w = Math.min(to - x, 5 + Math.floor(r() * 4));
-      house(m, x + w / 2, 9, w, 8, 1 + Math.floor(r() * 3), -1, r, colliders, lamps, hangs);
+      const floors = 1 + Math.floor(r() * 3);
+      if (hdb) {
+        hdb.house(m, x + w / 2, 9, w, 8, floors, Math.PI, SHUTTERS[Math.floor(r() * SHUTTERS.length)], r, hdOut);
+        colliders.push({ minX: x, maxX: x + w, minZ: 5, maxZ: 13 });
+      } else house(m, x + w / 2, 9, w, 8, floors, -1, r, colliders, lamps, hangs);
       x += w;
     }
   }
@@ -322,6 +348,12 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
       const floors = 1 + Math.floor(r() * 2);
       const h = floors * 3 + 0.4;
       const shutter = SHUTTERS[Math.floor(r() * 4)];
+      if (hdb) {
+        hdb.house(m, cx, cz, dd, 8, floors, side < 0 ? Math.PI / 2 : -Math.PI / 2, shutter, r, hdOut, { balconies: false });
+        colliders.push({ minX: cx - 4, maxX: cx + 4, minZ: z, maxZ: z + dd });
+        z += dd;
+        continue;
+      }
       m.add(G.box, WHITE[Math.floor(r() * 4)], cx, h / 2, cz, 0, 0, 0, 8, h, dd);
       m.add(ROOF_GEO, ROOF, cx, h, cz, 0, Math.PI / 2, 0, dd + 0.1, 1.5, 8.5);
       const fx = cx - side * 4.06;
@@ -339,44 +371,47 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
 
   // Iglesia de Sant Bartomeu al fondo del Pla de l'Església: fachada con frontón y rosetón,
   // y el campanario a la derecha con arcos, reloj y remate piramidal con cruz.
-  const STONE = 0xe6d3ad;
-  m.add(G.box, STONE, 0, 5, 30, 0, 0, 0, 14, 10, 8);
-  m.add(ROOF_GEO, 0xa9573a, 0, 10, 30, 0, Math.PI / 2, 0, 8.4, 3, 14.4);
-  m.add(ROOF_GEO, STONE, 0, 10, 26.1, 0, 0, 0, 14.2, 3.2, 0.3); // frontón
-  m.add(G.box, 0xd8c39a, 0, 10.05, 25.95, 0, 0, 0, 14.4, 0.3, 0.4); // cornisa
-  for (const sx of [-7, 7]) m.add(G.box, 0xd8c39a, sx, 5, 26.2, 0, 0, 0, 0.8, 10, 0.6);
-  for (const sx of [-3.6, 3.6]) m.add(G.box, 0xdcc79f, sx, 5, 26.0, 0, 0, 0, 0.5, 10, 0.3); // pilastras
-  m.add(G.box, 0xd8c39a, 0, 13.4, 26.0, 0, 0, 0, 0.15, 1.2, 0.15); // cruz del frontón
-  m.add(G.box, 0xd8c39a, 0, 13.6, 26.0, 0, 0, 0, 0.7, 0.15, 0.15);
-  // Campanario
   const TX = 8.6;
   const TZ = 27.4;
-  m.add(G.box, 0xe0cba2, TX, 8, TZ, 0, 0, 0, 3.6, 16, 3.6);
-  for (const y of [5.3, 10.6]) m.add(G.box, 0xd8c39a, TX, y, TZ, 0, 0, 0, 3.9, 0.3, 3.9); // impostas
-  m.add(G.box, 0xd8c39a, TX, 16.15, TZ, 0, 0, 0, 4.1, 0.35, 4.1);
-  m.add(G.box, 0xe0cba2, TX, 18, TZ, 0, 0, 0, 3.2, 3.4, 3.2); // cuerpo de campanas
-  for (const [dx, dz, ry] of [[0, -1.61, 0], [0, 1.61, 0], [-1.61, 0, Math.PI / 2], [1.61, 0, Math.PI / 2]]) {
-    m.add(G.box, 0x2a1d16, TX + dx, 17.8, TZ + dz, 0, ry, 0, 1.3, 2.2, 0.06); // hueco
-    m.add(G.cyl, 0x2a1d16, TX + dx, 18.9, TZ + dz, Math.PI / 2, ry, 0, 1.3, 0.06, 1.3); // arco
+  if (hdb) hdb.church(m);
+  else {
+    const STONE = 0xe6d3ad;
+    m.add(G.box, STONE, 0, 5, 30, 0, 0, 0, 14, 10, 8);
+    m.add(ROOF_GEO, 0xa9573a, 0, 10, 30, 0, Math.PI / 2, 0, 8.4, 3, 14.4);
+    m.add(ROOF_GEO, STONE, 0, 10, 26.1, 0, 0, 0, 14.2, 3.2, 0.3); // frontón
+    m.add(G.box, 0xd8c39a, 0, 10.05, 25.95, 0, 0, 0, 14.4, 0.3, 0.4); // cornisa
+    for (const sx of [-7, 7]) m.add(G.box, 0xd8c39a, sx, 5, 26.2, 0, 0, 0, 0.8, 10, 0.6);
+    for (const sx of [-3.6, 3.6]) m.add(G.box, 0xdcc79f, sx, 5, 26.0, 0, 0, 0, 0.5, 10, 0.3); // pilastras
+    m.add(G.box, 0xd8c39a, 0, 13.4, 26.0, 0, 0, 0, 0.15, 1.2, 0.15); // cruz del frontón
+    m.add(G.box, 0xd8c39a, 0, 13.6, 26.0, 0, 0, 0, 0.7, 0.15, 0.15);
+    // Campanario
+    m.add(G.box, 0xe0cba2, TX, 8, TZ, 0, 0, 0, 3.6, 16, 3.6);
+    for (const y of [5.3, 10.6]) m.add(G.box, 0xd8c39a, TX, y, TZ, 0, 0, 0, 3.9, 0.3, 3.9); // impostas
+    m.add(G.box, 0xd8c39a, TX, 16.15, TZ, 0, 0, 0, 4.1, 0.35, 4.1);
+    m.add(G.box, 0xe0cba2, TX, 18, TZ, 0, 0, 0, 3.2, 3.4, 3.2); // cuerpo de campanas
+    for (const [dx, dz, ry] of [[0, -1.61, 0], [0, 1.61, 0], [-1.61, 0, Math.PI / 2], [1.61, 0, Math.PI / 2]]) {
+      m.add(G.box, 0x2a1d16, TX + dx, 17.8, TZ + dz, 0, ry, 0, 1.3, 2.2, 0.06); // hueco
+      m.add(G.cyl, 0x2a1d16, TX + dx, 18.9, TZ + dz, Math.PI / 2, ry, 0, 1.3, 0.06, 1.3); // arco
+    }
+    m.add(G.cone, 0xd9a83a, TX, 17.5, TZ - 1.0, 0, 0, 0, 0.9, 1.0, 0.9); // campana
+    m.add(G.box, 0xd8c39a, TX, 19.85, TZ, 0, 0, 0, 3.6, 0.3, 3.6);
+    m.add(G.cone, 0xb86a42, TX, 21.2, TZ, 0, Math.PI / 4, 0, 3.6, 2.5, 3.6); // chapitel
+    m.add(G.box, 0x444444, TX, 23.1, TZ, 0, 0, 0, 0.1, 1.4, 0.1);
+    m.add(G.box, 0x444444, TX, 23.3, TZ, 0, 0, 0, 0.7, 0.1, 0.1);
+    m.add(G.cyl, 0xfbf7ee, TX, 13.2, TZ - 1.82, Math.PI / 2, 0, 0, 1.8, 0.08, 1.8); // reloj
+    m.add(G.cyl, 0x2a1d16, TX, 13.2, TZ - 1.88, Math.PI / 2, 0, 0, 0.2, 0.05, 0.2);
+    m.add(G.box, 0x2a1d16, TX, 13.45, TZ - 1.9, 0, 0, 0, 0.06, 0.55, 0.03);
+    m.add(G.box, 0x2a1d16, TX + 0.17, 13.2, TZ - 1.9, 0, 0, 0, 0.38, 0.06, 0.03);
+    m.add(G.box, 0xd8c39a, 0, 2.2, 25.98, 0, 0, 0, 3.4, 4.6, 0.1); // portal
+    m.add(G.box, 0x6b4428, 0, 2, 25.9, 0, 0, 0, 2.4, 4, 0.1);
+    m.add(G.cyl, 0xd8c39a, 0, 4.1, 25.92, Math.PI / 2, 0, 0, 2.4, 0.1, 2.4);
+    m.add(G.cyl, 0x6b4428, 0, 4.1, 25.88, Math.PI / 2, 0, 0, 2.0, 0.1, 2.0);
+    m.add(G.cyl, 0xd8c39a, 0, 7.4, 25.95, Math.PI / 2, 0, 0, 2.8, 0.1, 2.8); // rosetón
+    m.add(G.cyl, 0x8fb3d9, 0, 7.4, 25.9, Math.PI / 2, 0, 0, 2.2, 0.1, 2.2);
+    for (let k = 0; k < 8; k++) m.add(G.box, 0xd8c39a, 0, 7.4, 25.86, 0, 0, (k * Math.PI) / 8, 0.1, 2.2, 0.05);
+    for (let k = 0; k < 3; k++) m.add(G.box, 0xcab58e, 0, 0.1 + k * 0.2, 25.3 - k * 0.4, 0, 0, 0, 6 - k, 0.2, 1.2); // escalones
   }
-  m.add(G.cone, 0xd9a83a, TX, 17.5, TZ - 1.0, 0, 0, 0, 0.9, 1.0, 0.9); // campana
-  m.add(G.box, 0xd8c39a, TX, 19.85, TZ, 0, 0, 0, 3.6, 0.3, 3.6);
-  m.add(G.cone, 0xb86a42, TX, 21.2, TZ, 0, Math.PI / 4, 0, 3.6, 2.5, 3.6); // chapitel
-  m.add(G.box, 0x444444, TX, 23.1, TZ, 0, 0, 0, 0.1, 1.4, 0.1);
-  m.add(G.box, 0x444444, TX, 23.3, TZ, 0, 0, 0, 0.7, 0.1, 0.1);
-  m.add(G.cyl, 0xfbf7ee, TX, 13.2, TZ - 1.82, Math.PI / 2, 0, 0, 1.8, 0.08, 1.8); // reloj
-  m.add(G.cyl, 0x2a1d16, TX, 13.2, TZ - 1.88, Math.PI / 2, 0, 0, 0.2, 0.05, 0.2);
-  m.add(G.box, 0x2a1d16, TX, 13.45, TZ - 1.9, 0, 0, 0, 0.06, 0.55, 0.03);
-  m.add(G.box, 0x2a1d16, TX + 0.17, 13.2, TZ - 1.9, 0, 0, 0, 0.38, 0.06, 0.03);
   colliders.push({ minX: TX - 1.8, maxX: TX + 1.8, minZ: TZ - 1.8, maxZ: TZ + 1.8 });
-  m.add(G.box, 0xd8c39a, 0, 2.2, 25.98, 0, 0, 0, 3.4, 4.6, 0.1); // portal
-  m.add(G.box, 0x6b4428, 0, 2, 25.9, 0, 0, 0, 2.4, 4, 0.1);
-  m.add(G.cyl, 0xd8c39a, 0, 4.1, 25.92, Math.PI / 2, 0, 0, 2.4, 0.1, 2.4);
-  m.add(G.cyl, 0x6b4428, 0, 4.1, 25.88, Math.PI / 2, 0, 0, 2.0, 0.1, 2.0);
-  m.add(G.cyl, 0xd8c39a, 0, 7.4, 25.95, Math.PI / 2, 0, 0, 2.8, 0.1, 2.8); // rosetón
-  m.add(G.cyl, 0x8fb3d9, 0, 7.4, 25.9, Math.PI / 2, 0, 0, 2.2, 0.1, 2.2);
-  for (let k = 0; k < 8; k++) m.add(G.box, 0xd8c39a, 0, 7.4, 25.86, 0, 0, (k * Math.PI) / 8, 0.1, 2.2, 0.05);
-  for (let k = 0; k < 3; k++) m.add(G.box, 0xcab58e, 0, 0.1 + k * 0.2, 25.3 - k * 0.4, 0, 0, 0, 6 - k, 0.2, 1.2); // escalones
   colliders.push({ minX: -7, maxX: 7, minZ: 26, maxZ: 34 });
 
   // Vallas al final de la calle
@@ -388,10 +423,10 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
 
   // Bares
-  bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs);
-  bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs);
-  bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, town?.bars?.[2] ?? 'Sa Penya', signs);
-  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Plaça', signs);
+  bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs, hdb);
+  bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs, hdb);
+  bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, town?.bars?.[2] ?? 'Sa Penya', signs, hdb);
+  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Plaça', signs, hdb);
   const barFronts = [new THREE.Vector3(9, 0, 10.2), new THREE.Vector3(-28, 0, -1.6), new THREE.Vector3(30, 0, 1.6), new THREE.Vector3(-7.5, 0, 22.2)];
   const tables: [number, number][] = [[7.5, 18], [-6, 18], [-24, -1.5], [33, 1.2], [-9, 7], [-31, -1.4], [27, 1.3]];
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
@@ -414,6 +449,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
       colliders.push({ minX: bx - 0.3, maxX: bx + 0.3, minZ: bz - 1, maxZ: bz + 1 });
     }
   }
+  hdb?.finish(group);
   // Arena en la plaza, donde saltan los ases
   const sand = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), toon({ color: 0xe2c48e }));
   sand.scale.set(8, 1, 6.8);
@@ -566,7 +602,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
   const crowds: Crowd[] = looks.map((look, li) => {
     const mine = spots.filter((_, i) => i % looks.length === li);
-    const people = new CrowdPeople(look, mine.length);
+    const people = makeCrowd(look, mine.length);
     group.add(people.group);
     return { people, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
   });
@@ -598,7 +634,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   partyLooks.forEach((look, li) => {
     const mine = dancers.filter((_, i) => i % partyLooks.length === li);
     if (!mine.length) return;
-    const people = new CrowdPeople(look, mine.length);
+    const people = makeCrowd(look, mine.length, true);
     group.add(people.group);
     crowds.push({ people, dance: true, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
   });

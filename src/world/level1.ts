@@ -6,6 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
 import { FERRERIES } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
+import { boneAnchor } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
@@ -190,7 +191,12 @@ export class Level1 implements Level {
       : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
     this.tofol.root.position.copy(this.world.tofolPos);
     // Delantal de Tòfol
-    if (!V.horses) this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
+    if (!V.horses && this.tofol.rig) {
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.5, 0.012), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2a7a50), roughness: 0.85 }));
+      apron.position.set(0, -0.14, 0.135);
+      apron.castShadow = true;
+      boneAnchor(this.tofol, 'Hips').add(apron);
+    } else if (!V.horses) this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
@@ -209,7 +215,32 @@ export class Level1 implements Level {
     this.fabiolera = makePerson({ skin: 0xf0c8a6, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x5a3a22, hairStyle: 'bun', shoes: 0x111111 });
     this.fabiolera.root.position.copy(this.world.fabioleraPos);
     this.fabiolera.root.rotation.y = Math.PI;
-    this.fabiolera.body.add(
+    if (this.fabiolera.rig) {
+      // Personaje glTF: el bombín va en la cabeza y el tamborí en la cadera, siguiendo al cuerpo
+      const mat = (c: number, r = 0.6) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: r });
+      const hat = new THREE.Group();
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.115, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x111111, 0.55));
+      crown.scale.y = 1.3;
+      crown.position.y = 0.235;
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.012, 24), mat(0x111111, 0.55));
+      brim.position.y = 0.235;
+      hat.add(crown, brim);
+      boneAnchor(this.fabiolera, 'Head').add(hat);
+      // El fabiol sale de la boca hacia abajo y adelante
+      const fabiol = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.38, 10), mat(0x6b4428, 0.45));
+      fabiol.rotation.x = -0.65;
+      fabiol.position.set(0, 0.07 - 0.19 * Math.cos(0.65), 0.1 + 0.19 * Math.sin(0.65));
+      fabiol.castShadow = true;
+      hat.parent!.add(fabiol);
+      const drum = new THREE.Group();
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.17, 24), mat(0xd9c7a5, 0.7));
+      const hoop = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 24), mat(0x9b2335, 0.6));
+      drum.add(shell, hoop);
+      drum.rotation.z = Math.PI / 2;
+      drum.position.set(-0.2, -0.02, 0.1);
+      boneAnchor(this.fabiolera, 'Hips').add(drum);
+      for (const o of [crown, brim, shell, hoop]) o.castShadow = true;
+    } else this.fabiolera.body.add(
       new Merger()
         .add(G.cyl, 0x111111, 0, 2.08, 0, 0, 0, 0, 0.62, 0.18, 0.62) // bombín
         .add(G.cyl, 0x111111, 0, 1.99, 0, 0, 0, 0, 0.82, 0.03, 0.82)
@@ -217,7 +248,7 @@ export class Level1 implements Level {
         .add(G.cyl, 0x9b2335, 0.24, 0.95, 0.12, 0, 0, Math.PI / 2, 0.37, 0.05, 0.37)
         .mesh(),
     );
-    this.fabiolera.handR.add(new Merger().add(G.cyl, 0x6b4428, 0, 0.1, 0.05, 0.4, 0, 0, 0.04, 0.4, 0.04).mesh()); // fabiol
+    if (!this.fabiolera.rig) this.fabiolera.handR.add(new Merger().add(G.cyl, 0x6b4428, 0, 0.1, 0.05, 0.4, 0, 0, 0.04, 0.4, 0.04).mesh()); // fabiol
     this.scene.add(this.fabiolera.root);
     this.world.colliders.push({ minX: this.world.fabioleraPos.x - 0.4, maxX: this.world.fabioleraPos.x + 0.4, minZ: this.world.fabioleraPos.z - 0.4, maxZ: this.world.fabioleraPos.z + 0.4 });
     this.scene.add(this.fireworks.points);
@@ -696,8 +727,16 @@ export class Level1 implements Level {
       }
     }
     animatePerson(this.fabiolera, dt, 'talk');
-    this.fabiolera.armR.rotation.set(-1.9, 0, 0.5); // fabiol a la boca
-    this.fabiolera.armL.rotation.set(-0.6 + Math.abs(Math.sin(this.t * 9)) * 0.5, 0, -0.2); // baqueta
+    if (this.fabiolera.rig) {
+      // Brazos de verdad (más largos que los del muñeco): codo doblado para llevar el fabiol a la boca
+      this.fabiolera.armR.rotation.set(-0.55, 0, -0.35);
+      this.fabiolera.elbowR.rotation.set(-1.6, 0, 0.5);
+      this.fabiolera.armL.rotation.set(-0.35, 0, -0.15);
+      this.fabiolera.elbowL.rotation.set(-0.9 - Math.abs(Math.sin(this.t * 9)) * 0.45, 0, 0);
+    } else {
+      this.fabiolera.armR.rotation.set(-1.9, 0, 0.5); // fabiol a la boca
+      this.fabiolera.armL.rotation.set(-0.6 + Math.abs(Math.sin(this.t * 9)) * 0.5, 0, -0.2); // baqueta
+    }
 
     const rearingNear = this.updateDonkeys(dt);
 

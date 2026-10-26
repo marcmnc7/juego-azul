@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
+import { loadHdriSync } from './assets';
 import { Water } from 'three/examples/jsm/objects/Water.js';
-import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, type Surf } from './surfaces';
+import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSurfaceTexture, hdNormalTexture, hdMeans, hdRoughMeans, type Surf } from './surfaces';
 
 // Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
 // sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
@@ -22,6 +23,17 @@ export const quality = {
    */
   kind: 'standard' as 'standard' | 'phong' | 'lambert',
 };
+
+/**
+ * Calidad de la prueba de concepto (texturas fotográficas con relieve y rugosidad). Es un uniforme
+ * compartido por todos los materiales: se enciende al entrar en un capítulo que la usa y se apaga
+ * al salir, sin recompilar nada. De momento, solo el capítulo 1.
+ */
+export const hdSurfaces = { value: 0 };
+const HD_STRENGTH = SURF_STRENGTH.map((v, i) => ([1, 2, 3, 10].includes(i) ? 1 : v));
+// Las texturas HD solo se crean si algún capítulo HD llega a dibujarse
+const hdColorUniform = { get value() { return hdSurfaces.value ? hdSurfaceTexture() : surfaceTexture(); } };
+const hdNormalUniform = { get value() { return hdSurfaces.value ? hdNormalTexture() : surfaceTexture(); } };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
 export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf }) {
@@ -59,6 +71,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
     sh.uniforms.surfStrength = { value: SURF_STRENGTH };
     sh.uniforms.surfMean = { value: surfMeans };
     sh.uniforms.uSurf = { value: (m.userData.surf as number) ?? 0 };
+    sh.uniforms.uHD = hdSurfaces;
+    sh.uniforms.hdTex = hdColorUniform;
+    sh.uniforms.hdNrm = hdNormalUniform;
+    sh.uniforms.hdMean = { value: hdMeans };
+    sh.uniforms.hdRoughMean = { value: hdRoughMeans };
+    sh.uniforms.hdStrength = { value: HD_STRENGTH };
+    sh.uniforms.hdNormal = { value: SURF_NORMAL };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
       .replace(
@@ -85,6 +104,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         uniform float surfStrength[16];
         uniform float surfMean[16];
         uniform float uSurf;
+        uniform float uHD;
+        uniform highp sampler2DArray hdTex;
+        uniform highp sampler2DArray hdNrm;
+        uniform vec3 hdMean[16];
+        uniform float hdRoughMean[16];
+        uniform float hdStrength[16];
+        uniform float hdNormal[16];
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -99,11 +125,21 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
         // Textura de la superficie (encalado, teja, marès…) proyectada desde los tres ejes del mundo
         int sIdx = int(max(vSurf, uSurf) + 0.5);
-        if (sIdx > 0) {
-          vec3 bw = pow(abs(vGrainN), vec3(4.0));
-          bw /= (bw.x + bw.y + bw.z + 1e-4);
-          vec3 sp = vGrainPos * surfScale[sIdx];
-          float sl = float(sIdx);
+        vec3 bw = pow(abs(vGrainN), vec3(4.0));
+        bw /= (bw.x + bw.y + bw.z + 1e-4);
+        vec3 sp = vGrainPos * surfScale[sIdx];
+        float sl = float(sIdx);
+        bool hdOn = uHD > 0.5 && sIdx > 0;
+        if (hdOn) {
+          // Foto en color (Sponza) proyectada en los tres ejes, normalizada a su color medio para
+          // respetar el color elegido de cada pared
+          vec3 sdc = texture(hdTex, vec3(sp.zy, sl)).rgb * bw.x
+                   + texture(hdTex, vec3(sp.xz, sl)).rgb * bw.y
+                   + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).rgb * bw.z;
+          vec2 mpc = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
+          vec3 smc = texture(hdTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mpc * 0.23 + 0.37, sl)).rgb;
+          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx]);
+        } else if (sIdx > 0) {
           float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
                    + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
                    + texture(surfTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).r * bw.z;
@@ -124,7 +160,31 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);
+        if (hdOn) {
+          float rS = texture(hdNrm, vec3(sp.zy, sl)).a * bw.x
+                   + texture(hdNrm, vec3(sp.xz, sl)).a * bw.y
+                   + texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
+          roughnessFactor = clamp(roughnessFactor * mix(1.0, rS / hdRoughMean[sIdx], 0.8), 0.04, 1.0);
+        }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        if (hdOn) {
+          // Relieve triplanar (mezcla "whiteout"): juntas, grietas y teja con volumen de verdad
+          vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
+          float ns = hdNormal[sIdx];
+          vec3 tx = texture(hdNrm, vec3(sp.zy, sl)).xyz * 2.0 - 1.0;
+          vec3 ty = texture(hdNrm, vec3(sp.xz, sl)).xyz * 2.0 - 1.0;
+          vec3 tz = texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).xyz * 2.0 - 1.0;
+          tx.xy *= ns; ty.xy *= ns; tz.xy *= ns; tz.y = -tz.y;
+          tx = vec3(tx.xy + nW.zy, abs(tx.z) * nW.x);
+          ty = vec3(ty.xy + nW.xz, abs(ty.z) * nW.y);
+          tz = vec3(tz.xy + nW.xy, abs(tz.z) * nW.z);
+          vec3 nb = normalize(tx.zyx * bw.x + ty.xzy * bw.y + tz.xyz * bw.z);
+          normal = normalize((viewMatrix * vec4(nb, 0.0)).xyz);
+        }`,
       );
   };
   m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) : 'plain');
@@ -135,6 +195,11 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
  * de entorno prefiltrado, para que cada material recoja el color del cielo de forma física.
  */
 let pmrem: THREE.PMREMGenerator | null = null;
+/** Sentido del giro del HDRI (comprobado con una esfera espejo). */
+export let ENV_ROT_SIGN = 1;
+export function setEnvRotSign(v: number) {
+  ENV_ROT_SIGN = v;
+}
 export function setEnvRenderer(r: THREE.WebGLRenderer) {
   pmrem = new THREE.PMREMGenerator(r);
 }
@@ -145,6 +210,21 @@ export function applyEnvironment(scene: THREE.Scene) {
   scene.traverse((o) => {
     if (o.userData.sky) sky = o;
   });
+  // Capítulos con la calidad de la prueba: luz de un cielo real fotografiado (HDRI), girado para
+  // que su sol caiga donde está el sol de la escena
+  const hd = scene.userData.hdri as { url: string; intensity?: number; sunDir?: THREE.Vector3; hemi?: number } | undefined;
+  const h = hd ? loadHdriSync(hd.url) : null;
+  if (hd && h) {
+    scene.environment = pmrem.fromEquirectangular(h.texture).texture;
+    scene.environmentIntensity = hd.intensity ?? 0.75;
+    if (hd.sunDir) scene.environmentRotation.y = ENV_ROT_SIGN * (Math.atan2(hd.sunDir.z, hd.sunDir.x) - Math.atan2(h.sun.z, h.sun.x));
+    // Con un cielo real dando la luz ambiente, la hemisférica casi sobra y el sol manda (como en la prueba)
+    scene.traverse((o) => {
+      const hl = o as THREE.HemisphereLight;
+      if (hl.isHemisphereLight) hl.intensity *= hd.hemi ?? 0.3;
+    });
+    return;
+  }
   const tmp = new THREE.Scene();
   if (sky) {
     const c = (sky as THREE.Object3D).clone();

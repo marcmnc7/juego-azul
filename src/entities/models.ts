@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { airOf } from '../core/air';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { toon, addOutline } from '../core/gfx';
+import { toon, addOutline, hdSurfaces } from '../core/gfx';
+import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
+import { RigCrowd, crowdReady } from './crowdRig';
+import { makeDonkeyHD, donkeyReady } from './donkeyHD';
 import { spring } from '../core/walker';
 import { surfaceFor } from '../core/surfaces';
 
@@ -183,6 +186,8 @@ export interface PersonLook {
   beard?: boolean;
   /** Mono de una pieza ajustado y cintura marcada; antebrazos, manos y espinillas al aire. */
   jumpsuit?: boolean;
+  /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
+  male?: boolean;
 }
 
 export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
@@ -214,6 +219,8 @@ export interface Person {
   lookT?: number;
   /** Movimiento real del cuerpo (para los que no tienen Walker): fase del paso, velocidad e inclinación. */
   auto?: { x: number; z: number; ry: number; ph: number; v: number; acc: number; lf: number; lfV: number; ls: number; lsV: number };
+  /** Personaje glTF con captura de movimiento (capítulos con la calidad de la prueba). */
+  rig?: Rig;
 }
 
 const HEAD_Y = 1.3; // base del cuello
@@ -268,6 +275,7 @@ function eyesInto(m: Merger, look: PersonLook, oy = 0) {
 
 /** Personaje animable con cabeza grande (estilo "chibi"). Mira hacia +Z. */
 export function makePerson(look: PersonLook, scale = 1, outline = true): Person {
+  if (hdSurfaces.value && rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
@@ -601,6 +609,7 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
     }
   }
   p.head.userData.lookY = p.head.rotation.y;
+  if (p.rig) rigSnapshot(p, mode);
 }
 
 /** Muelle amortiguado crítico (misma fórmula que en walker.ts, sin importar el Walker). */
@@ -648,6 +657,19 @@ function crowdArmGeometry(look: PersonLook) {
   m.add(GL.capsule, look.skin, 0, -0.25 - Math.cos(bend) * 0.1, Math.sin(bend) * 0.1, -bend, 0, 0, 0.1, 0.11, 0.1);
   m.add(GS, look.skin, 0, -0.25 - Math.cos(bend) * 0.22, Math.sin(bend) * 0.22, 0, 0, 0, 0.13, 0.14, 0.13);
   return m.build();
+}
+
+/** Lo que necesita un nivel de una multitud (la de siempre o la de personajes glTF). */
+export interface CrowdLike {
+  readonly group: THREE.Group;
+  set(i: number, x: number, z: number, q: THREE.Quaternion, p: CrowdPose, y?: number): void;
+  commit(): void;
+}
+
+/** Multitud: con personajes glTF horneados en los capítulos con la calidad de la prueba. */
+export function makeCrowd(look: PersonLook, count: number, dance = false): CrowdLike {
+  if (hdSurfaces.value && crowdReady()) return new RigCrowd(look, count, dance);
+  return new CrowdPeople(look, count);
 }
 
 /** Postura de una persona de la multitud: brazos (adelante/lado) y balanceo del cuerpo. */
@@ -767,6 +789,7 @@ export interface Donkey {
 
 /** Ase con su jinete (caixer): frac negro, pantalón blanco y bombín. Mira hacia +Z. */
 export function makeDonkey(coat = 0x7d6b5d): Donkey {
+  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
   const root = new THREE.Group();
   const pivot = new THREE.Group();
   pivot.position.z = -0.75; // eje en las patas traseras

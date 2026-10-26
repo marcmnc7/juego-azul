@@ -16,8 +16,11 @@ import { LevelMoto } from './world/levelMoto';
 import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import type { Level, LevelResult } from './world/level';
-import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
-import { loadSurfacePhotos } from './core/surfaces';
+import { applyEnvironment, applyShadows, hdSurfaces, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
+import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
+import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
+import { preloadCrowd } from './entities/crowdRig';
+import { preloadDonkey } from './entities/donkeyHD';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -247,6 +250,8 @@ function goMap() {
     level.dispose();
     level = null;
   }
+  clearRigPeople();
+  setHd(false);
   input.reset();
   input.enabled = true;
   mapScreen(data, mapOpts);
@@ -256,9 +261,30 @@ function goMap() {
 // Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
 // Las texturas fotográficas se cargan ya, mientras se ve la portada
 void loadSurfacePhotos();
+void loadHdPhotos();
+// Personajes glTF y multitud horneada (para los capítulos con la calidad de la prueba)
+let hdAssets = false;
+const rigLoading = preloadRig()
+  .then(() => Promise.all([preloadCrowd(), preloadDonkey()]))
+  .then(() => (hdAssets = true));
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
+// Capítulos que ya usan la calidad de la prueba de concepto: texturas fotográficas con relieve,
+// cielo HDRI y tono AgX. Los demás siguen con el aspecto anterior hasta que se migren.
+const HD_CHAPTERS = [1];
+function setHd(on: boolean) {
+  hdSurfaces.value = on ? 1 : 0;
+  renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = on ? 1.05 : 0.92;
+}
+
 function startLevel(n: number) {
+  // Los capítulos con personajes glTF esperan a que estén cargados (suele ser al instante)
+  if (HD_CHAPTERS.includes(n) && !hdAssets) {
+    void rigLoading.then(() => startLevel(n));
+    return;
+  }
+  clearRigPeople();
   clearScreens();
   closeDialogue();
   newEpoch();
@@ -292,6 +318,7 @@ function startLevel(n: number) {
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
+  setHd(HD_CHAPTERS.includes(n));
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
   applyShadows(level.threeScene);
@@ -335,6 +362,7 @@ function frame() {
   renderer.info.reset();
   if (level) {
     level.update(dt);
+    updateRigPeople(dt);
     const showJump = performance.now() - walkerActiveAt < 250 && !document.querySelector('.dialogue');
     if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
