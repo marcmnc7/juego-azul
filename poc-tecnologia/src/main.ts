@@ -12,6 +12,36 @@ import azulUrl from './assets/azul.glb';
 import animsUrl from './assets/anims.glb';
 import envUrl from './assets/env.hdr';
 
+// El visor de artefactos no deja hacer fetch() de URLs data:, así que los archivos incrustados
+// se decodifican a mano y se pasan a los loaders con parse().
+function dataUrlToBuffer(url: string) {
+  const b64 = url.slice(url.indexOf(',') + 1);
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+async function loadGLB(url: string): Promise<GLTF> {
+  // Sin createImageBitmap, GLTFLoader usa <img> con blob: (permitido) en vez de fetch (bloqueado)
+  const g = globalThis as any;
+  const saved = g.createImageBitmap;
+  g.createImageBitmap = undefined;
+  try { return await new GLTFLoader().parseAsync(dataUrlToBuffer(url), ''); }
+  finally { g.createImageBitmap = saved; }
+}
+
+function loadHDR(url: string) {
+  const d = new RGBELoader().parse(dataUrlToBuffer(url)) as any;
+  const t = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+  t.colorSpace = THREE.LinearSRGBColorSpace;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  t.flipY = true;
+  t.needsUpdate = true;
+  return t;
+}
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const prog = $('prog'), loadmsg = $('loadmsg');
 const setProg = (p: number, msg: string) => { prog.style.width = `${Math.round(p * 100)}%`; loadmsg.textContent = msg; };
@@ -47,7 +77,7 @@ async function main() {
 
   setProg(0.15, 'Cargando el cielo…');
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const hdr = await new RGBELoader().loadAsync(envUrl);
+  const hdr = loadHDR(envUrl);
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = pmrem.fromEquirectangular(hdr).texture;
   scene.environmentIntensity = 0.75;
@@ -92,8 +122,8 @@ async function main() {
     RAPIER.ColliderDesc.ball(0.32).setDensity(12).setRestitution(0.75).setFriction(0.5), new THREE.Vector3(7, 1.5, 4), 0.15);
 
   setProg(0.5, 'Cargando a Azul…');
-  const loader = new GLTFLoader();
-  const [azul, anims] = (await Promise.all([loader.loadAsync(azulUrl), loader.loadAsync(animsUrl)])) as [GLTF, GLTF];
+  const azul = await loadGLB(azulUrl);
+  const anims = await loadGLB(animsUrl);
 
   setProg(0.8, 'Animando…');
   const parts = makeCharacterModel(azul, anims);
