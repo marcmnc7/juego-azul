@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b2a3a">
+<title>Plaça des Born</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading"><div class="card"><h1>Plaça des Born</h1><p>Prueba de concepto · motor nuevo</p><div class="bar"><i id="prog"></i></div><p id="loadmsg">Cargando…</p></div></div>
+<div id="hud" hidden>
+  <div id="hint">Joystick a la izquierda · arrastra a la derecha para girar la cámara</div>
+  <div id="stats"></div>
+  <div id="stick"><i></i></div>
+  <button id="jump" aria-label="Saltar">Saltar</button>
+  <button id="dance" aria-label="Bailar">Bailar</button>
+  <button id="info" aria-label="Qué es esto">?</button>
+</div>
+<div id="about" hidden><div class="card">
+  <h2>Qué estás viendo</h2>
+  <ul>
+    <li><b>Física Rapier</b> (WebAssembly): paredes sólidas, escalones, salto con gravedad real, cajas y barriles que se empujan.</li>
+    <li><b>Personaje glTF con esqueleto</b> y animaciones capturadas (reposo, andar, correr, bailar) mezcladas según la velocidad.</li>
+    <li><b>Cámara con colisión</b>: se acerca sola si una pared se mete en medio y nunca atraviesa nada.</li>
+    <li><b>Texturas fotográficas PBR</b> (color, relieve y rugosidad) y luz de un cielo real (HDRI).</li>
+    <li><b>Mundo cerrado</b>: fachadas y balaustrada que no se pueden cruzar, con el puerto y el horizonte de fondo.</li>
+  </ul>
+  <p class="small">El personaje es provisional (un modelo de muestra de Mixamo, recoloreado). En el juego de verdad sería Azul hecha a medida.<br>Texturas: Sponza (Crytek, CC BY 3.0). Cielo: quarry_01, Poly Haven (CC0). Animaciones: Mixamo.</p>
+  <button id="close">Seguir jugando</button>
+</div></div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
