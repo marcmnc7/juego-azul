@@ -614,7 +614,9 @@ export class Level1 implements Level {
 
     const pp = this.player.root.position;
     this.walker.turn(this.input.consumeCam());
-    const ax = this.busy || ending || this.stage === 'meet' || this.stage === 'barDance' || this.stage === 'kiss' || this.stage === 'kissing' ? { x: 0, y: 0 } : this.input.axes();
+    const locked = this.busy || ending || this.stage === 'meet' || this.stage === 'barDance' || this.stage === 'kiss' || this.stage === 'kissing';
+    const ax = locked ? { x: 0, y: 0 } : this.input.axes();
+    this.walker.canJump = !locked;
     // Obstáculos redondos: el público y los ases (dos círculos a lo largo del cuerpo)
     this.solids.length = this.world.people.length;
     let k = this.solids.length;

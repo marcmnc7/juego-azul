@@ -624,9 +624,10 @@ export class Level4 implements Level {
           : this.phase === 'arrive'
             ? HOME_AREA
             : PLOT;
+      this.walker.canJump = walking && !swimming;
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
-      // En el Born, la explanada del obelisco está un escalón más alta que la calle
-      if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z);
+      // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
+      if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
       this.player.root.rotation.y = this.walker.facing;
       if (swimming) {
         this.swimPose(this.player, move);

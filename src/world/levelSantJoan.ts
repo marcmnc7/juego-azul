@@ -329,6 +329,7 @@ export class LevelSantJoan implements Level {
     for (const [x, z, ry] of [[77, -6, 0], [83, 6, 0], [77, 6, 0], [83, -6, 0]]) {
       m.add(G.box, 0x6b4a2e, x, 0.45, z, 0, ry, 0, 1.8, 0.1, 0.5);
       m.add(G.box, 0x333333, x, 0.22, z, 0, ry, 0, 1.6, 0.44, 0.1);
+      this.colliders.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.25, maxZ: z + 0.25 });
     }
     sc.add(m.mesh());
 
@@ -578,10 +579,11 @@ export class LevelSantJoan implements Level {
     // Azul
     const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming');
     this.walker.turn(this.input.consumeCam());
+    this.walker.canJump = walking;
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     // La explanada del obelisco está un escalón más alta que la calle
-    for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z);
+    for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z) + (q === this.player ? this.walker.hop : 0);
     this.player.root.rotation.y = this.walker.facing;
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'dance', 0, this.t * 6);
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');

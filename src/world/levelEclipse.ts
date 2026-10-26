@@ -73,6 +73,8 @@ export class LevelEclipse implements Level {
 
   // Coches y aparcamiento
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
+  /** Obstáculo del coche aparcado delante de casa de Azul (sigue al coche cuando llega). */
+  private carBox: Box2 | null = null;
   private rig: CarRig | null = null;
   private carSpeed = 0;
   private carT = 0;
@@ -131,6 +133,7 @@ export class LevelEclipse implements Level {
     sc.add(this.marker);
     this.marker.visible = false;
     this.colliders = [];
+    this.carBox = null;
     this.others = [];
     this.followers = [];
     this.scene = sc;
@@ -232,6 +235,8 @@ export class LevelEclipse implements Level {
     this.car.root.rotation.y = -Math.PI / 2;
     this.car.root.position.set(40, 0, STREET_Z + 0.6);
     sc.add(this.car.root);
+    this.carBox = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+    this.colliders.push(this.carBox);
     this.rig = new CarRig(this.car);
     this.carT = 0;
   }
@@ -767,6 +772,10 @@ export class LevelEclipse implements Level {
     this.walker.turn(this.input.consumeCam());
     if (free) {
       const bounds = this.phase === 'walk' ? WALK_BOUNDS : HOME_BOUNDS;
+      if (this.carBox) {
+        const c = this.car.root.position;
+        Object.assign(this.carBox, { minX: c.x - 2.2, maxX: c.x + 2.2, minZ: c.z - 0.95, maxZ: c.z + 0.95 });
+      }
       const move = this.walker.move(dt, this.input.axes(), this.colliders, bounds);
       this.player.root.rotation.y = this.walker.facing;
       animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);

@@ -2,6 +2,8 @@ import { audio } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
+import { requestJump, walkerActiveAt, lastBounds } from './core/walker';
+import { physLists } from './core/phys';
 import { load, save } from './core/save';
 import { giftForLevel } from './data/gifts';
 import { Level1 } from './world/level1';
@@ -179,6 +181,21 @@ function draw(scene: THREE.Scene) {
   composer.render();
 }
 const input = new Input(canvas, uiRoot);
+
+// Saltar: botón en pantalla (solo mientras se controla a alguien andando) y tecla J en el ordenador
+const jumpBtn = document.createElement('button');
+jumpBtn.className = 'jump-btn';
+jumpBtn.textContent = 'Saltar';
+jumpBtn.hidden = true;
+jumpBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  requestJump();
+});
+uiRoot.append(jumpBtn);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyJ' && !e.repeat) requestJump();
+});
 let data = load();
 
 let level: Level | null = null;
@@ -299,6 +316,8 @@ const clock = new THREE.Clock();
 let avg = 16;
 let lastAdjust = 0;
 const stats = TEST ? document.createElement('div') : null;
+// Modo prueba: acceso desde la consola para revisar colisiones
+if (TEST) Object.assign(window, { __dbg: { level: () => level, camera, physLists, THREE, bounds: () => lastBounds } });
 if (stats) {
   stats.className = 'stats';
   uiRoot.append(stats);
@@ -316,8 +335,10 @@ function frame() {
   renderer.info.reset();
   if (level) {
     level.update(dt);
+    const showJump = performance.now() - walkerActiveAt < 250 && !document.querySelector('.dialogue');
+    if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
-    const camQ = TEST ? new URLSearchParams(location.search).get('cam') : null;
+    const camQ = TEST ? ((window as unknown as { __cam?: string }).__cam ?? new URLSearchParams(location.search).get('cam')) : null;
     if (camQ) {
       const v = camQ.split(',').map(Number);
       camera.position.set(v[0], v[1], v[2]);

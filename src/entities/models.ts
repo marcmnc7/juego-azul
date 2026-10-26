@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { airOf } from '../core/air';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toon, addOutline } from '../core/gfx';
 import { spring } from '../core/walker';
@@ -569,6 +570,35 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
       j.rotation.z = prev[i][2] + (j.rotation.z - prev[i][2]) * a;
     });
     p.body.position.y = prevY + (p.body.position.y - prevY) * a;
+  }
+  // Salto (lo mueve el Walker): piernas recogidas y brazos abiertos en el aire, rodillas que
+  // absorben el golpe al aterrizar. Se mezcla con lo que estuviera haciendo.
+  const air = airOf.get(p.root.position);
+  if (air && (air.hop > 0.001 || air.land > 0.01)) {
+    const k = THREE.MathUtils.smoothstep(air.hop, 0, 0.12);
+    const up = air.vy > 0 ? 1 : 0.6;
+    const mix = (j: THREE.Object3D, ax: 'x' | 'z', v: number) => (j.rotation[ax] += (v - j.rotation[ax]) * k);
+    mix(p.legL, 'x', -0.75 * up);
+    mix(p.legR, 'x', -0.25);
+    mix(p.kneeL, 'x', 1.25 * up);
+    mix(p.kneeR, 'x', 0.75);
+    mix(p.footL, 'x', 0.35);
+    mix(p.footR, 'x', 0.3);
+    mix(p.armL, 'z', -1.0);
+    mix(p.armR, 'z', 1.0);
+    mix(p.elbowL, 'x', -0.5);
+    mix(p.elbowR, 'x', -0.5);
+    const c = air.land * (1 - k);
+    if (c > 0) {
+      p.body.position.y -= c * 0.08;
+      p.legL.rotation.x -= c * 0.55;
+      p.legR.rotation.x -= c * 0.55;
+      p.kneeL.rotation.x += c * 1.0;
+      p.kneeR.rotation.x += c * 1.0;
+      p.footL.rotation.x -= c * 0.45;
+      p.footR.rotation.x -= c * 0.45;
+      p.body.rotation.x += c * 0.2;
+    }
   }
   p.head.userData.lookY = p.head.rotation.y;
 }

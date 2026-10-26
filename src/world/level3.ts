@@ -1752,6 +1752,7 @@ export class Level3 implements Level {
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
+    this.walker.canJump = walking;
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.player === this.gas ? this.allPeople : []);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);

@@ -163,6 +163,13 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; }
   transition: transform .12s ease;
 }
 .action-btn:active { transform: scale(.94); }
+.jump-btn {
+  position: fixed; right: calc(max(24px, env(safe-area-inset-right)) + 108px); bottom: max(34px, env(safe-area-inset-bottom));
+  width: 70px; height: 70px; border-radius: 50%; color: white; font-size: 13px; font-weight: 700;
+  background: rgba(20, 24, 48, .55); border: 2px solid rgba(255,255,255,.55); backdrop-filter: blur(6px);
+  touch-action: none; transition: transform .12s ease; z-index: 3;
+}
+.jump-btn:active { transform: scale(.92); background: rgba(110, 100, 255, .7); }
 .action-btn.hidden { display: none; }
 .action-btn.pulse { animation: pulse .9s ease-in-out infinite; background: linear-gradient(135deg, #22c08a, #4f7cff); }
 @keyframes pulse { 0%, 100% { box-shadow: 0 14px 30px -10px rgba(34,192,138,.8), 0 0 0 4px rgba(34,192,138,.35); } 50% { box-shadow: 0 14px 30px -10px rgba(34,192,138,.8), 0 0 0 14px rgba(34,192,138,0); transform: scale(1.05); } }
