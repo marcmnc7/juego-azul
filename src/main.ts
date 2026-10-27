@@ -21,6 +21,11 @@ import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
 import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
 import { preloadCrowd } from './entities/crowdRig';
 import { preloadDonkey } from './entities/donkeyHD';
+import { preloadVehicles } from './entities/vehiclesHD';
+import { preloadHdri } from './core/assets';
+import { hdEnvDefault } from './core/gfx';
+import sunsetHdr from './assets/env/venice_sunset.hdr';
+import quarryHdr from './assets/env/quarry.hdr';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -265,15 +270,18 @@ void loadHdPhotos();
 // Personajes glTF y multitud horneada (para los capítulos con la calidad de la prueba)
 let hdAssets = false;
 const rigLoading = preloadRig()
-  .then(() => Promise.all([preloadCrowd(), preloadDonkey()]))
+  .then(() => Promise.all([preloadCrowd(), preloadDonkey(), preloadVehicles(), preloadHdri(sunsetHdr).catch((e) => console.warn('[gfx] HDRI', e)), preloadHdri(quarryHdr).catch((e) => console.warn('[gfx] HDRI', e))]))
   .then(() => (hdAssets = true));
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
 // Capítulos que ya usan la calidad de la prueba de concepto: texturas fotográficas con relieve,
 // cielo HDRI y tono AgX. Los demás siguen con el aspecto anterior hasta que se migren.
-const HD_CHAPTERS = [1];
-function setHd(on: boolean) {
+const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+// De día, la luz ambiente sale del cielo de la prueba (quarry_01); de noche, del cielo de cada escena
+const HD_DAY_CHAPTERS = [3, 5, 6, 8];
+function setHd(on: boolean, n = 0) {
   hdSurfaces.value = on ? 1 : 0;
+  hdEnvDefault.url = on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
   renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = on ? 1.05 : 0.92;
 }
@@ -318,7 +326,7 @@ function startLevel(n: number) {
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
-  setHd(HD_CHAPTERS.includes(n));
+  setHd(HD_CHAPTERS.includes(n), n);
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
   applyShadows(level.threeScene);
@@ -344,7 +352,7 @@ let avg = 16;
 let lastAdjust = 0;
 const stats = TEST ? document.createElement('div') : null;
 // Modo prueba: acceso desde la consola para revisar colisiones
-if (TEST) Object.assign(window, { __dbg: { level: () => level, camera, physLists, THREE, bounds: () => lastBounds } });
+if (TEST) Object.assign(window, { __dbg: { level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds } });
 if (stats) {
   stats.className = 'stats';
   uiRoot.append(stats);

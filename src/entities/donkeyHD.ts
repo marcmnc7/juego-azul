@@ -22,6 +22,8 @@ interface Prepared {
 }
 
 let prep: Prepared | null = null;
+/** El mismo caballo sin alargar las orejas, para los caballos negros de Sant Joan. */
+let prepHorse: Prepared | null = null;
 let loading: Promise<void> | null = null;
 
 export const donkeyReady = () => !!prep;
@@ -30,20 +32,21 @@ export function preloadDonkey() {
   loading ??= loadGLB(horseUrl)
     .then((g) => {
       const src = g.scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
-      prep = prepare(src, g.animations[0]);
+      prep = prepare(src, g.animations[0], 2.3, 1.3);
+      prepHorse = prepare(src, g.animations[0], 1, 1.6);
     })
     .catch((e) => console.warn('[donkey] no se pudo cargar el ase', e));
   return loading;
 }
 
-function prepare(src: THREE.Mesh, clip: THREE.AnimationClip): Prepared {
+function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, backHeight: number): Prepared {
   const geo = src.geometry.clone();
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const morphs = geo.morphAttributes.position as THREE.BufferAttribute[];
   const n = pos.count;
 
   // Orejas: los vértices de arriba de la cabeza, alargados desde su base (también en cada fotograma)
-  const EAR_Y = 172, EAR_Z = 100, S = 2.3;
+  const EAR_Y = 172, EAR_Z = 100, S = earScale;
   for (const side of [-1, 1]) {
     const ear: number[] = [];
     for (let i = 0; i < n; i++) if (pos.getY(i) > EAR_Y && pos.getZ(i) > EAR_Z && Math.sign(pos.getX(i) + 0.5) === side) ear.push(i);
@@ -75,7 +78,7 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip): Prepared {
     minY = Math.min(minY, pos.getY(i));
     if (Math.abs(pos.getZ(i)) < 25) backY = Math.max(backY, pos.getY(i));
   }
-  const scale = 1.3 / (backY - minY);
+  const scale = backHeight / (backY - minY);
 
   // Pelo: el marrón del caballo pasa a ser el color del ase (lo pone el material), lo oscuro
   // (crin, cascos, cola) más oscuro y lo claro, crema
@@ -117,8 +120,8 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip): Prepared {
 const lin = (hex: number) => new THREE.Color(hex);
 
 /** Ase con jinete; la misma interfaz que el de los muñecos (root, pivot, patas, cabeza). */
-export function makeDonkeyHD(coat: number, shadow: THREE.Object3D): Donkey {
-  const P = prep!;
+export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false): Donkey {
+  const P = horse ? prepHorse! : prep!;
   const root = new THREE.Group();
   const pivot = new THREE.Group();
   pivot.position.z = -0.75;
@@ -127,7 +130,7 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D): Donkey {
   inner.position.z = 0.75;
   pivot.add(inner);
 
-  const mat = new THREE.MeshStandardMaterial({ color: lin(coat), vertexColors: true, roughness: 0.9, metalness: 0, flatShading: true });
+  const mat = new THREE.MeshStandardMaterial({ color: lin(coat), vertexColors: true, roughness: horse ? 0.55 : 0.9, metalness: 0, flatShading: true });
   const mesh = new THREE.Mesh(P.geo, mat);
   mesh.name = P.name;
   mesh.scale.setScalar(P.scale);
@@ -140,7 +143,7 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D): Donkey {
   const back = (P.backY - P.minY) * P.scale;
 
   // Manta roja y silla
-  const cloth = new THREE.MeshStandardMaterial({ color: lin(0x9b2335), roughness: 0.85 });
+  const cloth = new THREE.MeshStandardMaterial({ color: lin(horse ? 0xf4f1ea : 0x9b2335), roughness: 0.85 });
   const blanket = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.05, 0.7), cloth);
   blanket.position.set(0, back + 0.01, -0.05);
   blanket.castShadow = true;

@@ -6,7 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, animatePerson, Person, CrowdPeople, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
@@ -419,7 +419,7 @@ export class Level3 implements Level {
   private v1 = new THREE.Vector3();
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
   private pose = newCrowdPose();
-  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private crowds: { people: CrowdLike; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private spots: { mesh: THREE.Mesh; ph: number }[] = [];
   private band: Person[] = [];
   private marker: THREE.Mesh;
@@ -976,7 +976,7 @@ export class Level3 implements Level {
     }
     looks.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % looks.length === li);
-      const people = new CrowdPeople(lk, mine.length);
+      const people = makeCrowd(lk, mine.length, true);
       sc.add(people.group);
       this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });
     });

@@ -6,7 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, Fireworks, Confetti, glowTexture, toon, vibrate } from '../core/gfx';
 import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, CrowdPeople, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } from '../ui/ui';
 import { CHATS } from '../data/chats';
@@ -101,7 +101,7 @@ export class LevelSantJoan implements Level {
   private people: Circle[] = [];
   private pose = newCrowdPose();
   private cheer = 0.35;
-  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private crowds: { people: CrowdLike; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
   private bagCount = 0;
   private luck = 0;
@@ -390,7 +390,7 @@ export class LevelSantJoan implements Level {
     }
     LOOKS.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % LOOKS.length === li);
-      const people = new CrowdPeople(lk, mine.length);
+      const people = makeCrowd(lk, mine.length);
       this.scene.add(people.group);
       // Miran hacia el centro del Born (o hacia la calle)
       this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });

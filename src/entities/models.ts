@@ -5,6 +5,7 @@ import { toon, addOutline, hdSurfaces } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
 import { RigCrowd, crowdReady } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
+import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
 import { surfaceFor } from '../core/surfaces';
 
@@ -847,6 +848,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
 
 /** Caballo menorquín negro con su caixer, como los de Sant Joan: alto, crin larga y escarapelas. Mira hacia +Z. */
 export function makeHorse(coat = 0x0e0c0b): Donkey {
+  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
   const root = new THREE.Group();
   const pivot = new THREE.Group();
   pivot.position.z = -0.85; // eje en las patas traseras: así se pone de manos (el «bot»)
@@ -927,6 +929,7 @@ export interface Dog {
 
 /** Joy: perra negra mediana. Mira hacia +Z. */
 export function makeDog(): Dog {
+  if (hdSurfaces.value && rigReady() && vehiclesReady()) return makeDogHD(blobShadow(0.9));
   const root = new THREE.Group();
   const black = 0x1d1b1f;
   const b = new Merger(false);
@@ -960,7 +963,12 @@ export function makeDog(): Dog {
 }
 
 /** Coche del viaje con Azul, Gas y Joy asomada por la ventanilla. Mira hacia +Z. */
-export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean } = {}) {
+export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook } = {}) {
+  if (hdSurfaces.value && rigReady() && vehiclesReady()) {
+    const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver });
+    c.root.add(blobShadow(4.4));
+    return c;
+  }
   const { luggage = true, joy: withJoy = true } = opts;
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -1019,6 +1027,11 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
 
 /** Moto (la de Gas) con él montado y casco. Mira hacia +Z. */
 export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
+  if (hdSurfaces.value && rigReady()) {
+    const mo = makeMotoHD(color, rider);
+    mo.root.add(blobShadow(1.4));
+    return mo;
+  }
   const root = new THREE.Group();
   const m = new Merger(false);
   // Chasis, depósito, asiento, colín y horquilla

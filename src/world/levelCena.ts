@@ -61,7 +61,7 @@ export class LevelCena implements Level {
   private sun: Sun;
   private colliders: Box2[] = [];
   private marker: THREE.Group;
-  private parentCar = makeCar(0x8c8f94, { luggage: false, joy: false });
+  private parentCar = makeCar(0x8c8f94, { luggage: false, joy: false, driver: DAD_LOOK });
   private gasCar = makeMoto(0x1b1d22, MARC_LOOK);
   private beam!: THREE.Mesh;
   private pan!: THREE.Group;

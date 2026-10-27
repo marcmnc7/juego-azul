@@ -203,6 +203,18 @@ export function setEnvRotSign(v: number) {
 export function setEnvRenderer(r: THREE.WebGLRenderer) {
   pmrem = new THREE.PMREMGenerator(r);
 }
+/** Cielo HDRI para los capítulos de día con la calidad de la prueba que no ponen uno propio. */
+export const hdEnvDefault: { url: string | null } = { url: null };
+
+function sunDirOf(scene: THREE.Scene) {
+  let dir: THREE.Vector3 | undefined;
+  scene.traverse((o) => {
+    const l = o as THREE.DirectionalLight;
+    if (!dir && l.isDirectionalLight) dir = l.position.clone().sub(l.target.position).normalize();
+  });
+  return dir;
+}
+
 export function applyEnvironment(scene: THREE.Scene) {
   if (!pmrem || !quality.env || scene.userData.envDone) return;
   scene.userData.envDone = true;
@@ -212,7 +224,10 @@ export function applyEnvironment(scene: THREE.Scene) {
   });
   // Capítulos con la calidad de la prueba: luz de un cielo real fotografiado (HDRI), girado para
   // que su sol caiga donde está el sol de la escena
-  const hd = scene.userData.hdri as { url: string; intensity?: number; sunDir?: THREE.Vector3; hemi?: number } | undefined;
+  const hd = (scene.userData.hdri ??
+    (hdSurfaces.value && hdEnvDefault.url && !scene.userData.noHdri ? { url: hdEnvDefault.url, intensity: 0.85, sunDir: sunDirOf(scene), hemi: 0.4 } : undefined)) as
+    | { url: string; intensity?: number; sunDir?: THREE.Vector3; hemi?: number }
+    | undefined;
   const h = hd ? loadHdriSync(hd.url) : null;
   if (hd && h) {
     scene.environment = pmrem.fromEquirectangular(h.texture).texture;
