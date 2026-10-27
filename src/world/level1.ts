@@ -49,16 +49,16 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   guide: 'Tòfol',
   item: '🍋',
   hud: {
-    talk: 'Xerra amb en Tòfol, an es bar de sa plaça',
-    collectItems: 'Cerca ses pomades que falten pels bars',
-    collectLuck: 'Fes una carícia an es ases quan s’aturin',
-    collect: 'Pomades pels bars i carícies an es ases quan s’aturin',
-    back: 'Ja està! Torna amb en Tòfol',
-    find: 'Vés a ballar an es bar de Sa Font, amb na Carme',
-    give: '💃 Ballar',
+    talk: 'Habla con Tòfol, en el bar de la plaza',
+    collectItems: 'Busca las pomadas que faltan por los bares',
+    collectLuck: 'Acaricia a los burros cuando se paren',
+    collect: 'Pomadas por los bares y caricias a los burros cuando se paren',
+    back: '¡Ya está! Vuelve con Tòfol',
+    find: 'Ve a bailar al bar de Sa Font, con Carme',
+    give: '💃 Bailar',
   },
-  bumped: 'Uiii! Alerta amb es ases 🫏',
-  statHits: 'Envestides d’ase',
+  bumped: '¡Uiii! Cuidado con los burros 🫏',
+  statHits: 'Empujones de burro',
   meetScene: FERRERIES_MEET,
 };
 
@@ -159,7 +159,7 @@ export class Level1 implements Level {
   // Es jaleo: confeti en el aire, purpurina y pistolas de agua entre la gente
   private airConfetti = new Confetti(110, 9, 7);
   private glitter = new Glitter();
-  private jetT = 1.5;
+  private shooters: { p: Person; gun: THREE.Group; yaw: number; aim: number; fireT: number; turnT: number }[] = [];
   private tossT = 2;
   private noteT = 0;
   private partyColors: Float32Array;
@@ -196,11 +196,12 @@ export class Level1 implements Level {
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI / 2;
+    this.buildShooters();
     this.solids.push(...this.world.people);
 
     this.tofol = V.horses
       ? makePerson({ skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x1f3a6b, hair: 0x6b3f22, hairStyle: 'long', skirt: true, eyes: 0x5a3a22 })
-      : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x222222, hair: 0x9a9a9a, hairStyle: 'short', beard: true });
+      : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x9a9a9a, hairStyle: 'short', beard: true, shorts: true });
     this.tofol.root.position.copy(this.world.tofolPos);
     // Delantal de Tòfol
     if (!V.horses && this.tofol.rig) {
@@ -212,7 +213,7 @@ export class Level1 implements Level {
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
-    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044] }); // aquel día, con la del Barça
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }); // aquel día, con la del Barça
     this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
     this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
@@ -367,7 +368,7 @@ export class Level1 implements Level {
       dialogue(this.T.intro, () => (V.introChats ? phoneChat(V.introChats, go) : go()));
     }, 2300);
     audio.startMusic();
-    audio.ambience(0.1);
+    audio.ambience(0.03);
   }
 
   get threeScene() {
@@ -646,6 +647,7 @@ export class Level1 implements Level {
     this.near[0].x = pp0.x;
     this.near[0].z = pp0.z;
     animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear, dt, this.near);
+    this.updateShooters(dt);
     this.jaleoFx(dt);
     this.fx.update(dt);
     (this.world.lights.material as THREE.PointsMaterial).size = 0.9 + Math.sin(this.t * 3) * 0.08;
@@ -807,11 +809,11 @@ export class Level1 implements Level {
         const s = rearingNear;
         this.pendingAction = () => this.touchDonkey(s);
       } else if (this.stage === 'kiss') {
-        label = '💋 Fer-li un petó';
+        label = '💋 Darle un beso';
         pulse = true;
         this.pendingAction = () => this.startKiss();
       } else if (dT < 3.5) {
-        label = 'Xerrar';
+        label = 'Hablar';
         this.pendingAction = () => this.talkTofol();
       } else if (this.V.findFirst && this.stage === 'findMarc' && this.gasMovesLeft <= 0 && dM < 3.5) {
         label = '📍 Aquí!';
@@ -822,7 +824,7 @@ export class Level1 implements Level {
         pulse = true;
         this.pendingAction = () => this.startBarDance();
       } else if (dM < 3.5 && this.stage !== 'barDance' && this.stage !== 'meet' && this.stage !== 'eyes' && this.stage !== 'pairDance' && this.stage !== 'kissing') {
-        label = 'Xerrar';
+        label = 'Hablar';
         this.pendingAction = () => {
           this.busy = true;
           dialogue(this.T.carme, () => (this.busy = false));
@@ -870,9 +872,9 @@ export class Level1 implements Level {
           this.onComplete({
             stars,
             stats: [
-              ['Carícies perfectes', `${this.perfects}/3`],
+              ['Caricias perfectas', `${this.perfects}/3`],
               [this.V.statHits, `${this.hits}`],
-              ['Temps', clock(this.playTime)],
+              ['Tiempo', clock(this.playTime)],
             ],
           }),
         );
@@ -977,10 +979,10 @@ export class Level1 implements Level {
       this.stage = 'eyes';
       this.eyesT = 0;
       this.updateHud();
-      audio.ambience(0.02);
+      audio.ambience(0.008);
       dialogue(M.eyes, () => {
         this.stage = 'meet';
-        audio.ambience(0.1);
+        audio.ambience(0.03);
         this.updateHud();
         dialogue([...M.name, ...this.T.smallTalk, ...M.dance], toDance);
       });
@@ -1023,6 +1025,89 @@ export class Level1 implements Level {
   }
 
   /** La primera mirada: desde detrás del hombro de Marc, la cámara se acerca despacio a los ojos de ella. */
+  /** Gente con pistolas de agua de colores, en el corro de la plaça y por la calle. */
+  private buildShooters() {
+    const c = this.world.plazaCenter;
+    const spots: [number, number][] = [
+      [c.x + Math.cos(0.4) * 7.6, c.z + Math.sin(0.4) * 6.6],
+      [c.x + Math.cos(2.3) * 7.6, c.z + Math.sin(2.3) * 6.6],
+      [c.x + Math.cos(3.6) * 7.6, c.z + Math.sin(3.6) * 6.6],
+      [c.x + Math.cos(5.3) * 7.6, c.z + Math.sin(5.3) * 6.6],
+      [-30, 1.6],
+      [-15, -2.4],
+      [20, 2.2],
+    ];
+    const looks: PersonLook[] = [
+      { skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x5a3a22, hairStyle: 'long', shorts: true },
+      { skin: 0xd9a27c, shirt: 0x1b998b, pants: 0x222222, hair: 0x2b1d14, hairStyle: 'short', male: true, shorts: true },
+      { skin: 0xe8b894, shirt: 0xf4d35e, pants: 0x6b4a2b, hair: 0x111111, hairStyle: 'pony', shorts: true },
+      { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x3b4a6b, hair: 0x8a5a2a, hairStyle: 'short', male: true, shorts: true },
+    ];
+    const gunCols = [0xff7a1a, 0x2bc4ff, 0x7ed321, 0xff3fa4, 0xffd21a];
+    spots.forEach(([x, z], i) => {
+      const p = makePerson(looks[i % looks.length]);
+      p.root.position.set(x, 0, z);
+      const yaw = Math.atan2(c.x - x, c.z - z);
+      p.root.rotation.y = yaw;
+      this.scene.add(p.root);
+      const col = gunCols[i % gunCols.length];
+      const plastic = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: 0.35 });
+      const gun = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.24), plastic);
+      body.position.z = 0.06;
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05), plastic);
+      grip.position.set(0, -0.07, -0.01);
+      grip.rotation.x = -0.25;
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 14), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xbfe8ff), roughness: 0.1, transparent: true, opacity: 0.6 }));
+      tank.rotation.x = Math.PI / 2;
+      tank.position.set(0, 0.07, 0.04);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.1, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xffffff), roughness: 0.4 }));
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.z = 0.22;
+      gun.add(body, grip, tank, barrel);
+      gun.traverse((o) => (o.castShadow = true));
+      this.scene.add(gun);
+      this.shooters.push({ p, gun, yaw, aim: yaw, fireT: 0.5 + i * 0.6, turnT: 1 + Math.random() * 2 });
+      this.world.people.push({ x, z, r: 0.35 });
+    });
+  }
+
+  private updateShooters(dt: number) {
+    const fire = this.stage !== 'eyes' && this.stage !== 'ending' && this.stage !== 'done';
+    const pp = this.player.root.position;
+    for (const s of this.shooters) {
+      const r = s.p.root;
+      // Van girándose: apuntan a otro lado del corro de vez en cuando
+      if ((s.turnT -= dt) < 0) {
+        s.turnT = 2 + Math.random() * 3;
+        s.aim = s.yaw + (Math.random() - 0.5) * 2.2;
+      }
+      r.rotation.y += (s.aim - r.rotation.y) * Math.min(1, dt * 2);
+      animatePerson(s.p, dt, 'idle');
+      if (s.p.rig) s.p.rig.force = { armR: 1 };
+      s.p.armR.rotation.set(-1.35, 0, 0.12);
+      s.p.elbowR.rotation.x = -0.15;
+      // La pistola va en la mano, apuntando hacia donde mira (y un poco arriba)
+      const hand = s.p.rig?.bones.get('LeftHand'); // el brazo «R» del muñeco es la mano izquierda del modelo
+      if (hand) hand.getWorldPosition(this.v1);
+      else this.v1.set(r.position.x, 1.35, r.position.z);
+      const pitch = 0.22;
+      s.gun.position.copy(this.v1);
+      s.gun.rotation.set(-pitch, r.rotation.y, 0, 'YXZ');
+      if (!fire || Math.hypot(r.position.x - pp.x, r.position.z - pp.z) > 22) continue;
+      if ((s.fireT -= dt) < 0) {
+        s.fireT = 1.6 + Math.random() * 2.4;
+        const dir = this.v2.set(Math.sin(r.rotation.y) * Math.cos(pitch), Math.sin(pitch), Math.cos(r.rotation.y) * Math.cos(pitch));
+        const muzzle = this.v1.addScaledVector(dir, 0.28);
+        this.fx.jet(muzzle, dir, 16, 7);
+        if (Math.random() < 0.5) {
+          const d2 = dir.clone();
+          later(() => this.fx.jet(s.gun.position.clone().addScaledVector(d2, 0.28), d2, 12, 7), 250);
+        }
+      }
+    }
+  }
+
   /** Ambiente del jaleo: confeti y purpurina siempre alrededor; de vez en cuando alguien dispara su pistola de agua o tira un puñado de confeti. */
   private jaleoFx(dt: number) {
     const pp = this.player.root.position;
@@ -1035,18 +1120,6 @@ export class Level1 implements Level {
       const x = b.x + (b.ox ?? 0), z = b.z + (b.oz ?? 0);
       return Math.hypot(x - pp.x, z - pp.z) < 13 ? this.v2.set(x, 0, z) : null;
     };
-    if ((this.jetT -= dt) < 0) {
-      this.jetT = 0.5 + Math.random() * 1.1;
-      const at = pick();
-      if (at) {
-        // Apuntan a otra persona o al aire, nunca a cámara
-        const a = Math.random() * Math.PI * 2;
-        const dir = this.v1.set(Math.cos(a), 0.35 + Math.random() * 0.35, Math.sin(a)).normalize();
-        at.y = 1.45;
-        at.addScaledVector(dir, 0.35);
-        this.fx.jet(at, dir, 12, 6 + Math.random() * 2);
-      }
-    }
     if ((this.tossT -= dt) < 0) {
       this.tossT = 1.2 + Math.random() * 2;
       const at = pick();
@@ -1085,7 +1158,7 @@ export class Level1 implements Level {
     this.input.reset();
     this.hud.setAction(null);
     audio.stopMusic();
-    audio.ambience(0.04);
+    audio.ambience(0.015);
   }
 
   /** El beso: se acercan, ella le rodea el cuello, él la coge de la cintura; corazones y fuegos artificiales. */
@@ -1111,7 +1184,7 @@ export class Level1 implements Level {
       this.confetti.mesh.visible = true;
       this.confetti.active = true;
       audio.startMusic();
-      audio.ambience(0.12);
+      audio.ambience(0.04);
       audio.cheer(0.6);
       this.updateHud();
     }

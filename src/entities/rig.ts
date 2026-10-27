@@ -35,6 +35,13 @@ interface KindData {
 
 let data: Partial<Record<Kind, KindData>> = {};
 let parts: Uint8ClampedArray | null = null;
+/** Parte del cuerpo de la mujer en una coordenada de textura (1 piel, 2 pelo, 3 top, 4 pantalón, 5 zapatos, 6 cara). */
+export const womanPartAt = (u: number, v: number) => {
+  if (!parts) return 0;
+  const x = Math.min(511, Math.max(0, Math.floor(u * 512)));
+  const y = Math.min(511, Math.max(0, Math.floor(v * 512)));
+  return Math.round(parts[(y * 512 + x) * 4] / 36);
+};
 let loading: Promise<void> | null = null;
 let ready = false;
 
@@ -275,8 +282,8 @@ const texCache = new Map<string, THREE.Texture>();
 
 /** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : ''}`;
-  const over = look.jumpsuit ? shortSuit().mask : null;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}`;
+  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
   let t = texCache.get(k);
   if (t) return t;
   const img = src.image as HTMLImageElement | ImageBitmap;
@@ -533,7 +540,11 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
       m.geometry = tee.geo;
       stripes(mat, tee.axis, tee.period, look.stripes);
     }
-    if (kind === 'woman' && look.jumpsuit && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
+    if (kind === 'man' && look.shorts && /Outfit_Bottom/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
+      m.geometry = restHeights(m as THREE.SkinnedMesh, kind);
+      shortsShader(mat, look.skin);
+    }
+    if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
   });
 
   const B = boneMap(model);
@@ -653,6 +664,55 @@ function skinMatrix(m: THREE.SkinnedMesh, i: number) {
     for (let e = 0; e < 16; e++) acc.elements[e] += t.elements[e] * wt;
   }
   return new THREE.Matrix4().multiplyMatrices(m.matrixWorld, m.bindMatrixInverse).multiply(acc).multiply(m.bindMatrix);
+}
+
+// ---------- Pantalón corto ----------
+
+let legs: Uint8Array | null = null;
+/** Solo las piernas del mono corto (sin taparle la barriga): pantalón corto de ella. */
+function legsMask() {
+  legs ??= shortSuit().mask.map((v) => (v === 6 ? 6 : 0));
+  return legs;
+}
+
+
+const restCache = new Map<string, THREE.BufferGeometry>();
+/** La geometría con la altura de cada vértice en la pose de carga (0 pies … 1 cabeza) como atributo aRest. */
+function restHeights(m: THREE.SkinnedMesh, kind: Kind) {
+  const hit = restCache.get(m.geometry.uuid);
+  if (hit) return hit;
+  const src = data[kind]!.gltf.scene;
+  let orig: THREE.SkinnedMesh | null = null;
+  src.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === m.geometry) orig = o as THREE.SkinnedMesh;
+  });
+  src.updateWorldMatrix(true, true);
+  const box = new THREE.Box3();
+  src.traverse((q) => {
+    if ((q as THREE.Mesh).isMesh) box.expandByObject(q);
+  });
+  const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+  const r = new Float32Array(pos.count);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) r[i] = (v.fromBufferAttribute(pos, i).applyMatrix4(skinMatrix((orig ?? m) as THREE.SkinnedMesh, i)).y - box.min.y) / (box.max.y - box.min.y || 1);
+  const geo = m.geometry.clone();
+  geo.setAttribute('aRest', new THREE.BufferAttribute(r, 1));
+  restCache.set(m.geometry.uuid, geo);
+  return geo;
+}
+
+/** Por debajo de medio muslo el pantalón se pinta de piel: pantalón corto. */
+export function shortsShader(mat: THREE.MeshStandardMaterial, skin: number, hem = 0.37) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    sh.uniforms.legSkin = { value: lin(skin) };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aRest;\nvarying float vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 legSkin;\nvarying float vRest;')
+      .replace('#include <map_fragment>', `#include <map_fragment>\nif (vRest < ${hem.toFixed(3)}) diffuseColor.rgb = legSkin * 0.92;`);
+  };
+  mat.customProgramCacheKey = () => 'shorts';
 }
 
 // ---------- Camiseta a rayas (la del Barça) ----------

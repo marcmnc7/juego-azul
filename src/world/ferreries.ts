@@ -573,12 +573,12 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
 
   // Multitud (4 variantes instanciadas). Evitamos el círculo central donde van los ases.
   const looks: PersonLook[] = [
-    { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'short' },
-    { skin: 0xd9a27c, shirt: 0xd7263d, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true },
-    { skin: 0xf0c8a6, shirt: 0x1b998b, pants: 0xe8e0d0, hair: 0xb07a3a, hairStyle: 'cap' },
-    { skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'pony', skirt: true },
-    { skin: 0xe2b28c, shirt: 0xffffff, pants: 0x6b4a2b, hair: 0x8a8a8a, hairStyle: 'short' },
-    { skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0x3a2516, hairStyle: 'bun', skirt: true },
+    { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'short', shorts: true },
+    { skin: 0xd9a27c, shirt: 0xd7263d, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true, shorts: true },
+    { skin: 0xf0c8a6, shirt: 0x1b998b, pants: 0xe8e0d0, hair: 0xb07a3a, hairStyle: 'cap', shorts: true },
+    { skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'pony', skirt: true, shorts: true },
+    { skin: 0xe2b28c, shirt: 0xffffff, pants: 0x6b4a2b, hair: 0x8a8a8a, hairStyle: 'short', shorts: true },
+    { skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0x3a2516, hairStyle: 'bun', skirt: true, shorts: true },
   ];
   const spots: { x: number; z: number; ry: number }[] = [];
   const near = (px: number, pz: number, cx: number, cz: number, rr: number) => Math.hypot(px - cx, pz - cz) < rr;
@@ -629,9 +629,9 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     }
   });
   const partyLooks: PersonLook[] = [
-    { skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x2b2b3a, hair: 0x6a4a2a, hairStyle: 'short' },
-    { skin: 0xe8b894, shirt: 0xd7263d, pants: 0xffffff, hair: 0x2b1d14, hairStyle: 'long', skirt: true },
-    { skin: 0xd9a27c, shirt: 0xf4d35e, pants: 0x2b2b3a, hair: 0x111111, hairStyle: 'bun', skirt: true },
+    { skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x2b2b3a, hair: 0x6a4a2a, hairStyle: 'short', shorts: true },
+    { skin: 0xe8b894, shirt: 0xd7263d, pants: 0xffffff, hair: 0x2b1d14, hairStyle: 'long', skirt: true, shorts: true },
+    { skin: 0xd9a27c, shirt: 0xf4d35e, pants: 0x2b2b3a, hair: 0x111111, hairStyle: 'bun', skirt: true, shorts: true },
   ];
   partyLooks.forEach((look, li) => {
     const mine = dancers.filter((_, i) => i % partyLooks.length === li);

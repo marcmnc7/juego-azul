@@ -32,14 +32,14 @@ export function preloadDonkey() {
   loading ??= loadGLB(horseUrl)
     .then((g) => {
       const src = g.scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
-      prep = prepare(src, g.animations[0], 2.3, 1.3);
+      prep = prepare(src, g.animations[0], 2.9, 1.15, true);
       prepHorse = prepare(src, g.animations[0], 1, 1.6);
     })
     .catch((e) => console.warn('[donkey] no se pudo cargar el ase', e));
   return loading;
 }
 
-function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, backHeight: number): Prepared {
+function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, backHeight: number, donkey = false): Prepared {
   const geo = src.geometry.clone();
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const morphs = geo.morphAttributes.position as THREE.BufferAttribute[];
@@ -71,6 +71,8 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, b
     }
     for (const i of ear) pos.setXYZ(i, nb.get(i)!.x, nb.get(i)!.y, nb.get(i)!.z);
   }
+
+  if (donkey) burro(pos, morphs);
 
   // Medidas: lomo (donde va la silla), suelo y hocico
   let minY = Infinity, backY = -Infinity;
@@ -115,6 +117,46 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, b
   }
   mixer.uncacheRoot(dummy);
   return { geo, clip, name: src.name, scale, minY, backY, standT, stride: reach * scale * 1.6 };
+}
+
+/**
+ * Del caballo al burro: patas más cortas, barriga más ancha y una cabeza grande y pesada.
+ * Se deforma la posición final de cada vértice (base y base + cada morph), así el galope sigue valiendo.
+ */
+function burro(pos: THREE.BufferAttribute, morphs: THREE.BufferAttribute[]) {
+  const n = pos.count;
+  let y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i));
+    z0 = Math.min(z0, pos.getZ(i)); z1 = Math.max(z1, pos.getZ(i));
+  }
+  const H = y1 - y0, L = z1 - z0;
+  const legTop = y0 + H * 0.42; // por encima, cuerpo; por debajo, patas
+  const neckZ = z1 - L * 0.3; // a partir de aquí, cuello y cabeza
+  const hp = new THREE.Vector3(0, y0 + H * 0.62, neckZ); // la cabeza crece desde la base del cuello
+  const f = (v: THREE.Vector3) => {
+    if (v.y < legTop) v.y = legTop - (legTop - v.y) * 0.58;
+    else v.x *= 1 + 0.16 * Math.min(1, (v.y - legTop) / (H * 0.15));
+    if (v.z > neckZ && v.y > hp.y - H * 0.1) {
+      const k = Math.min(1, (v.z - neckZ) / (L * 0.12));
+      v.sub(hp).multiplyScalar(1 + 0.22 * k).add(hp);
+      v.y -= k * H * 0.06; // la lleva más baja que un caballo
+    }
+    return v;
+  };
+  const b = new THREE.Vector3(), a = new THREE.Vector3();
+  const base: THREE.Vector3[] = [];
+  for (let i = 0; i < n; i++) base.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+  for (const m of morphs)
+    for (let i = 0; i < n; i++) {
+      a.set(m.getX(i), m.getY(i), m.getZ(i)).add(base[i]);
+      f(a).sub(f(b.copy(base[i])));
+      m.setXYZ(i, a.x, a.y, a.z);
+    }
+  for (let i = 0; i < n; i++) {
+    f(b.copy(base[i]));
+    pos.setXYZ(i, b.x, b.y, b.z);
+  }
 }
 
 const lin = (hex: number) => new THREE.Color(hex);

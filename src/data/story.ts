@@ -29,13 +29,13 @@ export const LEVELS: LevelInfo[] = [
 // El xat d'aquell vespre va tal qual a chats.ts (ferreriesTarde).
 export const FERRERIES = {
   intro: [
-    { who: 'Narrador', text: 'Ferreries. 25 d’agost de 2025. Darrer dia de ses festes de Sant Bartomeu: es jaleo d’ases.' },
-    { who: 'Narrador', text: 'Pistoles d’aigua, purpurina i confeti per tot. Has pujat amb ses amigues. Encara no el coneixes.' },
+    { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2025. Último día de las fiestas de Sant Bartomeu: el jaleo de burros.' },
+    { who: 'Narrador', text: 'Pistolas de agua, purpurina y confeti por todas partes. Has subido con tus amigas. Todavía no le conoces.' },
   ] as Line[],
   tofolQuest: [
     { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
     { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
-    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es tassó. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
+    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es got. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
   ] as Line[],
   tofolNotYet: [{ who: 'Tòfol', text: 'Encara no. Pomades i ases, que es jaleo no espera.' }] as Line[],
   tofolDone: [
@@ -47,7 +47,7 @@ export const FERRERIES = {
   carme: [{ who: 'Carme', text: 'Ja era hora! Vina, balla!' }] as Line[],
   marcMeet: [
     { who: 'Marc', text: 'Carme! Què fas per aquí?' },
-    { who: 'Carme', text: 'Ballar. Millor que tu, segur.' },
+    { who: 'Carme', text: 'Res, aquí amb una amiga.' },
     { who: 'Marc', text: '¿Y tú? Yo soy Marc.' },
   ] as Line[],
   smallTalk: [
@@ -60,13 +60,13 @@ export const FERRERIES = {
     { who: 'Marc', text: 'Pues bienvenida otra vez. Aquí se baila como se puede.' },
   ] as Line[],
   hints: {
-    pomada: 'Pomada! 🍋',
-    luck: 'Carícia de sort! 🍀',
-    dropped: 'Uiii! Un ase t’ha envestit i se t’ha caigut sa pomada',
-    rear: 'Ara! Fes-li una carícia',
-    perfect: 'Carícia perfecta! ✨🍀',
-    late: 'Pels pèls 🍀',
-    allLuck: 'Tres carícies! Sa plaça sencera t’aplaudeix 👏',
+    pomada: '¡Pomada! 🍋',
+    luck: '¡Caricia de la suerte! 🍀',
+    dropped: '¡Uiii! Un burro te ha empujado y se te ha caído la pomada',
+    rear: '¡Ahora! Hazle una caricia',
+    perfect: '¡Caricia perfecta! ✨🍀',
+    late: 'Por los pelos 🍀',
+    allLuck: '¡Tres caricias! Toda la plaza te aplaude 👏',
   },
 };
 
@@ -82,7 +82,6 @@ export const FERRERIES_MEET = {
   insta: [
     { who: 'Marc', text: 'Oye… ¿me das tu Instagram?' },
     { who: 'Margaux', text: 'Apunta.' },
-    { who: 'Narrador', text: 'Aquell vespre ell la va voler veure. Ella sopava a La Vall amb els amics. Quedaren per l’endemà.' },
   ] as Line[],
 };
 

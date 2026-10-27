@@ -222,6 +222,8 @@ export interface PersonLook {
   jumpsuit?: boolean;
   /** Camiseta a rayas verticales de dos colores (la del Barça). */
   stripes?: [number, number];
+  /** Pantalón corto (en la multitud): piernas al aire por debajo de medio muslo. */
+  shorts?: boolean;
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
 }
