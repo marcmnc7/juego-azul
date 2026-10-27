@@ -94,6 +94,20 @@ export class Phys {
     ch.col.setTranslation({ x: pos.x, y: pos.y + 0.5 + r, z: pos.z });
     ch.cc.computeColliderMovement(ch.col, { x: dx, y: 0, z: dz }, undefined, QUERY_SOLID);
     const m = ch.cc.computedMovement();
+    // Si ya está metida en un sólido (un personaje que se le ha acercado, una caja nueva justo
+    // encima, un salto de prueba), el controlador no la deja moverse en ninguna dirección: se le
+    // deja salir alejándose del centro de lo que pisa, sin que pueda meterse más.
+    const want = Math.hypot(dx, dz);
+    if (want > 1e-4 && Math.hypot(m.x, m.z) < want * 0.05) {
+      let out: { x: number; z: number } | null = null;
+      this.world.intersectionsWithShape(ch.col.translation(), ch.col.rotation(), ch.col.shape, (c) => {
+        const t = c.translation();
+        const ax = pos.x - t.x, az = pos.z - t.z;
+        if (ax * dx + az * dz > 0) out = { x: dx, z: dz };
+        return !out;
+      }, undefined, QUERY_SOLID);
+      if (out) return out;
+    }
     return { x: m.x, z: m.z };
   }
 
