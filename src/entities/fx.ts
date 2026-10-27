@@ -21,6 +21,7 @@ interface P {
   max: number;
   dust?: boolean;
   spray?: boolean;
+  small?: boolean;
 }
 
 function dustTexture() {
@@ -75,6 +76,7 @@ export class Particles {
       p.v.set((Math.random() - 0.5) * spread, (2 + Math.random() * 2.5) * up, (Math.random() - 0.5) * spread);
       p.dust = kind === 'dust';
       p.spray = kind === 'spray';
+      p.small = kind === '🎵' || kind === '🎶';
       p.max = p.life = 1.2 + Math.random() * 0.6;
       p.s.visible = true;
     }
@@ -91,8 +93,8 @@ export class Particles {
         p.s.material.opacity = k * 0.7;
       } else {
         p.v.y -= 2.5 * dt;
-        p.s.scale.setScalar(p.spray ? 0.12 + (1 - k) * 0.25 : 0.5 + (1 - k) * 0.3);
-        p.s.material.opacity = Math.min(1, k * 2);
+        p.s.scale.setScalar(p.spray ? 0.12 + (1 - k) * 0.25 : p.small ? 0.22 + (1 - k) * 0.1 : 0.5 + (1 - k) * 0.3);
+        p.s.material.opacity = p.small ? Math.min(0.75, k * 1.5) : Math.min(1, k * 2);
       }
       p.s.position.addScaledVector(p.v, dt);
       if (p.life <= 0) p.s.visible = false;

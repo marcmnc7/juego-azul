@@ -562,7 +562,8 @@ export class Level1 implements Level {
     ph.walls = W.colliders.filter((c) => c.maxX - c.minX < 60 && c.maxZ - c.minZ < 60);
     ph.bounds = W.bounds;
     const geo = new THREE.CylinderGeometry(0.07, 0.05, 0.17, 14);
-    const mats = [toon({ color: 0xf2f2f2, roughness: 0.35 }), toon({ color: 0xc9e7a6, roughness: 0.35 }), toon({ color: 0xd62828, roughness: 0.45 })];
+    // Vasos de plástico transparentes de pomada (gin con limonada): alguno con un culo de limonada
+    const mats = [toon({ color: 0xf4f7f2, roughness: 0.15, transparent: true, opacity: 0.55 }), toon({ color: 0xf1ecb0, roughness: 0.2, transparent: true, opacity: 0.7 })];
     const B = W.bounds;
     let n = 0;
     for (let i = 0; i < 600 && n < 36; i++) {
@@ -637,9 +638,9 @@ export class Level1 implements Level {
     // Notas musicales saliendo de los bares cercanos
     this.noteT -= dt;
     if (this.noteT <= 0) {
-      this.noteT = 0.35;
+      this.noteT = 0.9;
       for (const b of this.world.bars) {
-        if (b.distanceTo(this.player.root.position) < 22) this.fx.burst(this.v1.copy(b).setY(2.8).setX(b.x + (Math.random() - 0.5) * 4), Math.random() < 0.5 ? '🎵' : '🎶', 1, 0.8, 0.5);
+        if (b.distanceTo(this.player.root.position) < 22) this.fx.burst(this.v1.copy(b).setY(2.8).setX(b.x + (Math.random() - 0.5) * 4), Math.random() < 0.5 ? '🎵' : '🎶', 1, 0.6, 0.3);
       }
     }
     this.fireworks.update(dt);
