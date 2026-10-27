@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { airOf } from '../core/air';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toon, addOutline, hdSurfaces } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
 import { RigCrowd, crowdReady } from './crowdRig';
@@ -77,26 +77,56 @@ export class Merger {
 }
 
 /** Roca irregular: icosaedro deformado con ruido, de caras planas como la piedra partida. */
-function rockGeo(seed: number, rough = 0.35, detail = 2) {
-  const g = new THREE.IcosahedronGeometry(0.5, detail);
+// Ruido de valor 3D (para dar forma a rocas y matas)
+function vHash(x: number, y: number, z: number, seed: number) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 19.19) * 43758.5453;
+  return s - Math.floor(s);
+}
+function vNoise(x: number, y: number, z: number, seed: number) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const fx = x - ix, fy = y - iy, fz = z - iz;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+  const L = (a: number, b: number, t: number) => a + (b - a) * t;
+  const h = (dx: number, dy: number, dz: number) => vHash(ix + dx, iy + dy, iz + dz, seed);
+  return L(L(L(h(0, 0, 0), h(1, 0, 0), u), L(h(0, 1, 0), h(1, 1, 0), u), v), L(L(h(0, 0, 1), h(1, 0, 1), u), L(h(0, 1, 1), h(1, 1, 1), u), v), w);
+}
+function fbm(x: number, y: number, z: number, seed: number, oct = 4) {
+  let a = 0.5, f = 1, t = 0;
+  for (let i = 0; i < oct; i++) {
+    t += a * (vNoise(x * f, y * f, z * f, seed + i * 7) - 0.5);
+    a *= 0.5;
+    f *= 2.07;
+  }
+  return t;
+}
+
+/**
+ * Roca (o mata) de superficie suave: esfera subdividida deformada con ruido fractal, con los
+ * vértices soldados para que la luz resbale en vez de dibujar facetas. kind 'rock' añade estratos
+ * horizontales y una base plana; 'bush' hace lóbulos redondos como copas de árbol.
+ */
+function rockGeo(seed: number, rough = 0.35, detail = 2, kind: 'rock' | 'bush' = 'rock') {
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(0.5, detail);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
   const p = g.attributes.position;
   const v = new THREE.Vector3();
-  const r = (x: number) => {
-    const s = Math.sin(x * 12.9898 + seed * 78.233) * 43758.5453;
-    return s - Math.floor(s);
-  };
-  // Ruido coherente: la misma posición (vértices compartidos) siempre se desplaza igual
-  const key = new Map<string, number>();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    const k = `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
-    let d = key.get(k);
-    if (d === undefined) {
-      d = 1 + (r(v.x * 3.1 + v.y * 5.7 + v.z * 7.3) - 0.5) * rough + Math.sin(v.x * 7 + seed) * Math.sin(v.z * 6) * rough * 0.4;
-      key.set(k, d);
+    const n = v.clone().normalize();
+    let d: number;
+    if (kind === 'bush') {
+      // Lóbulos grandes y bultitos de hojas
+      d = 1 + fbm(n.x * 1.6, n.y * 1.6, n.z * 1.6, seed, 2) * rough * 2.2 + fbm(n.x * 6, n.y * 6, n.z * 6, seed + 3, 2) * rough * 0.7;
+    } else {
+      d = 1 + fbm(n.x * 1.3, n.y * 1.3, n.z * 1.3, seed, 4) * rough * 1.9;
+      // Estratos: escalones suaves en horizontal, como la piedra sedimentaria (marès)
+      const st = n.y * 5 + fbm(n.x * 2, 0, n.z * 2, seed + 11, 2) * 2;
+      d += (st - Math.floor(st) - 0.5) * rough * 0.12;
     }
-    v.multiplyScalar(d);
-    if (v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.4; // base algo plana
+    v.copy(n).multiplyScalar(0.5 * d);
+    if (kind === 'rock' && v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.35; // base algo plana
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -113,9 +143,11 @@ export const G = {
   capsule: new THREE.CapsuleGeometry(0.5, 1, 4, 10),
   dome: new THREE.SphereGeometry(0.5, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
   smile: new THREE.TorusGeometry(0.5, 0.18, 4, 10, Math.PI),
-  rock: rockGeo(1),
-  rock2: rockGeo(2, 0.45),
-  bush: rockGeo(3, 0.3, 1),
+  rock: rockGeo(1, 0.4, 3),
+  rock2: rockGeo(2, 0.5, 3),
+  bush: rockGeo(3, 0.32, 2, 'bush'),
+  /** Roca de menos polígonos, para acantilados hechos de cientos de piezas. */
+  crag: rockGeo(4, 0.55, 2),
 };
 
 // Versión de pocos polígonos para la multitud (cientos de personas)

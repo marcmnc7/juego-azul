@@ -45,7 +45,7 @@ function rotateWorld(b: THREE.Object3D, rot: THREE.Quaternion, w: number) {
 }
 
 /** IK de dos huesos (hombro-codo-mano) hacia t, con el codo empujado hacia pole. */
-function twoBone(upper: THREE.Object3D, lower: THREE.Object3D, end: THREE.Object3D, t: THREE.Vector3, pole: THREE.Vector3, w: number) {
+export function twoBone(upper: THREE.Object3D, lower: THREE.Object3D, end: THREE.Object3D, t: THREE.Vector3, pole: THREE.Vector3, w: number) {
   if (w <= 0) return;
   for (let it = 0; it < 2; it++) {
     const a = upper.getWorldPosition(_a), b = lower.getWorldPosition(_b), c = end.getWorldPosition(_c);

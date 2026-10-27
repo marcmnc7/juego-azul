@@ -155,7 +155,15 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         float gFoot = (1.0 - smoothstep(0.0, 0.75, vGrainPos.y)) * step(-0.3, vGrainPos.y) * gWall;
         diffuseColor.rgb *= 1.0 - gFoot * (0.16 + gN * 0.12);
         float gStreak = gWall * smoothstep(0.55, 0.9, gNoise(vec3(vGrainPos.x * 3.0 + vGrainPos.z * 3.0, vGrainPos.y * 0.25, 0.0)));
-        diffuseColor.rgb *= 1.0 - gStreak * 0.06;`,
+        diffuseColor.rgb *= 1.0 - gStreak * 0.06;
+        // Lo que mira hacia abajo recibe menos cielo (aleros, balcones, copas por debajo)
+        diffuseColor.rgb *= 1.0 - clamp(-vGrainN.y, 0.0, 1.0) * 0.2;
+        if (sIdx == 7) {
+          // Copas de árbol y matas: por dentro y por debajo, sombra; arriba, hojas al sol con motas
+          diffuseColor.rgb *= mix(0.5, 1.1, smoothstep(-0.7, 0.9, vGrainN.y));
+          float lf = gNoise(vGrainPos * 11.0) * 0.6 + gNoise(vGrainPos * 27.0) * 0.4;
+          diffuseColor.rgb *= 0.78 + lf * 0.42;
+        }`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -678,7 +686,17 @@ export function makeSea(size: [number, number], color: number, sunDir: THREE.Vec
       distortionScale: opts.night ? 0.8 : 1.3,
       fog: true,
     });
-    const u = (w.material as THREE.ShaderMaterial).uniforms;
+    // Agua mediterránea: el reflejo del cielo se tiñe del color del mar y nunca lo tapa del todo,
+    // así el mar se ve azul y profundo aunque el cielo del horizonte sea casi blanco
+    const wm = w.material as THREE.ShaderMaterial;
+    wm.fragmentShader = wm.fragmentShader.replace(
+      /vec3 albedo = mix\([^;]*;/,
+      `vec3 refl = reflectionSample * mix( vec3( 1.0 ), waterColor * 2.6 + 0.15, 0.7 );
+      float rfl = min( reflectance, 0.48 );
+      vec3 deep = waterColor * ( 0.5 + 0.7 * max( 0.0, dot( surfaceNormal, eyeDirection ) ) );
+      vec3 albedo = mix( ( sunColor * diffuseLight * 0.22 + deep ) * getShadowMask(), ( vec3( 0.03 ) + refl * 0.9 + reflectionSample * specularLight ), rfl );`,
+    );
+    const u = wm.uniforms;
     u.size.value = 6;
     let last = performance.now();
     w.onBeforeRender = ((orig) =>

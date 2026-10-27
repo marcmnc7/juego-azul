@@ -47,6 +47,15 @@ function villa(m: Merger, x: number, z: number, faceX: 1 | -1, colliders: Box2[]
       for (const s of [-1, 1]) m.add(G.box, SHUTTER, fx + faceX * 0.06, y, z + wz + s * 0.7, 0, 0, 0, 0.05, 1.2, 0.48);
     }
   m.add(G.box, 0x6b4a2e, fx, 1.05, z, 0, 0, 0, 0.06, 2.1, 1.0); // puerta
+  // Por detrás (lo que se ve desde el mar): ventanas con persiana, un toldo y la chimenea
+  const bx = x - faceX * (d / 2 + 0.05);
+  for (const wz of [-w / 3, 0, w / 3])
+    for (const y of h > 4 ? [1.5, 4.2] : [1.5]) {
+      m.add(G.box, 0x30384a, bx, y, z + wz, 0, 0, 0, 0.05, 1.0, 0.8);
+      for (const s of [-1, 1]) m.add(G.box, SHUTTER, bx - faceX * 0.06, y, z + wz + s * 0.62, 0, 0, 0, 0.05, 1.1, 0.42);
+    }
+  m.add(G.box, seed % 2 ? 0x2f6a9a : 0xb8453a, bx - faceX * 0.7, 2.55, z, 0, 0, faceX * 0.35, 1.5, 0.05, w * 0.5);
+  m.add(G.box, WHITE, x + faceX * 1.5, h + 0.9, z + w / 2 - 1.2, 0, 0, 0, 0.6, 1.4, 0.6);
   // Jardín delante con muro encalado y buganvilla
   const gx = x + faceX * (d / 2 + 3.2);
   for (const [z0, z1] of [[z - w / 2 - 1, z - 0.8], [z + 0.8, z + w / 2 + 1]]) {

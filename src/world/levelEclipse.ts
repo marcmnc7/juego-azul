@@ -13,7 +13,8 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { princesaGame, lostMoto } from '../ui/minis';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
-import { FAROLA_WALK, COAST_Z } from './saFarola';
+import { FAROLA_WALK, COAST_Z, buildSaFarola } from './saFarola';
+import { buildKayak as kayakBoat, buildFerry, type Kayak } from './kayak';
 import { canvasTex } from './deco';
 import { buildStreet } from './homeStreet';
 import { buildSurroundings } from './surround';
@@ -28,6 +29,9 @@ import { disposeObj, type Level, type LevelDone } from './level';
 // 3. Casa de Gas (la de la piscinita): aparcar marcha atrás dentro, por la corredera; entráis los dos y Azul conoce
 //    a sus padres en la cocina.
 // 4. Solos en las rocas: una partida a La Princesa (gana ella) y el eclipse con las gafas puestas.
+
+/** Nivel del mar en Sa Farola (el plano del agua de buildSaFarola). */
+const WATER_Y = -0.4;
 
 type Phase = 'kayak' | 'ferry' | 'arrive' | 'parents' | 'walk' | 'park' | 'marcParents' | 'cards' | 'eclipse' | 'done';
 
@@ -68,6 +72,7 @@ export class LevelEclipse implements Level {
   private kayak = new THREE.Group();
   private ferry = new THREE.Group();
   private kayakV = 0;
+  private boat: Kayak | null = null;
   private stroke = 0;
   private ferryT = 0;
   private flipT = 0;
@@ -123,6 +128,8 @@ export class LevelEclipse implements Level {
   /** Escena nueva con su cielo y su sol; la anterior se libera. */
   private newScene(sky: ConstructorParameters<typeof Sky>[0], fog: number, sunCol: number, sunI: number, dir: THREE.Vector3) {
     const old = this.scene;
+    this.boat?.stop();
+    this.boat = null;
     const sc = new THREE.Scene();
     sc.fog = new THREE.Fog(fog, 110, 420);
     this.sky = new Sky(sky);
@@ -157,48 +164,33 @@ export class LevelEclipse implements Level {
   }
 
   private buildKayak() {
-    const sc = this.newScene(this.daySky(), 0xbfe0f4, 0xfff4e0, 2.2, new THREE.Vector3(0.5, 1, 0.3));
-    sc.add(makeSea([900, 900], 0x0f5a7a, new THREE.Vector3(0.5, 1, 0.3)));
-    const m = new Merger();
-    // Costa a la izquierda: rocas de marès, Sa Farola y casas blancas
-    for (let i = 0; i < 18; i++) m.add(i % 2 ? G.rock : G.rock2, i % 2 ? 0xc9a36a : 0xb8925c, -38 + Math.sin(i) * 4, -1, -40 + i * 14, 0, i, 0, 22, 7, 16);
-    m.add(G.cyl, 0xf6f1e6, -30, 7, -24, 0, 0, 0, 1.6, 10, 1.6);
-    m.add(G.cyl, 0x2f2f36, -30, 12.4, -24, 0, 0, 0, 1.9, 0.8, 1.9);
-    for (let i = 0; i < 8; i++) m.add(G.box, 0xf6f1e6, -50 - (i % 3) * 7, 3, 10 + i * 18, 0, 0.4 * i, 0, 6, 5, 6);
-    sc.add(m.mesh());
-    // Kayak doble, amarillo, con Azul delante y Gas detrás
-    const k = new Merger();
-    k.add(G.capsule, 0xf2c230, 0, 0.18, 0, Math.PI / 2, 0, 0, 0.7, 2.0, 0.45);
-    k.add(G.cyl, 0x222222, 0, 0.36, 0.55, 0, 0, 0, 0.5, 0.06, 0.6);
-    k.add(G.cyl, 0x222222, 0, 0.36, -0.75, 0, 0, 0, 0.5, 0.06, 0.6);
-    this.kayak = new THREE.Group();
-    this.kayak.add(k.mesh());
+    const sc = this.newScene(this.daySky(), 0xcfe6f4, 0xfff4e0, 2.2, new THREE.Vector3(0.4, 1, 0.6));
+    // La costa de verdad: el Camí de sa Farola, las rocas de marès y el faro, vistos desde el agua
+    const sf = buildSaFarola(sc, this.colliders, true);
+    for (const w of sf.walkers) w.root.parent?.remove(w.root);
+    // Desde el agua se ve la costa baja de marès: una franja de rocas comidas por el mar
+    const shore = new Merger();
+    for (let i = 0; i < 60; i++) {
+      const x = -100 + i * 3.6 + Math.sin(i * 2.7) * 1.5;
+      const z = COAST_Z - 2.5 - Math.abs(Math.sin(i * 1.3)) * 3;
+      shore.add(G.crag, [0xb8925c, 0xa8845a, 0xc29c66][i % 3], x, -0.9, z, Math.sin(i) * 0.3, i * 0.9, 0, 5 + (i % 3), 2.4 + (i % 4) * 0.5, 4.5);
+      if (i % 3 === 0) shore.add(G.crag, 0x8f7450, x + 1.5, -1.1, z - 2.2, 0, i, 0, 3, 1.4, 2.5); // escollos con alga
+    }
+    sc.add(shore.mesh());
     this.player = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
-    for (const [p, z] of [[this.player, 0.55], [this.gas, -0.75]] as [Person, number][]) {
-      p.root.position.set(0, 0.05, z);
-      this.sitPose(p);
-      p.armL.rotation.x = p.armR.rotation.x = -1.0;
-      // Remo de doble pala
-      p.handR.add(new Merger().add(G.cyl, 0x333333, -0.4, 0, 0.1, 0, 0, Math.PI / 2, 0.04, 1.8, 0.04).add(G.box, 0xd7263d, -1.3, 0, 0.1, 0, 0, 0, 0.05, 0.4, 0.2).add(G.box, 0xd7263d, 0.5, 0, 0.1, 0, 0, 0, 0.05, 0.4, 0.2).mesh());
-      this.kayak.add(p.root);
-    }
-    this.kayak.position.set(0, 0, 0);
+    this.boat = kayakBoat(this.player, this.gas);
+    this.kayak = this.boat.root;
+    // Saliendo de la bocana, por fuera de las rocas del faro, rumbo a Sa Caleta (hacia +x)
+    this.kayak.position.set(-62, WATER_Y, COAST_Z - 17);
+    this.kayak.rotation.y = Math.PI / 2;
     sc.add(this.kayak);
-    // El ferry: casco blanco con franja azul, puente y chimenea
-    const f = new Merger();
-    f.add(G.box, 0xf4f4f4, 0, 3, 0, 0, 0, 0, 44, 6, 9);
-    f.add(G.box, 0x1f4f9a, 0, 1.4, 0, 0, 0, 0, 44.2, 1.2, 9.2);
-    f.add(G.box, 0xe8e8e8, -4, 8, 0, 0, 0, 0, 26, 4, 8);
-    f.add(G.box, 0x2a3a50, -4, 8.6, 0, 0, 0, 0, 26.2, 1, 8.2);
-    f.add(G.box, 0xd7263d, -10, 12, 0, 0, 0, 0, 3, 4, 3);
-    f.add(G.box, 0xf4f4f4, 22, 3, 0, 0, Math.PI / 4, 0, 6.4, 6, 6.4);
-    this.ferry = new THREE.Group();
-    this.ferry.add(f.mesh());
+    this.ferry = buildFerry();
     this.ferry.visible = false;
     sc.add(this.ferry);
-    this.camera.position.set(-3, 3, -7);
-    this.camLook.set(0, 1, 6);
+    const k = this.kayak.position;
+    this.camera.position.set(k.x - 6.5, 2.8, k.z - 2.8);
+    this.camLook.set(k.x + 6, 0.6, k.z + 1);
   }
 
   private buildAzul() {
@@ -693,17 +685,20 @@ export class LevelEclipse implements Level {
   }
 
   private updateKayak(dt: number) {
+    const k = this.kayak.position;
+    const roll = this.boat!.roll;
     if (this.phase === 'kayak') {
       this.ferryT += dt;
       if (this.input.consumeAction()) {
         this.kayakV = Math.min(2.6, this.kayakV + 0.45);
         this.stroke = 1;
-        audio.splash();
       }
       if (this.ferryT > 6) {
         this.phase = 'ferry';
         this.ferry.visible = true;
-        this.ferry.position.set(140, 0, this.kayak.position.z + 6);
+        // Sale de mar abierto hacia la bocana del puerto: de frente contra el costado del kayak
+        this.ferry.rotation.y = -Math.PI / 2;
+        this.ferry.position.set(k.x + 9, WATER_Y, k.z - 150);
         toast(ECLIPSE.ferryWarn);
         audio.warn();
         vibrate([80, 60, 80]);
@@ -712,33 +707,42 @@ export class LevelEclipse implements Level {
     } else if (this.phase === 'ferry') {
       this.input.consumeAction();
       // Da igual lo que remes: el ferry siempre llega
-      this.ferry.position.x -= dt * 26;
-      this.ferry.position.z += (this.kayak.position.z + 1 - this.ferry.position.z) * Math.min(1, dt * 2);
-      if (this.flipT === 0 && this.ferry.position.x < 24) {
+      this.ferry.position.z += dt * 26;
+      this.ferry.position.x += (k.x + 1.5 - this.ferry.position.x) * Math.min(1, dt * 0.8);
+      this.ferry.position.y = WATER_Y + Math.sin(this.t * 0.7) * 0.08;
+      if (this.flipT === 0 && this.ferry.position.z + 31 > k.z - 1) {
         this.flipT = 0.001;
         audio.hit();
         audio.splash();
         vibrate([200, 50, 200]);
-        this.fx.burst(this.v1.copy(this.kayak.position).setY(1), '💦', 16, 3, 1.5);
+        this.fx.burst(this.v1.copy(k).setY(0.4), 'spray', 40, 4, 1.6);
       }
       if (this.flipT > 0) {
         this.flipT += dt;
-        this.kayak.rotation.z = Math.min(Math.PI, this.flipT * 4);
-        this.kayak.position.y = -Math.min(1, this.flipT) * 0.6;
+        // El kayak se aparta de la roda y vuelca
+        k.x += dt * 2.5;
+        roll.rotation.z = -Math.min(Math.PI, this.flipT * 4);
+        roll.position.y = -Math.min(1, this.flipT) * 0.5;
         if (this.flipT > 1.4 && !this.busy) this.sunk();
       }
     }
-    this.kayakV = Math.max(0, this.kayakV - dt * 0.6);
-    this.kayak.position.z += this.kayakV * dt;
-    this.kayak.position.y = this.flipT > 0 ? this.kayak.position.y : Math.sin(this.t * 1.6) * 0.05;
-    this.kayak.rotation.x = Math.sin(this.t * 1.3) * 0.03;
+    this.kayakV = Math.max(0.35, this.kayakV - dt * 0.6);
+    if (this.flipT === 0) {
+      k.x += this.kayakV * dt;
+      k.y = WATER_Y + Math.sin(this.t * 1.6) * 0.035;
+      roll.rotation.x = Math.sin(this.t * 1.3) * 0.025;
+      roll.rotation.z = Math.sin(this.t * 0.9) * 0.03;
+    }
     this.stroke = Math.max(0, this.stroke - dt * 2.5);
-    const sw = Math.sin(this.t * 6) * this.stroke;
-    for (const p of [this.player, this.gas]) p.body.rotation.y = sw * 0.5;
+    const splash = this.boat!.update(dt, this.flipT > 0 ? 0 : this.kayakV, WATER_Y);
+    if (splash) {
+      audio.splash();
+      this.fx.burst(splash, 'spray', 7, 0.8, 0.6);
+    }
     this.hud.setAction(this.phase === 'kayak' ? '🛶 Remar' : null, this.phase === 'kayak');
-    const k = this.kayak.position;
-    const pos = this.phase === 'ferry' ? this.v1.set(k.x - 9, 5, k.z - 9) : this.v1.set(k.x - 2.5, 2.8, k.z - 6.5);
-    const look = this.phase === 'ferry' ? new THREE.Vector3((k.x + this.ferry.position.x) / 2, 3, k.z) : new THREE.Vector3(k.x, 1, k.z + 6);
+    const f = this.ferry.position;
+    const pos = this.phase === 'ferry' ? this.v1.set(k.x - 14, 4.5, k.z + 9) : this.v1.set(k.x - 6.5, 2.4, k.z - 2.8);
+    const look = this.phase === 'ferry' ? new THREE.Vector3((k.x + f.x) / 2, 3, Math.max(k.z - 28, (k.z + f.z) / 2)) : new THREE.Vector3(k.x + 6, 0.6, k.z + 1);
     this.camera.position.lerp(pos, Math.min(1, dt * 2.5));
     this.camLook.lerp(look, Math.min(1, dt * 3));
     this.camera.lookAt(this.camLook);
@@ -940,6 +944,7 @@ export class LevelEclipse implements Level {
 
   update(dt: number) {
     this.t += dt;
+    this.fx.update(dt);
     if (this.phase === 'kayak' || this.phase === 'ferry') this.updateKayak(dt);
     else if (this.phase === 'arrive' || this.phase === 'parents' || this.phase === 'walk') this.updateAzul(dt);
     else if (this.phase === 'park') this.updatePark(dt);

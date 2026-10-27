@@ -9,6 +9,7 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
+import { Surf } from '../core/surfaces';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 // Capítulo 2 · La ruta de las zamburiñas.
@@ -237,18 +238,29 @@ export class Level2 implements Level {
     sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.6));
     this.sun = new Sun(sc, 0xfff1d6, 2.3, new THREE.Vector3(0.5, 1, 0.4), 26);
 
+    // Manchas grandes y suaves (hierba más verde, tierra más clara, rodadas): el detalle fino lo pone
+    // la textura de superficie (hierba o tierra) que se proyecta encima
     this.groundTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = '#e8e8e8';
       ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 900; i++) {
-        const v = 200 + Math.random() * 55;
-        ctx.fillStyle = `rgb(${v},${v},${v})`;
-        ctx.fillRect(Math.random() * w, Math.random() * h, 6, 6);
+      for (let i = 0; i < 70; i++) {
+        const x = Math.random() * w, y = Math.random() * h, r = 12 + Math.random() * 46;
+        const v = Math.random() < 0.5 ? 180 + Math.random() * 40 : 245 + Math.random() * 10;
+        for (const ox of [-w, 0, w])
+          for (const oy of [-h, 0, h]) {
+            const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+            g.addColorStop(0, `rgba(${v},${v},${v},0.55)`);
+            g.addColorStop(1, `rgba(${v},${v},${v},0)`);
+            ctx.fillStyle = g;
+            ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+          }
       }
     });
     this.groundTex.wrapS = this.groundTex.wrapT = THREE.RepeatWrapping;
-    this.groundTex.repeat.set(20, 20);
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), toon({ map: this.groundTex, color: REGION_STYLE.madrid.ground }));
+    this.groundTex.repeat.set(5, 5);
+    const gg = new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2);
+    gg.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(gg.attributes.position.count).fill(Surf.Grass), 1));
+    this.ground = new THREE.Mesh(gg, toon({ map: this.groundTex, color: REGION_STYLE.madrid.ground }));
     sc.add(this.ground);
 
     this.roadTex = canvasTex((ctx, w, h) => {
@@ -368,24 +380,63 @@ export class Level2 implements Level {
   };
 
   private buildScatters() {
-    const building = new Merger()
-      .add(G.box, 0xd9cfc0, 0, 6, 0, 0, 0, 0, 6, 12, 6)
-      .add(G.box, 0x7a8fa6, 0, 6, 3.01, 0, 0, 0, 5, 10, 0.05)
-      .add(G.box, 0xb5603b, 0, 12.2, 0, 0, 0, 0, 6.2, 0.4, 6.2)
-      .build();
-    const brick = new Merger()
-      .add(G.box, 0xb36a4a, 0, 4, 0, 0, 0, 0, 7, 8, 5)
-      .add(G.box, 0xe8e2d0, 0, 4, 2.51, 0, 0, 0, 6, 6, 0.05)
-      .build();
-    const pine = new Merger()
-      .add(G.cyl, 0x6b4a30, 0, 1.5, 0, 0, 0, 0, 0.4, 3, 0.4)
-      .add(G.sphere, 0x4f7a3a, 0, 4, 0, 0, 0, 0, 4, 2.2, 4)
-      .build();
-    const oak = new Merger()
-      .add(G.cyl, 0x5a3e28, 0, 1.2, 0, 0, 0, 0, 0.5, 2.4, 0.5)
-      .add(G.sphere, 0x3f7f35, 0, 3.6, 0, 0, 0, 0, 3.6, 3.2, 3.6)
-      .add(G.sphere, 0x4a8f3f, 0.8, 4.4, 0.4, 0, 0, 0, 2.4, 2.2, 2.4)
-      .build();
+    // Bloques de pisos de las afueras de Madrid: ventanas con persiana y marco, balcones con
+    // barandilla, bajos con locales y cornisa; uno de ladrillo visto y otro revocado
+    const block = (wall: number, w: number, d: number, floors: number) => {
+      const m = new Merger();
+      const H = 3.6 + floors * 2.9;
+      m.add(G.box, wall, 0, H / 2, 0, 0, 0, 0, w, H, d);
+      m.add(G.box, 0xcfc6b6, 0, 1.8, 0, 0, 0, 0, w + 0.15, 3.6, d + 0.15); // bajos
+      m.add(G.box, 0xe6dfd2, 0, H + 0.15, 0, 0, 0, 0, w + 0.5, 0.3, d + 0.5); // cornisa
+      m.add(G.box, wall, 0, H + 0.7, 0, 0, 0, 0, w, 0.8, d); // pretil de la azotea
+      m.add(G.box, 0xb8b2a8, w * 0.25, H + 1.6, -d * 0.2, 0, 0, 0, 2.2, 1.8, 2); // casetón
+      for (const [nx, nz, len] of [[0, 1, w], [0, -1, w], [1, 0, d], [-1, 0, d]] as const) {
+        const cols = Math.max(2, Math.floor(len / 2.6));
+        const off = nx ? (d / 2 + 0.03) : (w / 2 + 0.03);
+        for (let c = 0; c < cols; c++) {
+          const u = -len / 2 + (c + 0.5) * (len / cols);
+          const at = (dy: number, out: number) => (nz ? [u, dy, nz * (off + out)] : [nx * (off + out), dy, u]) as [number, number, number];
+          const rot = nx ? Math.PI / 2 : 0;
+          // Escaparate en los bajos
+          { const [x, y, z] = at(1.6, 0.02); m.add(G.box, c % 3 ? 0x2c3a46 : 0x7a2a22, x, y, z, 0, rot, 0, len / cols - 0.6, 2.2, 0.05); }
+          for (let f = 0; f < floors; f++) {
+            const y = 3.6 + f * 2.9 + 1.4;
+            const [x, , z] = at(y, 0.02);
+            m.add(G.box, 0xefe9dc, x, y, z, 0, rot, 0, 1.45, 1.75, 0.06); // marco
+            m.add(G.box, 0x24303c, ...at(y - 0.1, 0.05), 0, rot, 0, 1.15, 1.35, 0.05); // cristal
+            m.add(G.box, 0xc8a46a, ...at(y + 0.62, 0.07), 0, rot, 0, 1.2, 0.3, 0.06); // persiana a medias
+            if ((c + f) % 2 === 0) {
+              m.add(G.box, 0xd8d0c2, ...at(y - 0.92, 0.45), 0, rot, 0, 1.7, 0.12, 0.9); // balcón
+              m.add(G.box, 0x2a2a2a, ...at(y - 0.45, 0.88), 0, rot, 0, 1.7, 0.85, 0.04); // barandilla
+            }
+          }
+        }
+      }
+      return m.build();
+    };
+    const building = block(0xe2d6c0, 12, 10, 4);
+    const brick = block(0xa65a3e, 10, 9, 3);
+    // Pino piñonero: tronco algo torcido y copa ancha y plana, hecha de varias matas
+    const pine = new Merger().add(G.cyl, 0x6b4a30, 0.2, 2.4, 0, 0, 0, 0.08, 0.45, 4.8, 0.45).add(G.cyl, 0x6b4a30, 0.9, 4.6, 0.2, 0, 0, -0.7, 0.25, 1.8, 0.25);
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2;
+      pine.add(G.bush, k % 2 ? 0x46703a : 0x3f6a34, 0.5 + Math.cos(a) * 1.7, 5.4 + Math.sin(k * 2.1) * 0.25, Math.sin(a) * 1.7, 0, k, 0, 2.8, 1.3, 2.6);
+    }
+    pine.add(G.bush, 0x4a7a3c, 0.5, 5.9, 0, 0, 0, 0, 3.2, 1.2, 3.2);
+    const pineGeo = pine.build();
+    // Roble cántabro: copa redonda de muchas matas, más oscura por debajo
+    const oak = new Merger().add(G.cyl, 0x5a3e28, 0, 1.5, 0, 0, 0, 0, 0.6, 3, 0.6).add(G.cyl, 0x5a3e28, 0.6, 3.2, 0, 0, 0, -0.6, 0.3, 1.6, 0.3).add(G.cyl, 0x5a3e28, -0.5, 3.3, 0.3, 0.3, 0, 0.6, 0.3, 1.6, 0.3);
+    for (let k = 0; k < 9; k++) {
+      const a = k * 2.4;
+      const r = k ? 1.6 : 0;
+      oak.add(G.bush, k % 3 ? 0x3f7f35 : 0x4a8f3f, Math.cos(a) * r, 4.4 + Math.sin(k * 1.7) * 0.6 + (k ? 0 : 0.8), Math.sin(a) * r, 0, k, 0, 2.8, 2.4, 2.8);
+    }
+    const oakGeo = oak.build();
+    // Matas y piedras en las cunetas: rompen la línea recta entre el asfalto y el campo
+    const verge = new Merger();
+    for (let k = 0; k < 6; k++) verge.add(G.bush, k % 2 ? 0x7d8a4a : 0x6a7d3e, Math.cos(k * 2.3) * 2.2, 0.25, Math.sin(k * 1.7) * 3, 0, k, 0, 0.9 + (k % 3) * 0.3, 0.85, 0.9);
+    verge.add(G.rock, 0x9a8f80, 1.4, 0.05, -1.5, 0, 1, 0, 0.8, 0.5, 0.7).add(G.rock2, 0xa89a86, -1.2, 0.05, 2, 0, 2, 0, 0.6, 0.4, 0.5);
+    const vergeGeo = verge.build();
     const hay = new Merger().add(G.cyl, 0xe0c060, 0, 0.75, 0, 0, 0, Math.PI / 2, 1.5, 1.6, 1.5).build();
     const mill = new Merger()
       .add(G.cyl, 0xf2efe6, 0, 3, 0, 0, 0, 0, 2.4, 6, 2.4)
@@ -393,7 +444,7 @@ export class Level2 implements Level {
       .add(G.box, 0x6b4428, 0, 4.8, 1.3, 0, 0, 0.6, 0.3, 7, 0.1)
       .add(G.box, 0x6b4428, 0, 4.8, 1.3, 0, 0, -0.95, 0.3, 7, 0.1)
       .build();
-    const hill = new Merger().add(G.sphere, 0x4f8f3e, 0, 0, 0, 0, 0, 0, 30, 14, 26).build();
+    const hill = new Merger().add(G.rock2, 0x4f8f3e, 0, -2, 0, 0, 0, 0, 34, 16, 28).add(G.bush, 0x3a6e30, 6, 5, 4, 0, 0, 0, 10, 5, 9).add(G.bush, 0x3a6e30, -8, 3, -5, 0, 1, 0, 8, 4, 8).build();
     const cow = new Merger()
       .add(G.box, 0xf4f1ea, 0, 1.1, 0, 0, 0, 0, 0.9, 0.9, 1.8)
       .add(G.box, 0x2a2420, 0.2, 1.25, 0.3, 0, 0, 0, 0.92, 0.5, 0.6)
@@ -432,17 +483,18 @@ export class Level2 implements Level {
       .build();
 
     this.scatters = [
-      new Scatter(building, 24, 9, ['madrid'], [10, 30], true, [0.8, 1.6]),
-      new Scatter(brick, 16, 14, ['madrid'], [12, 40], true, [0.8, 1.3]),
-      new Scatter(pine, 18, 12, ['madrid', 'meseta'], [8, 40], true, [0.7, 1.3]),
+      new Scatter(building, 20, 14, ['madrid'], [14, 34], true, [0.85, 1.25]),
+      new Scatter(brick, 14, 18, ['madrid'], [14, 44], true, [0.85, 1.2]),
+      new Scatter(pineGeo, 18, 12, ['madrid', 'meseta'], [8, 40], true, [0.7, 1.3]),
       new Scatter(hay, 20, 9, ['meseta'], [8, 50], true, [0.8, 1.2]),
       new Scatter(mill, 6, 45, ['meseta'], [25, 60], true, [1, 1.2]),
       new Scatter(bull, 1, 260, ['meseta'], [22, 24], false, [1, 1], false),
       new Scatter(hill, 10, 30, ['cantabria'], [40, 90], false, [0.7, 1.4]),
       new Scatter(peak, 6, 70, ['cantabria'], [-150, -210], false, [0.9, 1.5], false),
-      new Scatter(oak, 22, 9, ['cantabria'], [8, 35], true, [0.8, 1.3]),
+      new Scatter(oakGeo, 22, 9, ['cantabria'], [8, 35], true, [0.8, 1.3]),
       new Scatter(cow, 10, 16, ['cantabria'], [-9, -30], false, [1, 1]),
       new Scatter(vineGeo, 24, 10, ['rioja'], [8, 30], true, [1, 1], false),
+      new Scatter(vergeGeo, 40, 5, ['madrid', 'meseta', 'cantabria', 'rioja'], [6.5, 12], true, [0.7, 1.3]),
     ];
     // Las montañas lejanas no llevan niebla (si no, desaparecen): ya son de un gris azulado de lejanía
     this.scatters[7].mesh.material = toon({ vertexColors: true, fog: false });
@@ -794,6 +846,13 @@ export class Level2 implements Level {
     (this.scene.fog as THREE.Fog).color.lerp(this.tmpColor.set(st.fog), k);
     (this.ground.material as THREE.MeshToonMaterial).color.lerp(this.tmpColor.set(st.ground), k);
     this.sea.visible = this.region === 'cantabria';
+    // Hierba seca o verde en casi todo el viaje; tierra roja de viñedo en La Rioja
+    const gs = this.ground.geometry.attributes.surf as THREE.BufferAttribute;
+    const want = this.region === 'rioja' ? Surf.Sand : Surf.Grass;
+    if (gs.getX(0) !== want) {
+      (gs.array as Float32Array).fill(want);
+      gs.needsUpdate = true;
+    }
 
     // Fotos y obstáculos
     if (drive) {
