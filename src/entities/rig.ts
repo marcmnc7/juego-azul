@@ -318,7 +318,7 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
 }
 
 /** Textura en gris normalizado (media = blanco) para teñir la ropa con material.color. */
-function grayTexture(src: THREE.Texture) {
+export function grayTexture(src: THREE.Texture) {
   const k = 'g' + src.uuid;
   let t = texCache.get(k);
   if (t) return t;

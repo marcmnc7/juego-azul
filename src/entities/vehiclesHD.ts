@@ -3,7 +3,7 @@ import { loadGLB } from '../core/assets';
 import { quality } from '../core/gfx';
 import carUrl from '../assets/chars/car.glb';
 import foxUrl from '../assets/chars/fox.glb';
-import { boneAnchor, makeRigPerson, rigTickers } from './rig';
+import { boneAnchor, grayTexture, makeRigPerson, rigTickers } from './rig';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -31,6 +31,11 @@ export function preloadVehicles() {
         // Normales suaves salvo en las aristas marcadas (más de ~35°)
         if (!m.geometry.attributes.normal) m.geometry = toCreasedNormals(m.geometry, 0.6);
         (m.material as THREE.MeshStandardMaterial).flatShading = false;
+      });
+      // El zorro tampoco trae normales
+      f.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && !m.geometry.attributes.normal) m.geometry.computeVertexNormals();
       });
       car = c;
       fox = f;
@@ -208,10 +213,15 @@ export function makeDogHD(shadow: THREE.Object3D): Dog {
   const s = 0.72 / (box.max.y - box.min.y);
   model.scale.setScalar(s);
   root.add(model);
-  const coat = new THREE.MeshStandardMaterial({ color: lin(0x1a181c), roughness: 0.75 });
+  let coat: THREE.MeshStandardMaterial | null = null;
   model.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
     if (!m.isMesh) return;
+    // Pelo negro con el pecho y el hocico claros: la textura del zorro en gris, teñida
+    if (!coat) {
+      const src = m.material as THREE.MeshStandardMaterial;
+      coat = new THREE.MeshStandardMaterial({ map: src.map ? grayTexture(src.map) : null, color: lin(0x24201e), roughness: 0.6 });
+    }
     m.material = coat;
     m.castShadow = true;
     m.frustumCulled = false;
