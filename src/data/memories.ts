@@ -28,7 +28,7 @@ export interface Memory {
 }
 
 export const MEMORIES: Memory[] = [
-  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Plaça. Más o menos.', sticker: true },
+  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Font. Más o menos.', sticker: true },
   { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
   { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },
   { level: 2, chat: CHATS.joyPiscina.msgs, caption: 'Joy, 3 de abril de 2026. De una.' },

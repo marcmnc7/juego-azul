@@ -25,36 +25,39 @@ export const LEVELS: LevelInfo[] = [
   { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙' },
 ];
 
-// Capítulo 1, tot en menorquí. El xat d'aquell vespre va tal qual a chats.ts (ferreriesTarde).
+// Capítulo 1. Els de Ferreries parlen en menorquí; ella, en castellà, i entre ells dos, en castellà.
+// El xat d'aquell vespre va tal qual a chats.ts (ferreriesTarde).
 export const FERRERIES = {
   intro: [
-    { who: 'Narrador', text: 'Ferreries. 25 d’agost de 2025, Sant Bartomeu. Es ases són a les onze.' },
-    { who: 'Narrador', text: 'Has pujat amb ses amigues. Encara no el coneixes.' },
+    { who: 'Narrador', text: 'Ferreries. 25 d’agost de 2025. Darrer dia de ses festes de Sant Bartomeu: es jaleo d’ases.' },
+    { who: 'Narrador', text: 'Pistoles d’aigua, purpurina i confeti per tot. Has pujat amb ses amigues. Encara no el coneixes.' },
   ] as Line[],
   tofolQuest: [
-    { who: 'Tòfol', text: 'Primera vegada an es jaleo? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
-    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es tassó.' },
+    { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
+    { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
+    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es tassó. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
   ] as Line[],
   tofolNotYet: [{ who: 'Tòfol', text: 'Encara no. Pomades i ases, que es jaleo no espera.' }] as Line[],
   tofolDone: [
     { who: 'Tòfol', text: 'Ja ets de Ferreries, al·lota.' },
-    { who: 'Tòfol', text: 'Ara vés a ballar an aquell bar, que està molt guai. Na Carme ja hi és.' },
+    { who: 'Margaux', text: '¡Y llena de purpurina!' },
+    { who: 'Tòfol', text: 'Ara vés a ballar an es bar de Sa Font, que està molt guai. Na Carme ja hi és.' },
   ] as Line[],
-  tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés an es bar!' }] as Line[],
+  tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés a Sa Font!' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ja era hora! Vina, balla!' }] as Line[],
   marcMeet: [
     { who: 'Marc', text: 'Carme! Què fas per aquí?' },
     { who: 'Carme', text: 'Ballar. Millor que tu, segur.' },
-    { who: 'Marc', text: 'I tu? Jo som en Marc.' },
-    { who: 'Margaux', text: 'Margaux.' },
-    { who: 'Marc', text: 'Margaux… Encantat.' },
+    { who: 'Marc', text: '¿Y tú? Yo soy Marc.' },
   ] as Line[],
   smallTalk: [
-    { who: 'Marc', text: 'I què, ets d’aquí?' },
-    { who: 'Margaux', text: 'Visc a Madrid. Però som una mica de tot: francesa, italiana i espanyola.' },
-    { who: 'Marc', text: 'I havies vingut mai a ses festes de Ferreries, o és sa primera vegada?' },
-    { who: 'Margaux', text: 'A Menorca hi vaig viure més d’un any, en plena pandèmia… però festes, cap ni una. Aquestes són ses primeres.' },
-    { who: 'Marc', text: 'Idò benvinguda a ses de veres. Ja veus que aquí es balla com es pot.' },
+    { who: 'Marc', text: '¿Y de dónde eres?' },
+    { who: 'Margaux', text: 'Vivo en Madrid. Pero soy francesa e italiana.' },
+    { who: 'Marc', text: '¿Y habías venido alguna vez a las fiestas? ¿A Menorca?' },
+    { who: 'Margaux', text: '¡Sí! Prácticamente todos los años.' },
+    { who: 'Marc', text: '¿Todos los años? ¿Y cómo es que no te había visto nunca?' },
+    { who: 'Carme', text: 'Perquè no mires, Marc.' },
+    { who: 'Marc', text: 'Pues bienvenida otra vez. Aquí se baila como se puede.' },
   ] as Line[],
   hints: {
     pomada: 'Pomada! 🍋',
@@ -65,6 +68,22 @@ export const FERRERIES = {
     late: 'Pels pèls 🍀',
     allLuck: 'Tres carícies! Sa plaça sencera t’aplaudeix 👏',
   },
+};
+
+/** Lo que solo pasa en Ferreries: la mirada a cámara lenta, el baile, el beso y el Instagram. */
+export const FERRERIES_MEET = {
+  /** Cuando ella se gira y él la ve: todo va a cámara lenta. */
+  eyes: [{ who: 'Marc', text: '(Mare meva… quins ulls.)' }] as Line[],
+  name: [
+    { who: 'Margaux', text: 'Margaux.' },
+    { who: 'Marc', text: 'Margaux… Encantado.' },
+  ] as Line[],
+  dance: [{ who: 'Carme', text: 'Bé, bé… jo me’n vaig a cercar una altra pomada.' }] as Line[],
+  insta: [
+    { who: 'Marc', text: 'Oye… ¿me das tu Instagram?' },
+    { who: 'Margaux', text: 'Apunta.' },
+    { who: 'Narrador', text: 'Aquell vespre ell la va voler veure. Ella sopava a La Vall amb els amics. Quedaren per l’endemà.' },
+  ] as Line[],
 };
 
 // Capítulo 6: Sant Joan en Ciutadella (junio de 2026). Buscar a Gas por sus ubicaciones entre caballos y avellanes.

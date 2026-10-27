@@ -21,6 +21,7 @@ const VARIANT: JaleoVariant = {
   introChats: [CHATS.tarde, CHATS.veintidos, CHATS.asesOnce],
   findFirst: { found: [CHATS.bocata] },
   endChats: [CHATS.fecha],
+  meetScene: undefined,
   // Lo que vino después: el vóley de septiembre y Joy en octubre
   afterEnd: (next) => dialogue(ANIVERSARIO.september, () => voley(() => dialogue(ANIVERSARIO.october, () => joyTraining(next)))),
   // Un año después ya no va con el mono negro: vestido azul

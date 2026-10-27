@@ -547,6 +547,17 @@ export class Confetti {
     this.r[i * 2 + 1] = 2 + Math.random() * 4;
   }
 
+  private next = 0;
+  /** Un puñado de confeti lanzado al aire desde `at` (cae desde ahí y luego vuelve a la lluvia normal). */
+  toss(at: THREE.Vector3, n = 14) {
+    for (let k = 0; k < n; k++) {
+      const i = (this.next = (this.next + 1) % this.count);
+      this.p[i * 3] = at.x + (Math.random() - 0.5) * 1.4;
+      this.p[i * 3 + 1] = at.y + Math.random() * 1.2;
+      this.p[i * 3 + 2] = at.z + (Math.random() - 0.5) * 1.4;
+    }
+  }
+
   update(dt: number, center: THREE.Vector3, t: number) {
     for (let i = 0; i < this.count; i++) {
       this.p[i * 3 + 1] -= this.v[i] * dt;
@@ -560,6 +571,56 @@ export class Confetti {
       this.mesh.setMatrixAt(i, this.m.compose(this.tmp.set(this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]), this.q, this.s));
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/** Purpurina en el aire: motas doradas, plateadas y rosas que flotan y destellan alrededor de un punto. */
+export class Glitter {
+  points: THREE.Points;
+  private pos: Float32Array;
+  private col: Float32Array;
+  private base: Float32Array;
+  private ph: Float32Array;
+  constructor(private N = 260, private area = 7, private height = 3.2) {
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(N * 3);
+    this.col = new Float32Array(N * 3);
+    this.base = new Float32Array(N * 3);
+    this.ph = new Float32Array(N);
+    const pal = [0xffd76a, 0xfff2c0, 0xd8dde6, 0xff8fc8, 0xb88cff, 0x8fe3ff];
+    const c = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      this.pos.set([(Math.random() - 0.5) * area * 2, Math.random() * height, (Math.random() - 0.5) * area * 2], i * 3);
+      c.set(pal[i % pal.length]);
+      this.base.set([c.r, c.g, c.b], i * 3);
+      this.ph[i] = Math.random() * 40;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.09, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.points.frustumCulled = false;
+  }
+  update(dt: number, center: THREE.Vector3, t: number) {
+    const A = this.area;
+    for (let i = 0; i < this.N; i++) {
+      const j = i * 3;
+      this.pos[j + 1] -= dt * (0.12 + (i % 7) * 0.03);
+      this.pos[j] += Math.sin(t * 0.9 + this.ph[i]) * dt * 0.25;
+      // Se recoloca al otro lado cuando se aleja del centro: siempre hay purpurina alrededor
+      if (this.pos[j] - center.x > A) this.pos[j] -= 2 * A;
+      if (this.pos[j] - center.x < -A) this.pos[j] += 2 * A;
+      if (this.pos[j + 2] - center.z > A) this.pos[j + 2] -= 2 * A;
+      if (this.pos[j + 2] - center.z < -A) this.pos[j + 2] += 2 * A;
+      if (this.pos[j + 1] < 0.05) this.pos[j + 1] = this.height;
+      // Destello: casi apagada la mayor parte del tiempo y de golpe muy brillante
+      const tw = Math.pow(0.5 + 0.5 * Math.sin(t * (5 + (i % 5)) + this.ph[i]), 8);
+      const k = 0.25 + tw * 2.2;
+      this.col[j] = this.base[j] * k;
+      this.col[j + 1] = this.base[j + 1] * k;
+      this.col[j + 2] = this.base[j + 2] * k;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.geometry.attributes.color.needsUpdate = true;
   }
 }
 

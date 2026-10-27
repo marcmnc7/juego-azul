@@ -275,7 +275,8 @@ const texCache = new Map<string, THREE.Texture>();
 
 /** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}`;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : ''}`;
+  const over = look.jumpsuit ? shortSuit().mask : null;
   let t = texCache.get(k);
   if (t) return t;
   const img = src.image as HTMLImageElement | ImageBitmap;
@@ -288,7 +289,7 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
   const px = id.data;
   const sum = new Float64Array(7), cnt = new Float64Array(7);
   // 1 piel, 2 pelo, 3 camiseta, 4 pantalón, 5 zapatos, 6 cara (piel con menos detalle); 0 se queda igual
-  const part = (i: number) => Math.round((parts?.[i] ?? 0) / 36);
+  const part = (i: number) => (over && over[i >> 2]) || Math.round((parts?.[i] ?? 0) / 36);
   for (let i = 0; i < px.length; i += 4) {
     const p = part(i);
     sum[p] += px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
@@ -527,6 +528,12 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
     if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
     m.material = mat;
+    if (look.stripes && /Outfit_Top/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
+      const tee = teeFor(m as THREE.SkinnedMesh, kind);
+      m.geometry = tee.geo;
+      stripes(mat, tee.axis, tee.period, look.stripes);
+    }
+    if (kind === 'woman' && look.jumpsuit && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
   });
 
   const B = boneMap(model);
@@ -628,8 +635,364 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     kneeL, kneeR, footL, footR, elbowL, elbowR,
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
+  if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
   people.add(p);
   return p;
+}
+
+/** Matriz de un vértice con el esqueleto en su pose actual, de la geometría al mundo. */
+function skinMatrix(m: THREE.SkinnedMesh, i: number) {
+  const g = m.geometry, si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
+  const acc = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  const t = new THREE.Matrix4();
+  for (let k = 0; k < 4; k++) {
+    const wt = sw.getComponent(i, k);
+    if (!wt) continue;
+    const bi = si.getComponent(i, k);
+    t.multiplyMatrices(m.skeleton.bones[bi].matrixWorld, m.skeleton.boneInverses[bi]);
+    for (let e = 0; e < 16; e++) acc.elements[e] += t.elements[e] * wt;
+  }
+  return new THREE.Matrix4().multiplyMatrices(m.matrixWorld, m.bindMatrixInverse).multiply(acc).multiply(m.bindMatrix);
+}
+
+// ---------- Camiseta a rayas (la del Barça) ----------
+
+const teeCache = new Map<string, { geo: THREE.BufferGeometry; axis: string; period: number }>();
+/**
+ * Camiseta de fútbol sobre la chaqueta del modelo: fuera los faldones (lo que cuelga por debajo de
+ * la cintura) y rayas verticales. Medido con el esqueleto del modelo original en su pose de carga.
+ */
+function teeFor(m: THREE.SkinnedMesh, kind: Kind) {
+  const src = data[kind]!.gltf.scene;
+  let orig: THREE.SkinnedMesh | null = null;
+  src.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === m.geometry) orig = o as THREE.SkinnedMesh;
+  });
+  let c = teeCache.get(m.geometry.uuid);
+  if (c) return c;
+  const geo0 = m.geometry;
+  const o = (orig ?? m) as THREE.SkinnedMesh;
+  src.updateWorldMatrix(true, true);
+  const pos = geo0.attributes.position as THREE.BufferAttribute;
+  const w = Array.from({ length: pos.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(skinMatrix(o, i)));
+  const box = new THREE.Box3();
+  src.traverse((q) => {
+    if ((q as THREE.Mesh).isMesh) box.expandByObject(q);
+  });
+  const H = box.max.y - box.min.y || 1;
+  const hOf = (v: THREE.Vector3) => (v.y - box.min.y) / H;
+  // Cintura: el borde de abajo de la camiseta
+  const WAIST = 0.53;
+  const index = geo0.index ? Array.from(geo0.index.array) : [...Array(pos.count).keys()];
+  const out: number[] = [];
+  for (let t = 0; t < index.length; t += 3) {
+    const [a, b, cc] = [index[t], index[t + 1], index[t + 2]];
+    if ((hOf(w[a]) + hOf(w[b]) + hOf(w[cc])) / 3 > WAIST) out.push(a, b, cc);
+  }
+  const geo = geo0.clone();
+  geo.setIndex(out);
+  // Eje de lado a lado en el espacio de la geometría: el que más cambia de un hombro al otro
+  // (con un vértice del pecho, que solo mueve la espalda)
+  const cx = (box.max.x + box.min.x) / 2;
+  let chest = 0, best = Infinity;
+  w.forEach((v, i) => {
+    const d = Math.abs(hOf(v) - 0.68) * 4 + Math.abs(v.x - cx) / H;
+    if (d < best) { best = d; chest = i; }
+  });
+  const inv = skinMatrix(o, chest).invert();
+  const l = new THREE.Vector3(1, 0, 0).transformDirection(inv);
+  const ax = Math.abs(l.x) >= Math.abs(l.y) && Math.abs(l.x) >= Math.abs(l.z) ? 'x' : Math.abs(l.y) >= Math.abs(l.z) ? 'y' : 'z';
+  // Ancho de una raya: unos 4,5 cm en metros del mundo, pasado a unidades de la geometría
+  const unit = new THREE.Vector3().setFromMatrixScale(skinMatrix(o, chest)).x || 1;
+  c = { geo, axis: ax, period: 0.09 / unit };
+  teeCache.set(geo0.uuid, c);
+  return c;
+}
+
+/** Rayas verticales de dos colores sobre la camiseta. */
+function stripes(mat: THREE.MeshStandardMaterial, axis: string, period: number, [a, b]: [number, number]) {
+  mat.color.set(0xffffff);
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.stA = { value: new THREE.Color(a) };
+    sh.uniforms.stB = { value: new THREE.Color(b) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vStripe;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStripe = position.${axis} / ${period.toFixed(6)};`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vStripe;\nuniform vec3 stA;\nuniform vec3 stB;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat sf = fract(vStripe);\ndiffuseColor.rgb *= mix(stA, stB, smoothstep(0.46, 0.54, sf) - smoothstep(0.96, 1.0, sf));');
+  };
+  mat.customProgramCacheKey = () => 'stripes' + a + b + axis;
+}
+
+
+// ---------- Mono corto ----------
+
+let short: { mask: Uint8Array; geo: Map<string, THREE.BufferGeometry> } | null = null;
+/**
+ * Mono negro corto (Ferreries): tapa la barriga que deja ver el top de Michelle y deja las piernas
+ * al aire desde medio muslo. Las perneras anchas del pantalón se ciñen a la forma de la pierna y su
+ * textura pasa a ser piel; la barriga pasa a ser tela. Se calcula una vez para todas.
+ */
+function shortSuit() {
+  if (short) return short;
+  const mask = new Uint8Array(512 * 512);
+  const geo = new Map<string, THREE.BufferGeometry>();
+  short = { mask, geo };
+  const scene = data.woman?.gltf.scene;
+  if (!scene || !parts) return short;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 512;
+  const g = cv.getContext('2d', { willReadFrequently: true })!;
+  g.lineWidth = 2;
+  const hc = document.createElement('canvas');
+  hc.width = hc.height = 512;
+  const hg = hc.getContext('2d', { willReadFrequently: true })!;
+  hg.lineWidth = 1.5;
+  scene.updateWorldMatrix(true, true);
+  const meshes: THREE.SkinnedMesh[] = [];
+  scene.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh && m.geometry.attributes.uv) meshes.push(m);
+  });
+  const box = new THREE.Box3();
+  const MS = meshes.map(() => [] as THREE.Matrix4[]);
+  const skinM = skinMatrix;
+  const W = meshes.map((m, mi) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const w: THREE.Vector3[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const M = skinM(m, i);
+      MS[mi].push(M);
+      w.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(M));
+    }
+    w.forEach((v) => box.expandByPoint(v));
+    return w;
+  });
+  const H = box.max.y - box.min.y;
+  const cx = (box.max.x + box.min.x) / 2;
+  const hOf = (v: THREE.Vector3) => (v.y - box.min.y) / H;
+  const HEM = 0.455; // a medio muslo
+  // Grosor de la pierna (radio respecto a la altura) del muslo al tobillo
+  const legR = (h: number) => H * (h > 0.3 ? THREE.MathUtils.lerp(0.034, 0.05, (h - 0.3) / (HEM - 0.3)) : h > 0.17 ? THREE.MathUtils.lerp(0.03, 0.034, (h - 0.17) / 0.13) : THREE.MathUtils.lerp(0.02, 0.03, Math.max(0, h - 0.05) / 0.12));
+  meshes.forEach((m, mi) => {
+    const src = m.geometry;
+    const uv = src.attributes.uv as THREE.BufferAttribute;
+    const pos = src.attributes.position as THREE.BufferAttribute;
+    const w = W[mi];
+    const partOf = (i: number) => {
+      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
+      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
+      return Math.round(parts![(y * 512 + x) * 4] / 36);
+    };
+    const pt = Array.from({ length: pos.count }, (_, i) => partOf(i));
+    // Texturas: perneras por debajo del dobladillo → piel; barriga → tela del mono
+    const index = src.index ? Array.from(src.index.array) : [...Array(pos.count).keys()];
+    for (let t = 0; t < index.length; t += 3) {
+      const [a, b, c] = [index[t], index[t + 1], index[t + 2]];
+      const h = (hOf(w[a]) + hOf(w[b]) + hOf(w[c])) / 3;
+      const ax = Math.abs((w[a].x + w[b].x + w[c].x) / 3 - cx) / H;
+      let to = 0;
+      if (pt[a] === 4 && pt[b] === 4 && pt[c] === 4) {
+        // Altura de cada píxel del pantalón (función lineal en el triángulo = degradado lineal): el
+        // dobladillo sale recto y no en dientes de sierra como los triángulos
+        const P = [a, b, c].map((q) => [uv.getX(q) * 512, uv.getY(q) * 512, hOf(w[q])]);
+        const [x0, y0, h0] = P[0], [x1, y1, h1] = P[1], [x2, y2, h2] = P[2];
+        const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+        let gx = 0, gy = 0;
+        if (Math.abs(det) > 1e-6) {
+          gx = ((h1 - h0) * (y2 - y0) - (h2 - h0) * (y1 - y0)) / det;
+          gy = ((h2 - h0) * (x1 - x0) - (h1 - h0) * (x2 - x0)) / det;
+        }
+        const g2 = gx * gx + gy * gy;
+        if (g2 > 1e-12) {
+          const s0 = -h0 / g2, s1 = (1 - h0) / g2;
+          const gr = hg.createLinearGradient(x0 + gx * s0, y0 + gy * s0, x0 + gx * s1, y0 + gy * s1);
+          gr.addColorStop(0, 'rgb(0,255,0)');
+          gr.addColorStop(1, 'rgb(255,255,0)');
+          hg.fillStyle = hg.strokeStyle = gr;
+        } else hg.fillStyle = hg.strokeStyle = `rgb(${Math.round(h0 * 255)},255,0)`;
+        hg.beginPath();
+        hg.moveTo(x0, y0);
+        hg.lineTo(x1, y1);
+        hg.lineTo(x2, y2);
+        hg.closePath();
+        hg.fill();
+        hg.stroke();
+        continue;
+      } else if (pt[a] === 1 && pt[b] === 1 && pt[c] === 1 && h > 0.5 && h < 0.69 && ax < 0.1) to = 3;
+      if (!to) continue;
+      g.fillStyle = g.strokeStyle = `rgb(${to * 36},0,0)`;
+      g.beginPath();
+      g.moveTo(uv.getX(a) * 512, uv.getY(a) * 512);
+      g.lineTo(uv.getX(b) * 512, uv.getY(b) * 512);
+      g.lineTo(uv.getX(c) * 512, uv.getY(c) * 512);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+    // Perneras ceñidas: cada vértice del pantalón bajo el dobladillo se acerca al eje de su pierna
+    const BIN = 0.015;
+    const stat = new Map<string, { x: number; z: number; n: number; r: number }>();
+    const key = (v: THREE.Vector3) => `${v.x > cx ? 1 : 0}:${Math.floor(hOf(v) / BIN)}`;
+    for (let i = 0; i < pos.count; i++) {
+      if (pt[i] !== 4 || hOf(w[i]) >= HEM + 0.03) continue;
+      const k = key(w[i]);
+      const st = stat.get(k) ?? { x: 0, z: 0, n: 0, r: 0 };
+      st.x += w[i].x; st.z += w[i].z; st.n++;
+      stat.set(k, st);
+    }
+    for (const st of stat.values()) { st.x /= st.n; st.z /= st.n; }
+    for (let i = 0; i < pos.count; i++) {
+      if (pt[i] !== 4 || hOf(w[i]) >= HEM + 0.03) continue;
+      const st = stat.get(key(w[i]))!;
+      st.r = Math.max(st.r, Math.hypot(w[i].x - st.x, w[i].z - st.z));
+    }
+    const out = src.clone();
+    const op = out.attributes.position as THREE.BufferAttribute;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      if (pt[i] !== 4) continue;
+      const h = hOf(w[i]);
+      if (h >= HEM + 0.03) continue;
+      const st = stat.get(key(w[i]))!;
+      const k = Math.min(1, legR(Math.min(h, HEM)) / Math.max(1e-4, st.r));
+      const blend = THREE.MathUtils.smoothstep(HEM + 0.03 - h, 0, 0.03); // sin escalón en el dobladillo
+      const f = 1 + (k - 1) * blend;
+      v.set(st.x + (w[i].x - st.x) * f, w[i].y, st.z + (w[i].z - st.z) * f).applyMatrix4(MS[mi][i].clone().invert());
+      op.setXYZ(i, v.x, v.y, v.z);
+    }
+    out.computeVertexNormals();
+    geo.set(src.uuid, out);
+  });
+  const px = g.getImageData(0, 0, 512, 512).data;
+  const hp = hg.getImageData(0, 0, 512, 512).data;
+  for (let i = 0; i < mask.length; i++) {
+    mask[i] = px[i * 4] > 70 ? 3 : 0; // bordes suavizados del lienzo
+    if (hp[i * 4 + 1] > 128 && hp[i * 4] / 255 < HEM) mask[i] = 6; // piel lisa, sin los pliegues del vaquero
+  }
+  return short;
+}
+
+// ---------- Melena lisa ----------
+
+const noHairCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+/** La misma malla sin los triángulos del pelo de Michelle (los dos moños). */
+function withoutHair(src: THREE.BufferGeometry) {
+  let g = noHairCache.get(src);
+  if (g) return g;
+  const uv = src.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!uv || !parts) return src;
+  const isHair = (i: number) => {
+    const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
+    const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
+    return Math.round(parts![(y * 512 + x) * 4] / 36) === 2;
+  };
+  const index = src.index ? Array.from(src.index.array) : [...Array(src.attributes.position.count).keys()];
+  const out: number[] = [];
+  for (let t = 0; t < index.length; t += 3) if (!(isHair(index[t]) && isHair(index[t + 1]) && isHair(index[t + 2]))) out.push(index[t], index[t + 1], index[t + 2]);
+  g = src.clone();
+  g.setIndex(out);
+  noHairCache.set(src, g);
+  return g;
+}
+
+/** Puntos de una parte del modelo (por la textura de partes) en los ejes de un ancla de hueso. */
+function partPointsIn(p: Person, anchor: THREE.Object3D, bone: string, part: number) {
+  const out: THREE.Vector3[] = [];
+  const b = p.rig!.bones.get(bone)!;
+  anchor.updateMatrix();
+  const invA = anchor.matrix.clone().invert();
+  p.rig!.model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || !parts) return;
+    const bi = m.skeleton.bones.indexOf(b as THREE.Bone);
+    if (bi < 0) return;
+    const uv = m.geometry.attributes.uv as THREE.BufferAttribute | undefined;
+    if (!uv) return;
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const toBone = m.skeleton.boneInverses[bi].clone().multiply(m.bindMatrix);
+    for (let i = 0; i < pos.count; i += 2) {
+      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
+      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
+      if (Math.round(parts[(y * 512 + x) * 4] / 36) !== part) continue;
+      out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toBone).applyMatrix4(invA));
+    }
+  });
+  return out;
+}
+
+/**
+ * Melena lisa, rubia y a la altura de los hombros (Margaux): quita los moños del modelo y pone en
+ * la cabeza una melena con raya al lado, que deja la cara al aire y cae por detrás y por los lados.
+ */
+function straightHair(p: Person, look: PersonLook) {
+  p.rig!.model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh) m.geometry = withoutHair(m.geometry);
+  });
+  const anchor = boneAnchor(p, 'Head');
+  const face = partPointsIn(p, anchor, 'Head', 6);
+  if (face.length < 20) return;
+  const box = new THREE.Box3().setFromPoints(face);
+  const c = box.getCenter(new THREE.Vector3());
+  const sz = box.getSize(new THREE.Vector3());
+  if ((window as unknown as { __hairDbg?: unknown[] }).__hairDbg) (window as unknown as { __hairDbg: unknown[] }).__hairDbg.push({ n: face.length, min: box.min.toArray(), max: box.max.toArray() });
+  // Cráneo: tan ancho como la cara, algo más hondo, con el centro un poco detrás de ella
+  const rx = sz.x * 0.56, ry = sz.y * 0.5, rz = Math.max(sz.z, sz.x) * 0.56;
+  const cx = c.x, cy = c.y + sz.y * 0.08, cz = c.z - rz * 0.18;
+  const A = 48, S = 30;
+  const pos: number[] = [], idx: number[] = [], col: number[] = [], uvs: number[] = [];
+  const keep: boolean[] = [];
+  const hair = new THREE.Color(look.hair);
+  const root = hair.clone().multiplyScalar(0.72);
+  const tipLen = sz.y * 0.95; // por debajo de la oreja, hasta los hombros
+  for (let j = 0; j <= S; j++) {
+    const s = j / S;
+    for (let i = 0; i <= A; i++) {
+      const a = (i / A) * Math.PI * 2; // 0 = delante (+z)
+      const sa = Math.sin(a), ca = Math.cos(a);
+      let x: number, y: number, z: number;
+      // Raya al lado: el pelo cae algo más por la izquierda
+      const part = 1 + 0.06 * Math.sin(a + 0.6);
+      if (s < 0.5) {
+        const phi = (s / 0.5) * (Math.PI / 2); // de la coronilla al ecuador
+        x = cx + sa * Math.sin(phi) * rx * 1.1 * part;
+        y = cy + Math.cos(phi) * ry * 1.12;
+        z = cz + ca * Math.sin(phi) * rz * 1.1 * part;
+      } else {
+        const t = (s - 0.5) / 0.5; // cae recto, abriéndose un poco y metiéndose hacia dentro en las puntas
+        const flare = 1.1 + 0.16 * Math.sin(t * Math.PI * 0.8) - 0.05 * t * t;
+        x = cx + sa * rx * flare * part;
+        y = cy - t * tipLen - (Math.abs(ca) < 0.3 ? 0 : 0.02 * t) ;
+        z = cz + ca * rz * flare * part - 0.02 * t;
+      }
+      pos.push(x, y, z);
+      uvs.push((i / A) * 6, s * 3);
+      // Fuera la cara: por delante, por debajo de la línea de la frente
+      const front = ca; // 1 = justo delante
+      const hairline = cy + ry * (0.55 - 0.25 * Math.max(0, 1 - Math.abs(a - Math.PI * 0.12) / 0.9)); // flequillo ladeado
+      keep.push(!(front > 0.42 && y < hairline));
+      const k = Math.min(1, s * 1.6);
+      const cc = root.clone().lerp(hair, k).multiplyScalar(0.92 + 0.16 * Math.sin(i * 2.7) * Math.sin(i * 1.3));
+      col.push(cc.r, cc.g, cc.b);
+    }
+  }
+  for (let j = 0; j < S; j++)
+    for (let i = 0; i < A; i++) {
+      const a = j * (A + 1) + i, b = a + A + 1;
+      if (keep[a] && keep[a + 1] && keep[b] && keep[b + 1]) idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.8, 0.8) });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.castShadow = true;
+  anchor.add(mesh);
 }
 
 /**

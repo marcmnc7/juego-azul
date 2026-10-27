@@ -82,6 +82,23 @@ export class Particles {
     }
   }
 
+  /** Chorro de pistola de agua: gotas en línea que salen en `dir` y caen en arco. */
+  jet(at: THREE.Vector3, dir: THREE.Vector3, n = 14, speed = 7) {
+    for (let i = 0; i < n; i++) {
+      const p = this.pool.find((q) => q.life <= 0);
+      if (!p) return;
+      p.s.material.map = this.tex.spray;
+      p.s.position.copy(at).addScaledVector(dir, i * 0.04);
+      const sp = speed * (0.85 + Math.random() * 0.3);
+      p.v.copy(dir).multiplyScalar(sp).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3));
+      p.dust = p.small = false;
+      p.spray = true;
+      // Las gotas del final salen más tarde: un chorro, no una nube
+      p.max = p.life = 0.7 + i * 0.03;
+      p.s.visible = true;
+    }
+  }
+
   update(dt: number) {
     for (const p of this.pool) {
       if (p.life <= 0) continue;
@@ -92,7 +109,7 @@ export class Particles {
         p.s.scale.setScalar(0.6 + (1 - k) * 1.6);
         p.s.material.opacity = k * 0.7;
       } else {
-        p.v.y -= 2.5 * dt;
+        p.v.y -= (p.spray ? 7 : 2.5) * dt;
         p.s.scale.setScalar(p.spray ? 0.12 + (1 - k) * 0.25 : p.small ? 0.22 + (1 - k) * 0.1 : 0.5 + (1 - k) * 0.3);
         p.s.material.opacity = p.small ? Math.min(0.75, k * 1.5) : Math.min(1, k * 2);
       }

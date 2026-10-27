@@ -3,8 +3,8 @@ import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
-import { Confetti, Fireworks, toon, vibrate } from '../core/gfx';
-import { FERRERIES } from '../data/story';
+import { Confetti, Fireworks, Glitter, toon, vibrate } from '../core/gfx';
+import { FERRERIES, FERRERIES_MEET } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
 import { boneAnchor } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
@@ -40,6 +40,8 @@ export interface JaleoVariant {
   findFirst?: { found: ChatFrag[] };
   /** Algo que pasa al final del capítulo, antes de cerrarlo (p. ej. un minijuego). */
   afterEnd?: (next: () => void) => void;
+  /** Ferreries: la mirada a cámara lenta, el baile juntos, el beso y el Instagram. */
+  meetScene?: typeof FERRERIES_MEET;
 }
 
 export const FERRERIES_VARIANT: JaleoVariant = {
@@ -52,14 +54,15 @@ export const FERRERIES_VARIANT: JaleoVariant = {
     collectLuck: 'Fes una carícia an es ases quan s’aturin',
     collect: 'Pomades pels bars i carícies an es ases quan s’aturin',
     back: 'Ja està! Torna amb en Tòfol',
-    find: 'Vés a ballar an es bar, amb na Carme',
+    find: 'Vés a ballar an es bar de Sa Font, amb na Carme',
     give: '💃 Ballar',
   },
   bumped: 'Uiii! Alerta amb es ases 🫏',
   statHits: 'Envestides d’ase',
+  meetScene: FERRERIES_MEET,
 };
 
-type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'kiss' | 'kissing' | 'ending' | 'done';
+type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
 const REAR = 1.8;
@@ -118,6 +121,8 @@ export class Level1 implements Level {
   private carme: Person;
   private marcTo: THREE.Vector3 | null = null;
   private barT = 0;
+  private eyesT = 0;
+  private pairT = 0;
   private kissT = 0;
   private kiss: Embrace | null = null;
   private clearR = 0;
@@ -151,6 +156,11 @@ export class Level1 implements Level {
   private pendingAction: (() => void) | null = null;
   private fabiolera: Person;
   private fireworks = new Fireworks();
+  // Es jaleo: confeti en el aire, purpurina y pistolas de agua entre la gente
+  private airConfetti = new Confetti(110, 9, 7);
+  private glitter = new Glitter();
+  private jetT = 1.5;
+  private tossT = 2;
   private noteT = 0;
   private partyColors: Float32Array;
   private hue = 0;
@@ -176,7 +186,7 @@ export class Level1 implements Level {
   ) {
     this.T = V.text;
     this.world = buildFerreries(this.scene, V.town);
-    this.fx = new Particles(this.scene);
+    this.fx = new Particles(this.scene, 120);
     this.buildCups();
 
     // Esa noche, Margaux y Carme van con un mono negro de una pieza, ajustado
@@ -202,7 +212,7 @@ export class Level1 implements Level {
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
-    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : MARC_LOOK);
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044] }); // aquel día, con la del Barça
     this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
     this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
@@ -254,6 +264,7 @@ export class Level1 implements Level {
     this.scene.add(this.fabiolera.root);
     this.world.colliders.push({ minX: this.world.fabioleraPos.x - 0.4, maxX: this.world.fabioleraPos.x + 0.4, minZ: this.world.fabioleraPos.z - 0.4, maxZ: this.world.fabioleraPos.z + 0.4 });
     this.scene.add(this.fireworks.points);
+    this.scene.add(this.airConfetti.mesh, this.glitter.points);
     this.partyColors = this.world.partyLights.geometry.attributes.color.array as Float32Array;
     for (const p of [this.world.tofolPos, this.world.marcPos]) {
       this.world.colliders.push({ minX: p.x - 0.35, maxX: p.x + 0.35, minZ: p.z - 0.35, maxZ: p.z + 0.35 });
@@ -391,8 +402,13 @@ export class Level1 implements Level {
         h.setObjective('💋');
         h.setCounters('');
         break;
+      case 'pairDance':
+        h.setObjective('💃🕺');
+        h.setCounters('');
+        break;
       case 'barDance':
       case 'meet':
+      case 'eyes':
         h.setObjective('…');
         h.setCounters('');
         break;
@@ -614,9 +630,15 @@ export class Level1 implements Level {
   }
 
   update(dt: number) {
+    // La primera mirada: el mundo va a cámara lenta
+    if (this.stage === 'eyes') {
+      this.eyesT += dt;
+      this.eyesCamera(dt);
+      dt *= 0.2;
+    }
     this.t += dt;
     const ending = this.stage === 'ending' || this.stage === 'done';
-    const close0 = this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing';
+    const close0 = this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'pairDance' || this.stage === 'kiss' || this.stage === 'kissing';
     this.clearR += ((close0 ? 4.2 : 0) - this.clearR) * Math.min(1, dt * 1.5);
     const cm = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
     Object.assign(this.clear, { x: cm.x, z: cm.z, r: this.clearR });
@@ -624,6 +646,7 @@ export class Level1 implements Level {
     this.near[0].x = pp0.x;
     this.near[0].z = pp0.z;
     animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear, dt, this.near);
+    this.jaleoFx(dt);
     this.fx.update(dt);
     (this.world.lights.material as THREE.PointsMaterial).size = 0.9 + Math.sin(this.t * 3) * 0.08;
     // Guirnaldas de los bares que cambian de color con la música
@@ -648,7 +671,7 @@ export class Level1 implements Level {
 
     const pp = this.player.root.position;
     this.walker.turn(this.input.consumeCam());
-    const locked = this.busy || ending || this.stage === 'meet' || this.stage === 'barDance' || this.stage === 'kiss' || this.stage === 'kissing';
+    const locked = this.busy || ending || close0 || this.stage === 'barDance';
     const ax = locked ? { x: 0, y: 0 } : this.input.axes();
     this.walker.canJump = !locked;
     // Obstáculos redondos: el público y los ases (dos círculos a lo largo del cuerpo)
@@ -667,8 +690,8 @@ export class Level1 implements Level {
     this.player.root.rotation.y = this.walker.facing;
     this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
 
-    if (ending || this.stage === 'barDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
-    else if (this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
+    if (ending || this.stage === 'barDance' || this.stage === 'pairDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
+    else if (this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
     else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     // Con una pomada en la mano, el brazo va un poco adelantado
     const carrying = this.pomadaCount > 0 && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc');
@@ -693,7 +716,7 @@ export class Level1 implements Level {
         this.meetMarc();
       }
     } else if (this.stage === 'meet') animatePerson(this.marc, dt, 'talk');
-    else if (this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.marc, dt, 'idle');
+    else if (this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.marc, dt, 'idle');
     else animatePerson(this.marc, dt, 'dance', 0, this.t * 8 + 1);
     if (this.carmeTo) {
       const cp = this.carme.root.position, d = this.v2.subVectors(this.carmeTo, cp).setY(0), l = d.length();
@@ -720,6 +743,15 @@ export class Level1 implements Level {
       if (this.marcBox) Object.assign(this.marcBox, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
     }
     if (this.stage === 'kissing') this.updateKiss(dt);
+    // Bailan juntos un rato, cara a cara, y luego llega el beso
+    if (this.stage === 'pairDance') {
+      this.pairT += dt;
+      if (this.pairT > 6.5) {
+        this.faceToFace();
+        this.stage = 'kiss';
+        this.updateHud();
+      }
+    }
     if (this.stage === 'barDance') {
       this.barT += dt;
       animatePerson(this.player, dt, 'dance', 0, this.t * 8);
@@ -789,7 +821,7 @@ export class Level1 implements Level {
         label = this.V.hud.give;
         pulse = true;
         this.pendingAction = () => this.startBarDance();
-      } else if (dM < 3.5 && this.stage !== 'barDance' && this.stage !== 'meet') {
+      } else if (dM < 3.5 && this.stage !== 'barDance' && this.stage !== 'meet' && this.stage !== 'eyes' && this.stage !== 'pairDance' && this.stage !== 'kissing') {
         label = 'Xerrar';
         this.pendingAction = () => {
           this.busy = true;
@@ -831,7 +863,9 @@ export class Level1 implements Level {
         audio.ambience(0);
         const stars = 1 + (this.hits <= 2 ? 1 : 0) + (this.perfects >= 2 ? 1 : 0);
         // Esa misma tarde, a las 19:46, le escribe ella
-        const finish = (f: () => void) => phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () => (this.V.afterEnd ? this.V.afterEnd(f) : f()));
+        const insta = this.V.meetScene?.insta;
+        const chats = (f: () => void) => phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () => (this.V.afterEnd ? this.V.afterEnd(f) : f()));
+        const finish = (f: () => void) => (insta ? dialogue(insta, () => chats(f)) : chats(f));
         finish(() =>
           this.onComplete({
             stars,
@@ -847,8 +881,11 @@ export class Level1 implements Level {
     if (this.confetti.mesh.visible) this.confetti.update(dt, this.world.marcPos, this.t);
 
     const intro = this.stage === 'intro';
-    const close = this.stage === 'meet' || this.stage === 'kiss' || this.stage === 'kissing';
-    if (this.stage === 'kiss' || this.stage === 'kissing') this.kissCamera(dt);
+    const close = this.stage === 'meet' || this.stage === 'pairDance' || this.stage === 'kiss' || this.stage === 'kissing';
+    if (this.stage === 'pairDance') this.walker.yaw += dt * 0.35; // la cámara les da la vuelta mientras bailan
+    if (this.stage === 'eyes') {
+      // (la mueve eyesCamera al principio del fotograma)
+    } else if (this.stage === 'kiss' || this.stage === 'kissing') this.kissCamera(dt);
     else this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 7.5, close ? 2.3 : ending ? 4.2 : intro ? 6 : 3.8);
     this.world.sun.follow(pp);
     this.world.sky.update(this.camera, dt);
@@ -919,15 +956,34 @@ export class Level1 implements Level {
     this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
     this.walker.yaw = this.walker.facing - Math.PI / 2;
     this.updateHud();
-    dialogue([...this.T.marcMeet, ...this.T.smallTalk], () => {
+    const M = this.V.meetScene;
+    const toDance = () => {
       this.busy = false;
       this.faceToFace();
       // Carme se aparta discretamente al otro lado para no tapar la escena
       const dir = this.v1.subVectors(pp, mp).setY(0).normalize();
       const mid = this.v2.copy(pp).lerp(mp, 0.5);
       this.carmeTo = new THREE.Vector3(mid.x - dir.z * 2.2 + dir.x * 0.6, 0, mid.z + dir.x * 2.2 + dir.z * 0.6);
-      this.stage = 'kiss';
+      this.stage = M ? 'pairDance' : 'kiss';
+      this.pairT = 0;
       this.updateHud();
+    };
+    if (!M) {
+      dialogue([...this.T.marcMeet, ...this.T.smallTalk], toDance);
+      return;
+    }
+    // Se presenta; ella se gira, él le ve los ojos y todo va a cámara lenta; luego, la charla
+    dialogue(this.T.marcMeet, () => {
+      this.stage = 'eyes';
+      this.eyesT = 0;
+      this.updateHud();
+      audio.ambience(0.02);
+      dialogue(M.eyes, () => {
+        this.stage = 'meet';
+        audio.ambience(0.1);
+        this.updateHud();
+        dialogue([...M.name, ...this.T.smallTalk, ...M.dance], toDance);
+      });
     });
   }
 
@@ -964,6 +1020,51 @@ export class Level1 implements Level {
         this.updateHud();
       }),
     );
+  }
+
+  /** La primera mirada: desde detrás del hombro de Marc, la cámara se acerca despacio a los ojos de ella. */
+  /** Ambiente del jaleo: confeti y purpurina siempre alrededor; de vez en cuando alguien dispara su pistola de agua o tira un puñado de confeti. */
+  private jaleoFx(dt: number) {
+    const pp = this.player.root.position;
+    this.airConfetti.update(dt, pp, this.t);
+    this.glitter.update(dt, pp, this.t);
+    if (this.stage === 'eyes' || this.stage === 'ending' || this.stage === 'done') return;
+    const pick = () => {
+      const c = this.world.crowds[Math.floor(Math.random() * this.world.crowds.length)];
+      const b = c.base[Math.floor(Math.random() * c.base.length)] as { x: number; z: number; ox?: number; oz?: number };
+      const x = b.x + (b.ox ?? 0), z = b.z + (b.oz ?? 0);
+      return Math.hypot(x - pp.x, z - pp.z) < 13 ? this.v2.set(x, 0, z) : null;
+    };
+    if ((this.jetT -= dt) < 0) {
+      this.jetT = 0.5 + Math.random() * 1.1;
+      const at = pick();
+      if (at) {
+        // Apuntan a otra persona o al aire, nunca a cámara
+        const a = Math.random() * Math.PI * 2;
+        const dir = this.v1.set(Math.cos(a), 0.35 + Math.random() * 0.35, Math.sin(a)).normalize();
+        at.y = 1.45;
+        at.addScaledVector(dir, 0.35);
+        this.fx.jet(at, dir, 12, 6 + Math.random() * 2);
+      }
+    }
+    if ((this.tossT -= dt) < 0) {
+      this.tossT = 1.2 + Math.random() * 2;
+      const at = pick();
+      if (at) this.airConfetti.toss(at.setY(2.4), 18);
+    }
+  }
+
+  private eyesCamera(dt: number) {
+    const head = this.player.rig?.bones.get('Head');
+    const eye = head ? head.getWorldPosition(this.v2) : this.v2.copy(this.player.root.position).setY(1.55);
+    eye.y += 0.06;
+    const mp = this.marc.root.position;
+    const dx = eye.x - mp.x, dz = eye.z - mp.z, l = Math.hypot(dx, dz) || 1;
+    const k = Math.min(1, this.eyesT / 3);
+    const back = THREE.MathUtils.lerp(1.3, 0.45, k * k * (3 - 2 * k));
+    const target = this.v1.set(eye.x - (dx / l) * back + (dz / l) * 0.18, eye.y + 0.02, eye.z - (dz / l) * back - (dx / l) * 0.18);
+    this.camera.position.lerp(target, Math.min(1, dt * 4));
+    this.camera.lookAt(eye);
   }
 
   /** Plano de perfil de la pareja, que se acerca poco a poco durante el beso. */

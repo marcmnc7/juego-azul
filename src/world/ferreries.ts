@@ -426,7 +426,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs, hdb);
   bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs, hdb);
   bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, town?.bars?.[2] ?? 'Sa Penya', signs, hdb);
-  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Plaça', signs, hdb);
+  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Font', signs, hdb);
   const barFronts = [new THREE.Vector3(9, 0, 10.2), new THREE.Vector3(-28, 0, -1.6), new THREE.Vector3(30, 0, 1.6), new THREE.Vector3(-7.5, 0, 22.2)];
   const tables: [number, number][] = [[7.5, 18], [-6, 18], [-24, -1.5], [33, 1.2], [-9, 7], [-31, -1.4], [27, 1.3]];
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
@@ -577,6 +577,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     { skin: 0xd9a27c, shirt: 0xd7263d, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true },
     { skin: 0xf0c8a6, shirt: 0x1b998b, pants: 0xe8e0d0, hair: 0xb07a3a, hairStyle: 'cap' },
     { skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'pony', skirt: true },
+    { skin: 0xe2b28c, shirt: 0xffffff, pants: 0x6b4a2b, hair: 0x8a8a8a, hairStyle: 'short' },
+    { skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0x3a2516, hairStyle: 'bun', skirt: true },
   ];
   const spots: { x: number; z: number; ry: number }[] = [];
   const near = (px: number, pz: number, cx: number, cz: number, rr: number) => Math.hypot(px - cx, pz - cz) < rr;

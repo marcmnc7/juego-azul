@@ -212,13 +212,16 @@ export interface PersonLook {
   shirt: number;
   pants: number;
   hair: number;
-  hairStyle: 'long' | 'short' | 'bun' | 'cap' | 'pony';
+  /** straight: melena lisa a los hombros (en los personajes glTF; en los muñecos, como long). */
+  hairStyle: 'long' | 'short' | 'bun' | 'cap' | 'pony' | 'straight';
   skirt?: boolean;
   eyes?: number;
   shoes?: number;
   beard?: boolean;
   /** Mono de una pieza ajustado y cintura marcada; antebrazos, manos y espinillas al aire. */
   jumpsuit?: boolean;
+  /** Camiseta a rayas verticales de dos colores (la del Barça). */
+  stripes?: [number, number];
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
 }
@@ -271,7 +274,7 @@ function hairInto(m: Merger, look: PersonLook, oy = 0, oz = 0, g: typeof G = G) 
   // Flequillo
   m.add(g.sphere, h, -0.13, oy + 0.2, oz + 0.2, 0, 0, 0.5, 0.22, 0.12, 0.12);
   m.add(g.sphere, h, 0.06, oy + 0.22, oz + 0.22, 0, 0, -0.3, 0.24, 0.12, 0.12);
-  if (look.hairStyle === 'long') {
+  if (look.hairStyle === 'long' || look.hairStyle === 'straight') {
     m.add(g.capsule, h, 0, oy - 0.16, oz - 0.14, 0.12, 0, 0, 0.6, 0.32, 0.26);
     m.add(g.capsule, h, -0.27, oy - 0.12, oz + 0.02, 0, 0, 0.08, 0.13, 0.28, 0.16);
     m.add(g.capsule, h, 0.27, oy - 0.12, oz + 0.02, 0, 0, -0.08, 0.13, 0.28, 0.16);
