@@ -226,9 +226,10 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
 
   const mixer = new THREE.AnimationMixer(mesh);
   const act = mixer.clipAction(P.clip).play();
-  act.time = Math.random() * P.clip.duration;
+  act.time = horse ? Math.random() * P.clip.duration : P.standT; // el burro empieza parado, no a medio galope
   const last = new THREE.Vector3(NaN, 0, 0);
   let speed = 0;
+  let walk = 0;
   const tick = (dt: number) => {
     if (!root.parent) return;
     const p = root.position;
@@ -237,7 +238,15 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
     last.copy(p);
     const v = dt > 0 && d < 2 ? d / dt / (root.scale.z || 1) : 0;
     speed += (v - speed) * Math.min(1, dt * 6);
-    if (speed > 0.2) {
+    if (!horse && speed > 0.2) {
+      // El burro va al paso: las patas van y vienen alrededor de la pose de parado, sin galopar
+      walk += dt * (2.2 + speed * 2.4);
+      const D = P.clip.duration;
+      act.time = (P.standT + Math.sin(walk) * D * 0.11 + D) % D;
+      act.timeScale = 0;
+      mixer.update(0);
+      mesh.position.y = -P.minY * P.scale + Math.abs(Math.sin(walk)) * 0.025;
+    } else if (speed > 0.2) {
       act.timeScale = THREE.MathUtils.clamp((speed / P.stride) * P.clip.duration, 0.3, 1.6);
       mixer.update(dt);
     } else {

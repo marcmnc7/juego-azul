@@ -274,7 +274,7 @@ export class Level1 implements Level {
 
     // Ases: 3 dando vueltas en la plaza y 1 paseando por la calle
     // En Sant Joan son caballos negros, más grandes que los ases
-    const coats = V.horses ? [0x15110f, 0x1c1714, 0x120e0c, 0x241c17] : [0x7d6b5d, 0x5e4f45, 0x8f8379, 0x6d5a4a];
+    const coats = V.horses ? [0x15110f, 0x1c1714, 0x120e0c, 0x241c17] : [0x8c8a87, 0x77756f, 0x9b9893, 0x6c6a66] /* burros grises */;
     const ringGeo = new THREE.RingGeometry(TOUCH_R - 0.25, TOUCH_R, 40).rotateX(-Math.PI / 2);
     for (let i = 0; i < 4; i++) {
       const d = makeDonkey(coats[i]);
@@ -367,8 +367,6 @@ export class Level1 implements Level {
       };
       dialogue(this.T.intro, () => (V.introChats ? phoneChat(V.introChats, go) : go()));
     }, 2300);
-    audio.startMusic();
-    audio.ambience(0.03);
   }
 
   get threeScene() {
@@ -488,7 +486,7 @@ export class Level1 implements Level {
           s.rearT = REAR;
         }
       } else {
-        const spd = s.mode === 'circle' ? 0.32 : 2.6;
+        const spd = s.mode === 'circle' ? 0.22 : 1.1; // al paso
         if (s.mode === 'circle') {
           s.angle += dt * spd;
           const c = this.world.plazaCenter;
@@ -500,7 +498,7 @@ export class Level1 implements Level {
           r.position.z = 0;
           r.rotation.y = (s.dir * Math.PI) / 2;
         }
-        s.walkPhase += dt * 8;
+        s.walkPhase += dt * 4.5;
         const w = Math.sin(s.walkPhase) * 0.5;
         s.d.legs[0].rotation.x = w;
         s.d.legs[3].rotation.x = w;
@@ -568,7 +566,6 @@ export class Level1 implements Level {
       vibrate(25);
     }
     this.fx.burst(at, '🍀', perfect ? 12 : 8);
-    audio.cheer(perfect ? 0.45 : 0.3);
     if (this.luckCount === 3) later(() => toast(this.T.hints.allLuck), 1200);
     this.checkCollectDone();
   }
@@ -866,7 +863,7 @@ export class Level1 implements Level {
         const stars = 1 + (this.hits <= 2 ? 1 : 0) + (this.perfects >= 2 ? 1 : 0);
         // Esa misma tarde, a las 19:46, le escribe ella
         const insta = this.V.meetScene?.insta;
-        const chats = (f: () => void) => phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde, CHATS.atesoro], () => (this.V.afterEnd ? this.V.afterEnd(f) : f()));
+        const chats = (f: () => void) => phoneChat(this.V.endChats ?? [CHATS.ferreriesTarde], () => (this.V.afterEnd ? this.V.afterEnd(f) : f()));
         const finish = (f: () => void) => (insta ? dialogue(insta, () => chats(f)) : chats(f));
         finish(() =>
           this.onComplete({
@@ -915,7 +912,6 @@ export class Level1 implements Level {
       this.stage = 'returnTofol';
       this.pomadas.forEach((p) => (p.mesh.visible = false));
       this.donkeys.forEach((d) => (d.ring.visible = false));
-      audio.fanfare();
     }
     this.updateHud();
   }
@@ -979,10 +975,8 @@ export class Level1 implements Level {
       this.stage = 'eyes';
       this.eyesT = 0;
       this.updateHud();
-      audio.ambience(0.008);
       dialogue(M.eyes, () => {
         this.stage = 'meet';
-        audio.ambience(0.03);
         this.updateHud();
         dialogue([...M.name, ...this.T.smallTalk, ...M.dance], toDance);
       });
@@ -1158,7 +1152,6 @@ export class Level1 implements Level {
     this.input.reset();
     this.hud.setAction(null);
     audio.stopMusic();
-    audio.ambience(0.015);
   }
 
   /** El beso: se acercan, ella le rodea el cuello, él la coge de la cintura; corazones y fuegos artificiales. */
@@ -1171,8 +1164,6 @@ export class Level1 implements Level {
       const mid = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5).setY(2.5);
       this.fx.burst(mid, '❤️', 14, 3, 1.2);
       this.fx.burst(mid, '💋', 3, 1, 0.8);
-      audio.fanfare();
-      audio.cheer(0.7);
       vibrate([60, 40, 120]);
       for (let i = 0; i < 3; i++) this.fireworks.burst(this.v2.set(-12 + i * 12, 22 + Math.random() * 5, 38));
     }
@@ -1183,9 +1174,6 @@ export class Level1 implements Level {
       this.endingT = 0;
       this.confetti.mesh.visible = true;
       this.confetti.active = true;
-      audio.startMusic();
-      audio.ambience(0.04);
-      audio.cheer(0.6);
       this.updateHud();
     }
   }

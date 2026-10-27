@@ -537,12 +537,16 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     m.material = mat;
     if (look.stripes && /Outfit_Top/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
       const tee = teeFor(m as THREE.SkinnedMesh, kind);
+      m.userData.restSrc = m.geometry;
       m.geometry = tee.geo;
       stripes(mat, tee.axis, tee.period, look.stripes);
     }
-    if (kind === 'man' && look.shorts && /Outfit_Bottom/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
-      m.geometry = restHeights(m as THREE.SkinnedMesh, kind);
-      shortsShader(mat, look.skin);
+    // Ropa de verano: pantalón corto y manga corta (a ella se lo pinta su textura)
+    if (kind === 'man' && look.shorts && /Outfit_(Bottom|Top)/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
+      const rest = restHeights(m as THREE.SkinnedMesh, kind, m.userData.restSrc);
+      if (m.geometry.attributes.position === rest.attributes.position) m.geometry = rest;
+      else m.geometry.setAttribute('aRest', rest.attributes.aRest);
+      bareShader(mat, look.skin, /Bottom/.test(m.name) ? 'legs' : 'arms');
     }
     if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
   });
@@ -677,42 +681,52 @@ function legsMask() {
 
 
 const restCache = new Map<string, THREE.BufferGeometry>();
-/** La geometría con la altura de cada vértice en la pose de carga (0 pies … 1 cabeza) como atributo aRest. */
-function restHeights(m: THREE.SkinnedMesh, kind: Kind) {
-  const hit = restCache.get(m.geometry.uuid);
+/** La geometría con, para cada vértice en la pose de carga, su altura (0 pies … 1 cabeza) y lo lejos que está del centro (los brazos) como atributo aRest. */
+function restHeights(m: THREE.SkinnedMesh, kind: Kind, srcGeo: THREE.BufferGeometry = m.geometry) {
+  const hit = restCache.get(srcGeo.uuid);
   if (hit) return hit;
   const src = data[kind]!.gltf.scene;
   let orig: THREE.SkinnedMesh | null = null;
   src.traverse((o) => {
-    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === m.geometry) orig = o as THREE.SkinnedMesh;
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === srcGeo) orig = o as THREE.SkinnedMesh;
   });
   src.updateWorldMatrix(true, true);
   const box = new THREE.Box3();
   src.traverse((q) => {
     if ((q as THREE.Mesh).isMesh) box.expandByObject(q);
   });
-  const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-  const r = new Float32Array(pos.count);
+  const pos = srcGeo.attributes.position as THREE.BufferAttribute;
+  const r = new Float32Array(pos.count * 2);
   const v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) r[i] = (v.fromBufferAttribute(pos, i).applyMatrix4(skinMatrix((orig ?? m) as THREE.SkinnedMesh, i)).y - box.min.y) / (box.max.y - box.min.y || 1);
-  const geo = m.geometry.clone();
-  geo.setAttribute('aRest', new THREE.BufferAttribute(r, 1));
-  restCache.set(m.geometry.uuid, geo);
+  const H = box.max.y - box.min.y || 1, cx = (box.max.x + box.min.x) / 2;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(skinMatrix((orig ?? m) as THREE.SkinnedMesh, i));
+    r[i * 2] = (v.y - box.min.y) / H;
+    r[i * 2 + 1] = Math.abs(v.x - cx) / H;
+  }
+  const geo = srcGeo.clone();
+  geo.setAttribute('aRest', new THREE.BufferAttribute(r, 2));
+  restCache.set(srcGeo.uuid, geo);
   return geo;
 }
 
-/** Por debajo de medio muslo el pantalón se pinta de piel: pantalón corto. */
-export function shortsShader(mat: THREE.MeshStandardMaterial, skin: number, hem = 0.37) {
+/**
+ * Ropa de verano pintada en el shader: pantalón corto (por debajo de medio muslo, piel) o manga corta
+ * (en los brazos, lejos del cuerpo, piel; y sin faldones de chaqueta). Necesita el atributo aRest (altura, distancia al centro).
+ */
+export function bareShader(mat: THREE.Material, skin: number, part: 'legs' | 'arms') {
   const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  const cond = part === 'legs' ? 'vRest.x < 0.37' : 'vRest.y > 0.15';
   mat.onBeforeCompile = (sh, r) => {
     prev?.call(mat, sh, r);
-    sh.uniforms.legSkin = { value: lin(skin) };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aRest;\nvarying float vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
+    sh.uniforms.bareSkin = { value: lin(skin) };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRest;\nvarying vec2 vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 legSkin;\nvarying float vRest;')
-      .replace('#include <map_fragment>', `#include <map_fragment>\nif (vRest < ${hem.toFixed(3)}) diffuseColor.rgb = legSkin * 0.92;`);
+      .replace('#include <common>', '#include <common>\nuniform vec3 bareSkin;\nvarying vec2 vRest;')
+      .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>\n${part === 'arms' ? 'if (vRest.x < 0.53) discard;' : ''}\nif (${cond}) diffuseColor.rgb = bareSkin * 0.92;`);
   };
-  mat.customProgramCacheKey = () => 'shorts';
+  mat.customProgramCacheKey = () => prevKey() + '|bare-' + part;
 }
 
 // ---------- Camiseta a rayas (la del Barça) ----------

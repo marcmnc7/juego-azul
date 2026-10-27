@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
-import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, type Kind } from './rig';
+import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
 import womanLodUrl from '../assets/chars/woman_lod.glb';
 import manLodUrl from '../assets/chars/man_lod.glb';
@@ -101,8 +101,11 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
     }
   const BH = y1 - y0, cx = (x0 + x1) / 2;
   const rests = binds.map(({ P }) => {
-    const r = new Float32Array(P.length / 3);
-    for (let i = 0; i < r.length; i++) r[i] = (P[i * 3 + 1] - y0) / BH;
+    const r = new Float32Array((P.length / 3) * 2);
+    for (let i = 0; i < P.length / 3; i++) {
+      r[i * 2] = (P[i * 3 + 1] - y0) / BH;
+      r[i * 2 + 1] = Math.abs(P[i * 3] - cx) / BH;
+    }
     return r;
   });
   // Ella: las perneras anchas del pantalón, ceñidas a la pierna por debajo de medio muslo
@@ -114,7 +117,8 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
       const uv = m.geometry.attributes.uv as THREE.BufferAttribute | undefined;
       if (!uv) return;
       const { P } = binds[mi];
-      const h = rests[mi];
+      const hr = rests[mi];
+      const h = new Float32Array(hr.length / 2).map((_, i) => hr[i * 2]);
       const legs: number[] = [];
       for (let i = 0; i < h.length; i++) if (h[i] < HEM + 0.03 && womanPartAt(uv.getX(i), uv.getY(i)) === 4) legs.push(i);
       const stat = new Map<string, { x: number; z: number; n: number }>();
@@ -189,7 +193,7 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
     g.setAttribute('position', d.m.geometry.attributes.position);
     g.setAttribute('normal', d.m.geometry.attributes.normal);
     if (d.m.geometry.attributes.uv) g.setAttribute('uv', d.m.geometry.attributes.uv);
-    g.setAttribute('aRest', new THREE.BufferAttribute(rests[datas.indexOf(d)], 1));
+    g.setAttribute('aRest', new THREE.BufferAttribute(rests[datas.indexOf(d)], 2));
     const base = full.get(d.m.name) ?? (full.values().next().value as THREE.MeshStandardMaterial);
     parts.push({ name: d.m.name, geo: g, pos: tex(d.pos, d.rows), nrm: tex(d.nrm, d.rows), V: d.V, base });
   });
@@ -230,16 +234,8 @@ void vatFrame(out float f0, out float f1, out float fa) {
 }
 `;
 
-function vatify(mat: THREE.Material, part: VatPart, shortsSkin?: number) {
+function vatify(mat: THREE.Material, part: VatPart) {
   mat.onBeforeCompile = (sh) => {
-    if (shortsSkin !== undefined) {
-      // Por debajo de medio muslo, el pantalón es pierna
-      sh.uniforms.legSkin = { value: new THREE.Color(shortsSkin) };
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aRest;\nvarying float vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec3 legSkin;\nvarying float vRest;')
-        .replace('#include <map_fragment>', '#include <map_fragment>\nif (vRest < 0.37) diffuseColor.rgb = legSkin * 0.92;');
-    }
     sh.uniforms.vatPos = { value: part.pos };
     sh.uniforms.vatNrm = { value: part.nrm };
     sh.uniforms.vatV = { value: part.V };
@@ -262,7 +258,7 @@ function vatify(mat: THREE.Material, part: VatPart, shortsSkin?: number) {
         vec3 transformed = mix(vatFetch(vatPos, vp0), vatFetch(vatPos, vp1), vpa);`,
       );
   };
-  mat.customProgramCacheKey = () => (shortsSkin !== undefined ? 'vat-shorts' : 'vat');
+  mat.customProgramCacheKey = () => 'vat';
 }
 
 /** Gente de la multitud con modelo glTF: misma forma de usar que CrowdPeople. */
@@ -290,7 +286,8 @@ export class RigCrowd {
       const mat = part.name === 'Hair' ? new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.9 }) : part.base.clone();
       // Pantalón corto: a ella se lo pinta su textura (como el mono de Margaux); a él, el shader
       colorRigMaterial(kind, part.name, mat, look);
-      vatify(mat, part, look.shorts && kind === 'man' && /Outfit_Bottom/.test(part.name) ? look.skin : undefined);
+      vatify(mat, part);
+      if (look.shorts && kind === 'man' && /Outfit_(Bottom|Top)/.test(part.name)) bareShader(mat, look.skin, /Bottom/.test(part.name) ? 'legs' : 'arms');
       const im = new THREE.InstancedMesh(g, mat, count);
       const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
       vatify(depth, part);
