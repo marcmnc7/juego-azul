@@ -14,6 +14,7 @@ import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
+import { embrace, type Embrace } from '../entities/embrace';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
@@ -85,6 +86,7 @@ export class Level4 implements Level {
   private pickedUp = false;
   private carT = 0;
   private hugT = 0;
+  private hugE: Embrace | null = null;
   // Sigilo: ruido acumulado, ventanas de los padres y las veces que casi os pillan
   private noise = 0;
   private lightOn = false;
@@ -1025,13 +1027,16 @@ export class Level4 implements Level {
       this.swimPose(q, close ? 0 : 0.5);
       if (close) {
         q.root.position.y = SWIM_Y + 0.12;
-        q.armL.rotation.set(-1.35, 0, 0.75);
-        q.armR.rotation.set(-1.35, 0, -0.75);
         q.legL.rotation.x = q.legR.rotation.x = 0;
       }
     }
+    // El abrazo: se rodean con los brazos de verdad y se sueltan al final
+    if (close) this.hugE ??= embrace(this.player, this.gas, 'hug');
+    if (this.hugE) this.hugE.k = THREE.MathUtils.clamp(this.hugE.k + dt * (this.hugT < 4.3 ? 1.2 : -1.6), 0, 1);
     if (close && Math.random() < dt * 4) this.fx.burst(this.v2.copy(p).setY(0.9), '❤️', 1, 0.8, 0.6);
     if (this.hugT > 5) {
+      this.hugE?.stop();
+      this.hugE = null;
       this.phase = 'swim';
       this.busy = false;
       this.updateHud();

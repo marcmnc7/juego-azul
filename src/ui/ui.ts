@@ -46,6 +46,15 @@ export interface MapOptions {
   onReset: () => void;
 }
 
+/** Cumpleaños: el último capítulo se abre ese día y cada uno de los anteriores, un día antes. */
+const BIRTHDAY = new Date(2026, 9, 28);
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function openDay(i: number) {
+  const d = new Date(BIRTHDAY);
+  d.setDate(d.getDate() - (LEVELS.length - 1 - i));
+  return d;
+}
+
 export function mapScreen(save: SaveData, opts: MapOptions) {
   clearScreens();
   const back = () => mapScreen(save, opts);
@@ -55,9 +64,17 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const list = el('div', 'levels');
   const done = new Set(save.levelsDone);
   LEVELS.forEach((lv, i) => {
-    const unlocked = opts.test || i === 0 || done.has(LEVELS[i - 1].id);
+    const day = openDay(i);
+    const early = Date.now() < day.getTime();
+    const unlocked = opts.test || (!early && (i === 0 || done.has(LEVELS[i - 1].id)));
     const card = el('button', 'level-card' + (unlocked ? '' : ' locked'));
-    const state = done.has(lv.id) ? '✓ Completado' : unlocked ? '▶ Jugar' : '🔒 Bloqueado';
+    const state = done.has(lv.id)
+      ? '✓ Completado'
+      : unlocked
+        ? '<span class="blink">▶</span> Jugar'
+        : early
+          ? `🔒 Se abre el ${day.getDate()} de ${MONTHS[day.getMonth()]}`
+          : '🔒 Termina el anterior';
     if (done.has(lv.id)) card.classList.add('done');
     card.append(el('div', 'num', String(lv.id).padStart(2, '0')), el('div', 'emoji', lv.emoji), el('div', 'name', lv.name), el('div', 'place', lv.place), el('div', 'state', state));
     if (unlocked) card.onclick = () => opts.onPlay(lv.id);
@@ -530,25 +547,54 @@ export function later(fn: () => void, ms: number) {
   return window.setTimeout(() => e === epoch && fn(), ms);
 }
 
-/** Muestra una secuencia de líneas con efecto máquina de escribir. Toca para avanzar. */
+/** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */
+let speakerAt: (who: string) => { x: number; y: number } | null = () => null;
+export function setSpeakerResolver(fn: typeof speakerAt) {
+  speakerAt = fn;
+}
+
+const whoClass = (who: string) =>
+  who === 'Narrador' ? 'who-narr' : /^(Azul|Margaux)$/.test(who) ? 'who-azul' : /^(Gas|Marc)$/.test(who) ? 'who-gas' : 'who-other';
+
+/**
+ * Muestra una secuencia de líneas con efecto máquina de escribir. Toca en cualquier sitio para avanzar.
+ * El narrador habla en la caja de abajo; los personajes que se ven en pantalla, en un bocadillo sobre la cabeza.
+ */
 export function dialogue(lines: Line[], onDone: () => void) {
   closeDialogue();
   const box = el('div', 'dialogue');
   const who = el('div', 'who');
   const text = el('div', 'text');
-  box.append(who, text, el('div', 'next', 'toca para continuar ▸'));
-  root.append(box);
+  box.append(who, text, el('div', 'next', '▼'));
+  const catcher = el('div', 'dialogue-catch');
+  root.append(catcher, box);
   let i = 0;
   let shown = 0;
   let timer = 0;
+  let raf = 0;
   // Las líneas que empiezan por «(WhatsApp)» se pintan como un mensaje del móvil
   const WA = '(WhatsApp) ';
   const body = (ln: Line) => (ln.text.startsWith(WA) ? ln.text.slice(WA.length) : ln.text);
+  // Coloca el bocadillo sobre la cabeza de quien habla, sin salirse de la pantalla
+  const place = () => {
+    raf = requestAnimationFrame(place);
+    const ln = lines[i];
+    const at = ln && !ln.text.startsWith(WA) && ln.who !== 'Narrador' ? speakerAt(ln.who) : null;
+    const W = window.innerWidth;
+    if (at && at.y > 70) {
+      box.classList.add('speech');
+      const w = box.offsetWidth, h = box.offsetHeight;
+      const left = Math.min(Math.max(at.x - w / 2, 12), W - w - 12);
+      const top = Math.max(at.y - h - 18, 8);
+      box.style.setProperty('--bx', `${left}px`);
+      box.style.setProperty('--by', `${top}px`);
+      box.style.setProperty('--tail', `${Math.min(Math.max(at.x - left, 22), w - 22)}px`);
+    } else box.classList.remove('speech');
+  };
   const show = () => {
     const ln = lines[i];
     const wa = ln.text.startsWith(WA);
-    box.classList.toggle('wa', wa);
-    box.classList.toggle('wa-me', wa && (ln.who === 'Azul' || ln.who === 'Margaux'));
+    box.className = `dialogue ${whoClass(ln.who)}` + (wa ? ' wa' : '');
     who.textContent = wa ? `📱 ${ln.who}` : ln.who;
     const full = body(ln);
     shown = 0;
@@ -578,19 +624,22 @@ export function dialogue(lines: Line[], onDone: () => void) {
   const onKey = (e: KeyboardEvent) => {
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') advance();
   };
-  box.onpointerdown = (e) => {
+  box.onpointerdown = catcher.onpointerdown = (e) => {
     e.stopPropagation();
     advance();
   };
   const cancel = () => {
     clearInterval(timer);
+    cancelAnimationFrame(raf);
     box.remove();
+    catcher.remove();
     window.removeEventListener('keydown', onKey);
     if (cancelDialogue === cancel) cancelDialogue = null;
   };
   cancelDialogue = cancel;
   window.addEventListener('keydown', onKey);
   show();
+  place();
 }
 
 export interface GaugeZone {

@@ -12,6 +12,7 @@ import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { hud, dialogue, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
+import { embrace, hugFor, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
@@ -118,6 +119,7 @@ export class Level1 implements Level {
   private marcTo: THREE.Vector3 | null = null;
   private barT = 0;
   private kissT = 0;
+  private kiss: Embrace | null = null;
   private clearR = 0;
   private carmeTo: THREE.Vector3 | null = null;
   private carmeSteer: SteerState = {};
@@ -811,6 +813,14 @@ export class Level1 implements Level {
     // Final: la pareja baila, confeti y la cámara gira alrededor
     if (this.stage === 'ending') {
       this.endingT += dt;
+      // Se sueltan poco a poco y se ponen a bailar
+      if (this.kiss) {
+        this.kiss.k = Math.max(0, 1 - this.endingT / 0.7);
+        if (this.kiss.k === 0) {
+          this.kiss.stop();
+          this.kiss = null;
+        }
+      }
       this.walker.yaw += dt * 0.5;
       if (Math.random() < dt * 6) this.fx.burst(this.v1.copy(pp).lerp(this.world.marcPos, 0.5).setY(2.4), '❤️', 2, 1.5);
       if (Math.random() < dt * 1.8) this.fireworks.burst(this.v2.set(-14 + Math.random() * 28, 20 + Math.random() * 8, 34 + Math.random() * 10));
@@ -943,6 +953,8 @@ export class Level1 implements Level {
     const pp = this.player.root.position;
     const mp = this.marc.root.position;
     this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
+    this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
+    hugFor(this.player, this.marc, 3);
     dialogue([...this.T.marcMeet, ...this.T.smallTalk], () =>
       phoneChat(this.V.findFirst!.found, () => {
         this.together = true;
@@ -974,19 +986,12 @@ export class Level1 implements Level {
     audio.ambience(0.04);
   }
 
-  /** El beso: se inclinan el uno hacia el otro, corazones y fuegos artificiales. */
+  /** El beso: se acercan, ella le rodea el cuello, él la coge de la cintura; corazones y fuegos artificiales. */
   private updateKiss(dt: number) {
     this.kissT += dt;
-    const k = Math.min(1, this.kissT / 1.2);
-    const lean = Math.sin(k * Math.PI * 0.5) * 0.22;
-    for (const p of [this.player, this.marc]) {
-      p.body.rotation.x = lean;
-      p.head.rotation.x = lean * 0.6;
-      p.armL.rotation.x = p.armR.rotation.x = -0.5 * k;
-      p.eyes.scale.y = k > 0.8 ? 0.15 : 1; // ojos cerrados
-    }
-    this.marc.head.rotation.z = 0.15 * k;
-    this.player.head.rotation.z = -0.15 * k;
+    this.kiss ??= embrace(this.player, this.marc, 'kiss');
+    this.kiss.k = Math.min(1, this.kissT / 1.3);
+    for (const p of [this.player, this.marc]) p.eyes.scale.y = this.kissT > 1 ? 0.15 : 1; // ojos cerrados
     if (this.kissT > 1.2 && this.kissT - dt <= 1.2) {
       const mid = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5).setY(2.5);
       this.fx.burst(mid, '❤️', 14, 3, 1.2);
@@ -996,11 +1001,8 @@ export class Level1 implements Level {
       vibrate([60, 40, 120]);
       for (let i = 0; i < 3; i++) this.fireworks.burst(this.v2.set(-12 + i * 12, 22 + Math.random() * 5, 38));
     }
-    if (this.kissT > 3.4) {
-      for (const p of [this.player, this.marc]) {
-        p.body.rotation.x = p.head.rotation.x = p.head.rotation.z = 0;
-        p.eyes.scale.y = 1;
-      }
+    if (this.kissT > 3.8) {
+      for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;
       this.busy = false;
       this.stage = 'ending';
       this.endingT = 0;

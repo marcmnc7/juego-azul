@@ -11,6 +11,7 @@ import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
+import { hugFor } from '../entities/embrace';
 import { CHATS } from '../data/chats';
 import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
@@ -1598,6 +1599,7 @@ export class Level3 implements Level {
     audio.luck();
     vibrate(25);
     this.fx.burst(ap.clone().lerp(pp, 0.5).setY(2.3), '❤️', 3, 0.8, 0.6);
+    hugFor(this.azul, this.player, 2.6);
     const lines = [...T_FOUND()[Math.min(this.trip - 1, 2)], ...(this.trip === 1 && this.smokeThrown ? [CONCERT.gasSmoke] : [])];
     dialogue(lines, () => {
       if (this.trip >= TRIPS) {

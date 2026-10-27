@@ -9,6 +9,7 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } from '../ui/ui';
+import { hugFor } from '../entities/embrace';
 import { CHATS } from '../data/chats';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
@@ -788,6 +789,7 @@ export class LevelSantJoan implements Level {
     this.walker.facing = Math.atan2(g.x - pp.x, g.z - pp.z);
     this.gas.root.rotation.y = Math.atan2(pp.x - g.x, pp.z - g.z);
     this.updateHud();
+    hugFor(this.player, this.gas, 4);
     dialogue(SANTJOAN.meet, () => this.finish());
   }
 

@@ -498,6 +498,15 @@ const people = new Set<Person>();
 export const vatTime = { value: 0 };
 /** Otras cosas animadas de los capítulos con glTF (los ases): se actualizan con los personajes. */
 export const rigTickers = new Set<(dt: number) => void>();
+/** Retoques después de animar a todos (abrazos y besos: manos que se apoyan en el otro). */
+export const rigPost = new Set<(dt: number) => void>();
+
+/** Ejes del personaje (x a su izquierda, y arriba, z adelante) pegados al hueso, en mundo. */
+export function boneFrame(p: Person, bone: string, out: THREE.Quaternion) {
+  const r = p.rig!;
+  r.bones.get(bone)!.getWorldQuaternion(out);
+  return out.multiply(_q3.copy(data[r.kind]!.down.get(bone)!).invert());
+}
 
 /** Crea un personaje glTF con las mismas articulaciones (invisibles) que el muñeco de siempre. */
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
@@ -758,10 +767,12 @@ export function updateRigPeople(dt: number) {
     if (!p.root.parent) continue;
     updateOne(p, dt);
   }
+  for (const f of rigPost) f(dt);
 }
 
 /** Al salir de un capítulo. */
 export function clearRigPeople() {
   people.clear();
   rigTickers.clear();
+  rigPost.clear();
 }

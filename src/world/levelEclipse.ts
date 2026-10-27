@@ -863,9 +863,9 @@ export class LevelEclipse implements Level {
       this.bumpT -= dt;
       // Aparcado: dentro de la zona, morro hacia la calle y casi parado
       const inZone = c.position.x > PARK.minX && c.position.x < PARK.maxX && c.position.z > PARK.minZ && c.position.z < PARK.maxZ;
-      const facing = Math.abs(Math.atan2(Math.sin(c.rotation.y - Math.PI), Math.cos(c.rotation.y - Math.PI))) < 0.32;
+      const facing = Math.abs(Math.atan2(Math.sin(c.rotation.y - Math.PI), Math.cos(c.rotation.y - Math.PI))) < 0.5;
       (this.parkZone.material as THREE.MeshBasicMaterial).color.set(inZone && facing ? 0x5cff8a : inZone ? 0xffd23f : 0x5cff8a);
-      if (inZone && facing && Math.abs(this.carSpeed) < 0.4) {
+      if (inZone && facing && Math.abs(this.carSpeed) < 0.8) {
         this.parkedT += dt;
         if (this.parkedT > 0.6) this.parked();
       } else this.parkedT = 0;

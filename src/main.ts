@@ -31,7 +31,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -209,6 +209,32 @@ let data = load();
 let level: Level | null = null;
 let levelAt = 0;
 let closeDebug: (() => void) | null = null;
+// Bocadillos de diálogo: quién es quién en cada capítulo (los niveles guardan a los personajes con estos nombres)
+const SPEAKERS: Record<string, string[]> = {
+  Azul: ['azul', 'player'], Margaux: ['azul', 'player'], Gas: ['gas', 'marc'], Marc: ['marc', 'gas'],
+  Carme: ['carme'], Tòfol: ['tofol'], Camarero: ['barman'],
+};
+const _head = new THREE.Vector3();
+setSpeakerResolver((who) => {
+  const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
+  if (!L) return null;
+  for (const f of SPEAKERS[who] ?? []) {
+    const p = L[f];
+    if (!p?.root || !p.head) continue;
+    // Tiene que estar en la escena y visible
+    let o: THREE.Object3D | null = p.root;
+    while (o && o.visible && o.parent) o = o.parent;
+    if (!o || !o.visible || !(o as THREE.Scene).isScene) continue;
+    const bone = p.rig?.bones.get('Head') ?? p.head;
+    bone.getWorldPosition(_head);
+    if (_head.distanceTo(camera.position) > 22) return null;
+    _head.y += 0.32 * (p.root.scale.y || 1);
+    _head.project(camera);
+    if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
+    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight };
+  }
+  return null;
+});
 const idle = new THREE.Scene();
 idle.background = new THREE.Color(0x2b1840);
 

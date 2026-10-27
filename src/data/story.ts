@@ -47,7 +47,7 @@ export const FERRERIES = {
     { who: 'Carme', text: 'Ballar. Millor que tu, segur.' },
     { who: 'Marc', text: 'I tu? Jo som en Marc.' },
     { who: 'Margaux', text: 'Margaux.' },
-    { who: 'Marc', text: 'Margaux. Increïble.' },
+    { who: 'Marc', text: 'Margaux… Encantat.' },
   ] as Line[],
   smallTalk: [
     { who: 'Marc', text: 'I què, ets d’aquí?' },
