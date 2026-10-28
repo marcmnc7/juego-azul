@@ -327,7 +327,7 @@ export class LevelSantJoan implements Level {
     {
       const MARES = 0xdcc49a;
       const MARES_D = 0xc9ad80;
-      const cz0 = STREET.maxZ + 1.2; // fachada que da a la calle
+      const cz0 = STREET.maxZ + 2.2; // fachada que da a la plaza de la Catedral, junto a la calle
       this.block(m, 19, 30, cz0, cz0 + 16, 16, MARES);
       // Contrafuertes góticos a lo largo de la nave
       for (let x = 20; x <= 29; x += 3) m.add(G.box, MARES_D, x, 7, cz0 - 0.35, 0, 0, 0, 0.9, 14, 0.7);
@@ -372,7 +372,7 @@ export class LevelSantJoan implements Level {
     // Rótulos de verdad
     this.sign('Ses Voltes', 30.4, 4.4, 0, -Math.PI / 2, 3);
     this.sign('Carrer Major des Born', 19.2, 3.4, -4.5, 0, 3.6);
-    this.sign('Catedral de Menorca', 24.6, 6.4, STREET.maxZ + 1.0 - 0.6, Math.PI, 3.6);
+    this.sign('Catedral de Menorca', 24.6, 7.6, STREET.maxZ + 2.2 - 1.95, Math.PI, 3.6);
     this.sign('Plaça Nova', 69.4, 3, 6.5, -Math.PI / 2, 3);
     this.sign('Plaça Espanya', 70.6, 3, -6.5, -Math.PI / 2, 3.4);
     this.sign('Maramao', 40, 3.6, 4.55, Math.PI, 2.6);
