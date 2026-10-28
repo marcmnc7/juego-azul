@@ -22,6 +22,7 @@ export class Input {
     this.knob.className = 'stick-knob';
     this.base.appendChild(this.knob);
     ui.appendChild(this.base);
+    this.ghost();
 
     surface.addEventListener('pointerdown', this.onDown);
     window.addEventListener('pointermove', this.onMove);
@@ -50,6 +51,7 @@ export class Input {
       this.base.style.left = `${e.clientX}px`;
       this.base.style.top = `${e.clientY}px`;
       this.base.classList.add('on');
+      this.base.classList.remove('ghost');
       this.knob.style.transform = 'translate(-50%,-50%)';
     } else if (!left && this.camId === null) {
       this.camId = e.pointerId;
@@ -64,14 +66,23 @@ export class Input {
       let dy = e.clientY - this.stickOrigin.y;
       const len = Math.hypot(dx, dy);
       if (len > R) {
+        // El joystick sigue al pulgar: si se pasa del borde, la base se arrastra con él
+        this.stickOrigin.x += (dx / len) * (len - R);
+        this.stickOrigin.y += (dy / len) * (len - R);
+        this.base.style.left = `${this.stickOrigin.x}px`;
+        this.base.style.top = `${this.stickOrigin.y}px`;
         dx = (dx / len) * R;
         dy = (dy / len) * R;
       }
       this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      this.moveX = dx / R;
-      this.moveY = -dy / R;
+      // Zona muerta pequeña y respuesta suave: un poco de pulgar = andar despacio
+      const m = Math.min(1, len / R);
+      const g = m < 0.12 ? 0 : Math.pow((m - 0.12) / 0.88, 1.3) / (m || 1);
+      this.moveX = (dx / R) * g;
+      this.moveY = (-dy / R) * g;
     } else if (e.pointerId === this.camId) {
-      this.camDelta += (e.clientX - this.camLastX) * 0.008;
+      // Misma sensación en cualquier pantalla: media pantalla de arrastre ≈ media vuelta
+      this.camDelta += ((e.clientX - this.camLastX) / Math.max(480, window.innerWidth)) * 6.5;
       this.camLastX = e.clientX;
     }
   };
@@ -80,7 +91,7 @@ export class Input {
     if (e.pointerId === this.stickId) {
       this.stickId = null;
       this.moveX = this.moveY = 0;
-      this.base.classList.remove('on');
+      this.ghost();
     } else if (e.pointerId === this.camId) {
       this.camId = null;
     }
@@ -125,6 +136,14 @@ export class Input {
     this.stickId = this.camId = null;
     this.moveX = this.moveY = 0;
     this.actionQueued = false;
+    this.ghost();
+  }
+
+  /** Sin dedo: el joystick se queda en su sitio, transparente, para que se sepa dónde tocar. */
+  private ghost() {
     this.base.classList.remove('on');
+    this.base.classList.add('ghost');
+    this.base.style.left = this.base.style.top = '';
+    this.knob.style.transform = 'translate(-50%,-50%)';
   }
 }

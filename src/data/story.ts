@@ -25,46 +25,64 @@ export const LEVELS: LevelInfo[] = [
   { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙' },
 ];
 
-// Capítulo 1, tot en menorquí. El xat d'aquell vespre va tal qual a chats.ts (ferreriesTarde).
+// Capítulo 1. Els de Ferreries parlen en menorquí; ella, en castellà, i entre ells dos, en castellà.
+// El xat d'aquell vespre va tal qual a chats.ts (ferreriesTarde).
 export const FERRERIES = {
   intro: [
-    { who: 'Narrador', text: 'Ferreries. 25 d’agost de 2025, Sant Bartomeu. Es ases són a les onze.' },
-    { who: 'Narrador', text: 'Has pujat amb ses amigues. Encara no el coneixes.' },
+    { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2025. Último día de las fiestas de Sant Bartomeu: el jaleo de burros.' },
+    { who: 'Narrador', text: 'Pistolas de agua, purpurina y confeti por todas partes. Has subido con tus amigas. Todavía no le conoces.' },
   ] as Line[],
   tofolQuest: [
-    { who: 'Tòfol', text: 'Primera vegada an es jaleo? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
-    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es tassó.' },
+    { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
+    { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
+    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es got. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
   ] as Line[],
   tofolNotYet: [{ who: 'Tòfol', text: 'Encara no. Pomades i ases, que es jaleo no espera.' }] as Line[],
   tofolDone: [
     { who: 'Tòfol', text: 'Ja ets de Ferreries, al·lota.' },
-    { who: 'Tòfol', text: 'Ara vés a ballar an aquell bar, que està molt guai. Na Carme ja hi és.' },
+    { who: 'Margaux', text: '¡Y llena de purpurina!' },
+    { who: 'Tòfol', text: 'Ara vés a ballar an es bar de Sa Font, que està molt guai. Na Carme ja hi és.' },
   ] as Line[],
-  tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés an es bar!' }] as Line[],
+  tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés a Sa Font!' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ja era hora! Vina, balla!' }] as Line[],
   marcMeet: [
     { who: 'Marc', text: 'Carme! Què fas per aquí?' },
-    { who: 'Carme', text: 'Ballar. Millor que tu, segur.' },
-    { who: 'Marc', text: 'I tu? Jo som en Marc.' },
-    { who: 'Margaux', text: 'Margaux.' },
-    { who: 'Marc', text: 'Margaux. Increïble.' },
+    { who: 'Carme', text: 'Res, aquí amb una amiga.' },
+    { who: 'Marc', text: '¿Y tú? Yo soy Marc.' },
   ] as Line[],
   smallTalk: [
-    { who: 'Marc', text: 'I què, ets d’aquí?' },
-    { who: 'Margaux', text: 'Visc a Madrid. Però som una mica de tot: francesa, italiana i espanyola.' },
-    { who: 'Marc', text: 'I havies vingut mai a ses festes de Ferreries, o és sa primera vegada?' },
-    { who: 'Margaux', text: 'A Menorca hi vaig viure més d’un any, en plena pandèmia… però festes, cap ni una. Aquestes són ses primeres.' },
-    { who: 'Marc', text: 'Idò benvinguda a ses de veres. Ja veus que aquí es balla com es pot.' },
+    { who: 'Marc', text: '¿Y de dónde eres?' },
+    { who: 'Margaux', text: 'Vivo en Madrid. Pero soy francesa e italiana.' },
+    { who: 'Marc', text: '¿Y habías venido alguna vez a las fiestas? ¿A Menorca?' },
+    { who: 'Margaux', text: '¡Sí! Prácticamente todos los años.' },
+    { who: 'Marc', text: '¿Todos los años? ¿Y cómo es que no te había visto nunca?' },
+    { who: 'Carme', text: 'Perquè no mires, Marc.' },
+    { who: 'Marc', text: 'Pues bienvenida otra vez. Aquí se baila como se puede.' },
   ] as Line[],
   hints: {
-    pomada: 'Pomada! 🍋',
-    luck: 'Carícia de sort! 🍀',
-    dropped: 'Uiii! Un ase t’ha envestit i se t’ha caigut sa pomada',
-    rear: 'Ara! Fes-li una carícia',
-    perfect: 'Carícia perfecta! ✨🍀',
-    late: 'Pels pèls 🍀',
-    allLuck: 'Tres carícies! Sa plaça sencera t’aplaudeix 👏',
+    pomada: '¡Pomada! 🍋',
+    luck: '¡Caricia de la suerte! 🍀',
+    dropped: '¡Uiii! Un burro te ha empujado y se te ha caído la pomada',
+    rear: '¡Ahora! Hazle una caricia',
+    perfect: '¡Caricia perfecta! ✨🍀',
+    late: 'Por los pelos 🍀',
+    allLuck: '¡Tres caricias! Toda la plaza te aplaude 👏',
   },
+};
+
+/** Lo que solo pasa en Ferreries: la mirada a cámara lenta, el baile, el beso y el número (a las 19:46 ya os escribíais por WhatsApp). */
+export const FERRERIES_MEET = {
+  /** Cuando ella se gira y él la ve: todo va a cámara lenta. */
+  eyes: [{ who: 'Marc', text: '(Mare meva… quins ulls.)' }] as Line[],
+  name: [
+    { who: 'Margaux', text: 'Margaux.' },
+    { who: 'Marc', text: 'Margaux… Encantado.' },
+  ] as Line[],
+  dance: [{ who: 'Carme', text: 'Bé, bé… jo me’n vaig a cercar una altra pomada.' }] as Line[],
+  insta: [
+    { who: 'Marc', text: 'Oye… ¿me das tu número?' },
+    { who: 'Margaux', text: 'Apunta.' },
+  ] as Line[],
 };
 
 // Capítulo 6: Sant Joan en Ciutadella (junio de 2026). Buscar a Gas por sus ubicaciones entre caballos y avellanes.
@@ -105,7 +123,7 @@ export const ROAD = {
     { who: 'Narrador', text: 'Cafetería Marcial. La primera con M. Juego ganado.' },
     { who: 'Narrador', text: '📷 Recuerdo desbloqueado: Cafetería Marcial.' },
   ] as Line[],
-  threeDays: [{ who: 'Narrador', text: 'Tres días después.' }] as Line[],
+  named: [{ who: 'Narrador', text: 'Desde ese día, Marc es Gas.' }] as Line[],
   regions: {
     madrid: 'Saliendo de Madrid (sin helado)',
     meseta: 'La meseta. Caminitos, no solo autopista',
@@ -145,8 +163,8 @@ export const CONCERT = {
   airport: [
     { who: 'Narrador', text: 'Jueves 12 de marzo de 2026. Gas vuela desde Barcelona y Azul, desde Madrid. Destino: Gran Canaria, a ver a Fito.' },
   ] as Line[],
-  airportHint: 'Esquiva las hamburguesas 🍔 y llega a la puerta de embarque',
-  burgerHit: ['🍔 ¡Plaf! «NUNCA más»', '🍔 «Todo malo y caro, hasta la fanta»', '🍔 Gas ya te avisó'],
+  airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
+  burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],
   landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria. Él ha llegado antes.' }] as Line[],
   stadium: [
     { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
@@ -176,7 +194,6 @@ export const NIGHT = {
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
   swimDone: [{ who: 'Narrador', text: 'Al césped. Esa oscuridad tenebre.' }] as Line[],
   lie: [{ who: 'Narrador', text: 'Toca las estrellas, empezando por la que parpadea.' }] as Line[],
-  candle: (n: number) => `🕯️ ${n}/6`,
   sneakHint: 'Silencio full: despacio y por las losas, que la grava cruje',
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
   caught: [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga. Otra vez, despacito.' }] as Line[],
@@ -190,12 +207,17 @@ export const CENA = {
   intro: [{ who: 'Narrador', text: 'Sa Farola, 13 de julio de 2026. Tus padres salen a cenar. Gas espera en un lugar estratégico, con la moto.' }] as Line[],
   /** Lo que le vas escribiendo mientras tus padres no acaban de irse (mensajes tuyos de esa noche). */
   waitEvents: ['Aun estan', 'Sale mi padre ahora', 'Que hace mi padre top', 'Tio'],
-  cookIntro: [{ who: 'Gas', text: 'El 10 es la carbonara. Y sin nata.' }] as Line[],
+  // Tal cual en el chat: el del bacon era él, y la italiana es ella
+  cookIntro: [
+    { who: 'Gas', text: 'Bacon iba bien si tenías.' },
+    { who: 'Margaux', text: '¿Qué dices? Guanciale. Y ni se te ocurra la nata.' },
+    { who: 'Gas', text: 'Vale, vale. El 10 es la carbonara.' },
+  ] as Line[],
   steps: {
     guanciale: 'Toca cuando el guanciale esté dorado 🥓',
     pasta: 'Escurre la pasta al dente ⏱️',
     mix: 'Mezcla fuera del fuego: que no se cuaje 🥚',
-    nata: 'Gas: «¿Con nata? Regulín.»',
+    nata: 'Gas: «¿Nata? ¿Tú? ¿La italiana?» 🙄',
     scrambled: '¡Buu! Huevos revueltos',
     burnt: '¡Buu! Guanciale quemado',
     raw: 'Todavía está dura',
@@ -356,12 +378,12 @@ export const ECLIPSE = {
   stats: (rounds: number, parkTries: number) => [['Partidas a La Princesa', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
 };
 
-// Capítulo 9: un año después, otra vez Ferreries y en menorquí, como el 1. Chats: tarde, veintidos, asesOnce, bocata, fecha.
+// Capítulo 9: un año después, otra vez Ferreries. Como en el 1, el pueblo habla en menorquín y ella y Gas, en castellano. Chats: tarde, veintidos, asesOnce, bocata, fecha.
 export const ANIVERSARIO = {
   ...FERRERIES,
   intro: [
-    { who: 'Narrador', text: 'Ferreries. 25 d’agost de 2026, Sant Bartomeu. Un any just.' },
-    { who: 'Narrador', text: 'Aquesta vegada ja el coneixes. Sa setmana ha anat així:' },
+    { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2026, Sant Bartomeu. Un año justo.' },
+    { who: 'Narrador', text: 'Esta vez ya le conoces. La semana ha ido así:' },
   ] as Line[],
   tofolQuest: [
     { who: 'Tòfol', text: 'Tu altra vegada! I aquest any acompanyada.' },
@@ -372,19 +394,19 @@ export const ANIVERSARIO = {
     { who: 'Tòfol', text: 'I ara, que és Sant Bartomeu, un petó.' },
   ] as Line[],
   tofolAgain: [{ who: 'Tòfol', text: 'Encara aquí? Vinga, que es jaleo no espera!' }] as Line[],
-  september: [{ who: 'Narrador', text: 'Setembre. Gas s’apunta a vòlei platja.' }] as Line[],
-  october: [{ who: 'Narrador', text: 'Octubre. Joy, a punt per a campionats.' }] as Line[],
+  september: [{ who: 'Narrador', text: 'Septiembre. Gas se apunta a vóley playa.' }] as Line[],
+  october: [{ who: 'Narrador', text: 'Octubre. Joy, lista para campeonatos.' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ell és per aquí. Segueix sa ubicació!' }] as Line[],
-  gasMoves: ['📍 Ubicació nova', '📍 I una altra', '📍 «Tinc bocata»'],
+  gasMoves: ['📍 Ubicación nueva', '📍 Y otra', '📍 «Tengo bocata»'],
   marcMeet: [
-    { who: 'Marc', text: 'Ja era hora. Un any just, eh?' },
-    { who: 'Margaux', text: 'Un any. I encara balles igual.' },
+    { who: 'Marc', text: 'Ya era hora. Un año justo, ¿eh?' },
+    { who: 'Margaux', text: 'Un año. Y sigues bailando igual.' },
   ] as Line[],
   smallTalk: [
-    { who: 'Marc', text: 'L’any passat vaig haver de parlar amb na Carme per presentar-me.' },
-    { who: 'Marc', text: 'Enguany ja no em fa falta excusa.' },
+    { who: 'Marc', text: 'El año pasado tuve que hablar con Carme para presentarme.' },
+    { who: 'Marc', text: 'Este año ya no me hace falta excusa.' },
   ] as Line[],
-  hints: { ...FERRERIES.hints, allLuck: 'Tres carícies, i aquesta vegada junts 👏' },
+  hints: { ...FERRERIES.hints, allLuck: 'Tres caricias, y esta vez juntos 👏' },
 };
 
 // Minijuegos cortos que salen al acabar algunos capítulos (y desde el mapa).

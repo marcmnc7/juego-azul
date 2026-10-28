@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import photoUrl from '../assets/surf-photo.jpg';
+import colorUrl from '../assets/pbr/color.jpg';
+import normalUrl from '../assets/pbr/normal.jpg';
+import roughUrl from '../assets/pbr/rough.jpg';
 
 // Texturas de superficie para todo el decorado, sin descargar imágenes: cada material del mundo
 // (encalado, teja árabe, marès, piedra seca, asfalto, madera, losas, adoquín, arena…) se dibuja en
@@ -457,6 +460,162 @@ export function loadSurfacePhotos() {
     img.src = photoUrl;
   });
   return photoLoading;
+}
+
+// ---------- Calidad de la prueba de concepto (de momento, solo el capítulo 1) ----------
+// Resolución de cada capa en la GPU. Se pinta a 256 y se dibuja al doble para que las fotos
+// (estuco, teja, marès y losas de Sponza) se vean nítidas.
+const M = 512;
+/** Relieve de cada superficie (cuánto se nota el mapa de normales). */
+export const SURF_NORMAL = [0, 0.9, 1.1, 1.0, 0.9, 0.55, 0.8, 0.7, 0.6, 0.6, 1.0, 0.8, 0.6, 1.0, 1.1, 0.9];
+
+let hdTex: THREE.DataArrayTexture | null = null;
+let hdNrmTex: THREE.DataArrayTexture | null = null;
+/** Color medio de cada capa (RGB), para que la textura cambie el detalle pero no el color elegido. */
+export const hdMeans = new Float32Array(LAYERS * 3).fill(0.5);
+/** Rugosidad media de cada capa: la textura la varía alrededor de la del material. */
+export const hdRoughMeans = new Float32Array(LAYERS).fill(0.5);
+let procedural: Uint8Array | null = null;
+
+function paintProcedural() {
+  if (procedural) return procedural;
+  const data = new Uint8Array(M * M * 4 * LAYERS);
+  const c = document.createElement('canvas');
+  c.width = c.height = M;
+  const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  for (let l = 0; l < LAYERS; l++) {
+    seed = 1000 + l * 7919;
+    ctx.setTransform(M / N, 0, 0, M / N, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, N, N);
+    painters[l](ctx);
+    data.set(ctx.getImageData(0, 0, M, M).data, l * M * M * 4);
+  }
+  return (procedural = data);
+}
+
+/** Rellena los datos de color y de relieve con lo pintado y, encima, las fotos ya cargadas. */
+function fill(col: Uint8Array, nrm: Uint8Array) {
+  col.set(paintProcedural());
+  const S = M * M * 4;
+  for (let l = 0; l < LAYERS; l++) {
+    const o = l * S;
+    if (hdPhoto) {
+      const src = hdPhoto.color.subarray(o, o + S);
+      let sum = 0;
+      for (let i = 0; i < S; i += 4) sum += src[i] + src[i + 1] + src[i + 2];
+      if (sum / (M * M * 3 * 255) > 0.05) col.set(src, o);
+    }
+    let r = 0, g = 0, b = 0;
+    for (let i = o; i < o + S; i += 4) { r += col[i]; g += col[i + 1]; b += col[i + 2]; }
+    const k = 1 / (M * M * 255);
+    hdMeans[l * 3] = Math.max(0.05, r * k);
+    hdMeans[l * 3 + 1] = Math.max(0.05, g * k);
+    hdMeans[l * 3 + 2] = Math.max(0.05, b * k);
+    // Relieve: el mapa de normales de la foto si lo hay; si no, sacado del propio dibujo
+    const pn = hdPhoto?.normal.subarray(o, o + S);
+    let pnSum = 0;
+    if (pn) for (let i = 0; i < S; i += 64) pnSum += pn[i + 2];
+    const pr = hdPhoto?.rough.subarray(o, o + S);
+    let prSum = 0;
+    if (pr) for (let i = 0; i < S; i += 64) prSum += pr[i];
+    const lum = (x: number, y: number) => {
+      const i = o + (((y + M) % M) * M + ((x + M) % M)) * 4;
+      return (col[i] * 0.3 + col[i + 1] * 0.59 + col[i + 2] * 0.11) / 255;
+    };
+    const mean = (hdMeans[l * 3] * 0.3 + hdMeans[l * 3 + 1] * 0.59 + hdMeans[l * 3 + 2] * 0.11);
+    let rs = 0;
+    for (let y = 0; y < M; y++)
+      for (let x = 0; x < M; x++) {
+        const i = o + (y * M + x) * 4;
+        if (pnSum > 0) {
+          nrm[i] = pn![i - o]; nrm[i + 1] = pn![i - o + 1]; nrm[i + 2] = pn![i - o + 2];
+        } else {
+          // Lo oscuro (juntas, grietas) se hunde
+          const dx = (lum(x + 1, y) - lum(x - 1, y)) * 2.2;
+          const dy = (lum(x, y + 1) - lum(x, y - 1)) * 2.2;
+          const il = 1 / Math.hypot(dx, dy, 1);
+          nrm[i] = (-dx * il * 0.5 + 0.5) * 255;
+          nrm[i + 1] = (dy * il * 0.5 + 0.5) * 255;
+          nrm[i + 2] = (il * 0.5 + 0.5) * 255;
+        }
+        const rv = prSum > 0 ? pr![i - o] : Math.max(8, Math.min(255, (0.55 + (mean - lum(x, y)) * 0.8) * 255));
+        nrm[i + 3] = rv;
+        rs += rv;
+      }
+    hdRoughMeans[l] = Math.max(0.05, rs / (M * M * 255));
+  }
+}
+
+function arrayTex(data: Uint8Array) {
+  const t = new THREE.DataArrayTexture(data, M, M, LAYERS);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Textura por capas con el color de detalle de cada superficie (se genera una vez). */
+export function hdSurfaceTexture() {
+  if (!hdTex) {
+    const col = new Uint8Array(M * M * 4 * LAYERS);
+    const nrm = new Uint8Array(M * M * 4 * LAYERS);
+    fill(col, nrm);
+    hdTex = arrayTex(col);
+    hdNrmTex = arrayTex(nrm);
+  }
+  return hdTex;
+}
+
+/** Relieve (normal en RGB) y rugosidad (en A) de cada superficie, a juego con surfaceTexture(). */
+export function hdNormalTexture() {
+  hdSurfaceTexture();
+  return hdNrmTex!;
+}
+
+// ---------- Texturas fotográficas ----------
+// Las mismas de la prueba de concepto: estuco, teja, marès y losas de Sponza (color, relieve y
+// rugosidad), más el detalle sacado de fotos reales (arena, tierra, césped, madera, adoquín, baldosa
+// de barro y la piedra seca del Camí de sa Farola). Una tira con una capa por superficie; las capas
+// negras se quedan con el dibujo procedural (persiana, corteza).
+let hdPhoto: { color: Uint8ClampedArray; normal: Uint8ClampedArray; rough: Uint8ClampedArray } | null = null;
+let hdLoading: Promise<void> | null = null;
+
+function loadStrip(url: string) {
+  return new Promise<Uint8ClampedArray | null>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = M;
+        c.height = M * LAYERS;
+        const ctx = c.getContext('2d', { willReadFrequently: true })!;
+        ctx.drawImage(img, 0, 0, M, M * LAYERS);
+        resolve(ctx.getImageData(0, 0, M, M * LAYERS).data);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** Carga las tiras HD una vez y, si las texturas ya existen, las actualiza. */
+export function loadHdPhotos() {
+  hdLoading ??= Promise.all([loadStrip(colorUrl), loadStrip(normalUrl), loadStrip(roughUrl)]).then(([color, normal, rough]) => {
+    if (!color || !normal || !rough) return;
+    hdPhoto = { color, normal, rough };
+    if (hdTex && hdNrmTex) {
+      fill(hdTex.image.data as Uint8Array, hdNrmTex.image.data as Uint8Array);
+      hdTex.needsUpdate = true;
+      hdNrmTex.needsUpdate = true;
+    }
+  });
+  return hdLoading;
 }
 
 // ---------- Qué superficie corresponde a cada color ----------

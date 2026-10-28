@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Box2 } from '../world/ferreries';
+import { physFor } from './phys';
+import { airOf, type AirState } from './air';
 
 // Movimiento en tercera persona relativo a la cámara, con colisión círculo-contra-cajas,
 // empujones, y una cámara que se coloca sola detrás al andar y se acerca si hay una pared.
@@ -29,9 +31,32 @@ const ACCEL = 16; // m/s² arrancando (≈0,35 s hasta correr)
 const BRAKE = 24; // m/s² frenando o cambiando de sentido
 const STUMBLE_DECEL = 8; // m/s² mientras te recuperas de un empujón
 const STRIDE = 0.53; // metros por radián de ciclo de paso (una zancada ≈ 1,65 m)
+// Salto: gravedad algo mayor que la real (en pantalla se siente más natural) y ≈ 0,55 m de altura
+const GRAVITY = 13;
+const JUMP_V = 3.8;
 
-export class Walker {
+let jumpQueued = false;
+let jumpAt = 0;
+/** Botón o tecla de saltar: vale durante un instante (si se pulsa justo antes de tocar el suelo, salta igual). */
+export function requestJump() {
+  jumpQueued = true;
+  jumpAt = performance.now();
+}
+/** Momento (performance.now) en que algún Walker se movió por última vez: para enseñar el botón de saltar. */
+export let walkerActiveAt = -1e9;
+/** Solo para el modo prueba: los últimos límites del área jugable. */
+export let lastBounds: Box2 | null = null;
+
+export class Walker implements AirState {
   facing = 0;
+  /** Altura del salto sobre el suelo, velocidad vertical y aterrizaje (ver AirState). */
+  hop = 0;
+  vy = 0;
+  land = 0;
+  /** Se puede saltar (los niveles lo apagan en escenas, conduciendo o nadando). */
+  canJump = true;
+  private baseY = 0;
+  private coyote = 0;
   yaw = 0;
   /** Fase del ciclo de paso: avanza con la distancia recorrida, así los pies no patinan. */
   walk = 0;
@@ -66,7 +91,14 @@ export class Walker {
   private baseFov = 0;
   private shakeT = 0;
 
-  constructor(public pos: THREE.Vector3) {}
+  constructor(public pos: THREE.Vector3) {
+    this.baseY = pos.y;
+    airOf.set(pos, this);
+  }
+
+  get airborne() {
+    return this.hop > 0.001;
+  }
 
   /** Giro de cámara manual (arrastre con el dedo). */
   turn(delta: number) {
@@ -95,6 +127,8 @@ export class Walker {
 
   /** Para teletransportes y escenas: parar en seco sin inercia. */
   stop() {
+    this.hop = this.vy = this.land = 0;
+    this.baseY = this.pos.y;
     this.velocity.set(0, 0, 0);
     this.knock.set(0, 0, 0);
     this.stumble = 0;
@@ -103,6 +137,8 @@ export class Walker {
   /** Devuelve la intensidad del movimiento (0..1) para animar. */
   move(dt: number, ax: { x: number; y: number }, boxes: Box2[], b: Box2, circles: readonly Circle[] = []) {
     if (dt <= 0) return Math.min(1, this.currentSpeed / this.speed);
+    if (this.canJump) walkerActiveAt = performance.now();
+    lastBounds = b;
     let mag = Math.min(1, Math.hypot(ax.x, ax.y));
     const p = this.pos;
     const sx = p.x;
@@ -153,14 +189,26 @@ export class Walker {
     const dl = Math.hypot(dx, dz);
     if (dl > 1e-5) {
       const speeding = tx * v.x + tz * v.z > 0 && tx * tx + tz * tz > v.x * v.x + v.z * v.z;
-      const a = (this.stumble > 0 ? STUMBLE_DECEL : speeding ? ACCEL : BRAKE) * this.traction;
+      // En el aire casi no se puede cambiar de rumbo (no hay suelo en el que apoyarse)
+      const a = (this.stumble > 0 ? STUMBLE_DECEL : speeding ? ACCEL : BRAKE) * this.traction * (this.airborne ? 0.25 : 1);
       const step = Math.min(dl, a * dt);
       v.x += (dx / dl) * step;
       v.z += (dz / dl) * step;
     }
-    p.x += v.x * dt;
-    p.z += v.z * dt;
+    this.vertical(dt);
+    const phys = physFor(boxes);
+    if (phys) {
+      // Rapier: barrido continuo de la cápsula contra todas las cajas a la vez
+      const m = phys.move(this, p, v.x * dt, v.z * dt, R - 0.02);
+      p.x += m.x;
+      p.z += m.z;
+    } else {
+      p.x += v.x * dt;
+      p.z += v.z * dt;
+    }
 
+    // Red de seguridad (y lo único si Rapier no está): sacar de cualquier caja en la que se haya
+    // quedado dentro, p. ej. al aparecer en un sitio o si el nivel mueve una caja encima.
     for (const c of boxes) {
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
@@ -231,16 +279,60 @@ export class Walker {
     return Math.min(1, now / this.speed);
   }
 
+  /**
+   * Salto con gravedad. La altura se suma a la del suelo que ponga el nivel (si el nivel fija
+   * pos.y, por ejemplo en una explanada, esa es la nueva base).
+   */
+  private vertical(dt: number) {
+    const p = this.pos;
+    if (Math.abs(p.y - (this.baseY + this.hop)) > 1e-4) this.baseY = p.y - this.hop;
+    const grounded = this.hop <= 0.001;
+    this.coyote = grounded ? 0.1 : this.coyote - dt;
+    // Se guarda hasta el siguiente fotograma (aunque el móvil vaya lento), pero no más de un segundo
+    const fresh = jumpQueued && performance.now() - jumpAt < 1000;
+    if (!fresh) jumpQueued = false;
+    if (fresh && this.coyote > 0 && this.canJump && this.traction >= 1 && this.stumble <= 0) {
+      jumpQueued = false;
+      this.vy = JUMP_V;
+      this.coyote = 0;
+    }
+    if (this.vy !== 0 || this.hop > 0) {
+      this.vy -= GRAVITY * dt;
+      this.hop += this.vy * dt;
+      if (this.hop <= 0) {
+        if (this.vy < -2) {
+          this.land = Math.min(1, -this.vy / 5);
+          if (this.vy < -3.5) this.shake(0.1);
+        }
+        this.hop = 0;
+        this.vy = 0;
+      }
+    }
+    this.land = Math.max(0, this.land - dt * 4.5);
+    p.y = this.baseY + this.hop;
+  }
+
   camera(cam: THREE.Camera, dt: number, walls: Box2[], dist = 7, h = 3.6) {
     const p = this.pos;
     const sx = -Math.sin(this.yaw);
     const sz = -Math.cos(this.yaw);
+    const phys = physFor(walls);
     let d = 1.2;
-    for (; d < dist; d += 0.25) {
-      const x = p.x + sx * d;
-      const z = p.z + sz * d;
-      // Edificios y también muros largos y finos (antes la cámara los atravesaba)
-      if (walls.some((c) => (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
+    const baseY = p.y - this.hop; // la cámara no sube y baja con cada salto
+    if (phys) {
+      // Esfera lanzada desde la cabeza hacia donde iría la cámara: se para antes del primer muro
+      const from = { x: p.x, y: baseY + 1.5, z: p.z };
+      const to = { x: p.x + sx * dist, y: baseY + h, z: p.z + sz * dist };
+      const L = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+      const dir = { x: (to.x - from.x) / L, y: (to.y - from.y) / L, z: (to.z - from.z) / L };
+      d = Math.max(1.2, (phys.camCast(from, dir, L) / L) * dist - 0.15);
+    } else {
+      for (; d < dist; d += 0.25) {
+        const x = p.x + sx * d;
+        const z = p.z + sz * d;
+        // Edificios y también muros largos y finos (antes la cámara los atravesaba)
+        if (walls.some((c) => (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
+      }
     }
     if (this.camD < 0 || !this.camInit) this.camD = d;
     else this.camD += (d - this.camD) * Math.min(1, dt * (d < this.camD ? 14 : 2.2));
@@ -248,8 +340,9 @@ export class Walker {
     const run = Math.min(1, this.currentSpeed / this.speed);
     // Alturas relativas a los pies (en el agua, en una explanada o en una escalera la cámara sigue igual);
     // si una pared la acerca, sube solo un poco para no acabar mirando desde arriba
-    this.camPos.set(p.x + sx * d, p.y + h + (dist - d) * 0.15, p.z + sz * d);
-    this.camLook.set(p.x - sx * 1.5, p.y + 1.3, p.z - sz * 1.5);
+    this.camPos.set(p.x + sx * d, baseY + h + (dist - d) * 0.15, p.z + sz * d);
+    // Al saltar, la mirada sube solo un poco: la cámara acompaña sin dar botes
+    this.camLook.set(p.x - sx * 1.5, baseY + 1.3 + this.hop * 0.35, p.z - sz * 1.5);
     if (!this.camInit || cam.position.distanceToSquared(this.camPos) > 400) {
       // Primera vez o teletransporte: sin muelle
       this.camInit = true;
@@ -265,6 +358,20 @@ export class Walker {
     for (const ax of ['x', 'y', 'z'] as const) {
       [cp[ax], this.camVel[ax]] = spring(cp[ax], this.camVel[ax], this.camPos[ax], 5.5, k);
       [look[ax], this.lookVel[ax]] = spring(look[ax], this.lookVel[ax], this.camLook[ax], 9, k);
+    }
+    // El muelle va con un pelín de retraso: si en ese retraso la cámara quedara dentro de un muro
+    // (al girar una esquina), se adelanta hasta el borde. Nunca se ve el interior de una pared.
+    if (phys) {
+      const from = { x: p.x, y: baseY + 1.5, z: p.z };
+      const ex = cp.x - from.x, ey = cp.y - from.y, ez = cp.z - from.z;
+      const L = Math.hypot(ex, ey, ez);
+      if (L > 0.5) {
+        const free = phys.camCast(from, { x: ex / L, y: ey / L, z: ez / L }, L);
+        if (free < L - 0.05) {
+          const k2 = Math.max(0.6, free - 0.1) / L;
+          cp.set(from.x + ex * k2, from.y + ey * k2, from.z + ez * k2);
+        }
+      }
     }
     // Un leve balanceo con los pasos al correr
     const bob = Math.abs(Math.sin(this.walk)) * 0.04 * run;

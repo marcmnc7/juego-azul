@@ -2,6 +2,8 @@ import { audio } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
+import { requestJump, walkerActiveAt, lastBounds } from './core/walker';
+import { physLists } from './core/phys';
 import { load, save } from './core/save';
 import { giftForLevel } from './data/gifts';
 import { Level1 } from './world/level1';
@@ -14,14 +16,22 @@ import { LevelMoto } from './world/levelMoto';
 import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import type { Level, LevelResult } from './world/level';
-import { applyEnvironment, applyShadows, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
-import { loadSurfacePhotos } from './core/surfaces';
+import { applyEnvironment, applyShadows, hdSurfaces, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
+import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
+import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
+import { preloadCrowd } from './entities/crowdRig';
+import { preloadDonkey } from './entities/donkeyHD';
+import { preloadVehicles } from './entities/vehiclesHD';
+import { preloadHdri } from './core/assets';
+import { hdEnvDefault } from './core/gfx';
+import sunsetHdr from './assets/env/venice_sunset.hdr';
+import quarryHdr from './assets/env/quarry.hdr';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories } from './ui/ui';
+import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -179,11 +189,52 @@ function draw(scene: THREE.Scene) {
   composer.render();
 }
 const input = new Input(canvas, uiRoot);
+
+// Saltar: botón en pantalla (solo mientras se controla a alguien andando) y tecla J en el ordenador
+const jumpBtn = document.createElement('button');
+jumpBtn.className = 'jump-btn';
+jumpBtn.textContent = 'Saltar';
+jumpBtn.hidden = true;
+jumpBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  requestJump();
+});
+uiRoot.append(jumpBtn);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyJ' && !e.repeat) requestJump();
+});
 let data = load();
 
 let level: Level | null = null;
 let levelAt = 0;
 let closeDebug: (() => void) | null = null;
+// Bocadillos de diálogo: quién es quién en cada capítulo (los niveles guardan a los personajes con estos nombres)
+const SPEAKERS: Record<string, string[]> = {
+  Azul: ['azul', 'player'], Margaux: ['azul', 'player'], Gas: ['gas', 'marc'], Marc: ['marc', 'gas'],
+  Carme: ['carme'], Tòfol: ['tofol'], Camarero: ['barman'],
+};
+const _head = new THREE.Vector3();
+setSpeakerResolver((who) => {
+  const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
+  if (!L) return null;
+  for (const f of SPEAKERS[who] ?? []) {
+    const p = L[f];
+    if (!p?.root || !p.head) continue;
+    // Tiene que estar en la escena y visible
+    let o: THREE.Object3D | null = p.root;
+    while (o && o.visible && o.parent) o = o.parent;
+    if (!o || !o.visible || !(o as THREE.Scene).isScene) continue;
+    const bone = p.rig?.bones.get('Head') ?? p.head;
+    bone.getWorldPosition(_head);
+    if (_head.distanceTo(camera.position) > 22) return null;
+    _head.y += 0.32 * (p.root.scale.y || 1);
+    _head.project(camera);
+    if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
+    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight };
+  }
+  return null;
+});
 const idle = new THREE.Scene();
 idle.background = new THREE.Color(0x2b1840);
 
@@ -230,6 +281,8 @@ function goMap() {
     level.dispose();
     level = null;
   }
+  clearRigPeople();
+  setHd(false);
   input.reset();
   input.enabled = true;
   mapScreen(data, mapOpts);
@@ -238,17 +291,51 @@ function goMap() {
 // En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, la moto por la Costa Brava,
 // Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
 // Las texturas fotográficas se cargan ya, mientras se ve la portada
-void loadSurfacePhotos();
+// Personajes glTF y multitud horneada (para los capítulos con la calidad de la prueba)
+let hdAssets = false;
+// Pantalla de carga: la portada no deja empezar hasta que todo está listo (así cada capítulo abre al momento)
+let loadedParts = 0;
+const LOAD_PARTS = 8;
+const part = <T,>(p: Promise<T>) => p.finally(() => loadedParts++);
+const photosLoading = Promise.all([part(Promise.resolve(loadSurfacePhotos())), part(Promise.resolve(loadHdPhotos()))]);
+const rigLoading = part(preloadRig())
+  .then(() => Promise.all([part(preloadCrowd()), part(preloadDonkey()), part(preloadVehicles()), part(preloadHdri(sunsetHdr).catch((e) => console.warn('[gfx] HDRI', e))), part(preloadHdri(quarryHdr).catch((e) => console.warn('[gfx] HDRI', e)))]))
+  .then(() => (hdAssets = true));
+const allLoading = Promise.all([rigLoading, photosLoading.catch(() => {})]);
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
+// Capítulos que ya usan la calidad de la prueba de concepto: texturas fotográficas con relieve,
+// cielo HDRI y tono AgX. Los demás siguen con el aspecto anterior hasta que se migren.
+const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+// De día, la luz ambiente sale del cielo de la prueba (quarry_01); de noche, del cielo de cada escena
+const HD_DAY_CHAPTERS = [3, 5, 6, 8];
+function setHd(on: boolean, n = 0) {
+  hdSurfaces.value = on ? 1 : 0;
+  hdEnvDefault.url = on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
+  renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = on ? 1.05 : 0.92;
+}
+
 function startLevel(n: number) {
+  // Los capítulos con personajes glTF esperan a que estén cargados (suele ser al instante)
+  if (HD_CHAPTERS.includes(n) && !hdAssets) {
+    void rigLoading.then(() => startLevel(n));
+    return;
+  }
+  clearRigPeople();
   clearScreens();
   closeDialogue();
   newEpoch();
   input.reset();
   input.enabled = true;
   tryFullscreen();
-  chapterCard(n);
+  // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
+  let ready!: () => void;
+  chapterCard(n, new Promise<void>((r) => (ready = r)));
+  setTimeout(() => buildLevel(n, ready), 60);
+}
+
+function buildLevel(n: number, ready: () => void) {
   const done = (result?: LevelResult) => {
     // Un capítulo ya cerrado no puede completarse "solo"
     if (level !== me) return;
@@ -275,12 +362,21 @@ function startLevel(n: number) {
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
+  setHd(HD_CHAPTERS.includes(n), n);
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
   applyShadows(level.threeScene);
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(level.debug());
   if (stats) (window as unknown as { game: Level }).game = level;
+  // Compila todos los materiales antes de quitar el rótulo: así no hay tirones al empezar a jugar
+  // (compileAsync se cuelga con algunos materiales en three r180: mejor el síncrono, que va detrás del rótulo)
+  try {
+    renderer.compile(level.threeScene, camera);
+  } catch (e) {
+    console.warn('[gfx] compilar', e);
+  }
+  requestAnimationFrame(() => requestAnimationFrame(ready));
 }
 
 function tryFullscreen() {
@@ -299,6 +395,8 @@ const clock = new THREE.Clock();
 let avg = 16;
 let lastAdjust = 0;
 const stats = TEST ? document.createElement('div') : null;
+// Modo prueba: acceso desde la consola para revisar colisiones
+if (TEST) Object.assign(window, { __dbg: { level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds } });
 if (stats) {
   stats.className = 'stats';
   uiRoot.append(stats);
@@ -316,8 +414,11 @@ function frame() {
   renderer.info.reset();
   if (level) {
     level.update(dt);
+    updateRigPeople(dt);
+    const showJump = performance.now() - walkerActiveAt < 250 && !document.querySelector('.dialogue');
+    if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
-    const camQ = TEST ? new URLSearchParams(location.search).get('cam') : null;
+    const camQ = TEST ? ((window as unknown as { __cam?: string }).__cam ?? new URLSearchParams(location.search).get('cam')) : null;
     if (camQ) {
       const v = camQ.split(',').map(Number);
       camera.position.set(v[0], v[1], v[2]);
@@ -371,7 +472,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-titleScreen(() => {
-  data = load();
-  mapScreen(data, mapOpts);
-});
+titleScreen(
+  () => {
+    data = load();
+    mapScreen(data, mapOpts);
+  },
+  { done: allLoading, progress: () => Math.min(1, loadedParts / LOAD_PARTS) },
+);

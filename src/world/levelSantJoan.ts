@@ -6,15 +6,22 @@ import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, Fireworks, Confetti, glowTexture, toon, vibrate } from '../core/gfx';
 import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, CrowdPeople, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, Hud, DebugItem, later, phoneChat, fadeFlash } from '../ui/ui';
+import { hugFor } from '../entities/embrace';
 import { CHATS } from '../data/chats';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
 import { buildSurroundings, collidersBox } from './surround';
 import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
+
+/** La víspera, solo lo bonito: que viene a las 10.45 y el «Te quiero» (Marc pidió recortar el resto). */
+const LA_NOCHE = {
+  ...CHATS.laNoche,
+  msgs: CHATS.laNoche.msgs.filter((m) => ['Mañana a las 10.45 estoy ahi', 'Descansa ahora', 'Bona nit', 'Te quiero', 'Bona nit 🫂'].includes(m.text)),
+};
 
 // Capítulo 5 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
 // Por la tarde, al acabar la bandera, Azul va desde la Plaça Espanya hacia el Born por Ses Voltes,
@@ -24,7 +31,8 @@ import { clock, type Level, type LevelDone, disposeObj } from './level';
 
 type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'ending' | 'done';
 
-// Plano (metros): el Born en el origen, Ses Voltes hacia el este y la Plaça Espanya al final
+// Plano (metros): el Born en el origen; hacia el este, el Carrer Major des Born con la Catedral, Ses Voltes
+// y, al final, la Plaça Nova y la Plaça Espanya
 const STREET = { minX: 18, maxX: 70, minZ: -4.4, maxZ: 4.4 };
 const ESPANYA = { minX: 70, maxX: 90, minZ: -12, maxZ: 12 };
 const PINS = [new THREE.Vector3(CORREUS.x + 2, 0, CORREUS.z - 1.2)]; // Correus
@@ -101,7 +109,7 @@ export class LevelSantJoan implements Level {
   private people: Circle[] = [];
   private pose = newCrowdPose();
   private cheer = 0.35;
-  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private crowds: { people: CrowdLike; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
   private bagCount = 0;
   private luck = 0;
@@ -190,7 +198,7 @@ export class LevelSantJoan implements Level {
       if (this.phase !== 'intro') return;
       const ex = CHATS.dimeExacto;
       phoneChat(CHATS.mar, () => dialogue(SANTJOAN.night, () =>
-        phoneChat(CHATS.laNoche, () =>
+        phoneChat(LA_NOCHE, () =>
           dialogue(SANTJOAN.morning, () =>
             phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
               dialogue(SANTJOAN.bandera, () =>
@@ -313,7 +321,35 @@ export class LevelSantJoan implements Level {
       }
       this.facade(m, 31, STREET.maxX - 1, wallZ, (-side) as 1 | -1, 2);
     }
-    // Plaça Espanya: árboles, bancos y casas alrededor
+    // Entre el Born y Ses Voltes, como en Ciutadella: el Carrer Major des Born y la Catedral de Menorca
+    // (gótica, de marès, con el pórtico neoclásico de 1813 y el campanario). Ses Voltes empieza en la
+    // plaza de la Catedral y acaba en la Plaça Nova, junto a la Plaça Espanya.
+    {
+      const MARES = 0xdcc49a;
+      const MARES_D = 0xc9ad80;
+      const cz0 = STREET.maxZ + 2.2; // fachada que da a la plaza de la Catedral, junto a la calle
+      this.block(m, 19, 30, cz0, cz0 + 16, 16, MARES);
+      // Contrafuertes góticos a lo largo de la nave
+      for (let x = 20; x <= 29; x += 3) m.add(G.box, MARES_D, x, 7, cz0 - 0.35, 0, 0, 0, 0.9, 14, 0.7);
+      // Pórtico neoclásico: cuatro columnas, entablamento y frontón
+      for (const x of [21.6, 23.6, 25.6, 27.6]) {
+        m.add(G.cyl, 0xe8dcc0, x, 3.6, cz0 - 1.6, 0, 0, 0, 0.42, 7.2, 0.42);
+        this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: cz0 - 2, maxZ: cz0 - 1.2 });
+      }
+      m.add(G.box, 0xe8dcc0, 24.6, 7.6, cz0 - 1.0, 0, 0, 0, 8.2, 0.8, 1.8);
+      const tri = new THREE.Shape([new THREE.Vector2(-4.1, 0), new THREE.Vector2(4.1, 0), new THREE.Vector2(0, 2.2)]);
+      m.add(new THREE.ExtrudeGeometry(tri, { depth: 1.6, bevelEnabled: false }).translate(0, 0, -0.8), 0xe8dcc0, 24.6, 8, cz0 - 1.0, 0, 0, 0, 1, 1, 1);
+      m.add(G.box, 0x3a2a20, 24.6, 2.4, cz0 - 0.02, 0, 0, 0, 2.2, 4.4, 0.1); // portal
+      m.add(G.cyl, 0x2a2e3a, 24.6, 12.4, cz0 - 0.05, Math.PI / 2, 0, 0, 1.5, 0.12, 1.5); // rosetón
+      m.add(G.cyl, MARES_D, 24.6, 12.4, cz0 - 0.08, Math.PI / 2, 0, 0, 1.75, 0.08, 1.75);
+      // Campanario: torre cuadrada que remata en octógono
+      m.add(G.box, MARES, 29, 11, cz0 + 3, 0, 0, 0, 4, 22, 4);
+      m.add(G.cyl, MARES_D, 29, 23.5, cz0 + 3, 0, Math.PI / 8, 0, 3.6, 3, 3.6);
+      for (const [dx, dz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) m.add(G.box, 0x2a2a2a, 29 + dx * 1.01, 18.5, cz0 + 3 + dz * 1.01, 0, 0, 0, dx ? 0.05 : 1.1, 2.4, dz ? 0.05 : 1.1);
+      // Al otro lado, casas señoriales de marès con balcón
+      this.block(m, 19, 30, -22, STREET.minZ - 0.2, 10, 0xe9dcc0);
+      this.facade(m, 19, 30, STREET.minZ - 0.2, 1, 3);
+    }
     this.block(m, ESPANYA.maxX, ESPANYA.maxX + 8, -14, 14, 9, SAND);
     this.block(m, STREET.maxX, ESPANYA.maxX, ESPANYA.maxZ, ESPANYA.maxZ + 7, 9, 0xeee3c8);
     this.block(m, STREET.maxX, ESPANYA.maxX, ESPANYA.minZ - 7, ESPANYA.minZ, 9, WHITE);
@@ -329,11 +365,15 @@ export class LevelSantJoan implements Level {
     for (const [x, z, ry] of [[77, -6, 0], [83, 6, 0], [77, 6, 0], [83, -6, 0]]) {
       m.add(G.box, 0x6b4a2e, x, 0.45, z, 0, ry, 0, 1.8, 0.1, 0.5);
       m.add(G.box, 0x333333, x, 0.22, z, 0, ry, 0, 1.6, 0.44, 0.1);
+      this.colliders.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.25, maxZ: z + 0.25 });
     }
     sc.add(m.mesh());
 
     // Rótulos de verdad
     this.sign('Ses Voltes', 30.4, 4.4, 0, -Math.PI / 2, 3);
+    this.sign('Carrer Major des Born', 19.2, 3.4, -4.5, 0, 3.6);
+    this.sign('Catedral de Menorca', 24.6, 7.6, STREET.maxZ + 2.2 - 1.95, Math.PI, 3.6);
+    this.sign('Plaça Nova', 69.4, 3, 6.5, -Math.PI / 2, 3);
     this.sign('Plaça Espanya', 70.6, 3, -6.5, -Math.PI / 2, 3.4);
     this.sign('Maramao', 40, 3.6, 4.55, Math.PI, 2.6);
 
@@ -389,7 +429,7 @@ export class LevelSantJoan implements Level {
     }
     LOOKS.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % LOOKS.length === li);
-      const people = new CrowdPeople(lk, mine.length);
+      const people = makeCrowd(lk, mine.length);
       this.scene.add(people.group);
       // Miran hacia el centro del Born (o hacia la calle)
       this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
@@ -578,10 +618,11 @@ export class LevelSantJoan implements Level {
     // Azul
     const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming');
     this.walker.turn(this.input.consumeCam());
+    this.walker.canJump = walking;
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     // La explanada del obelisco está un escalón más alta que la calle
-    for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z);
+    for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z) + (q === this.player ? this.walker.hop : 0);
     this.player.root.rotation.y = this.walker.facing;
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'dance', 0, this.t * 6);
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');
@@ -786,6 +827,7 @@ export class LevelSantJoan implements Level {
     this.walker.facing = Math.atan2(g.x - pp.x, g.z - pp.z);
     this.gas.root.rotation.y = Math.atan2(pp.x - g.x, pp.z - g.z);
     this.updateHud();
+    hugFor(this.player, this.gas, 4);
     dialogue(SANTJOAN.meet, () => this.finish());
   }
 

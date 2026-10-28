@@ -14,6 +14,7 @@ import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
+import { embrace, type Embrace } from '../entities/embrace';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
@@ -24,17 +25,17 @@ import { clock, type Level, type LevelDone, disposeObj } from './level';
 // Empieza en el Bar Imperi con el chat real de esa noche. Azul va hacia Pins, Gas llega en el coche azul,
 // van a Sa Son 69 B4 y no entran por la puerta: por el pasillo de la derecha hasta la piscina.
 // Bucle: cruzar sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden las
-// ventanas de arriba) → desnudarse, al agua y abrazarse → recoger 6 velitas → tumbarse en el césped →
+// ventanas de arriba) → desnudarse, al agua y abrazarse → nadar un rato juntos → tumbarse en el césped →
 // unir las estrellas → el chat real de la 01:01.
 
 type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
 
 // Piscina (interior del vaso)
 // La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
-const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 9.6 };
+const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 }; // «Muy pequeñita ella», pero algo más de lo que parecía
 const WATER_Y = -0.22;
 const SWIM_Y = -1.12;
-const TOWELS = new THREE.Vector3(-1.6, 0, 11.0);
+const TOWELS = new THREE.Vector3(-1.6, 0, 11.4);
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
 // de la carretera, así el coche azul usa el mismo carril en los dos sitios
@@ -65,12 +66,6 @@ const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se encie
 // Sin ropa: el mismo muñeco con todo del color de la piel
 const nude = (l: PersonLook): PersonLook => ({ ...l, shirt: l.skin, pants: l.skin, shoes: l.skin, skirt: false });
 
-interface Candle {
-  obj: THREE.Group;
-  taken: boolean;
-  ph: number;
-}
-
 export class Level4 implements Level {
   private scene = new THREE.Scene();
   private hud: Hud;
@@ -85,6 +80,7 @@ export class Level4 implements Level {
   private pickedUp = false;
   private carT = 0;
   private hugT = 0;
+  private hugE: Embrace | null = null;
   // Sigilo: ruido acumulado, ventanas de los padres y las veces que casi os pillan
   private noise = 0;
   private lightOn = false;
@@ -96,8 +92,7 @@ export class Level4 implements Level {
   private sun: Sun;
   private colliders: Box2[] = [];
   private solids: Circle[] = [];
-  private candles: Candle[] = [];
-  private collected = 0;
+  private swimT = 0;
   private waterTex: THREE.Texture;
   private fireflies!: THREE.Points;
   private marker: THREE.Group;
@@ -207,25 +202,6 @@ export class Level4 implements Level {
     this.clothes.visible = false;
     sc.add(this.clothes);
 
-
-    // Velitas flotando en la piscina
-    const candleGeo = new Merger()
-      .add(G.cyl, 0xf4efe2, 0, 0.06, 0, 0, 0, 0, 0.32, 0.14, 0.32)
-      .add(G.cyl, 0xffffff, 0, 0.18, 0, 0, 0, 0, 0.2, 0.18, 0.2)
-      .build();
-    const flameMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb347, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const spots: [number, number][] = [[-3.2, 6.3], [-1.2, 8.8], [0.4, 6.6], [1.9, 8.9], [3.3, 6.4], [-2.6, 8.6]];
-    spots.forEach(([x, z], i) => {
-      const g = new THREE.Group();
-      g.add(new THREE.Mesh(candleGeo, toon({ vertexColors: true, emissive: 0x2a1800 })));
-      const f = new THREE.Sprite(flameMat);
-      f.position.y = 0.42;
-      f.scale.setScalar(0.7);
-      g.add(f);
-      g.position.set(x, WATER_Y, z);
-      sc.add(g);
-      this.candles.push({ obj: g, taken: false, ph: i * 1.3 });
-    });
 
     // Flecha de objetivo
     this.marker = new THREE.Group();
@@ -537,7 +513,7 @@ export class Level4 implements Level {
 
   private updateHud() {
     const h = this.hud;
-    let chips = this.phase === 'swim' ? `<span class="chip">${NIGHT.candle(this.collected)}</span>` : '';
+    let chips = '';
     if (this.phase === 'toPool') {
       const n = Math.min(6, Math.round(this.noise * 6));
       const seg = (on: boolean, i: number) =>
@@ -563,7 +539,7 @@ export class Level4 implements Level {
         h.setObjective('🫂');
         break;
       case 'swim':
-        h.setObjective('Recoge las velitas que flotan');
+        h.setObjective('Nada un rato con Marc 💙');
         break;
       case 'toTowels':
         h.setObjective('Túmbate en las toallas del césped');
@@ -591,12 +567,6 @@ export class Level4 implements Level {
     this.fx.update(dt);
     if (this.phase !== 'intro' && this.phase !== 'done' && this.phase !== 'ending') this.playTime += dt;
     this.waterTex.offset.set(Math.sin(this.t * 0.3) * 0.2, this.t * 0.03);
-    this.candles.forEach((c) => {
-      if (c.taken) return;
-      c.obj.position.y = WATER_Y + Math.sin(this.t * 1.5 + c.ph) * 0.04;
-      c.obj.rotation.z = Math.sin(this.t + c.ph) * 0.08;
-      (c.obj.children[1] as THREE.Sprite).scale.setScalar(0.65 + Math.sin(this.t * 13 + c.ph) * 0.06);
-    });
     const ffp = this.fireflies.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < ffp.count; i++) ffp.setY(i, ffp.getY(i) + Math.sin(this.t * 1.3 + i) * dt * 0.25);
     ffp.needsUpdate = true;
@@ -624,9 +594,10 @@ export class Level4 implements Level {
           : this.phase === 'arrive'
             ? HOME_AREA
             : PLOT;
+      this.walker.canJump = walking && !swimming;
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
-      // En el Born, la explanada del obelisco está un escalón más alta que la calle
-      if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z);
+      // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
+      if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
       this.player.root.rotation.y = this.walker.facing;
       if (swimming) {
         this.swimPose(this.player, move);
@@ -640,21 +611,10 @@ export class Level4 implements Level {
     if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
     this.updatePoolPhysics(dt);
 
-    // Velitas
-    if (swimming) {
-      for (const c of this.candles) {
-        if (c.taken) continue;
-        if (Math.hypot(c.obj.position.x - pp.x, c.obj.position.z - pp.z) < 0.85) {
-          c.taken = true;
-          c.obj.visible = false;
-          this.collected++;
-          audio.pickup();
-          vibrate(20);
-          this.fx.burst(this.v1.copy(c.obj.position).setY(0.6), '✨', 6, 1.5);
-          this.updateHud();
-          if (this.collected >= 6) this.finishSwim();
-        }
-      }
+    // Un rato nadando juntos, sin prisa: luego al césped
+    if (this.phase === 'swim' && swimming && !this.busy) {
+      this.swimT += dt;
+      if (this.swimT > 12) this.finishSwim();
     }
 
     // Acción contextual
@@ -1024,14 +984,18 @@ export class Level4 implements Level {
       this.swimPose(q, close ? 0 : 0.5);
       if (close) {
         q.root.position.y = SWIM_Y + 0.12;
-        q.armL.rotation.set(-1.35, 0, 0.75);
-        q.armR.rotation.set(-1.35, 0, -0.75);
         q.legL.rotation.x = q.legR.rotation.x = 0;
       }
     }
+    // El abrazo: se rodean con los brazos de verdad y se sueltan al final
+    if (close) this.hugE ??= embrace(this.player, this.gas, 'hug');
+    if (this.hugE) this.hugE.k = THREE.MathUtils.clamp(this.hugE.k + dt * (this.hugT < 4.3 ? 1.2 : -1.6), 0, 1);
     if (close && Math.random() < dt * 4) this.fx.burst(this.v2.copy(p).setY(0.9), '❤️', 1, 0.8, 0.6);
     if (this.hugT > 5) {
+      this.hugE?.stop();
+      this.hugE = null;
       this.phase = 'swim';
+      this.swimT = 0;
       this.busy = false;
       this.updateHud();
     }
@@ -1216,7 +1180,7 @@ export class Level4 implements Level {
           this.phase = 'done';
           audio.ambience(0);
           const stars = 1 + (this.misses <= 6 ? 1 : 0) + (this.playTime < 240 ? 1 : 0);
-          this.onComplete({ stars, stats: [['Velitas', '6/6 🕯️'], ['Estrellas unidas', '10/10 ✨'], ['Casi os pillan', this.caught ? `${this.caught} ${this.caught === 1 ? 'vez' : 'veces'} 💡` : 'nunca 🤫'], ['Tiempo', clock(this.playTime)]] });
+          this.onComplete({ stars, stats: [['Estrellas unidas', '10/10 ✨'], ['Casi os pillan', this.caught ? `${this.caught} ${this.caught === 1 ? 'vez' : 'veces'} 💡` : 'nunca 🤫'], ['Tiempo', clock(this.playTime)]] });
         }, 1500);
       });
     }, 2200);
@@ -1331,11 +1295,6 @@ export class Level4 implements Level {
         label: '3 · Tumbarse',
         run: () => {
           reset();
-          this.candles.forEach((c) => {
-            c.taken = true;
-            c.obj.visible = false;
-          });
-          this.collected = 6;
           this.phase = 'toTowels';
           this.player.root.position.set(TOWELS.x + 1.2, 0, TOWELS.z - 0.6);
           this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);

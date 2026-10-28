@@ -335,7 +335,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   if (opts.cars) {
     const cols = [0xd7263d, 0xf2f2f2, 0x2a3a5a, 0x8a8a8a];
     for (const [x, z, ry, c] of [[-6, 11.6, Math.PI / 2, 0], [8, 11.6, Math.PI / 2, 1], [-15.2, -3, 0, 2], [5, -12.1, -Math.PI / 2, 3]] as [number, number, number, number][]) {
-      const car = makeCar(cols[c], { luggage: false, joy: false });
+      const car = makeCar(cols[c], { luggage: false, joy: false, empty: true });
       car.root.position.set(x, 0, z);
       car.root.rotation.y = ry;
       g.add(car.root);

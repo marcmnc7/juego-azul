@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
+import { loadHdriSync } from './assets';
 import { Water } from 'three/examples/jsm/objects/Water.js';
-import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, type Surf } from './surfaces';
+import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSurfaceTexture, hdNormalTexture, hdMeans, hdRoughMeans, type Surf } from './surfaces';
 
 // Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
 // sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
@@ -22,6 +23,17 @@ export const quality = {
    */
   kind: 'standard' as 'standard' | 'phong' | 'lambert',
 };
+
+/**
+ * Calidad de la prueba de concepto (texturas fotográficas con relieve y rugosidad). Es un uniforme
+ * compartido por todos los materiales: se enciende al entrar en un capítulo que la usa y se apaga
+ * al salir, sin recompilar nada. De momento, solo el capítulo 1.
+ */
+export const hdSurfaces = { value: 0 };
+const HD_STRENGTH = SURF_STRENGTH.map((v, i) => ([1, 2, 3, 10].includes(i) ? 1 : v));
+// Las texturas HD solo se crean si algún capítulo HD llega a dibujarse
+const hdColorUniform = { get value() { return hdSurfaces.value ? hdSurfaceTexture() : surfaceTexture(); } };
+const hdNormalUniform = { get value() { return hdSurfaces.value ? hdNormalTexture() : surfaceTexture(); } };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
 export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf }) {
@@ -59,6 +71,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
     sh.uniforms.surfStrength = { value: SURF_STRENGTH };
     sh.uniforms.surfMean = { value: surfMeans };
     sh.uniforms.uSurf = { value: (m.userData.surf as number) ?? 0 };
+    sh.uniforms.uHD = hdSurfaces;
+    sh.uniforms.hdTex = hdColorUniform;
+    sh.uniforms.hdNrm = hdNormalUniform;
+    sh.uniforms.hdMean = { value: hdMeans };
+    sh.uniforms.hdRoughMean = { value: hdRoughMeans };
+    sh.uniforms.hdStrength = { value: HD_STRENGTH };
+    sh.uniforms.hdNormal = { value: SURF_NORMAL };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
       .replace(
@@ -85,6 +104,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         uniform float surfStrength[16];
         uniform float surfMean[16];
         uniform float uSurf;
+        uniform float uHD;
+        uniform highp sampler2DArray hdTex;
+        uniform highp sampler2DArray hdNrm;
+        uniform vec3 hdMean[16];
+        uniform float hdRoughMean[16];
+        uniform float hdStrength[16];
+        uniform float hdNormal[16];
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -99,11 +125,21 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
         // Textura de la superficie (encalado, teja, marès…) proyectada desde los tres ejes del mundo
         int sIdx = int(max(vSurf, uSurf) + 0.5);
-        if (sIdx > 0) {
-          vec3 bw = pow(abs(vGrainN), vec3(4.0));
-          bw /= (bw.x + bw.y + bw.z + 1e-4);
-          vec3 sp = vGrainPos * surfScale[sIdx];
-          float sl = float(sIdx);
+        vec3 bw = pow(abs(vGrainN), vec3(4.0));
+        bw /= (bw.x + bw.y + bw.z + 1e-4);
+        vec3 sp = vGrainPos * surfScale[sIdx];
+        float sl = float(sIdx);
+        bool hdOn = uHD > 0.5 && sIdx > 0;
+        if (hdOn) {
+          // Foto en color (Sponza) proyectada en los tres ejes, normalizada a su color medio para
+          // respetar el color elegido de cada pared
+          vec3 sdc = texture(hdTex, vec3(sp.zy, sl)).rgb * bw.x
+                   + texture(hdTex, vec3(sp.xz, sl)).rgb * bw.y
+                   + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).rgb * bw.z;
+          vec2 mpc = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
+          vec3 smc = texture(hdTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mpc * 0.23 + 0.37, sl)).rgb;
+          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx]);
+        } else if (sIdx > 0) {
           float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
                    + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
                    + texture(surfTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).r * bw.z;
@@ -119,12 +155,44 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         float gFoot = (1.0 - smoothstep(0.0, 0.75, vGrainPos.y)) * step(-0.3, vGrainPos.y) * gWall;
         diffuseColor.rgb *= 1.0 - gFoot * (0.16 + gN * 0.12);
         float gStreak = gWall * smoothstep(0.55, 0.9, gNoise(vec3(vGrainPos.x * 3.0 + vGrainPos.z * 3.0, vGrainPos.y * 0.25, 0.0)));
-        diffuseColor.rgb *= 1.0 - gStreak * 0.06;`,
+        diffuseColor.rgb *= 1.0 - gStreak * 0.06;
+        // Lo que mira hacia abajo recibe menos cielo (aleros, balcones, copas por debajo)
+        diffuseColor.rgb *= 1.0 - clamp(-vGrainN.y, 0.0, 1.0) * 0.2;
+        if (sIdx == 7) {
+          // Copas de árbol y matas: por dentro y por debajo, sombra; arriba, hojas al sol con motas
+          diffuseColor.rgb *= mix(0.5, 1.1, smoothstep(-0.7, 0.9, vGrainN.y));
+          float lf = gNoise(vGrainPos * 11.0) * 0.6 + gNoise(vGrainPos * 27.0) * 0.4;
+          diffuseColor.rgb *= 0.78 + lf * 0.42;
+        }`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);
+        if (hdOn) {
+          float rS = texture(hdNrm, vec3(sp.zy, sl)).a * bw.x
+                   + texture(hdNrm, vec3(sp.xz, sl)).a * bw.y
+                   + texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
+          roughnessFactor = clamp(roughnessFactor * mix(1.0, rS / hdRoughMean[sIdx], 0.8), 0.04, 1.0);
+        }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        if (hdOn) {
+          // Relieve triplanar (mezcla "whiteout"): juntas, grietas y teja con volumen de verdad
+          vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
+          float ns = hdNormal[sIdx];
+          vec3 tx = texture(hdNrm, vec3(sp.zy, sl)).xyz * 2.0 - 1.0;
+          vec3 ty = texture(hdNrm, vec3(sp.xz, sl)).xyz * 2.0 - 1.0;
+          vec3 tz = texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).xyz * 2.0 - 1.0;
+          tx.xy *= ns; ty.xy *= ns; tz.xy *= ns; tz.y = -tz.y;
+          tx = vec3(tx.xy + nW.zy, abs(tx.z) * nW.x);
+          ty = vec3(ty.xy + nW.xz, abs(ty.z) * nW.y);
+          tz = vec3(tz.xy + nW.xy, abs(tz.z) * nW.z);
+          vec3 nb = normalize(tx.zyx * bw.x + ty.xzy * bw.y + tz.xyz * bw.z);
+          normal = normalize((viewMatrix * vec4(nb, 0.0)).xyz);
+        }`,
       );
   };
   m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) : 'plain');
@@ -135,9 +203,26 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
  * de entorno prefiltrado, para que cada material recoja el color del cielo de forma física.
  */
 let pmrem: THREE.PMREMGenerator | null = null;
+/** Sentido del giro del HDRI (comprobado con una esfera espejo). */
+export let ENV_ROT_SIGN = 1;
+export function setEnvRotSign(v: number) {
+  ENV_ROT_SIGN = v;
+}
 export function setEnvRenderer(r: THREE.WebGLRenderer) {
   pmrem = new THREE.PMREMGenerator(r);
 }
+/** Cielo HDRI para los capítulos de día con la calidad de la prueba que no ponen uno propio. */
+export const hdEnvDefault: { url: string | null } = { url: null };
+
+function sunDirOf(scene: THREE.Scene) {
+  let dir: THREE.Vector3 | undefined;
+  scene.traverse((o) => {
+    const l = o as THREE.DirectionalLight;
+    if (!dir && l.isDirectionalLight) dir = l.position.clone().sub(l.target.position).normalize();
+  });
+  return dir;
+}
+
 export function applyEnvironment(scene: THREE.Scene) {
   if (!pmrem || !quality.env || scene.userData.envDone) return;
   scene.userData.envDone = true;
@@ -145,6 +230,24 @@ export function applyEnvironment(scene: THREE.Scene) {
   scene.traverse((o) => {
     if (o.userData.sky) sky = o;
   });
+  // Capítulos con la calidad de la prueba: luz de un cielo real fotografiado (HDRI), girado para
+  // que su sol caiga donde está el sol de la escena
+  const hd = (scene.userData.hdri ??
+    (hdSurfaces.value && hdEnvDefault.url && !scene.userData.noHdri ? { url: hdEnvDefault.url, intensity: 0.85, sunDir: sunDirOf(scene), hemi: 0.4 } : undefined)) as
+    | { url: string; intensity?: number; sunDir?: THREE.Vector3; hemi?: number }
+    | undefined;
+  const h = hd ? loadHdriSync(hd.url) : null;
+  if (hd && h) {
+    scene.environment = pmrem.fromEquirectangular(h.texture).texture;
+    scene.environmentIntensity = hd.intensity ?? 0.75;
+    if (hd.sunDir) scene.environmentRotation.y = ENV_ROT_SIGN * (Math.atan2(hd.sunDir.z, hd.sunDir.x) - Math.atan2(h.sun.z, h.sun.x));
+    // Con un cielo real dando la luz ambiente, la hemisférica casi sobra y el sol manda (como en la prueba)
+    scene.traverse((o) => {
+      const hl = o as THREE.HemisphereLight;
+      if (hl.isHemisphereLight) hl.intensity *= hd.hemi ?? 0.3;
+    });
+    return;
+  }
   const tmp = new THREE.Scene();
   if (sky) {
     const c = (sky as THREE.Object3D).clone();
@@ -444,6 +547,17 @@ export class Confetti {
     this.r[i * 2 + 1] = 2 + Math.random() * 4;
   }
 
+  private next = 0;
+  /** Un puñado de confeti lanzado al aire desde `at` (cae desde ahí y luego vuelve a la lluvia normal). */
+  toss(at: THREE.Vector3, n = 14) {
+    for (let k = 0; k < n; k++) {
+      const i = (this.next = (this.next + 1) % this.count);
+      this.p[i * 3] = at.x + (Math.random() - 0.5) * 1.4;
+      this.p[i * 3 + 1] = at.y + Math.random() * 1.2;
+      this.p[i * 3 + 2] = at.z + (Math.random() - 0.5) * 1.4;
+    }
+  }
+
   update(dt: number, center: THREE.Vector3, t: number) {
     for (let i = 0; i < this.count; i++) {
       this.p[i * 3 + 1] -= this.v[i] * dt;
@@ -457,6 +571,56 @@ export class Confetti {
       this.mesh.setMatrixAt(i, this.m.compose(this.tmp.set(this.p[i * 3], this.p[i * 3 + 1], this.p[i * 3 + 2]), this.q, this.s));
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/** Purpurina en el aire: motas doradas, plateadas y rosas que flotan y destellan alrededor de un punto. */
+export class Glitter {
+  points: THREE.Points;
+  private pos: Float32Array;
+  private col: Float32Array;
+  private base: Float32Array;
+  private ph: Float32Array;
+  constructor(private N = 260, private area = 7, private height = 3.2) {
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(N * 3);
+    this.col = new Float32Array(N * 3);
+    this.base = new Float32Array(N * 3);
+    this.ph = new Float32Array(N);
+    const pal = [0xffd76a, 0xfff2c0, 0xd8dde6, 0xff8fc8, 0xb88cff, 0x8fe3ff];
+    const c = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      this.pos.set([(Math.random() - 0.5) * area * 2, Math.random() * height, (Math.random() - 0.5) * area * 2], i * 3);
+      c.set(pal[i % pal.length]);
+      this.base.set([c.r, c.g, c.b], i * 3);
+      this.ph[i] = Math.random() * 40;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.09, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.points.frustumCulled = false;
+  }
+  update(dt: number, center: THREE.Vector3, t: number) {
+    const A = this.area;
+    for (let i = 0; i < this.N; i++) {
+      const j = i * 3;
+      this.pos[j + 1] -= dt * (0.12 + (i % 7) * 0.03);
+      this.pos[j] += Math.sin(t * 0.9 + this.ph[i]) * dt * 0.25;
+      // Se recoloca al otro lado cuando se aleja del centro: siempre hay purpurina alrededor
+      if (this.pos[j] - center.x > A) this.pos[j] -= 2 * A;
+      if (this.pos[j] - center.x < -A) this.pos[j] += 2 * A;
+      if (this.pos[j + 2] - center.z > A) this.pos[j + 2] -= 2 * A;
+      if (this.pos[j + 2] - center.z < -A) this.pos[j + 2] += 2 * A;
+      if (this.pos[j + 1] < 0.05) this.pos[j + 1] = this.height;
+      // Destello: casi apagada la mayor parte del tiempo y de golpe muy brillante
+      const tw = Math.pow(0.5 + 0.5 * Math.sin(t * (5 + (i % 5)) + this.ph[i]), 8);
+      const k = 0.25 + tw * 2.2;
+      this.col[j] = this.base[j] * k;
+      this.col[j + 1] = this.base[j + 1] * k;
+      this.col[j + 2] = this.base[j + 2] * k;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.geometry.attributes.color.needsUpdate = true;
   }
 }
 
@@ -583,7 +747,17 @@ export function makeSea(size: [number, number], color: number, sunDir: THREE.Vec
       distortionScale: opts.night ? 0.8 : 1.3,
       fog: true,
     });
-    const u = (w.material as THREE.ShaderMaterial).uniforms;
+    // Agua mediterránea: el reflejo del cielo se tiñe del color del mar y nunca lo tapa del todo,
+    // así el mar se ve azul y profundo aunque el cielo del horizonte sea casi blanco
+    const wm = w.material as THREE.ShaderMaterial;
+    wm.fragmentShader = wm.fragmentShader.replace(
+      /vec3 albedo = mix\([^;]*;/,
+      `vec3 refl = reflectionSample * mix( vec3( 1.0 ), waterColor * 2.6 + 0.15, 0.7 );
+      float rfl = min( reflectance, 0.48 );
+      vec3 deep = waterColor * ( 0.5 + 0.7 * max( 0.0, dot( surfaceNormal, eyeDirection ) ) );
+      vec3 albedo = mix( ( sunColor * diffuseLight * 0.22 + deep ) * getShadowMask(), ( vec3( 0.03 ) + refl * 0.9 + reflectionSample * specularLight ), rfl );`,
+    );
+    const u = wm.uniforms;
     u.size.value = 6;
     let last = performance.now();
     w.onBeforeRender = ((orig) =>

@@ -6,11 +6,12 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, animatePerson, Person, CrowdPeople, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
+import { hugFor } from '../entities/embrace';
 import { CHATS } from '../data/chats';
 import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
@@ -18,7 +19,7 @@ import type { Level, LevelDone } from './level';
 import { disposeObj } from './level';
 
 // Capítulo 4 · Fito en Gran Canaria.
-// Aeropuerto (Azul esquiva hamburguesas) → en el estadio juegas con Gas, que tiene que ir al baño una y
+// Aeropuerto (Azul esquiva maletas camino de la puerta 26, asiento 26D «pasillo») → en el estadio juegas con Gas, que tiene que ir al baño una y
 // otra vez: cola de los WC, y mientras Azul le graba el temón → al volver está oscuro entre canciones y
 // cuesta encontrarla entre la gente (ella hace flash con el móvil) y cada canción que pasa buscándola
 // se la pierde → minijuego de ritmo juntos en primera fila → fuegos.
@@ -28,8 +29,8 @@ type Phase = 'airport' | 'intro' | 'toWc' | 'film' | 'seek' | 'found' | 'rhythm'
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = CONCERT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
-const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva la hamburguesa del aeropuerto 🍔 y llega a la puerta');
-const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🍔 ¡Buu! NUNCA más', '🍔 Todo malo y caro, hasta la Fanta', '🍔 Gas ya te lo avisó']);
+const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva las maletas y llega a la puerta 26 🧳');
+const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26D: 26 palo, pero D top ✨pasillo✨']);
 const T_WC_AGAIN = () => txt<string[]>('wcAgain', ['🚻 Otra vez a la cola del baño…', '🚻 Y otra vez. Cola eterna', '🚻 La última, lo promete']);
 const T_FILM_INTRO = () =>
   txt<Line[]>('filmIntro', [
@@ -419,7 +420,7 @@ export class Level3 implements Level {
   private v1 = new THREE.Vector3();
   private bounds: Box2 = { minX: -22, maxX: 22, minZ: -22, maxZ: 27.5 };
   private pose = newCrowdPose();
-  private crowds: { people: CrowdPeople; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private crowds: { people: CrowdLike; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
   private spots: { mesh: THREE.Mesh; ph: number }[] = [];
   private band: Person[] = [];
   private marker: THREE.Mesh;
@@ -525,7 +526,7 @@ export class Level3 implements Level {
 
   // ---------------- Aeropuerto ----------------
 
-  /** Terminal de Barajas: pasillo largo, el burger del «NUNCA más» y la puerta del vuelo a Gran Canaria. */
+  /** Terminal de Barajas: pasillo largo, tiendas y la puerta del vuelo a Gran Canaria (el burger del «NUNCA más» fue el de Gas, en Barcelona). */
   private buildAirport() {
     const sc = this.scene;
     const A = AIR;
@@ -564,7 +565,7 @@ export class Level3 implements Level {
         this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 1.5, maxZ: z + 1.5 });
       }
     }
-    // Los dos burgers, uno a cada lado, escupiendo hamburguesas
+    // Tiendas a los dos lados; de ellas sale gente con prisa empujando maletas de ruedas
     for (const [x, z] of BURGERS) {
       const side = x > cx ? 1 : -1;
       m.add(G.box, 0xd7263d, x + side * 0.4, 1.1, z, 0, 0, 0, 2.2, 2.2, 4);
@@ -590,7 +591,7 @@ export class Level3 implements Level {
       p.rotation.y = ry;
       sc.add(p);
     };
-    for (const [x, z] of BURGERS) sign('BURGER 🍔', x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#f4c430', '#b3001b');
+    BURGERS.forEach(([x, z], i) => sign(['DUTY FREE', 'CAFÉ', 'PRENSA'][i % 3], x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#1b2a4a', '#ffffff'));
     sign('Puerta 26 · LPA', cx, 4.4, A.maxZ + 3.0, Math.PI, 5, '#1b2a4a', '#ffd23f');
     sign('Salidas · Departures', cx, 4.6, A.minZ - 3.0, 0, 5, '#1b2a4a', '#ffffff');
     for (const z of [-24, -12, 0, 12, 24]) {
@@ -598,12 +599,14 @@ export class Level3 implements Level {
       l.position.set(cx, 5.5, z);
       sc.add(l);
     }
-    // Hamburguesas (pan, carne y pan) listas para salir volando
+    // Maletas de cabina que se escapan rodando por el pasillo
     const bun = new Merger()
-      .add(G.dome, 0xd99a4e, 0, 0.12, 0, 0, 0, 0, 0.5, 0.4, 0.5)
-      .add(G.cyl, 0x5a3320, 0, 0.08, 0, 0, 0, 0, 0.52, 0.08, 0.52)
-      .add(G.cyl, 0x6fbf4a, 0, 0.12, 0, 0, 0, 0, 0.55, 0.03, 0.55)
-      .add(G.cyl, 0xd99a4e, 0, 0.0, 0, 0, 0, 0, 0.48, 0.08, 0.48)
+      .add(G.rbox, 0x2b3a55, 0, 0.3, 0, 0, 0, 0, 0.4, 0.55, 0.24)
+      .add(G.box, 0x9aa3ad, 0, 0.68, 0, 0, 0, 0, 0.26, 0.04, 0.03)
+      .add(G.box, 0x9aa3ad, -0.12, 0.62, 0, 0, 0, 0, 0.02, 0.12, 0.02)
+      .add(G.box, 0x9aa3ad, 0.12, 0.62, 0, 0, 0, 0, 0.02, 0.12, 0.02)
+      .add(G.cyl, 0x111111, -0.15, 0.03, 0, 0, 0, 0, 0.06, 0.05, 0.06)
+      .add(G.cyl, 0x111111, 0.15, 0.03, 0, 0, 0, 0, 0.06, 0.05, 0.06)
       .build();
     for (let i = 0; i < 6; i++) {
       const o = new THREE.Mesh(bun, vertexMat());
@@ -655,7 +658,7 @@ export class Level3 implements Level {
       t.c.x = r.x;
       t.c.z = r.z;
     }
-    // El burger lanza hamburguesas cruzando el pasillo
+    // Cada poco, una maleta se escapa rodando de una tienda y cruza el pasillo
     this.burgerT -= dt;
     if (this.burgerT <= 0) {
       this.burgerT = 0.6 + Math.random() * 0.6;
@@ -666,24 +669,22 @@ export class Level3 implements Level {
         const side = bx > (AIR.minX + AIR.maxX) / 2 ? -1 : 1;
         b.live = true;
         b.o.visible = true;
-        b.o.position.set(bx + side * 1.0, 1.2, bz + (Math.random() - 0.5) * 3);
+        b.o.position.set(bx + side * 1.0, 0, bz + (Math.random() - 0.5) * 3);
+        b.o.rotation.set(0, 0, 0);
         // Apunta a donde va a estar Azul (con algo de error, para que se pueda esquivar)
-        const vx = 5 + Math.random() * 2.5;
+        const vx = 3.2 + Math.random() * 1.8;
         const tf = Math.abs(pp.x - b.o.position.x) / vx;
         const tz = pp.z + this.walker.vz * tf + (Math.random() - 0.5) * 1.2;
-        b.v.set(side * vx, 2.5 + Math.random() * 1.5, THREE.MathUtils.clamp((tz - b.o.position.z) / Math.max(0.3, tf), -6, 6));
+        b.v.set(side * vx, 0, THREE.MathUtils.clamp((tz - b.o.position.z) / Math.max(0.3, tf), -4, 4));
+        b.o.rotation.y = Math.atan2(b.v.x, b.v.z);
       }
     }
     for (const b of this.burgers) {
       if (!b.live) continue;
-      b.v.y -= 9.8 * dt;
+      // Rueda por el suelo frenándose poco a poco y con un ligero traqueteo
       b.o.position.addScaledVector(b.v, dt);
-      b.o.rotation.x += dt * 8;
-      if (b.o.position.y < 0.12 && b.v.y < 0) {
-        b.o.position.y = 0.12;
-        b.v.y *= -0.45;
-        b.v.x *= 0.7;
-      }
+      b.v.multiplyScalar(1 - dt * 0.25);
+      b.o.rotation.z = Math.sin(performance.now() * 0.03) * 0.04;
       if (b.o.position.x < AIR.minX - 0.5 || b.o.position.x > AIR.maxX + 0.5 || Math.abs(b.v.x) < 0.4) {
         b.live = false;
         b.o.visible = false;
@@ -697,7 +698,7 @@ export class Level3 implements Level {
         audio.hit();
         vibrate(60);
         toast(T_BURGER_HIT()[(this.burgerHits - 1) % T_BURGER_HIT().length]);
-        this.fx.burst(pp.clone().setY(1.6), '🍔', 3, 1, 0.6);
+        this.fx.burst(pp.clone().setY(1.6), '🧳', 3, 1, 0.6);
         b.live = false;
         b.o.visible = false;
         this.updateHud();
@@ -976,7 +977,7 @@ export class Level3 implements Level {
     }
     looks.forEach((lk, li) => {
       const mine = pts.filter((_, i) => i % looks.length === li);
-      const people = new CrowdPeople(lk, mine.length);
+      const people = makeCrowd(lk, mine.length, true);
       sc.add(people.group);
       this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: Math.PI + (Math.random() - 0.5) * 0.6, ph: Math.random() * 6 })) });
     });
@@ -1598,6 +1599,7 @@ export class Level3 implements Level {
     audio.luck();
     vibrate(25);
     this.fx.burst(ap.clone().lerp(pp, 0.5).setY(2.3), '❤️', 3, 0.8, 0.6);
+    hugFor(this.azul, this.player, 2.6);
     const lines = [...T_FOUND()[Math.min(this.trip - 1, 2)], ...(this.trip === 1 && this.smokeThrown ? [CONCERT.gasSmoke] : [])];
     dialogue(lines, () => {
       if (this.trip >= TRIPS) {
@@ -1623,7 +1625,7 @@ export class Level3 implements Level {
     if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
-    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🍔 ${this.burgerHits}</span>`;
+    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
       if (t !== this.hudObj) h.setObjective((this.hudObj = t));
@@ -1752,6 +1754,7 @@ export class Level3 implements Level {
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
+    this.walker.canJump = walking;
     const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.player === this.gas ? this.allPeople : []);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);
@@ -1929,7 +1932,7 @@ export class Level3 implements Level {
             stats: [
               ['Notas', `${hits}/${total}`],
               ['Perfectas', `${perfects} · racha x${maxCombo}`],
-              ['Hamburguesas esquivadas', this.burgerHits ? `te dieron ${this.burgerHits} 🍔` : 'todas 🍔'],
+              ['Maletas esquivadas', this.burgerHits ? `chocaste con ${this.burgerHits} 🧳` : 'todas 🧳'],
               ['Vídeo del temón', `${this.filmPct()}% con Fito en plano 📹`],
               ['Viajes al baño', `${TRIPS} 🚻 · se perdió ${this.missed} ${this.missed === 1 ? 'canción' : 'canciones'}`],
               ['Tabaco', this.smokeThrown ? 'a la papelera 🚭' : 'sigue ahí… 🚬'],

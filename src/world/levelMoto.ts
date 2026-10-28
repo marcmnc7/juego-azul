@@ -6,6 +6,7 @@ import { Surf } from '../core/surfaces';
 import { MOTO } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makeMoto, makePerson, type Person } from '../entities/models';
+import { boneAnchor } from '../entities/rig';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
@@ -88,7 +89,29 @@ export class LevelMoto implements Level {
     a.armL.rotation.z = 0.35;
     a.armR.rotation.z = -0.35;
     a.body.rotation.x = 0.2;
-    a.head.add(new Merger().add(G.ball, 0xf4f4f4, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh());
+    if (a.rig) {
+      // Personaje glTF: sentada de verdad (piernas, brazos y cadera mandan las articulaciones),
+      // abrazada a la cintura de Gas, y casco blanco pegado a la cabeza
+      a.rig.force = { body: 1, legL: 1, legR: 1, armL: 1, armR: 1 };
+      a.root.position.set(0, 0.86 - a.rig.hipsHeight, -0.86);
+      a.armL.rotation.set(-1.2, 0, 0.55);
+      a.armR.rotation.set(-1.2, 0, -0.55);
+      a.elbowL.rotation.x = a.elbowR.rotation.x = -0.55;
+      a.body.rotation.x = 0.28;
+      const helmet = new THREE.Group();
+      const shell = new THREE.MeshPhysicalMaterial({ color: 0xf4f4f4, roughness: 0.25, clearcoat: 1 });
+      const visor = new THREE.MeshPhysicalMaterial({ color: 0x223040, metalness: 0.2, roughness: 0.05, clearcoat: 1 });
+      const sh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 16), shell);
+      const vi = new THREE.Mesh(new THREE.SphereGeometry(0.152, 24, 12, -0.9, 1.8, 1.05, 0.75), visor);
+      for (const m of [sh, vi]) {
+        // Algo más grande que el de Gas: le tapa también el moño
+        m.position.set(0, 0.12, -0.02);
+        m.scale.set(1.3, 1.3, 1.45);
+        m.castShadow = true;
+        helmet.add(m);
+      }
+      boneAnchor(a, 'Head').add(helmet);
+    } else a.head.add(new Merger().add(G.ball, 0xf4f4f4, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh());
     this.moto.root.add(a.root);
     this.moto.root.rotation.order = 'YXZ';
     sc.add(this.moto.root);
@@ -220,7 +243,12 @@ export class LevelMoto implements Level {
         const d = -(5 + rnd() * 3);
         m.add(G.bush, wild ? 0x6f7a4a : 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, rnd() * 3, 0, 1.6, 0.9, 1.6);
       }
-      // Rocas del acantilado
+      // El acantilado: roca viva desde el borde de la carretera hasta el agua
+      for (const [d0, y0, k] of [[6.2, -0.9, 1], [8.5, -2.2, 1.3]] as const) {
+        const s = (0.85 + rnd() * 0.5) * k;
+        m.add(G.crag, wild ? (rnd() < 0.5 ? 0x5f5a54 : 0x6f6a62) : rnd() < 0.5 ? 0x8a7560 : 0x7a6a58, r.x + r.rx * (d0 + rnd()), y0, r.z + r.rz * (d0 + rnd()), rnd() * 0.4, rnd() * 3, 0, 5.2 * s, 3.4 * s, 4.4 * s);
+      }
+      // Rocas sueltas en el agua
       if (rnd() < 0.4) {
         const d = 9 + rnd() * 8;
         const s = 1.5 + rnd() * 2.5;
@@ -273,7 +301,9 @@ export class LevelMoto implements Level {
     for (let i = 0; i < 10; i++) {
       const r = ring(Math.floor((i / 10) * SAMPLES));
       const d = -(90 + (i % 3) * 25);
-      m.add(G.sphere, 0x7d8a5a, r.x + r.rx * d, 0, r.z + r.rz * d, 0, 0, 0, 70, 30 + (i % 4) * 8, 60);
+      m.add(G.rock2, 0x7d8a5a, r.x + r.rx * d, -4, r.z + r.rz * d, 0, i, 0, 80, 34 + (i % 4) * 8, 64);
+      // Bosque de encinas y pinos por la ladera
+      for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x4d6e3a : 0x5a7a40, r.x + r.rx * (d + 12 + k * 4) + Math.sin(k * 2.1 + i) * 18, 6 + (k % 3) * 4, r.z + r.rz * (d + 12 + k * 4) + Math.cos(k * 1.7 + i) * 18, 0, k, 0, 22, 9, 18);
     }
     sc.add(m.mesh());
   }
@@ -346,6 +376,7 @@ export class LevelMoto implements Level {
 
   update(dt: number) {
     this.t += dt;
+    this.fx.update(dt);
     let curv = 0;
     if (this.phase === 'ride') {
       const target = SPEED * (this.wobbleT > 0 ? 0.75 : 1);

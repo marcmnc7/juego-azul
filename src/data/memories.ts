@@ -28,13 +28,16 @@ export interface Memory {
 }
 
 export const MEMORIES: Memory[] = [
-  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Plaça. Más o menos.', sticker: true },
+  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Font. Más o menos.', sticker: true },
   { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
   { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },
   { level: 2, chat: CHATS.joyPiscina.msgs, caption: 'Joy, 3 de abril de 2026. De una.' },
   { level: 3, src: ruta, caption: 'El planning. «A coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
   { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },
+  { level: 3, chat: CHATS.vuelta.msgs, caption: '3 de noviembre, de vuelta a Barcelona' },
+  { level: 3, chat: CHATS.zamburinasCumple.msgs, caption: 'Tu cumpleaños, 28 de noviembre' },
+  { level: 3, chat: CHATS.sanVicente.msgs, caption: '«Ya sabes dónde se quedó mi corazón»' },
   { level: 4, src: vueloLpa, caption: '«VOY TARDEEEE?!» «tu vas pronto»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },

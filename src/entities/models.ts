@@ -1,6 +1,11 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { toon, addOutline } from '../core/gfx';
+import { airOf } from '../core/air';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { toon, addOutline, hdSurfaces } from '../core/gfx';
+import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
+import { RigCrowd, crowdReady } from './crowdRig';
+import { makeDonkeyHD, donkeyReady } from './donkeyHD';
+import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
 import { surfaceFor } from '../core/surfaces';
 
@@ -72,26 +77,56 @@ export class Merger {
 }
 
 /** Roca irregular: icosaedro deformado con ruido, de caras planas como la piedra partida. */
-function rockGeo(seed: number, rough = 0.35, detail = 2) {
-  const g = new THREE.IcosahedronGeometry(0.5, detail);
+// Ruido de valor 3D (para dar forma a rocas y matas)
+function vHash(x: number, y: number, z: number, seed: number) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 19.19) * 43758.5453;
+  return s - Math.floor(s);
+}
+function vNoise(x: number, y: number, z: number, seed: number) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const fx = x - ix, fy = y - iy, fz = z - iz;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+  const L = (a: number, b: number, t: number) => a + (b - a) * t;
+  const h = (dx: number, dy: number, dz: number) => vHash(ix + dx, iy + dy, iz + dz, seed);
+  return L(L(L(h(0, 0, 0), h(1, 0, 0), u), L(h(0, 1, 0), h(1, 1, 0), u), v), L(L(h(0, 0, 1), h(1, 0, 1), u), L(h(0, 1, 1), h(1, 1, 1), u), v), w);
+}
+function fbm(x: number, y: number, z: number, seed: number, oct = 4) {
+  let a = 0.5, f = 1, t = 0;
+  for (let i = 0; i < oct; i++) {
+    t += a * (vNoise(x * f, y * f, z * f, seed + i * 7) - 0.5);
+    a *= 0.5;
+    f *= 2.07;
+  }
+  return t;
+}
+
+/**
+ * Roca (o mata) de superficie suave: esfera subdividida deformada con ruido fractal, con los
+ * vértices soldados para que la luz resbale en vez de dibujar facetas. kind 'rock' añade estratos
+ * horizontales y una base plana; 'bush' hace lóbulos redondos como copas de árbol.
+ */
+function rockGeo(seed: number, rough = 0.35, detail = 2, kind: 'rock' | 'bush' = 'rock') {
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(0.5, detail);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
   const p = g.attributes.position;
   const v = new THREE.Vector3();
-  const r = (x: number) => {
-    const s = Math.sin(x * 12.9898 + seed * 78.233) * 43758.5453;
-    return s - Math.floor(s);
-  };
-  // Ruido coherente: la misma posición (vértices compartidos) siempre se desplaza igual
-  const key = new Map<string, number>();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    const k = `${v.x.toFixed(3)},${v.y.toFixed(3)},${v.z.toFixed(3)}`;
-    let d = key.get(k);
-    if (d === undefined) {
-      d = 1 + (r(v.x * 3.1 + v.y * 5.7 + v.z * 7.3) - 0.5) * rough + Math.sin(v.x * 7 + seed) * Math.sin(v.z * 6) * rough * 0.4;
-      key.set(k, d);
+    const n = v.clone().normalize();
+    let d: number;
+    if (kind === 'bush') {
+      // Lóbulos grandes y bultitos de hojas
+      d = 1 + fbm(n.x * 1.6, n.y * 1.6, n.z * 1.6, seed, 2) * rough * 2.2 + fbm(n.x * 6, n.y * 6, n.z * 6, seed + 3, 2) * rough * 0.7;
+    } else {
+      d = 1 + fbm(n.x * 1.3, n.y * 1.3, n.z * 1.3, seed, 4) * rough * 1.9;
+      // Estratos: escalones suaves en horizontal, como la piedra sedimentaria (marès)
+      const st = n.y * 5 + fbm(n.x * 2, 0, n.z * 2, seed + 11, 2) * 2;
+      d += (st - Math.floor(st) - 0.5) * rough * 0.12;
     }
-    v.multiplyScalar(d);
-    if (v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.4; // base algo plana
+    v.copy(n).multiplyScalar(0.5 * d);
+    if (kind === 'rock' && v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.35; // base algo plana
     p.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -108,9 +143,11 @@ export const G = {
   capsule: new THREE.CapsuleGeometry(0.5, 1, 4, 10),
   dome: new THREE.SphereGeometry(0.5, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
   smile: new THREE.TorusGeometry(0.5, 0.18, 4, 10, Math.PI),
-  rock: rockGeo(1),
-  rock2: rockGeo(2, 0.45),
-  bush: rockGeo(3, 0.3, 1),
+  rock: rockGeo(1, 0.4, 3),
+  rock2: rockGeo(2, 0.5, 3),
+  bush: rockGeo(3, 0.32, 2, 'bush'),
+  /** Roca de menos polígonos, para acantilados hechos de cientos de piezas. */
+  crag: rockGeo(4, 0.55, 2),
 };
 
 // Versión de pocos polígonos para la multitud (cientos de personas)
@@ -175,13 +212,20 @@ export interface PersonLook {
   shirt: number;
   pants: number;
   hair: number;
-  hairStyle: 'long' | 'short' | 'bun' | 'cap' | 'pony';
+  /** straight: melena lisa a los hombros (en los personajes glTF; en los muñecos, como long). */
+  hairStyle: 'long' | 'short' | 'bun' | 'cap' | 'pony' | 'straight';
   skirt?: boolean;
   eyes?: number;
   shoes?: number;
   beard?: boolean;
   /** Mono de una pieza ajustado y cintura marcada; antebrazos, manos y espinillas al aire. */
   jumpsuit?: boolean;
+  /** Camiseta a rayas verticales de dos colores (la del Barça). */
+  stripes?: [number, number];
+  /** Pantalón corto (en la multitud): piernas al aire por debajo de medio muslo. */
+  shorts?: boolean;
+  /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
+  male?: boolean;
 }
 
 export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
@@ -213,6 +257,8 @@ export interface Person {
   lookT?: number;
   /** Movimiento real del cuerpo (para los que no tienen Walker): fase del paso, velocidad e inclinación. */
   auto?: { x: number; z: number; ry: number; ph: number; v: number; acc: number; lf: number; lfV: number; ls: number; lsV: number };
+  /** Personaje glTF con captura de movimiento (capítulos con la calidad de la prueba). */
+  rig?: Rig;
 }
 
 const HEAD_Y = 1.3; // base del cuello
@@ -230,7 +276,7 @@ function hairInto(m: Merger, look: PersonLook, oy = 0, oz = 0, g: typeof G = G) 
   // Flequillo
   m.add(g.sphere, h, -0.13, oy + 0.2, oz + 0.2, 0, 0, 0.5, 0.22, 0.12, 0.12);
   m.add(g.sphere, h, 0.06, oy + 0.22, oz + 0.22, 0, 0, -0.3, 0.24, 0.12, 0.12);
-  if (look.hairStyle === 'long') {
+  if (look.hairStyle === 'long' || look.hairStyle === 'straight') {
     m.add(g.capsule, h, 0, oy - 0.16, oz - 0.14, 0.12, 0, 0, 0.6, 0.32, 0.26);
     m.add(g.capsule, h, -0.27, oy - 0.12, oz + 0.02, 0, 0, 0.08, 0.13, 0.28, 0.16);
     m.add(g.capsule, h, 0.27, oy - 0.12, oz + 0.02, 0, 0, -0.08, 0.13, 0.28, 0.16);
@@ -267,6 +313,7 @@ function eyesInto(m: Merger, look: PersonLook, oy = 0) {
 
 /** Personaje animable con cabeza grande (estilo "chibi"). Mira hacia +Z. */
 export function makePerson(look: PersonLook, scale = 1, outline = true): Person {
+  if (hdSurfaces.value && rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
@@ -570,7 +617,37 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
     });
     p.body.position.y = prevY + (p.body.position.y - prevY) * a;
   }
+  // Salto (lo mueve el Walker): piernas recogidas y brazos abiertos en el aire, rodillas que
+  // absorben el golpe al aterrizar. Se mezcla con lo que estuviera haciendo.
+  const air = airOf.get(p.root.position);
+  if (air && (air.hop > 0.001 || air.land > 0.01)) {
+    const k = THREE.MathUtils.smoothstep(air.hop, 0, 0.12);
+    const up = air.vy > 0 ? 1 : 0.6;
+    const mix = (j: THREE.Object3D, ax: 'x' | 'z', v: number) => (j.rotation[ax] += (v - j.rotation[ax]) * k);
+    mix(p.legL, 'x', -0.75 * up);
+    mix(p.legR, 'x', -0.25);
+    mix(p.kneeL, 'x', 1.25 * up);
+    mix(p.kneeR, 'x', 0.75);
+    mix(p.footL, 'x', 0.35);
+    mix(p.footR, 'x', 0.3);
+    mix(p.armL, 'z', -1.0);
+    mix(p.armR, 'z', 1.0);
+    mix(p.elbowL, 'x', -0.5);
+    mix(p.elbowR, 'x', -0.5);
+    const c = air.land * (1 - k);
+    if (c > 0) {
+      p.body.position.y -= c * 0.08;
+      p.legL.rotation.x -= c * 0.55;
+      p.legR.rotation.x -= c * 0.55;
+      p.kneeL.rotation.x += c * 1.0;
+      p.kneeR.rotation.x += c * 1.0;
+      p.footL.rotation.x -= c * 0.45;
+      p.footR.rotation.x -= c * 0.45;
+      p.body.rotation.x += c * 0.2;
+    }
+  }
   p.head.userData.lookY = p.head.rotation.y;
+  if (p.rig) rigSnapshot(p, mode);
 }
 
 /** Muelle amortiguado crítico (misma fórmula que en walker.ts, sin importar el Walker). */
@@ -618,6 +695,19 @@ function crowdArmGeometry(look: PersonLook) {
   m.add(GL.capsule, look.skin, 0, -0.25 - Math.cos(bend) * 0.1, Math.sin(bend) * 0.1, -bend, 0, 0, 0.1, 0.11, 0.1);
   m.add(GS, look.skin, 0, -0.25 - Math.cos(bend) * 0.22, Math.sin(bend) * 0.22, 0, 0, 0, 0.13, 0.14, 0.13);
   return m.build();
+}
+
+/** Lo que necesita un nivel de una multitud (la de siempre o la de personajes glTF). */
+export interface CrowdLike {
+  readonly group: THREE.Group;
+  set(i: number, x: number, z: number, q: THREE.Quaternion, p: CrowdPose, y?: number): void;
+  commit(): void;
+}
+
+/** Multitud: con personajes glTF horneados en los capítulos con la calidad de la prueba. */
+export function makeCrowd(look: PersonLook, count: number, dance = false): CrowdLike {
+  if (hdSurfaces.value && crowdReady()) return new RigCrowd(look, count, dance);
+  return new CrowdPeople(look, count);
 }
 
 /** Postura de una persona de la multitud: brazos (adelante/lado) y balanceo del cuerpo. */
@@ -737,6 +827,7 @@ export interface Donkey {
 
 /** Ase con su jinete (caixer): frac negro, pantalón blanco y bombín. Mira hacia +Z. */
 export function makeDonkey(coat = 0x7d6b5d): Donkey {
+  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
   const root = new THREE.Group();
   const pivot = new THREE.Group();
   pivot.position.z = -0.75; // eje en las patas traseras
@@ -794,6 +885,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
 
 /** Caballo menorquín negro con su caixer, como los de Sant Joan: alto, crin larga y escarapelas. Mira hacia +Z. */
 export function makeHorse(coat = 0x0e0c0b): Donkey {
+  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
   const root = new THREE.Group();
   const pivot = new THREE.Group();
   pivot.position.z = -0.85; // eje en las patas traseras: así se pone de manos (el «bot»)
@@ -874,6 +966,7 @@ export interface Dog {
 
 /** Joy: perra negra mediana. Mira hacia +Z. */
 export function makeDog(): Dog {
+  if (hdSurfaces.value && rigReady() && vehiclesReady()) return makeDogHD(blobShadow(0.9));
   const root = new THREE.Group();
   const black = 0x1d1b1f;
   const b = new Merger(false);
@@ -907,7 +1000,12 @@ export function makeDog(): Dog {
 }
 
 /** Coche del viaje con Azul, Gas y Joy asomada por la ventanilla. Mira hacia +Z. */
-export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean } = {}) {
+export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook; passenger?: PersonLook } = {}) {
+  if (hdSurfaces.value && rigReady() && vehiclesReady()) {
+    const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver, azul: opts.passenger });
+    c.root.add(blobShadow(4.4));
+    return c;
+  }
   const { luggage = true, joy: withJoy = true } = opts;
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -966,6 +1064,11 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
 
 /** Moto (la de Gas) con él montado y casco. Mira hacia +Z. */
 export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
+  if (hdSurfaces.value && rigReady()) {
+    const mo = makeMotoHD(color, rider);
+    mo.root.add(blobShadow(1.4));
+    return mo;
+  }
   const root = new THREE.Group();
   const m = new Merger(false);
   // Chasis, depósito, asiento, colín y horquilla
