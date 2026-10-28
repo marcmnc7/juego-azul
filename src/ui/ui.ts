@@ -505,7 +505,9 @@ export function chapterCard(n: number, ready: Promise<unknown> = Promise.resolve
   c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place));
   root.append(c);
   const minTime = new Promise((r) => setTimeout(r, 2100));
-  void Promise.all([minTime, ready.catch(() => {})]).then(() => {
+  // Por si algo falla al montar el capítulo, el rótulo nunca se queda más de 8 s
+  const safe = Promise.race([ready.catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
+  void Promise.all([minTime, safe]).then(() => {
     c.classList.add('out');
     setTimeout(() => c.remove(), 900);
   });

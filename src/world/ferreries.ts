@@ -287,7 +287,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const r = rand(42);
 
   // El jaleo d'ases es el día de Sant Bartomeuet (25 de agosto) a las 11 de la mañana: sol alto de verano
-  scene.fog = new THREE.Fog(0xcfe0ee, 45, 140);
+  scene.fog = new THREE.Fog(0xcfe0ee, 70, 180);
   const hd = hdSurfaces.value > 0;
   const sky = new Sky({
     top: 0x2f72c4,
@@ -301,8 +301,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   group.add(sky.group);
   if (hd) scene.userData.hdri = { url: dayHdr, intensity: 1.0, sunDir: MORNING_DIR, hemi: 0.35 };
 
-  group.add(new THREE.HemisphereLight(0xeaf2ff, 0x8a7a64, 1.4));
-  const sun = new Sun(scene, 0xfff1dc, hd ? 4.2 : 2.8, MORNING_DIR, 24);
+  group.add(new THREE.HemisphereLight(0xeaf2ff, 0x8a7a64, 1.0));
+  const sun = new Sun(scene, 0xfff1dc, hd ? 3.4 : 2.4, MORNING_DIR, 24);
 
   // Calidad de la prueba: casas, iglesia y suelo con materiales fotográficos (ver hd/ferreriesHD.ts)
   const hdb = hd ? new FerreriesHD() : null;

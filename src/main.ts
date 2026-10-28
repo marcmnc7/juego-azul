@@ -370,11 +370,13 @@ function buildLevel(n: number, ready: () => void) {
   if (TEST) closeDebug = debugPanel(level.debug());
   if (stats) (window as unknown as { game: Level }).game = level;
   // Compila todos los materiales antes de quitar el rótulo: así no hay tirones al empezar a jugar
-  const sc = level.threeScene;
-  renderer
-    .compileAsync(sc, camera)
-    .catch(() => {})
-    .finally(() => requestAnimationFrame(() => requestAnimationFrame(ready)));
+  // (compileAsync se cuelga con algunos materiales en three r180: mejor el síncrono, que va detrás del rótulo)
+  try {
+    renderer.compile(level.threeScene, camera);
+  } catch (e) {
+    console.warn('[gfx] compilar', e);
+  }
+  requestAnimationFrame(() => requestAnimationFrame(ready));
 }
 
 function tryFullscreen() {
