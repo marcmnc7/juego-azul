@@ -16,7 +16,7 @@ const VARIANT: JaleoVariant = {
   text: ANIVERSARIO,
   hud: {
     ...FERRERIES_VARIANT.hud,
-    find: 'Cerca en Marc: segueix ses ubicacions 📍',
+    find: 'Busca a Marc: sigue sus ubicaciones 📍',
   },
   introChats: [CHATS.tarde, CHATS.veintidos, CHATS.asesOnce],
   findFirst: { found: [CHATS.bocata] },

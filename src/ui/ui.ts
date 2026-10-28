@@ -47,7 +47,7 @@ export interface MapOptions {
 }
 
 /** Cumpleaños: el último capítulo se abre ese día y cada uno de los anteriores, un día antes. */
-const BIRTHDAY = new Date(2026, 9, 28);
+const BIRTHDAY = new Date(2026, 10, 28); // 28 de noviembre (en JavaScript los meses empiezan en 0)
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 function openDay(i: number) {
   const d = new Date(BIRTHDAY);

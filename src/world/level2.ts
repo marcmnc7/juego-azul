@@ -883,8 +883,8 @@ export class Level2 implements Level {
           this.fx.burst(at, '✨', 4, 1.5);
           if (this.combo % 5 === 0) {
             toast(ROAD.combo(this.combo));
-            audio.bark();
-            this.fx.burst(at, '🐾', 5, 1.8);
+            audio.fanfare();
+            this.fx.burst(at, '📸', 5, 1.8);
           }
         } else if (th.kind === 'turbo') {
           this.turboT = 3;
@@ -946,7 +946,7 @@ export class Level2 implements Level {
     this.phase = 'arriveSV';
     this.lane = 1;
     this.updateHud();
-    audio.bark();
+    audio.chime(2);
     later(() => {
       dialogue(ROAD.arriveSV, () => this.startGrill());
     }, 1200);
@@ -1057,11 +1057,12 @@ export class Level2 implements Level {
   private arriveLogrono() {
     this.phase = 'logrono';
     this.updateHud();
-    audio.bark();
+    audio.chime(2);
     later(
       () =>
         dialogue(ROAD.arriveLogrono, () =>
-          phoneChat(CHATS.vuelta, () => dialogue(ROAD.threeDays, () => phoneChat([CHATS.porQueGas, CHATS.tuNombre, CHATS.zamburinasCumple, CHATS.sanVicente], () => this.finish()))),
+          // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
+          phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish())),
         ),
       1500,
     );

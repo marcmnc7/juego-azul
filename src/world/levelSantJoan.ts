@@ -17,6 +17,12 @@ import { buildSurroundings, collidersBox } from './surround';
 import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
 
+/** La víspera, solo lo bonito: que viene a las 10.45 y el «Te quiero» (Marc pidió recortar el resto). */
+const LA_NOCHE = {
+  ...CHATS.laNoche,
+  msgs: CHATS.laNoche.msgs.filter((m) => ['Mañana a las 10.45 estoy ahi', 'Descansa ahora', 'Bona nit', 'Te quiero', 'Bona nit 🫂'].includes(m.text)),
+};
+
 // Capítulo 5 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
 // Por la tarde, al acabar la bandera, Azul va desde la Plaça Espanya hacia el Born por Ses Voltes,
 // entre la gente y los caballos que se ponen de manos (tocarles el pecho da suerte). En Correus, Gas lleva
@@ -191,7 +197,7 @@ export class LevelSantJoan implements Level {
       if (this.phase !== 'intro') return;
       const ex = CHATS.dimeExacto;
       phoneChat(CHATS.mar, () => dialogue(SANTJOAN.night, () =>
-        phoneChat(CHATS.laNoche, () =>
+        phoneChat(LA_NOCHE, () =>
           dialogue(SANTJOAN.morning, () =>
             phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
               dialogue(SANTJOAN.bandera, () =>

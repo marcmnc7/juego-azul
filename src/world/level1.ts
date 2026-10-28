@@ -40,7 +40,7 @@ export interface JaleoVariant {
   findFirst?: { found: ChatFrag[] };
   /** Algo que pasa al final del capítulo, antes de cerrarlo (p. ej. un minijuego). */
   afterEnd?: (next: () => void) => void;
-  /** Ferreries: la mirada a cámara lenta, el baile juntos, el beso y el Instagram. */
+  /** Ferreries: la mirada a cámara lenta, el baile juntos, el beso y el número. */
   meetScene?: typeof FERRERIES_MEET;
 }
 
