@@ -314,6 +314,12 @@ export class Walker implements AirState {
 
   camera(cam: THREE.Camera, dt: number, walls: Box2[], dist = 7, h = 3.6) {
     const p = this.pos;
+    // Encuadre de tercera persona más cercano y bajo: se ve a Azul y el horizonte, no el suelo desde
+    // un dron. Los planos muy altos a propósito (pasillos, presentaciones) se respetan.
+    if (h < 5) {
+      dist *= 0.86;
+      h = 1.6 + (h - 1.6) * 0.72;
+    }
     const sx = -Math.sin(this.yaw);
     const sz = -Math.cos(this.yaw);
     const phys = physFor(walls);

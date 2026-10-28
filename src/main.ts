@@ -1,4 +1,4 @@
-import { audio } from './core/audio';
+import { audio, type Bed } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
@@ -26,11 +26,8 @@ import { preloadHdri } from './core/assets';
 import { hdEnvDefault } from './core/gfx';
 import sunsetHdr from './assets/env/venice_sunset.hdr';
 import quarryHdr from './assets/env/quarry.hdr';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { Post, GRADES, NEUTRAL } from './core/post';
+import { juice } from './core/juice';
 import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -158,35 +155,19 @@ if (!gfxOk || quality.kind === 'lambert') {
 }
 renderer.info.autoReset = false;
 
-// Postproceso: MSAA, bloom en las luces, viñeta y un toque de color de cine.
-const GRADE = {
-  uniforms: { tDiffuse: { value: null }, amount: { value: 0.32 } },
-  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float amount; varying vec2 vUv;
-    void main(){
-      vec4 c = texture2D(tDiffuse, vUv);
-      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-      c.rgb = mix(vec3(l), c.rgb, 1.08);                       // un poco más de saturación
-      c.rgb *= mix(vec3(0.96, 0.98, 1.04), vec3(1.04, 1.0, 0.95), smoothstep(0.0, 0.6, l)); // sombras frías, luces cálidas
-      vec2 d = vUv - 0.5;
-      c.rgb *= 1.0 - amount * smoothstep(0.25, 0.8, dot(d, d) * 2.2);  // viñeta
-      gl_FragColor = c;
-    }`,
-};
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
-const renderPass = new RenderPass(new THREE.Scene(), camera);
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.5, 0.94);
-composer.addPass(renderPass);
-composer.addPass(bloom);
-composer.addPass(new ShaderPass(GRADE));
-composer.addPass(new OutputPass());
-function draw(scene: THREE.Scene) {
+// Postproceso de cine (ver core/post.ts): oclusión ambiental, profundidad de campo en los diálogos,
+// bloom, tono y etalonaje por capítulo.
+const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+const post = new Post(renderer, camera, MOBILE);
+juice.fx = post;
+audio.onCue = (c) => juice.cue(c);
+let cine = 0;
+function draw(scene: THREE.Scene, dt = 1 / 60) {
   if (!quality.post) {
     renderer.render(scene, camera);
     return;
   }
-  renderPass.scene = scene;
-  composer.render();
+  post.draw(scene, dt);
 }
 const input = new Input(canvas, uiRoot);
 
@@ -215,6 +196,7 @@ const SPEAKERS: Record<string, string[]> = {
   Carme: ['carme'], Tòfol: ['tofol'], Camarero: ['barman'],
 };
 const _head = new THREE.Vector3();
+const lastSpeaker = { pos: new THREE.Vector3(), at: 0 };
 setSpeakerResolver((who) => {
   const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
   if (!L) return null;
@@ -227,6 +209,8 @@ setSpeakerResolver((who) => {
     if (!o || !o.visible || !(o as THREE.Scene).isScene) continue;
     const bone = p.rig?.bones.get('Head') ?? p.head;
     bone.getWorldPosition(_head);
+    lastSpeaker.pos.copy(_head);
+    lastSpeaker.at = performance.now();
     if (_head.distanceTo(camera.position) > 22) return null;
     _head.y += 0.32 * (p.root.scale.y || 1);
     _head.project(camera);
@@ -247,9 +231,7 @@ function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
-  composer.setPixelRatio(renderer.getPixelRatio());
-  composer.setSize(w, h);
-  bloom.resolution.set(w / 2, h / 2);
+  post.setSize(w, h);
   camera.aspect = w / h;
   // En vertical abrimos más el plano para que se vea algo de calle
   camera.fov = w < h ? 75 : 60;
@@ -282,6 +264,7 @@ function goMap() {
     level = null;
   }
   clearRigPeople();
+  audio.bed('none');
   setHd(false);
   input.reset();
   input.enabled = true;
@@ -314,7 +297,11 @@ function setHd(on: boolean, n = 0) {
   hdEnvDefault.url = on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
   renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = on ? 1.05 : 0.92;
+  post.setGrade(on ? GRADES[n] ?? NEUTRAL : NEUTRAL, true);
 }
+
+// Ambiente sonoro de fondo de cada capítulo
+const BEDS: Record<number, Bed> = { 1: 'plaza', 9: 'plaza', 2: 'night', 3: 'wind', 5: 'sea', 7: 'night', 8: 'sea' };
 
 function startLevel(n: number) {
   // Los capítulos con personajes glTF esperan a que estén cargados (suele ser al instante)
@@ -329,6 +316,7 @@ function startLevel(n: number) {
   input.reset();
   input.enabled = true;
   tryFullscreen();
+  audio.bed(BEDS[n] ?? 'none');
   // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
   let ready!: () => void;
   chapterCard(n, new Promise<void>((r) => (ready = r)));
@@ -396,7 +384,7 @@ let avg = 16;
 let lastAdjust = 0;
 const stats = TEST ? document.createElement('div') : null;
 // Modo prueba: acceso desde la consola para revisar colisiones
-if (TEST) Object.assign(window, { __dbg: { level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds } });
+if (TEST) Object.assign(window, { __dbg: { level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice } });
 if (stats) {
   stats.className = 'stats';
   uiRoot.append(stats);
@@ -413,9 +401,19 @@ function frame() {
   smoothDt += (dt - smoothDt) * 0.15;
   renderer.info.reset();
   if (level) {
-    level.update(dt);
-    updateRigPeople(dt);
-    const showJump = performance.now() - walkerActiveAt < 250 && !document.querySelector('.dialogue');
+    const gdt = juice.scaleDt(dt);
+    level.update(gdt);
+    updateRigPeople(gdt);
+    // Diálogos en modo cine: bandas, un leve acercamiento y desenfoque del fondo enfocando a quien habla
+    const talking = !!document.querySelector('.dialogue');
+    cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
+    post.cinematic = cine < 0.01 ? 0 : cine;
+    // Solo se desenfoca el fondo cuando habla alguien que está en escena (el narrador no)
+    const speaker = talking && lastSpeaker.at > performance.now() - 300;
+    if (speaker) post.focus.copy(lastSpeaker.pos);
+    post.dofAmount += ((speaker ? 1 : 0) - post.dofAmount) * Math.min(1, dt * 4);
+    juice.apply(camera, dt, cine * 0.1);
+    const showJump = performance.now() - walkerActiveAt < 250 && !talking;
     if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
     const camQ = TEST ? ((window as unknown as { __cam?: string }).__cam ?? new URLSearchParams(location.search).get('cam')) : null;
@@ -424,17 +422,18 @@ function frame() {
       camera.position.set(v[0], v[1], v[2]);
       camera.lookAt(v[3], v[4], v[5]);
     }
-    draw(level.threeScene);
+    draw(level.threeScene, dt);
     if (shaderFailed) safeStep();
   } else {
-    draw(idle);
+    draw(idle, dt);
   }
   avg = avg * 0.95 + dt * 1000 * 0.05;
   const now = clock.elapsedTime;
   if (level && !HQ && now - lastAdjust > 2 && performance.now() - levelAt > 4000) {
     lastAdjust = now;
     if (avg > 24 && ratio > 1) ratio = Math.max(1, ratio - 0.25);
-    else if (avg > 28 && quality.post) quality.post = false; // primero fuera el postproceso
+    else if (avg > 26 && post.aoEnabled) post.aoEnabled = false; // primero fuera la oclusión ambiental
+    else if (avg > 28 && quality.post) quality.post = false; // luego el resto del postproceso
     else if (avg > 30 && quality.shadows) dropShadows();
     else if (avg < 15 && ratio < maxRatio) ratio = Math.min(maxRatio, ratio + 0.25);
     if (renderer.getPixelRatio() !== ratio) {

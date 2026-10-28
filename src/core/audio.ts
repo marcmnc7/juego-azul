@@ -1,4 +1,8 @@
 // Música y efectos sintetizados con WebAudio (sin archivos de audio: todo cabe en un HTML).
+// La melodía de cada canción se armoniza sola (un acorde por compás), con colchón de cuerdas, bajo,
+// batería completa y una sala con reverb y eco: suena a banda sonora y no a maquinita.
+import type { Cue } from './juice';
+
 type Note = [number | null, number]; // [semitonos desde La4 o null = silencio, duración en corcheas]
 
 interface Song {
@@ -8,10 +12,16 @@ interface Song {
   octave: number; // semitonos extra
   drum: (beat: number) => number; // volumen del golpe en cada corchea (0 = nada)
   bass?: boolean;
+  /** Tonalidad (semitonos desde La) y corcheas por compás, para armonizar. */
+  key: number;
+  bar: number;
+  minor?: boolean;
 }
 
 // Jaleo: imita de lejos el fabiol y el tamborí, en 6/8.
 const JALEO: Song = {
+  key: 5,
+  bar: 6,
   eighth: 0.16,
   wave: 'triangle',
   octave: 12,
@@ -26,6 +36,8 @@ const JALEO: Song = {
 
 // Canción de carretera: alegre, en 4/4.
 const ROAD: Song = {
+  key: 3,
+  bar: 8,
   eighth: 0.17,
   wave: 'square',
   octave: 0,
@@ -41,6 +53,8 @@ const ROAD: Song = {
 
 // Nana de verano para la noche en casa: lenta, suave y sin batería.
 const NIGHT: Song = {
+  key: 0,
+  bar: 8,
   eighth: 0.3,
   wave: 'sine',
   octave: 12,
@@ -57,6 +71,41 @@ const NIGHT: Song = {
 export type SongName = 'jaleo' | 'road' | 'night';
 const SONGS: Record<SongName, Song> = { jaleo: JALEO, road: ROAD, night: NIGHT };
 
+/** Acordes diatónicos (I ii iii IV V vi) como grados de la escala mayor. */
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+const CHORD_PREF = [1, 0.55, 0.35, 0.9, 0.85, 0.7];
+/**
+ * Un acorde por compás: el triada de la tonalidad que más notas de la melodía cubre (pesadas por
+ * duración), con preferencia por I, IV y V. Devuelve la raíz (semitonos) y si es menor.
+ */
+function harmonize(sg: Song): Array<{ root: number; minor: boolean; third: number }> {
+  const bars: number[][] = [];
+  let pos = 0;
+  for (const [semi, dur] of sg.notes) {
+    const b = Math.floor(pos / sg.bar);
+    (bars[b] ??= new Array(12).fill(0));
+    if (semi !== null) bars[b][(((semi - sg.key) % 12) + 12) % 12] += dur;
+    pos += dur;
+  }
+  const out: Array<{ root: number; minor: boolean; third: number }> = [];
+  let prev = -1;
+  for (const w of bars) {
+    let best = 0, bestScore = -1;
+    for (let d = 0; d < 6; d++) {
+      const tones = [MAJOR[d], MAJOR[(d + 2) % 7], MAJOR[(d + 4) % 7]];
+      const score = tones.reduce((a, t) => a + (w?.[t] ?? 0), 0) + CHORD_PREF[d] * 1.5 + (d === prev ? 0.4 : 0);
+      if (score > bestScore) (bestScore = score), (best = d);
+    }
+    prev = best;
+    const root = MAJOR[best];
+    const third = (MAJOR[(best + 2) % 7] - root + 12) % 12;
+    out.push({ root: sg.key + root, minor: third === 3, third });
+  }
+  return out;
+}
+
+export type Bed = 'plaza' | 'sea' | 'night' | 'wind' | 'none';
+
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -68,6 +117,15 @@ export class Audio {
   private song: Song = JALEO;
   muted = false;
   private playing = false;
+  private pos = 0;
+  private chords: ReturnType<typeof harmonize> = [];
+  private reverb!: ConvolverNode;
+  private delay!: DelayNode;
+  /** Cada sonido de premio avisa (main.ts lo usa para destellos, zoom y vibración). */
+  onCue: ((c: Cue) => void) | null = null;
+  private cue(c: Cue) {
+    this.onCue?.(c);
+  }
 
   /** Debe llamarse dentro de un gesto del usuario (iOS). */
   unlock() {
@@ -80,9 +138,34 @@ export class Audio {
     this.master = this.ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.6;
     this.master.connect(this.ctx.destination);
+    // Sala: reverb (respuesta al impulso generada) y un eco suave en estéreo, en paralelo con la señal seca
+    const comp = this.ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.ratio.value = 3;
+    this.master.disconnect();
+    this.master.connect(comp).connect(this.ctx.destination);
+    this.reverb = this.ctx.createConvolver();
+    this.reverb.buffer = this.impulse(2.6);
+    const wet = this.ctx.createGain();
+    wet.gain.value = 0.32;
+    this.reverb.connect(wet).connect(this.master);
+    this.delay = this.ctx.createDelay(1);
+    this.delay.delayTime.value = 0.32;
+    const fb = this.ctx.createGain();
+    fb.gain.value = 0.28;
+    const dl = this.ctx.createBiquadFilter();
+    dl.type = 'lowpass';
+    dl.frequency.value = 2400;
+    const dWet = this.ctx.createGain();
+    dWet.gain.value = 0.18;
+    this.delay.connect(dl).connect(fb).connect(this.delay);
+    dl.connect(dWet).connect(this.master);
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = 0.35;
     this.musicGain.connect(this.master);
+    const send = this.ctx.createGain();
+    send.gain.value = 0.55;
+    this.musicGain.connect(send).connect(this.reverb);
     const len = this.ctx.sampleRate * 0.3;
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -108,10 +191,12 @@ export class Audio {
   startMusic(name: SongName = 'jaleo') {
     if (!this.ctx) return;
     this.song = SONGS[name];
+    this.chords = harmonize(this.song);
     this.playing = true;
     this.nextTime = this.ctx.currentTime + 0.1;
     this.step = 0;
     this.beat = 0;
+    this.pos = 0;
   }
 
   stopMusic() {
@@ -122,20 +207,121 @@ export class Audio {
     const ctx = this.ctx;
     if (!ctx || !this.playing) return;
     const sg = this.song;
+    const total = sg.notes.reduce((a, n) => a + n[1], 0);
     while (this.nextTime < ctx.currentTime + 0.25) {
+      if (this.step % sg.notes.length === 0) this.pos = 0;
       const [semi, dur] = sg.notes[this.step % sg.notes.length];
       if (semi !== null) {
-        this.tone(440 * Math.pow(2, (semi + sg.octave) / 12), this.nextTime, dur * sg.eighth * 0.92, sg.wave, sg.wave === 'square' ? 0.08 : 0.22, this.musicGain);
-        if (sg.bass) this.tone(440 * Math.pow(2, (semi - 24) / 12), this.nextTime, dur * sg.eighth, 'triangle', 0.25, this.musicGain);
+        const f = 440 * Math.pow(2, (semi + sg.octave) / 12);
+        const len = dur * sg.eighth * 0.92;
+        this.lead(f, this.nextTime, len, sg.wave === 'square' ? 0.07 : 0.16);
       }
+      // Lo que cae en este trozo: compás nuevo (acorde y bajo) y la batería de cada corchea
       for (let i = 0; i < dur; i++) {
+        const p = this.pos + i;
+        const t = this.nextTime + i * sg.eighth;
+        if (p % sg.bar === 0) {
+          const c = this.chords[Math.floor(p / sg.bar) % this.chords.length];
+          const barLen = Math.min(sg.bar, total - p) * sg.eighth;
+          if (c) this.pad(c.root, c.third, t, barLen);
+        }
+        if (sg.bass) {
+          const c = this.chords[Math.floor(p / sg.bar) % this.chords.length];
+          const on = sg.bar === 6 ? p % 3 === 0 : p % 2 === 0;
+          if (c && on) this.tone(440 * Math.pow(2, (c.root - 24 + (p % sg.bar === sg.bar / 2 ? 7 : 0)) / 12), t, sg.eighth * 1.6, 'triangle', 0.22, this.musicGain);
+        }
         const v = sg.drum(this.beat);
-        if (v) this.drum(this.nextTime + i * sg.eighth, v);
+        if (v) {
+          if (v >= 0.4) this.kickAt(t, v);
+          else this.drum(t, v * 1.4, 1500);
+        }
+        if (v || sg.drum(0)) this.hat(t + (this.beat % 2 ? 0.012 : 0), this.beat % 2 ? 0.05 : 0.08);
         this.beat++;
       }
+      this.pos += dur;
       this.nextTime += dur * sg.eighth;
       this.step++;
     }
+  }
+
+  /** Voz principal: dos osciladores desafinados con filtro que se abre y cierra (más cálido que un pitido). */
+  private lead(freq: number, t: number, dur: number, vol: number) {
+    const ctx = this.ctx!;
+    const g = ctx.createGain();
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 2;
+    f.frequency.setValueAtTime(freq * 6, t);
+    f.frequency.exponentialRampToValueAtTime(freq * 2, t + Math.max(0.05, dur));
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.setTargetAtTime(vol * 0.6, t + 0.03, 0.12);
+    g.gain.setTargetAtTime(0, t + dur, 0.06);
+    f.connect(g);
+    g.connect(this.musicGain);
+    g.connect(this.delay);
+    for (const [type, det] of [['triangle', -6], ['sawtooth', 7]] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
+      o.detune.value = det;
+      const og = ctx.createGain();
+      og.gain.value = type === 'sawtooth' ? 0.35 : 1;
+      o.connect(og).connect(f);
+      o.start(t);
+      o.stop(t + dur + 0.4);
+    }
+  }
+
+  /** Colchón de cuerdas: el acorde del compás con ataque lento. */
+  private pad(root: number, third: number, t: number, dur: number) {
+    const ctx = this.ctx!;
+    const g = ctx.createGain();
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 1100;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.05, t + Math.min(0.35, dur * 0.3));
+    g.gain.setTargetAtTime(0, t + dur - 0.05, 0.15);
+    f.connect(g).connect(this.musicGain);
+    for (const iv of [0, third, 7, 12]) {
+      for (const det of [-9, 9]) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = 440 * Math.pow(2, (root - 12 + iv) / 12);
+        o.detune.value = det;
+        o.connect(f);
+        o.start(t);
+        o.stop(t + dur + 0.8);
+      }
+    }
+  }
+
+  private hat(t: number, vol: number) {
+    const ctx = this.ctx!;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 7000;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+    s.connect(f).connect(g).connect(this.musicGain);
+    s.start(t, Math.random() * 0.2);
+    s.stop(t + 0.06);
+  }
+
+  /** Respuesta al impulso de una sala: ruido estéreo que decae. */
+  private impulse(sec: number) {
+    const ctx = this.ctx!;
+    const len = Math.floor(ctx.sampleRate * sec);
+    const b = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = b.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    return b;
   }
 
   private tone(freq: number, t: number, dur: number, type: OscillatorType, vol: number, dest?: AudioNode) {
@@ -176,14 +362,14 @@ export class Audio {
     this.tone(f / 2, t, dur, 'triangle', 0.22, this.musicGain);
   }
 
-  kickAt(t: number) {
+  kickAt(t: number, vol = 0.8) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.frequency.setValueAtTime(140, t);
     o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
-    g.gain.setValueAtTime(0.8, t);
+    g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
     o.connect(g).connect(this.musicGain);
     o.start(t);
@@ -197,15 +383,19 @@ export class Audio {
   private sfx(notes: number[], gap: number, type: OscillatorType = 'sine', vol = 0.3) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    notes.forEach((n, i) => this.tone(440 * Math.pow(2, n / 12), t + i * gap, 0.25, type, vol));
+    notes.forEach((n, i) => {
+      this.tone(440 * Math.pow(2, n / 12), t + i * gap, 0.25, type, vol);
+      this.tone(440 * Math.pow(2, n / 12), t + i * gap, 0.4, 'sine', vol * 0.5, this.reverb);
+    });
   }
 
-  pickup() { this.sfx([12, 16, 19], 0.06); }
-  luck() { this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
+  pickup() { this.cue('pickup'); this.sfx([12, 16, 19], 0.06); }
+  luck() { this.cue('luck'); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
   talk() { this.sfx([7], 0, 'square', 0.04); }
   bark() { this.sfx([-2, -5], 0.09, 'sawtooth', 0.12); }
   boo() { this.sfx([0, -3, -7], 0.12, 'triangle', 0.25); }
   hit() {
+    this.cue('hit');
     if (!this.ctx) return;
     this.drum(this.ctx.currentTime, 0.9);
     this.sfx([-12, -17], 0.08, 'sawtooth', 0.12);
@@ -231,14 +421,14 @@ export class Audio {
     s.start(t, Math.random() * 0.5);
     s.stop(t + len + 0.02);
   }
-  fanfare() { this.sfx([7, 12, 16, 19, 24, 19, 24, 28], 0.11, 'triangle', 0.3); }
-  perfect() { this.sfx([24, 28, 31, 36], 0.04, 'square', 0.08); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
+  fanfare() { this.cue('fanfare'); this.sfx([7, 12, 16, 19, 24, 19, 24, 28], 0.11, 'triangle', 0.3); }
+  perfect() { this.cue('perfect'); this.sfx([24, 28, 31, 36], 0.04, 'square', 0.08); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
   warn() { this.sfx([5, 5], 0.1, 'square', 0.06); }
   whoosh() { if (this.ctx) this.noiseSwell(0.5, 0.35, 600, 2400); }
-  pop() { this.sfx([24, 31], 0.03, 'sine', 0.25); }
-  splash() { if (this.ctx) this.noiseSwell(0.9, 0.5, 400, 3000); }
+  pop() { this.cue('pop'); this.sfx([24, 31], 0.03, 'sine', 0.25); }
+  splash() { this.cue('splash'); if (this.ctx) this.noiseSwell(0.9, 0.5, 400, 3000); }
   /** Campanita de estrella: cada una un poco más aguda. */
-  chime(step: number) { this.sfx([12 + step * 2, 19 + step * 2], 0.08, 'sine', 0.22); }
+  chime(step: number) { this.cue('chime'); this.sfx([12 + step * 2, 19 + step * 2], 0.08, 'sine', 0.22); }
 
   /** Ovación del público: ruido filtrado que sube y baja. */
   cheer(vol = 0.5) {
@@ -309,6 +499,109 @@ export class Audio {
         a.src.stop(ctx.currentTime + 1.5);
       }
     }
+  }
+
+  private bedNodes: { stop: (t: number) => void; gain: GainNode } | null = null;
+  private bedName: Bed = 'none';
+  /** Ambiente de fondo de cada capítulo (mar, grillos, viento o plaza), todo sintetizado. */
+  bed(name: Bed, vol = 0.5) {
+    if (!this.ctx || name === this.bedName) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    if (this.bedNodes) {
+      const old = this.bedNodes;
+      old.gain.gain.setTargetAtTime(0, t, 0.6);
+      old.stop(t + 3);
+      this.bedNodes = null;
+    }
+    if (this.bedName === 'plaza') this.ambience(0);
+    this.bedName = name;
+    if (name === 'none') return;
+    if (name === 'plaza') {
+      this.ambience(vol * 0.5);
+      return;
+    }
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.gain.setTargetAtTime(vol, t, 1.2);
+    gain.connect(this.master);
+    const srcs: AudioScheduledSourceNode[] = [];
+    const noise = () => {
+      const s = ctx.createBufferSource();
+      s.buffer = this.brown();
+      s.loop = true;
+      s.start(t, Math.random() * 3);
+      srcs.push(s);
+      return s;
+    };
+    const lfo = (hz: number, depth: number, target: AudioParam) => {
+      const o = ctx.createOscillator();
+      o.frequency.value = hz;
+      const g = ctx.createGain();
+      g.gain.value = depth;
+      o.connect(g).connect(target);
+      o.start(t);
+      srcs.push(o);
+    };
+    if (name === 'sea' || name === 'wind' || name === 'night') {
+      // Olas (o viento): ruido grave que crece y rompe cada pocos segundos
+      const f = ctx.createBiquadFilter();
+      f.type = name === 'wind' ? 'bandpass' : 'lowpass';
+      f.frequency.value = name === 'wind' ? 500 : 650;
+      const g = ctx.createGain();
+      g.gain.value = name === 'night' ? 0.15 : 0.5;
+      noise().connect(f).connect(g).connect(gain);
+      lfo(name === 'wind' ? 0.13 : 0.09, name === 'night' ? 0.1 : 0.35, g.gain);
+      lfo(0.07, name === 'wind' ? 300 : 250, f.frequency);
+    }
+    if (name === 'night') {
+      // Grillos: un tono agudo que tiembla rápido y canta a ratos
+      for (const [hz, rate] of [[4300, 1.3], [4700, 0.9]]) {
+        const o = ctx.createOscillator();
+        o.frequency.value = hz;
+        const trill = ctx.createGain();
+        trill.gain.value = 0;
+        const chirp = ctx.createGain();
+        chirp.gain.value = 0;
+        const pan = ctx.createStereoPanner();
+        pan.pan.value = hz > 4500 ? 0.6 : -0.5;
+        o.connect(trill).connect(chirp).connect(pan).connect(gain);
+        o.start(t);
+        srcs.push(o);
+        const tr = ctx.createOscillator();
+        tr.type = 'square';
+        tr.frequency.value = 28;
+        const trg = ctx.createGain();
+        trg.gain.value = 0.02;
+        tr.connect(trg).connect(trill.gain);
+        tr.start(t);
+        srcs.push(tr);
+        const ch = ctx.createOscillator();
+        ch.type = 'square';
+        ch.frequency.value = rate;
+        const chg = ctx.createGain();
+        chg.gain.value = 0.5;
+        ch.connect(chg).connect(chirp.gain);
+        ch.start(t);
+        srcs.push(ch);
+      }
+    }
+    this.bedNodes = { gain, stop: (at) => srcs.forEach((s) => s.stop(at)) };
+  }
+
+  private brownBuf: AudioBuffer | null = null;
+  private brown() {
+    const ctx = this.ctx!;
+    if (this.brownBuf) return this.brownBuf;
+    const len = ctx.sampleRate * 4;
+    const b = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+      d[i] = last * 3.5;
+    }
+    return (this.brownBuf = b);
   }
 }
 
