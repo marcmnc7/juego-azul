@@ -11,6 +11,7 @@ import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Surf } from '../core/surfaces';
 import { clock, type Level, type LevelDone, disposeObj } from './level';
+import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 
 // Capítulo 2 · La ruta de las zamburiñas.
 // Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
@@ -149,7 +150,8 @@ export class Level2 implements Level {
   private hud: Hud;
   private fx: Particles;
   private phase: Phase = 'intro';
-  private car = makeCar(0xd7263d, { joy: false });
+  // Su Ford Focus gris: conduce ella («el tuyo. Y conduces tú») y Marc va de copiloto
+  private car = makeCar(0x8d9298, { joy: false, driver: MARGAUX_LOOK, passenger: MARC_LOOK });
   private carZ = 0;
   private carX = 0;
   private carVX = 0;

@@ -647,3 +647,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .mini-screen h1 { font-size: clamp(20px, 4vw, 30px); }
 .mini-screen .mini-canvas { width: min(96vw, calc((100dvh - 110px) * 16 / 9)); }
 .mini-screen .mini-skip { padding: 6px 14px; }
+
+/* Portada mientras se carga: el botón se va llenando */
+.big-btn.loading { opacity: .85; background-image: linear-gradient(90deg, rgba(255,255,255,.35) var(--p, 0%), transparent var(--p, 0%)); cursor: progress; }

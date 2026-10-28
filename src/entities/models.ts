@@ -1000,9 +1000,9 @@ export function makeDog(): Dog {
 }
 
 /** Coche del viaje con Azul, Gas y Joy asomada por la ventanilla. Mira hacia +Z. */
-export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook } = {}) {
+export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook; passenger?: PersonLook } = {}) {
   if (hdSurfaces.value && rigReady() && vehiclesReady()) {
-    const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver });
+    const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver, azul: opts.passenger });
     c.root.add(blobShadow(4.4));
     return c;
   }

@@ -291,13 +291,17 @@ function goMap() {
 // En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, la moto por la Costa Brava,
 // Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
 // Las texturas fotográficas se cargan ya, mientras se ve la portada
-void loadSurfacePhotos();
-void loadHdPhotos();
 // Personajes glTF y multitud horneada (para los capítulos con la calidad de la prueba)
 let hdAssets = false;
-const rigLoading = preloadRig()
-  .then(() => Promise.all([preloadCrowd(), preloadDonkey(), preloadVehicles(), preloadHdri(sunsetHdr).catch((e) => console.warn('[gfx] HDRI', e)), preloadHdri(quarryHdr).catch((e) => console.warn('[gfx] HDRI', e))]))
+// Pantalla de carga: la portada no deja empezar hasta que todo está listo (así cada capítulo abre al momento)
+let loadedParts = 0;
+const LOAD_PARTS = 8;
+const part = <T,>(p: Promise<T>) => p.finally(() => loadedParts++);
+const photosLoading = Promise.all([part(Promise.resolve(loadSurfacePhotos())), part(Promise.resolve(loadHdPhotos()))]);
+const rigLoading = part(preloadRig())
+  .then(() => Promise.all([part(preloadCrowd()), part(preloadDonkey()), part(preloadVehicles()), part(preloadHdri(sunsetHdr).catch((e) => console.warn('[gfx] HDRI', e))), part(preloadHdri(quarryHdr).catch((e) => console.warn('[gfx] HDRI', e)))]))
   .then(() => (hdAssets = true));
+const allLoading = Promise.all([rigLoading, photosLoading.catch(() => {})]);
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
 // Capítulos que ya usan la calidad de la prueba de concepto: texturas fotográficas con relieve,
@@ -325,7 +329,13 @@ function startLevel(n: number) {
   input.reset();
   input.enabled = true;
   tryFullscreen();
-  chapterCard(n);
+  // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
+  let ready!: () => void;
+  chapterCard(n, new Promise<void>((r) => (ready = r)));
+  setTimeout(() => buildLevel(n, ready), 60);
+}
+
+function buildLevel(n: number, ready: () => void) {
   const done = (result?: LevelResult) => {
     // Un capítulo ya cerrado no puede completarse "solo"
     if (level !== me) return;
@@ -359,6 +369,12 @@ function startLevel(n: number) {
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(level.debug());
   if (stats) (window as unknown as { game: Level }).game = level;
+  // Compila todos los materiales antes de quitar el rótulo: así no hay tirones al empezar a jugar
+  const sc = level.threeScene;
+  renderer
+    .compileAsync(sc, camera)
+    .catch(() => {})
+    .finally(() => requestAnimationFrame(() => requestAnimationFrame(ready)));
 }
 
 function tryFullscreen() {
@@ -454,7 +470,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-titleScreen(() => {
-  data = load();
-  mapScreen(data, mapOpts);
-});
+titleScreen(
+  () => {
+    data = load();
+    mapScreen(data, mapOpts);
+  },
+  { done: allLoading, progress: () => Math.min(1, loadedParts / LOAD_PARTS) },
+);

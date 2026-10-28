@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
 import { quality } from '../core/gfx';
-import carUrl from '../assets/chars/car.glb';
 import foxUrl from '../assets/chars/fox.glb';
 import { boneAnchor, grayTexture, makeRigPerson, rigTickers } from './rig';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -11,33 +10,23 @@ import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 import type { Dog, Person, PersonLook } from './models';
 
 // Vehículos y animales de los capítulos con la calidad de la prueba de concepto:
-// - coche: el Ferrari de los ejemplos de three.js (aligerado a ~23k vértices) con pintura de laca
+// - coche: un compacto de cinco puertas hecho con piezas (el Ford Focus gris de Azul y los demás)
 // - moto: hecha con piezas PBR (pintura, cromo, goma) y Gas sentado, con casco
 // - Joy: el zorro animado de las muestras de glTF de Khronos, teñido de negro, con collar
 
-let car: GLTF | null = null;
 let fox: GLTF | null = null;
 let loading: Promise<void> | null = null;
 
-export const vehiclesReady = () => !!car && !!fox;
+export const vehiclesReady = () => !!fox;
 
 export function preloadVehicles() {
-  loading ??= Promise.all([loadGLB(carUrl), loadGLB(foxUrl)])
-    .then(([c, f]) => {
-      // El coche se aligeró sin normales: se calculan suaves aquí
-      c.scene.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        // Normales suaves salvo en las aristas marcadas (más de ~35°)
-        if (!m.geometry.attributes.normal) m.geometry = toCreasedNormals(m.geometry, 0.6);
-        (m.material as THREE.MeshStandardMaterial).flatShading = false;
-      });
-      // El zorro tampoco trae normales
+  loading ??= loadGLB(foxUrl)
+    .then((f) => {
+      // El zorro no trae normales
       f.scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (m.isMesh && !m.geometry.attributes.normal) m.geometry.computeVertexNormals();
       });
-      car = c;
       fox = f;
     })
     .catch((e) => console.warn('[gfx] no se pudieron cargar los vehículos', e));
@@ -74,53 +63,100 @@ function seated(look: PersonLook, scale: number, hands: number) {
 }
 
 
-/** Coche realista con la misma interfaz que el de los muñecos (root, body, joy, wheels, azul). Mira hacia +Z. */
+/** Perfil lateral (z hacia delante, y hacia arriba) extruido a lo ancho y centrado en x. */
+function profile(pts: [number, number][], width: number, bevel: number) {
+  const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)));
+  const g = new THREE.ExtrudeGeometry(sh, { depth: width - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 });
+  g.translate(0, 0, -(width - bevel * 2) / 2);
+  g.rotateY(-Math.PI / 2); // la x del perfil pasa a ser la z del mundo
+  return toCreasedNormals(g, 0.5);
+}
+
+/**
+ * Compacto de cinco puertas (el Ford Focus gris de Azul, el coche azul de Gas, los aparcados), hecho con
+ * piezas PBR: carrocería lacada, habitáculo de cristal tintado, techo, pilares, plásticos, faros y ruedas
+ * con llanta. Medidas de un Focus: 4,38 × 1,82 × 1,47 m y 2,70 m de batalla. Mira hacia +Z, con la misma
+ * interfaz que el de los muñecos (root, body, joy, wheels, azul).
+ */
 export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonLook; gas?: PersonLook } = {}) {
-  const src = car!.scene;
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  const model = src.clone(true);
-  model.rotation.y = Math.PI; // el modelo mira hacia -Z
-  body.add(model);
-  model.updateMatrixWorld(true);
+  const add = (g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, parent: THREE.Object3D = body) => {
+    const mesh = new THREE.Mesh(g, m);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  };
+  const lacquer = paint(color);
+  const glass = phys({ color: 0x141b22, metalness: 0.1, roughness: 0.04, clearcoat: 1, transparent: true, opacity: 0.82 });
+  const plastic = new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.75 });
+  const chrome = phys({ color: 0xc9ced4, metalness: 1, roughness: 0.22 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
+  const lamp = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, emissive: 0xfff3d6, emissiveIntensity: 0.6, roughness: 0.1 });
+  const tail = new THREE.MeshStandardMaterial({ color: 0x8a0d10, emissive: 0xff1a1a, emissiveIntensity: 0.45, roughness: 0.25 });
+  const box = new THREE.BoxGeometry(1, 1, 1);
 
-  const glass = phys({ color: 0x1b2228, metalness: 0, roughness: 0.05, transparent: true, opacity: 0.35 });
-  model.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.castShadow = true;
-    m.receiveShadow = true;
-    const name = (m.material as THREE.Material).name;
-    if (name === 'Body_Color') m.material = paint(color);
-    else if (name === 'Glass_Gray') m.material = glass;
-  });
+  // Carrocería hasta la línea de cintura: portón trasero casi vertical, capó corto y en pendiente
+  add(
+    profile(
+      [[-2.12, 0.3], [2.1, 0.3], [2.19, 0.46], [2.17, 0.68], [2.02, 0.82], [1.2, 0.98], [0.98, 1.02], [-1.9, 1.06], [-2.12, 0.98], [-2.19, 0.62]],
+      1.82,
+      0.07,
+    ),
+    lacquer,
+  );
+  // Habitáculo de cristal, algo más estrecho, con el techo pintado encima
+  add(profile([[-1.98, 1.02], [-1.78, 1.36], [-1.45, 1.44], [0.1, 1.43], [1.0, 1.0]], 1.58, 0.05), glass);
+  add(profile([[-1.74, 1.38], [-1.45, 1.475], [0.12, 1.465], [0.32, 1.38]], 1.5, 0.04), lacquer);
+  // Pilares B y C (los del parabrisas los marca el propio techo)
+  for (const sx of [-0.8, 0.8]) {
+    add(box, plastic, sx, 1.22, -0.32, 0.04, 0.42, 0.12);
+    add(box, lacquer, sx * 0.99, 1.2, -1.62, 0.05, 0.36, 0.28);
+  }
+  // Paragolpes, faldones y pasos de rueda en plástico negro
+  add(box, plastic, 0, 0.36, 2.15, 1.7, 0.16, 0.12);
+  add(box, plastic, 0, 0.36, -2.15, 1.7, 0.16, 0.12);
+  for (const sx of [-0.92, 0.92]) add(box, plastic, sx, 0.34, 0.05, 0.04, 0.12, 2.2);
+  // Calandra, faros rasgados y pilotos traseros horizontales
+  add(box, plastic, 0, 0.6, 2.18, 0.9, 0.16, 0.04);
+  add(box, chrome, 0, 0.7, 2.19, 0.3, 0.05, 0.02);
+  for (const sx of [-0.62, 0.62]) {
+    add(box, lamp, sx, 0.74, 2.12, 0.42, 0.1, 0.06);
+    add(box, tail, sx, 0.86, -2.17, 0.4, 0.09, 0.05);
+  }
+  // Retrovisores y matrícula
+  for (const sx of [-0.98, 0.98]) add(box, lacquer, sx, 1.08, 0.85, 0.16, 0.1, 0.1);
+  add(box, new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.5 }), 0, 0.5, 2.22, 0.52, 0.11, 0.01);
+  add(box, new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.5 }), 0, 0.58, -2.21, 0.52, 0.11, 0.01);
 
   // Ruedas: cada una en un soporte propio, para que girar x las haga rodar hacia delante
   const wheels: THREE.Object3D[] = [];
-  for (const n of ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr']) {
-    const w = model.getObjectByName(n);
-    if (!w) continue;
+  const tire = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 28).rotateZ(Math.PI / 2);
+  const rim = new THREE.CylinderGeometry(0.21, 0.21, 0.23, 20).rotateZ(Math.PI / 2);
+  const spoke = new THREE.BoxGeometry(0.235, 0.36, 0.05);
+  for (const [x, z] of [[0.8, 1.38], [-0.8, 1.38], [0.8, -1.32], [-0.8, -1.32]] as const) {
     const holder = new THREE.Group();
-    w.getWorldPosition(holder.position);
-    const spin = new THREE.Group();
-    spin.rotation.y = Math.PI;
-    holder.add(spin);
-    spin.add(w);
-    w.position.set(0, 0, 0);
+    holder.position.set(x, 0.32, z);
+    add(tire, rubber, 0, 0, 0, 1, 1, 1, holder);
+    add(rim, chrome, 0, 0, 0, 1, 1, 1, holder);
+    for (let k = 0; k < 5; k++) add(spoke, plastic, 0, 0, 0, 1, 1, 1, holder).rotation.x = (k * Math.PI) / 5;
     root.add(holder);
     wheels.push(holder);
   }
 
-  // Ocupantes: Gas al volante (izquierda, +x mirando a +Z) y Azul de copiloto
+  // Ocupantes: conductor a la izquierda (+x mirando a +Z) y copiloto
   const azul = new THREE.Group();
   const joy = new THREE.Group();
   if (!opts.empty) {
     const gas = seated(opts.gas ?? MARC_LOOK, 0.95, 0.9);
-    gas.root.position.set(0.36, 0.3 - gas.rig!.hipsHeight * 0.95 + 0.05, -0.15);
+    gas.root.position.set(0.4, 0.62 - gas.rig!.hipsHeight * 0.95, -0.25);
     body.add(gas.root);
     const az = seated(opts.azul ?? MARGAUX_LOOK, 0.95, 0.35);
-    az.root.position.set(-0.36, 0.3 - az.rig!.hipsHeight * 0.95 + 0.05, -0.15);
+    az.root.position.set(-0.4, 0.62 - az.rig!.hipsHeight * 0.95, -0.25);
     azul.add(az.root);
     body.add(azul);
   }

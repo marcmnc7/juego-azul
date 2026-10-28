@@ -91,7 +91,9 @@ export class LevelEclipse implements Level {
 
   // Rocas y eclipse
   private rounds = 1;
-  private sunDir = new THREE.Vector3(0.15, 0.13, 1).normalize();
+  // En Ciutadella la totalidad fue a las 20:30 con el sol a 1,9° sobre el mar, hacia el oeste-noroeste:
+  // el eclipse coincidió con la puesta. El disco va un pelo más alto para que se vea entero.
+  private sunDir = new THREE.Vector3(0.15, 0.046, 1).normalize();
   private sunDisk!: THREE.Mesh;
   private moon!: THREE.Mesh;
   private corona!: THREE.Sprite;

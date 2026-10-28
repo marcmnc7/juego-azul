@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { buildSurroundings, collidersBox } from './surround';
 import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
-import sunsetHdr from '../assets/env/venice_sunset.hdr';
+import dayHdr from '../assets/env/quarry.hdr';
 import { FerreriesHD } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
 import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
 
-// Ferreries en fiestas al atardecer: calle mayor de este a oeste, plaza con la iglesia al norte,
+// Ferreries en fiestas, a las 11 de la mañana del 25 de agosto (jaleo d’ases en el Pla de l’Església): calle mayor de este a oeste, plaza con la iglesia al norte,
 // casas encaladas con persianas verdes, macetas, farolillos, banderines y bares llenos.
 
 export interface Box2 {
@@ -275,7 +275,8 @@ function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => numb
 }
 
 const MARC = new THREE.Vector3(-5.2, 0, 21.6);
-const SUNSET_DIR = new THREE.Vector3(-1, 0.18, 0.3).normalize();
+// Sol de las 11 de la mañana a finales de agosto: alto (unos 55°) y desde el sureste
+const MORNING_DIR = new THREE.Vector3(-0.55, 1.1, 0.35).normalize();
 
 export function buildFerreries(scene: THREE.Scene, town?: TownDressing): FerreriesWorld {
   const group = new THREE.Group();
@@ -285,22 +286,23 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const hangs: Hang[] = [];
   const r = rand(42);
 
-  scene.fog = new THREE.Fog(0xf0a585, 35, 110);
+  // El jaleo d'ases es el día de Sant Bartomeuet (25 de agosto) a las 11 de la mañana: sol alto de verano
+  scene.fog = new THREE.Fog(0xcfe0ee, 45, 140);
   const hd = hdSurfaces.value > 0;
   const sky = new Sky({
-    top: 0x3b3a85,
-    mid: 0xf0907e,
-    bottom: 0xffd08a,
-    sun: { color: 0xffc070, dir: new THREE.Vector3(-1, 0.18, 0.3), size: 140 },
-    clouds: { count: 10, tint: 0xffc6b0 },
-    // Calidad de la prueba: cielo físico (dispersión atmosférica) y luz de un atardecer real (HDRI)
-    ...(hd ? { physical: { sunDir: SUNSET_DIR, turbidity: 6, rayleigh: 2.2 } } : {}),
+    top: 0x2f72c4,
+    mid: 0x86bff0,
+    bottom: 0xdbeaf5,
+    sun: { color: 0xfff4dc, dir: MORNING_DIR, size: 70 },
+    clouds: { count: 6, tint: 0xffffff },
+    // Calidad de la prueba: cielo físico (dispersión atmosférica) y luz de un día despejado (HDRI)
+    ...(hd ? { physical: { sunDir: MORNING_DIR, turbidity: 3, rayleigh: 1.4 } } : {}),
   });
   group.add(sky.group);
-  if (hd) scene.userData.hdri = { url: sunsetHdr, intensity: 1.0, sunDir: SUNSET_DIR, hemi: 0.3 };
+  if (hd) scene.userData.hdri = { url: dayHdr, intensity: 1.0, sunDir: MORNING_DIR, hemi: 0.35 };
 
-  group.add(new THREE.HemisphereLight(0xffe9d6, 0x6f5a80, 1.5));
-  const sun = new Sun(scene, 0xffc490, hd ? 3.6 : 2.4, new THREE.Vector3(-1, 0.9, 0.35), 24);
+  group.add(new THREE.HemisphereLight(0xeaf2ff, 0x8a7a64, 1.4));
+  const sun = new Sun(scene, 0xfff1dc, hd ? 4.2 : 2.8, MORNING_DIR, 24);
 
   // Calidad de la prueba: casas, iglesia y suelo con materiales fotográficos (ver hd/ferreriesHD.ts)
   const hdb = hd ? new FerreriesHD() : null;

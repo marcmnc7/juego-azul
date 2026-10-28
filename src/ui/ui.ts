@@ -22,7 +22,8 @@ export function clearScreens() {
   root.querySelectorAll('.screen, .gift-overlay').forEach((e) => e.remove());
 }
 
-export function titleScreen(onStart: () => void) {
+/** Portada. Si se le pasa la carga, el botón espera (con porcentaje) a que todo esté listo, para que luego cada capítulo abra al momento. */
+export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }) {
   clearScreens();
   const s = el('div', 'screen title-screen');
   s.append(
@@ -31,11 +32,29 @@ export function titleScreen(onStart: () => void) {
     sticker(STICKERS.oso, 'title-sticker'),
     el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),
   );
-  const b = el('button', 'big-btn', 'Empezar ▸');
+  const b = el('button', 'big-btn', 'Empezar ▸') as HTMLButtonElement;
   b.onclick = () => {
     audio.unlock();
     onStart();
   };
+  if (loading) {
+    let ready = false;
+    b.disabled = true;
+    b.classList.add('loading');
+    const tick = () => {
+      if (ready || !b.isConnected) return;
+      b.innerHTML = `Preparando… ${Math.round(loading.progress() * 100)}%`;
+      b.style.setProperty('--p', `${loading.progress() * 100}%`);
+      setTimeout(tick, 150);
+    };
+    tick();
+    void loading.done.finally(() => {
+      ready = true;
+      b.disabled = false;
+      b.classList.remove('loading');
+      b.innerHTML = 'Empezar ▸';
+    });
+  }
   s.append(b, el('p', 'fine', 'Mejor con el móvil en horizontal y el sonido activado 🔊'));
   root.append(s);
 }
@@ -479,13 +498,17 @@ export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
 }
 
 /** Rótulo de capítulo a pantalla completa que se desvanece (tapa también la carga de la escena). */
-export function chapterCard(n: number) {
+/** Rótulo del capítulo. Tapa la pantalla mientras el capítulo se monta y compila; se va cuando pasan 2 s y está listo. */
+export function chapterCard(n: number, ready: Promise<unknown> = Promise.resolve()) {
   const lv = LEVELS[n - 1];
   const c = el('div', 'chapter-card');
   c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place));
   root.append(c);
-  setTimeout(() => c.classList.add('out'), 2100);
-  setTimeout(() => c.remove(), 3000);
+  const minTime = new Promise((r) => setTimeout(r, 2100));
+  void Promise.all([minTime, ready.catch(() => {})]).then(() => {
+    c.classList.add('out');
+    setTimeout(() => c.remove(), 900);
+  });
 }
 
 /** Fundido a negro y vuelta (transiciones entre momentos de la historia). */
