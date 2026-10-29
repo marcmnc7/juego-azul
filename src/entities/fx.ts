@@ -50,14 +50,18 @@ function sprayTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+// Texturas compartidas por todas las partículas del juego (una por emoji). Antes cada capítulo creaba las
+// suyas y las que no estaban en uso al salir nunca se liberaban: la memoria de vídeo crecía sin parar
+const TEX: Record<string, THREE.Texture> = {};
+
 export class Particles {
   private pool: P[] = [];
-  private tex: Record<string, THREE.Texture> = {};
+  private tex = TEX;
 
   constructor(parent: THREE.Object3D, size = 60) {
-    for (const k of ['❤️', '🍀', '✨', '🍋']) this.tex[k] = emojiTexture(k);
-    this.tex.dust = dustTexture();
-    this.tex.spray = sprayTexture();
+    for (const k of ['❤️', '🍀', '✨', '🍋']) this.tex[k] ??= emojiTexture(k);
+    this.tex.dust ??= dustTexture();
+    this.tex.spray ??= sprayTexture();
     for (let i = 0; i < size; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex['❤️'], depthWrite: false, transparent: true }));
       s.visible = false;

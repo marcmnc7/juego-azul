@@ -3,17 +3,27 @@
 Juego 3D para el móvil (Three.js + Vite + TypeScript) para el cumpleaños de Margaux (28 de noviembre). Se juega como Azul (rubia, ojos verdes, vestida de azul); cada capítulo recrea un momento con Gas y termina desbloqueando un **vale regalo real**. El progreso se guarda en el propio móvil.
 
 ## Capítulos
+Se abren uno al día, del 20 al 28 de noviembre (el último, el día del cumpleaños), y cada uno pide haber terminado el anterior.
+
 | # | Capítulo | Qué se hace | Regalo |
 |---|----------|-------------|--------|
-| 1 | **Jaleo d'ases** · Ferreries, 25 de agosto de 2025 | Hablar con Tòfol, conseguir 3 pomadas y 3 toques de suerte a los ases encabritados, encontrar a Marc en el Bar Sa Plaça y darle un beso. | Una noche de fiesta juntos |
-| 2 | **La piscinita** · Sa Caleta, la noche siguiente | Los WhatsApp de esa noche («Coche azul. Gira»), Gas la recoge en el Imperi y van a casa de sus padres en silencio. Tirarse a la piscina «pequeñita pero funciona», nadar un rato juntos, tumbarse en el césped y unir 10 estrellas en un corazón. | — |
-| 3 | **La ruta de las zamburiñas** · Atocha → San Vicente de la Barquera → Logroño | Empieza con el tren por los pelos y Azul esperando en Atocha a las 22h. Azul conduce su Ford Focus gris con Marc de copiloto (Joy no vino), cambiar de carril para recoger fotos y esquivar coches, tractores y vacas. En San Vicente, 8 zamburiñas a la plancha y una en la terraza de El Ancla. Seguir entre viñedos hasta Logroño, donde a Marc se le olvida el gas del camping y nace el mote «Gas». | Una cena en un buen restaurante |
-| 4 | **Fito bajo las estrellas** · Anexo del Estadio de Gran Canaria, 13 de marzo de 2026 | Barajas: esquivar maletas hasta la puerta 26 (asiento 26D, «pasillo»). Hacer cola con Gas en el baño sin que se cuele nadie, grabarle el «temón» que se pierde («Hize vídeo, don't worry») y encender el flash cuando él te busque a oscuras («Flash. Pls. Estoy. Xo no veo»). Opcional: tirar el tabaco. Concierto con minijuego de ritmo y fuegos artificiales. | Billetes al Carnaval de Tenerife |
-| 5 | **Sant Joan** · Ciutadella, junio de 2026 | Carme de guía, 3 bolsitas de avellanes y 3 toques de suerte a caballos negros, y encontrar a Gas (con la camiseta de Azul) siguiendo sus ubicaciones («Dime exacto pls»). | — |
-| 6 | **Cena a escondidas** · Sa Farola, 13 de julio de 2026 | Vigilar a los padres de Azul y decirle «Ven» a Gas solo cuando se han ido; cocinar la carbonara en la cocina de fuera (guanciale, pasta al dente y crema sin cuajar, sin nata) y que Gas ponga nota; cenar antes de las 22:50; a las 23:49, el WhatsApp de Azul. | — |
-| 💌 | **Un año después** · Ferreries, 25 de agosto de 2026 | Una escena corta otra vez en el Jaleo, el crucigrama de Gas (8 pistas con bromas suyas; las letras marcadas dicen TE QUIERO) y después la carta de Gas (y Joy). | — |
+| 1 | **Jaleo d'ases** · Ferreries, 25 de agosto de 2025 | Hablar con Tòfol, 3 pomadas y 3 caricias a los ases cuando se paran, bailar con Carme en Sa Font, la mirada a cámara lenta cuando aparece Marc, bailar juntos, el beso y el número. | Una noche de fiesta juntos |
+| 2 | **La piscinita** · Sa Caleta, la noche siguiente | Los WhatsApp de esa noche, Gas la recoge en el Imperi, entrar en silencio por las losas, tirarse a la piscina, nadar juntos, tumbarse en el césped y unir las estrellas en un corazón. | — |
+| 3 | **La ruta de las zamburiñas** · Atocha → San Vicente de la Barquera → Logroño | Conducir el Focus gris cambiando de carril, la Cafetería Marcial, las zamburiñas a la plancha y en la terraza de El Ancla, y la última noche de camping entre viñas: el hornillo sin gas y el nacimiento de «Gas». | Una cena en un buen restaurante |
+| 4 | **Fito bajo las estrellas** · Barajas → Estadio de Gran Canaria, marzo de 2026 | Esquivar maletas hasta la puerta 26, la cola del baño, grabar el «temón», encontrarla a oscuras con su flash (escena de cine la primera vez) y el concierto con el minijuego de ritmo. | Billetes al Carnaval de Tenerife |
+| 5 | **MotoTrip4life** · Costa Brava, del 30 de abril al 4 de mayo de 2026 | La mochila (solo lo de la lista de Gas) y la carretera de la costa hasta Cap de Creus inclinándose en las curvas, con tres fotos. | — |
+| 6 | **Sant Joan** · Ciutadella, junio de 2026 | Avellanes y toques de suerte a los caballos, buscar a Gas por Ses Voltes siguiendo sus ubicaciones y mandarle la foto exacta con el obelisco. | — |
+| 7 | **Cena a escondidas** · Sa Farola, 13 de julio de 2026 | Seguirle en el radar, vigilar a los padres, cocinar la carbonara (sin nata), cenar antes de las 22:50 y el WhatsApp de las 23:49. | — |
+| 8 | **El eclipse** · Ciutadella, 12 de agosto de 2026 | La moto perdida en el parking, el kayak que nunca pasó, conocer a los padres, aparcar marcha atrás, La Princesa en la roca y la totalidad con corona y anillo de diamante (escena de cine). | — |
+| 9 | **Un año después** · Ferreries, 25 de agosto de 2026 | Otra vez el jaleo, ahora juntos, buscándole por sus ubicaciones. Después, el crucigrama de Gas (las letras marcadas dicen TE QUIERO) y la carta. | — |
+| 💌 | **La carta** | Escena de noche sobre el mar con las fotos flotando; la carta aparece párrafo a párrafo, escrita a mano, y acaba con fuegos. Se puede leer entera. | — |
 
 ## Cómo se ve y se juega
+- Estilo pintado (`src/core/paint.ts` y `src/core/post.ts`): luz en franjas suaves, sombras de color en vez de negras, pinceladas en las superficies, perfil de luz en los personajes, filtro de óleo solo en el fondo lejano, tinta en las siluetas y grano de papel. Cielos de acuarela con nubes pintadas; las noches, azul ultramar. Cada capítulo tiene su paleta (y el de Fito cambia de día a noche al pasar de Barajas al estadio). `?estilo=antes` lo quita para comparar.
+- Escenas de cine (`src/core/cinema.ts`): planos con travelling, cámara lenta, enfoque y bandas negras para la mirada en Ferreries, el camping en el que nace Gas, el flash en Fito, la totalidad del eclipse y la carta final. Durante las escenas se esconden los mandos.
+- Movimiento: salto más alto si se mantiene el botón, acelerón al correr recto un rato (con polvo a los pies y la cámara abriendo el plano), polvo al aterrizar y al girar en seco, cámara que se adelanta hacia donde vas, y una columna de luz sobre el objetivo que asoma por encima de los tejados.
+- El público no son clones: cada persona tiene sus colores de pelo, ropa y piel y su altura (en el shader, sin coste).
+- Memoria: al salir de cada capítulo se liberan sombras, luz de entorno, esqueletos y texturas de los shaders, para poder rejugar sin que el móvil se quede sin memoria.
 - Postproceso de cine (`src/core/post.ts`, con `postprocessing` y N8AO): oclusión ambiental a media resolución, bloom, tono AgX y un etalonaje por capítulo (sombras frías, luces cálidas). En los diálogos, bandas negras, un leve acercamiento y el fondo desenfocado enfocando a quien habla. Si el móvil no llega, primero se quita la oclusión y luego el resto.
 - Sensación en los aciertos (`src/core/juice.ts`): cada sonido de premio dispara su efecto (micro-pausa, golpe de zoom, destello, aberración cromática en los golpes y vibración).
 - Audio: la melodía de cada canción se armoniza sola (acorde por compás) con colchón, bajo, batería, reverb y eco. Ambiente de fondo por capítulo: plaza en Ferreries, grillos de noche, viento en la carretera, mar en la costa.
@@ -41,7 +51,7 @@ Fotos del chat: al acabar cada capítulo caen sus polaroids («Recuerdo desbloqu
 - Los coches son compactos de cinco puertas hechos con piezas (el de Azul, un Ford Focus gris).
 
 ## Modo prueba
-Abrir el enlace añadiendo `#test` al final. Todo está desbloqueado, hay un botón amarillo 🛠 Prueba para saltar a cualquier fase o completar el capítulo, un contador de fps y un botón para borrar el progreso guardado.
+Abrir el enlace añadiendo `#test` al final. Todo está desbloqueado, hay un botón amarillo 🛠 Prueba para saltar a cualquier fase o completar el capítulo, un contador de fps y un botón para borrar el progreso guardado. Desde la consola, `__dbg` permite ir a un capítulo (`go(n)`), saltar de fase (`phase('2 ·')`), pasar diálogos (`skip()`), capturar el lienzo a resolución real (`view()`) y mantener vivo el bucle con la pestaña en segundo plano (`keepAlive(true)`).
 
 ## Cómo se cambia
 - Regalos: `src/data/gifts.ts`

@@ -15,7 +15,8 @@ import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
 import { buildSurroundings, collidersBox } from './surround';
 import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
-import { clock, type Level, type LevelDone, disposeObj } from './level';
+import { clock, type Level, type LevelDone, disposeScene } from './level';
+import { beacon } from '../core/beacon';
 
 /** La víspera, solo lo bonito: que viene a las 10.45 y el «Te quiero» (Marc pidió recortar el resto). */
 const LA_NOCHE = {
@@ -193,7 +194,6 @@ export class LevelSantJoan implements Level {
     this.camera.position.set(START.x + 7, 4, 0);
     this.updateHud();
     audio.startMusic('jaleo');
-    audio.ambience(0.15);
     later(() => {
       if (this.phase !== 'intro') return;
       const ex = CHATS.dimeExacto;
@@ -685,7 +685,11 @@ export class LevelSantJoan implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 4 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 4 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     this.mapT -= dt;
     if (this.mapT <= 0) {
@@ -901,6 +905,6 @@ export class LevelSantJoan implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

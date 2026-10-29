@@ -14,7 +14,9 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { hud, dialogue, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
 import { embrace, hugFor, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
-import { clock, type Level, type LevelDone, disposeObj } from './level';
+import { clock, type Level, type LevelDone, disposeScene } from './level';
+import { cinema, headOf, rel } from '../core/cinema';
+import { beacon } from '../core/beacon';
 
 // Nivel 1 · Jaleo d'ases (Ferreries), con todos los textos en menorquín.
 // Bucle: hablar con Tòfol → 3 pomadas + 3 caricias a los ases esquivando sus empujones → volver a Tòfol →
@@ -122,6 +124,8 @@ export class Level1 implements Level {
   private marcTo: THREE.Vector3 | null = null;
   private barT = 0;
   private eyesT = 0;
+  private eyesFrom = 0;
+  private eyesTo = 0;
   private pairT = 0;
   private kissT = 0;
   private kiss: Embrace | null = null;
@@ -628,11 +632,12 @@ export class Level1 implements Level {
   }
 
   update(dt: number) {
-    // La primera mirada: el mundo va a cámara lenta
+    // La primera mirada: la cámara y la cámara lenta las lleva la escena de cine (ver meetMarc).
+    // Ella, que bailaba con Carme, se gira hacia él
     if (this.stage === 'eyes') {
       this.eyesT += dt;
-      this.eyesCamera(dt);
-      dt *= 0.2;
+      const d = this.eyesTo - this.eyesFrom;
+      this.walker.facing = this.eyesFrom + Math.atan2(Math.sin(d), Math.cos(d)) * Math.min(1, this.eyesT / 0.7);
     }
     this.t += dt;
     const ending = this.stage === 'ending' || this.stage === 'done';
@@ -840,7 +845,11 @@ export class Level1 implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 3 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 3 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     // Final: la pareja baila, confeti y la cámara gira alrededor
     if (this.stage === 'ending') {
@@ -974,12 +983,25 @@ export class Level1 implements Level {
     dialogue(this.T.marcMeet, () => {
       this.stage = 'eyes';
       this.eyesT = 0;
+      this.eyesTo = this.walker.facing;
+      this.eyesFrom = this.walker.facing + 1.3;
       this.updateHud();
-      dialogue(M.eyes, () => {
+      const az = () => headOf(this.player);
+      const mc = () => headOf(this.marc);
+      cinema.play([
+        // Por encima del hombro de Marc: ella se gira y todo va a cámara lenta
+        { dur: 2.4, slow: 0.3, pos: () => rel(mc(), az(), 0.85, 0.32, 0.08), pos2: () => rel(mc(), az(), 0.6, 0.28, 0.05), look: az, focus: az, at: () => audio.whoosh() },
+        // Sus ojos, cada vez más cerca
+        { dur: 3, slow: 0.12, pos: () => rel(az(), mc(), -1.1, 0.12, 0.02), pos2: () => rel(az(), mc(), -0.5, 0.06, 0), look: az, fov: 45, fov2: 32, focus: az, at: () => audio.chime(2) },
+        // Contraplano: la cara de él, hasta que pasa su frase
+        { dur: Infinity, slow: 0.2, move: 3, pos: () => rel(mc(), az(), -0.9, -0.2, 0.02), pos2: () => rel(mc(), az(), -0.7, -0.18, 0.02), look: mc, fov: 40, focus: mc },
+      ]);
+      later(() => dialogue(M.eyes, () => {
+        cinema.stop();
         this.stage = 'meet';
         this.updateHud();
         dialogue([...M.name, ...this.T.smallTalk, ...M.dance], toDance);
-      });
+      }), 5400);
     });
   }
 
@@ -1121,19 +1143,6 @@ export class Level1 implements Level {
     }
   }
 
-  private eyesCamera(dt: number) {
-    const head = this.player.rig?.bones.get('Head');
-    const eye = head ? head.getWorldPosition(this.v2) : this.v2.copy(this.player.root.position).setY(1.55);
-    eye.y += 0.06;
-    const mp = this.marc.root.position;
-    const dx = eye.x - mp.x, dz = eye.z - mp.z, l = Math.hypot(dx, dz) || 1;
-    const k = Math.min(1, this.eyesT / 3);
-    const back = THREE.MathUtils.lerp(1.3, 0.45, k * k * (3 - 2 * k));
-    const target = this.v1.set(eye.x - (dx / l) * back + (dz / l) * 0.18, eye.y + 0.02, eye.z - (dz / l) * back - (dx / l) * 0.18);
-    this.camera.position.lerp(target, Math.min(1, dt * 4));
-    this.camera.lookAt(eye);
-  }
-
   /** Plano de perfil de la pareja, que se acerca poco a poco durante el beso. */
   private kissCamera(dt: number) {
     const pp = this.player.root.position, mp = this.marc.root.position;
@@ -1225,6 +1234,6 @@ export class Level1 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

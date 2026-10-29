@@ -16,7 +16,10 @@ import { CHATS } from '../data/chats';
 import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
-import { disposeObj } from './level';
+import { disposeScene } from './level';
+import { cinema, headOf, rel } from '../core/cinema';
+import { juice } from '../core/juice';
+import { beacon } from '../core/beacon';
 
 // Capítulo 4 · Fito en Gran Canaria.
 // Aeropuerto (Azul esquiva maletas camino de la puerta 26, asiento 26D «pasillo») → en el estadio juegas con Gas, que tiene que ir al baño una y
@@ -503,7 +506,6 @@ export class Level3 implements Level {
     this.camera.position.set(0, 5, -27);
     this.updateHud();
     audio.startMusic('road');
-    audio.ambience(0.12);
     this.busy = true;
     this.buildAirport();
     this.startAirport();
@@ -522,6 +524,11 @@ export class Level3 implements Level {
 
   get threeScene() {
     return this.scene;
+  }
+
+  /** Barajas es de día (y está lejos del estadio, en x > 100); todo lo demás, de noche. */
+  get mood(): 'day' | 'night' {
+    return this.player.root.position.x > 100 ? 'day' : 'night';
   }
 
   // ---------------- Aeropuerto ----------------
@@ -935,7 +942,14 @@ export class Level3 implements Level {
     // Focos (conos aditivos que barren el público)
     const spotGeo = new THREE.ConeGeometry(2.4, 14, 16, 1, true).translate(0, -7, 0);
     [-10, -5, 0, 5, 10].forEach((x, i) => {
-      const mesh = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      const beam = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      // Haz de luz, no cono macizo: se enciende donde pega (el escenario, el público) y se deshace hacia el foco
+      Object.assign(beam, { defines: { USE_UV: '' } });
+      beam.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', 'float toLamp = vUv.y;\ndiffuseColor.a *= ( 1.0 - smoothstep( 0.15, 1.0, toLamp ) ) * smoothstep( 0.0, 0.06, toLamp );\n#include <opaque_fragment>');
+      };
+      beam.customProgramCacheKey = () => 'beam';
+      const mesh = new THREE.Mesh(spotGeo, beam);
       mesh.position.set(x, 10.8, 30.4);
       sc.add(mesh);
       this.spots.push({ mesh, ph: i * 1.3 });
@@ -1601,7 +1615,35 @@ export class Level3 implements Level {
     this.fx.burst(ap.clone().lerp(pp, 0.5).setY(2.3), '❤️', 3, 0.8, 0.6);
     hugFor(this.azul, this.player, 2.6);
     const lines = [...T_FOUND()[Math.min(this.trip - 1, 2)], ...(this.trip === 1 && this.smokeThrown ? [CONCERT.gasSmoke] : [])];
-    dialogue(lines, () => {
+    // La primera vez, escena de cine: el flash entre miles de personas a oscuras, ella con el móvil
+    // en alto y la cámara dando la vuelta al abrazo. Las siguientes, directamente el abrazo
+    const az = () => headOf(this.azul);
+    const gs = () => headOf(this.player);
+    const mid = () => az().lerp(gs(), 0.5).setY(1.45);
+    let orbit0 = -1;
+    const around = () => {
+      if (orbit0 < 0) orbit0 = performance.now();
+      const a = Math.atan2(pp.x - ap.x, pp.z - ap.z) + Math.PI / 2 + ((performance.now() - orbit0) / 1000) * 0.3;
+      return mid().add(new THREE.Vector3(Math.sin(a) * 2.6, 0.35, Math.cos(a) * 2.6));
+    };
+    const flash = (on: boolean) => {
+      this.flashLight.position.set(ap.x, 2.3, ap.z);
+      this.flashLight.intensity = on ? 90 : 0;
+      this.flashSprite.position.set(ap.x + 0.25, 2.25, ap.z + 0.2);
+      (this.flashSprite.material as THREE.SpriteMaterial).opacity = on ? 1 : 0;
+    };
+    const first = this.trip === 1;
+    if (first)
+      cinema.play([
+        // Desde detrás de Gas: entre la gente, a oscuras, se enciende un flash
+        { dur: 1.8, slow: 0.25, pos: () => rel(gs(), az(), 1.1, 0.4, 0.2), pos2: () => rel(gs(), az(), 0.8, 0.3, 0.15), look: az, fov: 38, focus: az, at: () => { flash(true); audio.pop(); juice.fx?.flashScreen(0xffffff, 0.55); } },
+        // Ella, con el móvil en alto
+        { dur: 2.2, slow: 0.35, pos: () => rel(az(), gs(), -0.95, 0.8, 0.05), pos2: () => rel(az(), gs(), -0.7, 0.55, 0.02), look: az, fov: 42, focus: az, at: () => flash(true) },
+        // El abrazo: la cámara les da la vuelta mientras dura la conversación
+        { dur: Infinity, slow: 1, pos: around, look: mid, fov: 50, focus: mid, at: () => { flash(false); audio.cheer(0.4); } },
+      ]);
+    later(() => dialogue(lines, () => {
+      if (first) cinema.stop();
       if (this.trip >= TRIPS) {
         this.startRhythm();
         return;
@@ -1614,7 +1656,7 @@ export class Level3 implements Level {
         this.phase = 'toWc';
         this.updateHud();
       }), 900);
-    });
+    }), first ? 4000 : 0);
   }
 
   private updateHud() {
@@ -1855,7 +1897,11 @@ export class Level3 implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 3 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 3 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     // Final
     if (this.phase === 'ending') {
@@ -1998,6 +2044,6 @@ export class Level3 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

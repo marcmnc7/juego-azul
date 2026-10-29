@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Box2 } from '../world/ferreries';
 import { physFor } from './phys';
 import { airOf, type AirState } from './air';
+import { dust } from './dust';
 
 // Movimiento en tercera persona relativo a la cámara, con colisión círculo-contra-cajas,
 // empujones, y una cámara que se coloca sola detrás al andar y se acerca si hay una pared.
@@ -31,16 +32,29 @@ const ACCEL = 16; // m/s² arrancando (≈0,35 s hasta correr)
 const BRAKE = 24; // m/s² frenando o cambiando de sentido
 const STUMBLE_DECEL = 8; // m/s² mientras te recuperas de un empujón
 const STRIDE = 0.53; // metros por radián de ciclo de paso (una zancada ≈ 1,65 m)
-// Salto: gravedad algo mayor que la real (en pantalla se siente más natural) y ≈ 0,55 m de altura
+// Salto: gravedad algo mayor que la real (en pantalla se siente más natural) y ≈ 0,55 m de altura si
+// se mantiene el botón. Soltarlo pronto corta el salto (salto corto) y la caída es más rápida que la
+// subida: así el salto responde y no flota.
 const GRAVITY = 13;
 const JUMP_V = 3.8;
+const CUT_GRAVITY = 2.4; // ×gravedad subiendo con el botón suelto
+const FALL_GRAVITY = 1.55; // ×gravedad cayendo
+// Acelerón: con el joystick a fondo y recto un rato, se corre algo más (y se nota en la cámara)
+const SPRINT_AFTER = 1.0; // segundos a fondo antes de acelerar
+const SPRINT = 1.24;
 
 let jumpQueued = false;
 let jumpAt = 0;
+let jumpHeld = false;
 /** Botón o tecla de saltar: vale durante un instante (si se pulsa justo antes de tocar el suelo, salta igual). */
 export function requestJump() {
   jumpQueued = true;
+  jumpHeld = true;
   jumpAt = performance.now();
+}
+/** Se suelta el botón de saltar: si aún sube, el salto se queda corto. */
+export function releaseJump() {
+  jumpHeld = false;
 }
 /** Momento (performance.now) en que algún Walker se movió por última vez: para enseñar el botón de saltar. */
 export let walkerActiveAt = -1e9;
@@ -90,9 +104,20 @@ export class Walker implements AirState {
   private camD = -1;
   private baseFov = 0;
   private shakeT = 0;
+  /** Acelerón: tiempo con el joystick a fondo y multiplicador actual de velocidad (1 = normal). */
+  private fullT = 0;
+  boost = 1;
+  private dustT = 0;
 
   constructor(public pos: THREE.Vector3) {
     this.baseY = pos.y;
+    airOf.set(pos, this);
+  }
+
+  /** Pasa a mover otro cuerpo (p. ej. cuando se cambia el modelo del personaje por otro con otra ropa). */
+  attach(pos: THREE.Vector3) {
+    this.pos = pos;
+    this.baseY = pos.y - this.hop;
     airOf.set(pos, this);
   }
 
@@ -173,15 +198,36 @@ export class Walker implements AirState {
       const off = Math.abs(wrap(want - this.facing));
       const turnPenalty = 0.3 + 0.7 * Math.max(0, Math.cos(Math.min(Math.PI / 2, off * 1.2)));
       const len = Math.hypot(mx, mz) || 1;
-      tx = (mx / len) * this.speed * mag * turnPenalty;
-      tz = (mz / len) * this.speed * mag * turnPenalty;
+      // Acelerón: a fondo, recto y en tierra firme durante un rato
+      const flat = mag > 0.92 && turnPenalty > 0.85 && this.traction >= 1 && this.stumble <= 0;
+      this.fullT = flat ? this.fullT + dt : 0;
+      const wantBoost = this.fullT > SPRINT_AFTER ? SPRINT : 1;
+      if (wantBoost > 1 && this.boost < 1.02) dust.puff(p.x, p.y, p.z, 7, 0.6);
+      this.boost += (wantBoost - this.boost) * Math.min(1, dt * (wantBoost > this.boost ? 2.5 : 6));
+      tx = (mx / len) * this.speed * this.boost * mag * turnPenalty;
+      tz = (mz / len) * this.speed * this.boost * mag * turnPenalty;
+      // Girar en seco corriendo levanta polvo
+      if (turnPenalty < 0.6 && spd > 3.2 && !this.airborne && this.traction >= 1 && this.dustT <= 0) {
+        dust.puff(p.x, p.y, p.z, 3, 0.4);
+        this.dustT = 0.15;
+      }
       // La cámara se recoloca sola detrás, salvo si se camina hacia ella
       this.manualCam -= dt;
       // (más rápido cuanto más corres, y nada en el primer instante para que girar sobre sí no maree)
       if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * (0.6 + 1.6 * Math.min(1, spd / this.speed)) * mag);
     }
+    else {
+      this.fullT = 0;
+      this.boost += (1 - this.boost) * Math.min(1, dt * 6);
+    }
     this.turnRate = wrap(this.facing - prevFacing) / dt;
     this.wish.set(tx, tz);
+    // Al correr con acelerón, una estela de polvo a los pies
+    this.dustT -= dt;
+    if (this.boost > 1.1 && !this.airborne && this.dustT <= 0 && this.traction >= 1) {
+      dust.puff(p.x, p.y, p.z, 2, 0.3);
+      this.dustT = 0.16;
+    }
 
     // Aceleración limitada: arrancar cuesta un poco más que frenar
     const dx = tx - v.x;
@@ -289,7 +335,7 @@ export class Walker implements AirState {
     const grounded = this.hop <= 0.001;
     this.coyote = grounded ? 0.1 : this.coyote - dt;
     // Se guarda hasta el siguiente fotograma (aunque el móvil vaya lento), pero no más de un segundo
-    const fresh = jumpQueued && performance.now() - jumpAt < 1000;
+    const fresh = jumpQueued && performance.now() - jumpAt < 180;
     if (!fresh) jumpQueued = false;
     if (fresh && this.coyote > 0 && this.canJump && this.traction >= 1 && this.stumble <= 0) {
       jumpQueued = false;
@@ -297,12 +343,14 @@ export class Walker implements AirState {
       this.coyote = 0;
     }
     if (this.vy !== 0 || this.hop > 0) {
-      this.vy -= GRAVITY * dt;
+      const g = this.vy < 0 ? FALL_GRAVITY : jumpHeld ? 1 : CUT_GRAVITY;
+      this.vy -= GRAVITY * g * dt;
       this.hop += this.vy * dt;
       if (this.hop <= 0) {
         if (this.vy < -2) {
           this.land = Math.min(1, -this.vy / 5);
           if (this.vy < -3.5) this.shake(0.1);
+          dust.puff(p.x, this.baseY, p.z, 5 + Math.round(this.land * 6), this.land);
         }
         this.hop = 0;
         this.vy = 0;
@@ -348,7 +396,9 @@ export class Walker implements AirState {
     // si una pared la acerca, sube solo un poco para no acabar mirando desde arriba
     this.camPos.set(p.x + sx * d, baseY + h + (dist - d) * 0.15, p.z + sz * d);
     // Al saltar, la mirada sube solo un poco: la cámara acompaña sin dar botes
-    this.camLook.set(p.x - sx * 1.5, baseY + 1.3 + this.hop * 0.35, p.z - sz * 1.5);
+    // La mirada se adelanta un poco hacia donde vas (se ve lo que viene) y baja un pelín al aterrizar
+    const v = this.velocity;
+    this.camLook.set(p.x - sx * 1.5 + v.x * 0.16, baseY + 1.3 + this.hop * 0.35 - this.land * 0.12, p.z - sz * 1.5 + v.z * 0.16);
     if (!this.camInit || cam.position.distanceToSquared(this.camPos) > 400) {
       // Primera vez o teletransporte: sin muelle
       this.camInit = true;
@@ -385,7 +435,7 @@ export class Walker implements AirState {
     const pc = cam as THREE.PerspectiveCamera;
     if (pc.isPerspectiveCamera) {
       if (!this.baseFov) this.baseFov = pc.fov;
-      const fov = (pc.userData.baseFov ?? this.baseFov) + run * 3;
+      const fov = (pc.userData.baseFov ?? this.baseFov) + run * 3 + (this.boost - 1) * 26;
       if (Math.abs(pc.fov - fov) > 0.05) {
         pc.fov += (fov - pc.fov) * Math.min(1, k * 3);
         pc.updateProjectionMatrix();

@@ -193,7 +193,8 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
 
   // Jinete (caixer): frac negro, pantalón blanco, botas y bombín
   const rider = makeRigPerson({ skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }, 1, new THREE.Object3D());
-  rider.root.position.set(0, back + 0.04 - rider.rig!.hipsHeight, -0.05);
+  // La cadera unos centímetros por encima de la manta (a +0,04 quedaba a ras y se hundía en el lomo)
+  rider.root.position.set(0, back + 0.11 - rider.rig!.hipsHeight, -0.05);
   inner.add(rider.root);
   rider.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
   rider.legL.rotation.set(-1.25, 0, -0.38);

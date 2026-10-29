@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildSurroundings, collidersBox } from './surround';
 import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
+import { paintStyle } from '../core/paint';
 import dayHdr from '../assets/env/quarry.hdr';
 import { FerreriesHD } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
@@ -287,16 +288,18 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const r = rand(42);
 
   // El jaleo d'ases es el día de Sant Bartomeuet (25 de agosto) a las 11 de la mañana: sol alto de verano
-  scene.fog = new THREE.Fog(0xcfe0ee, 70, 180);
+  scene.fog = new THREE.Fog(paintStyle.value > 0 ? 0xe9e6dc : 0xcfe0ee, 70, 180);
   const hd = hdSurfaces.value > 0;
+  // Estilo pintado: cielo de acuarela (azul intenso arriba, horizonte cálido) con cúmulos pintados
+  const painted = paintStyle.value > 0;
   const sky = new Sky({
-    top: 0x2f72c4,
-    mid: 0x86bff0,
-    bottom: 0xdbeaf5,
+    top: painted ? 0x2a6fd0 : 0x2f72c4,
+    mid: painted ? 0x7fbdf2 : 0x86bff0,
+    bottom: painted ? 0xf6ead2 : 0xdbeaf5,
     sun: { color: 0xfff4dc, dir: MORNING_DIR, size: 70 },
-    clouds: { count: 6, tint: 0xffffff },
+    clouds: painted ? { count: 11, tint: 0xffffff, painted: true } : { count: 6, tint: 0xffffff },
     // Calidad de la prueba: cielo físico (dispersión atmosférica) y luz de un día despejado (HDRI)
-    ...(hd ? { physical: { sunDir: MORNING_DIR, turbidity: 3, rayleigh: 1.4 } } : {}),
+    ...(hd && !painted ? { physical: { sunDir: MORNING_DIR, turbidity: 3, rayleigh: 1.4 } } : {}),
   });
   group.add(sky.group);
   if (hd) scene.userData.hdri = { url: dayHdr, intensity: 1.0, sunDir: MORNING_DIR, hemi: 0.35 };

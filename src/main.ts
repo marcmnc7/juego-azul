@@ -2,7 +2,9 @@ import { audio, type Bed } from './core/audio';
 import * as THREE from 'three';
 import './ui/style.css';
 import { Input } from './core/input';
-import { requestJump, walkerActiveAt, lastBounds } from './core/walker';
+import { requestJump, releaseJump, walkerActiveAt, lastBounds } from './core/walker';
+import { dust } from './core/dust';
+import { beacon } from './core/beacon';
 import { physLists } from './core/phys';
 import { load, save } from './core/save';
 import { giftForLevel } from './data/gifts';
@@ -15,6 +17,7 @@ import { LevelCena } from './world/levelCena';
 import { LevelMoto } from './world/levelMoto';
 import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
+import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
 import { applyEnvironment, applyShadows, hdSurfaces, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
@@ -26,8 +29,10 @@ import { preloadHdri } from './core/assets';
 import { hdEnvDefault } from './core/gfx';
 import sunsetHdr from './assets/env/venice_sunset.hdr';
 import quarryHdr from './assets/env/quarry.hdr';
-import { Post, GRADES, NEUTRAL } from './core/post';
+import { Post, GRADES, NEUTRAL, type Grade } from './core/post';
+import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
+import { cinema } from './core/cinema';
 import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -181,9 +186,14 @@ jumpBtn.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   requestJump();
 });
+// Soltar pronto = salto corto; mantener = salto entero
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) jumpBtn.addEventListener(ev, () => releaseJump());
 uiRoot.append(jumpBtn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyJ' && !e.repeat) requestJump();
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'KeyJ') releaseJump();
 });
 let data = load();
 
@@ -247,6 +257,7 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 const mapOpts = {
   test: TEST,
   onPlay: (n: number) => startLevel(n),
+  onLetter: () => startLetter(),
   onReset: () => {
     data = { version: data.version, levelsDone: [], giftsUnlocked: [] };
     save(data);
@@ -254,7 +265,11 @@ const mapOpts = {
   },
 };
 
-function goMap() {
+/** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo, panel de prueba y botón de saltar. */
+function leaveLevel() {
+  cinema.stop();
+  beacon.at(null);
+  uiRoot.classList.remove('filming');
   closeDebug?.();
   closeDebug = null;
   closeDialogue();
@@ -264,10 +279,29 @@ function goMap() {
     level = null;
   }
   clearRigPeople();
-  audio.bed('none');
-  setHd(false);
+  jumpBtn.hidden = true;
   input.reset();
   input.enabled = true;
+}
+
+/** La carta final, como escena: de noche sobre el mar, con las fotos flotando y la carta a mano. */
+function startLetter() {
+  leaveLevel();
+  clearScreens();
+  audio.bed('none');
+  setHd(true, 2); // la luz pintada de noche
+  const me = new LetterScene(camera, goMap, () => finalLetter(() => clearScreens()));
+  level = me;
+  applyShadows(me.threeScene);
+  if (paintStyle.value) paintScene(me.threeScene);
+  levelAt = performance.now();
+  if (TEST) closeDebug = debugPanel(me.debug());
+}
+
+function goMap() {
+  leaveLevel();
+  audio.bed('none');
+  setHd(false);
   mapScreen(data, mapOpts);
 }
 
@@ -292,16 +326,60 @@ const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan,
 const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // De día, la luz ambiente sale del cielo de la prueba (quarry_01); de noche, del cielo de cada escena
 const HD_DAY_CHAPTERS = [3, 5, 6, 8];
+// Estilo pintado en todos los capítulos. ?estilo=antes lo quita para comparar con el aspecto anterior
+const ESTILO = new URLSearchParams(location.search).get('estilo');
+const PAINT_CHAPTERS = ESTILO === 'antes' ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+/** Luz pintada de cada capítulo: tinte de las sombras, de lo que da el sol (o la luna) y del perfil de los personajes. */
+const PAINT_LIGHT: Record<number, [number, number, number]> = {
+  1: [0xc9c8f2, 0xfff0d4, 0xfff3cf], // Ferreries a las 11: sombras lavanda, sol de mediodía
+  2: [0xb6bae6, 0xfff4e6, 0xa9c4ff], // La piscinita: noche azul, luz de luna en el perfil
+  3: [0xc4cbe8, 0xfff2dc, 0xfff3d6], // Carretera al norte en octubre
+  4: [0xa89cf0, 0xfff0f6, 0xffc0e8], // Fito: noche de neón rosa
+  5: [0xc8b8e8, 0xffe6c4, 0xffe0b0], // Costa Brava a la hora dorada
+  6: [0xc9c8f2, 0xfff0d4, 0xfff3cf], // Sant Joan, de día
+  7: [0xb6bae6, 0xfff1e0, 0xb0c4ff], // Cena a escondidas, de noche
+  8: [0xc0b0e6, 0xffdcb4, 0xffd2a0], // El eclipse, sol bajo sobre el mar
+  9: [0xc9c8f2, 0xfff0d4, 0xfff3cf],
+};
+const NIGHT_CHAPTERS = [2, 4, 7];
+/** Etalonaje pintado: el de cada capítulo, más vivo, con filtro de óleo en el fondo, tinta y papel. */
+function paintGrade(n: number): Grade {
+  const base = GRADES[n] ?? NEUTRAL;
+  const night = NIGHT_CHAPTERS.includes(n);
+  if (n === 1 || n === 9) return { ...base, exposure: 1.06, saturation: 1.2, contrast: 1.02, tint: 0.12, bloom: 0.35, vignette: 0.22, paint: 0.7, ink: 0.9, paper: 0.03, lift: 0.035 };
+  return { ...base, saturation: base.saturation * 1.07, contrast: Math.min(base.contrast, 1.04), paint: night ? 0.3 : 0.7, ink: night ? 0.7 : 0.9, paper: 0.03, lift: night ? 0.025 : 0.035 };
+}
+/**
+ * Luz y etalonaje del capítulo. Un capítulo de noche con un rato de día (Barajas, en el de Fito) toma
+ * para ese rato los del viaje por el norte.
+ */
+function applyLook(n: number, paint: boolean, mood?: 'day' | 'night') {
+  const k = mood === 'day' && NIGHT_CHAPTERS.includes(n) ? 3 : n;
+  const pl = PAINT_LIGHT[k] ?? [0xc6c6ee, 0xffefd8, 0xfff2cc];
+  paintPalette.shadow.setHex(pl[0]);
+  paintPalette.light.setHex(pl[1]);
+  paintPalette.rim.setHex(pl[2]);
+  post.setGrade(paint ? paintGrade(k) : GRADES[k] ?? NEUTRAL, true);
+}
+let lookN = 0;
+let lookMood: 'day' | 'night' | undefined;
 function setHd(on: boolean, n = 0) {
+  const paint = on && PAINT_CHAPTERS.includes(n);
+  paintStyle.value = paint ? 1 : 0;
+  lookN = n;
+  lookMood = undefined;
   hdSurfaces.value = on ? 1 : 0;
   hdEnvDefault.url = on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
-  renderer.toneMapping = on ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = on ? 1.05 : 0.92;
-  post.setGrade(on ? GRADES[n] ?? NEUTRAL : NEUTRAL, true);
+  // AgX apaga los colores: el pintado va con ACES, más vivo
+  renderer.toneMapping = on && !paint ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = paint ? 0.98 : on ? 1.05 : 0.92;
+  if (on) applyLook(n, paint);
+  else post.setGrade(NEUTRAL, true);
 }
 
-// Ambiente sonoro de fondo de cada capítulo
-const BEDS: Record<number, Bed> = { 1: 'plaza', 9: 'plaza', 2: 'night', 3: 'wind', 5: 'sea', 7: 'night', 8: 'sea' };
+// Ambiente sonoro de fondo: casi todo fuera (Marc pondrá canciones). Solo queda el mar suave del eclipse;
+// el público del concierto de Fito lo pone el propio capítulo
+const BEDS: Record<number, Bed> = { 8: 'sea' };
 
 function startLevel(n: number) {
   // Los capítulos con personajes glTF esperan a que estén cargados (suele ser al instante)
@@ -309,12 +387,9 @@ function startLevel(n: number) {
     void rigLoading.then(() => startLevel(n));
     return;
   }
-  clearRigPeople();
+  // Desde el modo prueba se puede saltar de un capítulo a otro sin pasar por el mapa
+  leaveLevel();
   clearScreens();
-  closeDialogue();
-  newEpoch();
-  input.reset();
-  input.enabled = true;
   tryFullscreen();
   audio.bed(BEDS[n] ?? 'none');
   // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
@@ -340,7 +415,7 @@ function buildLevel(n: number, ready: () => void) {
           level.dispose();
           level = null;
         }
-        crossword(() => finalLetter(goMap), goMap);
+        crossword(startLetter, goMap);
       } else goMap();
     };
     // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
@@ -353,6 +428,7 @@ function buildLevel(n: number, ready: () => void) {
   setHd(HD_CHAPTERS.includes(n), n);
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
+  if (paintStyle.value) paintScene(level.threeScene);
   applyShadows(level.threeScene);
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(level.debug());
@@ -384,7 +460,61 @@ let avg = 16;
 let lastAdjust = 0;
 const stats = TEST ? document.createElement('div') : null;
 // Modo prueba: acceso desde la consola para revisar colisiones
-if (TEST) Object.assign(window, { __dbg: { level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice } });
+// Captura del lienzo a resolución real (las capturas de pantalla del navegador salen reducidas)
+let shotReq: ((url: string) => void) | null = null;
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Modo prueba: pasa diálogos y chats como si se tocara la pantalla. */
+async function dbgSkip(max = 30) {
+  for (let i = 0; i < max; i++) {
+    if (document.querySelector('.phone-overlay')) {
+      document.querySelector('.phone-skip')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      await wait(300);
+      document.querySelector('.phone-overlay')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      await wait(500);
+      continue;
+    }
+    const d = document.querySelector('.dialogue');
+    if (!d) return;
+    d.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await wait(150);
+    if (document.querySelector('.dialogue') === d) d.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await wait(450);
+  }
+}
+if (TEST)
+  Object.assign(window, {
+    __dbg: {
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema,
+      shot: () => new Promise<string>((r) => (shotReq = r)),
+      skip: dbgSkip,
+      /** Abre el capítulo n y pasa la introducción. */
+      go: async (n: number) => {
+        startLevel(n);
+        await wait(4500);
+        await dbgSkip();
+      },
+      /** Salta a la fase del panel de prueba que empieza por `label`. */
+      phase: async (label: string, ms = 2500) => {
+        [...document.querySelectorAll<HTMLButtonElement>('.debug-list button')].find((b) => b.textContent!.trim().startsWith(label))?.click();
+        await wait(ms);
+      },
+      /** Captura del lienzo a pantalla completa encima de todo (para revisar); unview la quita. */
+      view: async () => {
+        document.querySelector('#shotov')?.remove();
+        const img = document.createElement('img');
+        img.src = await new Promise<string>((r) => (shotReq = r));
+        img.id = 'shotov';
+        img.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;z-index:9999;background:#000;pointer-events:none';
+        document.body.append(img);
+      },
+      unview: () => document.querySelector('#shotov')?.remove(),
+      /** Con la pestaña en segundo plano el navegador para el bucle: esto lo mantiene vivo (solo pruebas). */
+      keepAlive: (on: boolean) => {
+        keepAlive = on;
+        if (on) pump.port2.postMessage(0);
+      },
+    },
+  });
 if (stats) {
   stats.className = 'stats';
   uiRoot.append(stats);
@@ -393,7 +523,26 @@ if (stats) {
 // dt suavizado: un fotograma que llega tarde (GC, carga de textura) no provoca un salto brusco,
 // pero el tiempo total se conserva para que nada vaya a cámara lenta.
 let smoothDt = 1 / 60;
+let paintedScene: THREE.Scene | null = null;
+let paintedAt = 0;
 let debt = 0;
+// Modo prueba: bucle de reserva por mensajes (no lo frena el navegador) mientras la página está oculta
+let keepAlive = false;
+let lastPump = 0;
+const pump = new MessageChannel();
+pump.port1.onmessage = () => {
+  if (!keepAlive || !document.hidden) return;
+  const now = performance.now();
+  if (now - lastPump >= 16) {
+    lastPump = now;
+    frame();
+  }
+  pump.port2.postMessage(0);
+};
+document.addEventListener('visibilitychange', () => {
+  if (keepAlive && document.hidden) pump.port2.postMessage(0);
+});
+
 function frame() {
   const raw = Math.min(clock.getDelta(), 0.1) + debt;
   const dt = Math.min(raw, Math.max(smoothDt * 1.6, 1 / 120), 1 / 12);
@@ -401,16 +550,25 @@ function frame() {
   smoothDt += (dt - smoothDt) * 0.15;
   renderer.info.reset();
   if (level) {
-    const gdt = juice.scaleDt(dt);
+    const gdt = juice.scaleDt(dt) * cinema.timeScale;
+    dust.attach(level.threeScene);
+    beacon.attach(level.threeScene);
     level.update(gdt);
+    dust.update(gdt);
     updateRigPeople(gdt);
+    // Escenas de cine: mandan sobre la cámara que haya puesto el capítulo
+    const filming = cinema.update(camera, dt);
+    if (uiRoot.classList.contains('filming') !== filming) uiRoot.classList.toggle('filming', filming);
+    // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
+    beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
     // Diálogos en modo cine: bandas, un leve acercamiento y desenfoque del fondo enfocando a quien habla
-    const talking = !!document.querySelector('.dialogue');
+    const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
     post.cinematic = cine < 0.01 ? 0 : cine;
     // Solo se desenfoca el fondo cuando habla alguien que está en escena (el narrador no)
-    const speaker = talking && lastSpeaker.at > performance.now() - 300;
-    if (speaker) post.focus.copy(lastSpeaker.pos);
+    const speaker = (talking && lastSpeaker.at > performance.now() - 300) || cinema.hasFocus;
+    if (cinema.hasFocus) post.focus.copy(cinema.focus);
+    else if (speaker) post.focus.copy(lastSpeaker.pos);
     post.dofAmount += ((speaker ? 1 : 0) - post.dofAmount) * Math.min(1, dt * 4);
     juice.apply(camera, dt, cine * 0.1);
     const showJump = performance.now() - walkerActiveAt < 250 && !talking;
@@ -422,7 +580,22 @@ function frame() {
       camera.position.set(v[0], v[1], v[2]);
       camera.lookAt(v[3], v[4], v[5]);
     }
+    // Capítulos que pasan del día a la noche: cambia la luz al cambiar de sitio
+    if (level.mood !== lookMood) {
+      lookMood = level.mood;
+      applyLook(lookN, paintStyle.value > 0, lookMood);
+    }
+    // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pinta
+    if (paintStyle.value && (level.threeScene !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
+      paintedScene = level.threeScene;
+      paintedAt = clock.elapsedTime;
+      paintScene(paintedScene);
+    }
     draw(level.threeScene, dt);
+    if (shotReq) {
+      shotReq(canvas.toDataURL('image/png'));
+      shotReq = null;
+    }
     if (shaderFailed) safeStep();
   } else {
     draw(idle, dt);

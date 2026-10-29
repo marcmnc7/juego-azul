@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { Sky, Sun, toon, vibrate } from '../core/gfx';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeScallop, animatePerson, Person } from '../entities/models';
+import { G, Merger, makePerson, makeScallop, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { canvasTex } from './deco';
 
@@ -202,7 +202,7 @@ export class Terrace {
     this.azul = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
-      p.root.position.set(sx * 0.85, -0.2, 0);
+      p.root.position.set(sx * 0.85, seatedRootY(p, 0.48), 0); // asiento de la silla a 48 cm
       p.root.rotation.y = -sx * Math.PI / 2;
       sc.add(p.root);
     }
@@ -223,11 +223,7 @@ export class Terrace {
   private sit(p: Person) {
     animatePerson(p, 0.016, 'idle');
     // Sentados de verdad: muslos en el asiento, rodillas dobladas y pies en el suelo
-    p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2;
-    p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15;
-    p.footL.rotation.x = p.footR.rotation.x = 0.15;
-    p.body.rotation.z = 0;
-    p.body.position.y = 0;
+    seatPose(p);
   }
 
   update(dt: number, camera: THREE.PerspectiveCamera) {

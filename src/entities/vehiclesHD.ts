@@ -228,7 +228,7 @@ export function makeMotoHD(color: number, rider?: PersonLook) {
     p.armL.rotation.set(-1.0, 0, -0.18);
     p.armR.rotation.set(-1.0, 0, 0.18);
     p.elbowL.rotation.x = p.elbowR.rotation.x = -0.35;
-    p.root.position.set(0, 0.84 - p.rig!.hipsHeight, -0.45);
+    p.root.position.set(0, 0.94 - p.rig!.hipsHeight, -0.45); // cadera 7 cm sobre el asiento (a 0,84 se hundía en él)
     // Casco integral con visera
     const helmet = new THREE.Group();
     add(new THREE.SphereGeometry(0.15, 24, 16), body, 0, 0.12, 0.01, 0, 0, 0, 1, 1.05, 1.08, helmet);

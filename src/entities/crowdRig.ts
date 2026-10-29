@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
-import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, type Kind } from './rig';
+import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, womanPartsTexture, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
 import womanLodUrl from '../assets/chars/woman_lod.glb';
 import manLodUrl from '../assets/chars/man_lod.glb';
@@ -261,14 +261,83 @@ function vatify(mat: THREE.Material, part: VatPart) {
   mat.customProgramCacheKey = () => 'vat';
 }
 
+// ---------- Que no sean clones ----------
+// Cada persona de la multitud lleva sus propios colores de pelo, camiseta, pantalón y piel, y su
+// altura y complexión. El modelo se tiñe de un gris neutro y cada instancia multiplica por su color
+// (en el shader), así sigue siendo una sola llamada de dibujo por pieza.
+
+const NEUTRAL = 0x9a9a9a;
+const HAIRS = [0x2b1d14, 0x3b2618, 0x5a3b22, 0x7a5434, 0x161210, 0x161210, 0xb08a52, 0xd8bb7e, 0x8a3b1e];
+// De fiesta en verano: mucho blanco (en el jaleo se va de blanco) y colores vivos
+const TOPS = [0xf6f3ec, 0xf6f3ec, 0xf6f3ec, 0xffffff, 0xe94f4f, 0x2f6fb5, 0x3fa37a, 0xf2c14e, 0xf08cae, 0x1d1d22, 0x7a5cc4, 0x9fd3e6, 0xf28f3b];
+const BOTTOMS = [0x4b6a92, 0x4b6a92, 0x8aa6c8, 0x1f1f24, 0xeeeae0, 0xb8a27a, 0x5d6b3a, 0x2d3a5a];
+const SKINS = [0xf6d7bd, 0xf0c8a6, 0xe8b894, 0xe0aa84, 0xcf9670, 0xb97c55, 0x8f5a3c];
+
+const _c = new THREE.Color();
+const _n = new THREE.Color();
+/** Lo que hay que multiplicar a un color para que quede el otro (en lineal, como el shader). */
+function ratio(to: number, from: number, out: Float32Array, i: number) {
+  _c.setHex(to);
+  _n.setHex(from);
+  out[i] = Math.min(12, _c.r / Math.max(0.004, _n.r));
+  out[i + 1] = Math.min(12, _c.g / Math.max(0.004, _n.g));
+  out[i + 2] = Math.min(12, _c.b / Math.max(0.004, _n.b));
+}
+
+/** En ella todo es una malla con una textura: la máscara de partes dice qué color lleva cada trozo. */
+function varyWoman(mat: THREE.Material, look: PersonLook) {
+  const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey;
+  const mask = womanPartsTexture(look);
+  if (!mask) return;
+  mat.onBeforeCompile = (sh, r) => {
+    prev.call(mat, sh, r);
+    sh.uniforms.crowdParts = { value: mask };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 iHair, iTop, iBot, iSkin;\nvarying vec3 vHair, vTop, vBot, vSkin;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvHair = iHair; vTop = iTop; vBot = iBot; vSkin = iSkin;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D crowdParts;\nvarying vec3 vHair, vTop, vBot, vSkin;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float cPart = floor(texture2D(crowdParts, vMapUv).r * 255.0 / 36.0 + 0.5);
+        diffuseColor.rgb *= cPart == 2.0 ? vHair : cPart == 3.0 ? vTop : cPart == 4.0 ? vBot : (cPart == 1.0 || cPart == 6.0) ? vSkin : vec3(1.0);`,
+      );
+  };
+  mat.customProgramCacheKey = () => prevKey.call(mat) + '|vary';
+}
+
 /** Gente de la multitud con modelo glTF: misma forma de usar que CrowdPeople. */
 export class RigCrowd {
   readonly group = new THREE.Group();
   private meshes: THREE.InstancedMesh[] = [];
   private anim: THREE.InstancedBufferAttribute;
+  /** Altura y anchura de cada persona. */
+  private size: Float32Array;
   constructor(look: PersonLook, count: number, dance = false) {
     const kind: Kind = look.male || look.beard || look.hairStyle === 'short' || look.hairStyle === 'cap' ? 'man' : 'woman';
     const K = kinds[kind]!;
+    // Colores de cada uno: un tercio va como lo pensó el capítulo, el resto, a su aire
+    const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+    const hair = new Float32Array(count * 3), top = new Float32Array(count * 3), bot = new Float32Array(count * 3), skin = new Float32Array(count * 3);
+    this.size = new Float32Array(count * 2);
+    for (let i = 0; i < count; i++) {
+      const own = Math.random() < 0.33;
+      ratio(own ? look.hair : pick(HAIRS), NEUTRAL, hair, i * 3);
+      ratio(own ? look.shirt : pick(TOPS), NEUTRAL, top, i * 3);
+      ratio(own ? look.pants : pick(BOTTOMS), NEUTRAL, bot, i * 3);
+      ratio(own ? look.skin : pick(SKINS), look.skin, skin, i * 3);
+      this.size[i * 2] = 0.92 + Math.random() * 0.15;
+      this.size[i * 2 + 1] = 0.93 + Math.random() * 0.14;
+    }
+    const neutral: PersonLook = { ...look, hair: NEUTRAL, shirt: NEUTRAL, pants: NEUTRAL };
+    const attrs = {
+      iHair: new THREE.InstancedBufferAttribute(hair, 3),
+      iTop: new THREE.InstancedBufferAttribute(top, 3),
+      iBot: new THREE.InstancedBufferAttribute(bot, 3),
+      iSkin: new THREE.InstancedBufferAttribute(skin, 3),
+    };
     const a = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
       const r = Math.random();
@@ -283,12 +352,22 @@ export class RigCrowd {
       for (const k in part.geo.attributes) g.setAttribute(k, part.geo.attributes[k]);
       g.setAttribute('iAnim', this.anim);
       g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.2);
-      const mat = part.name === 'Hair' ? new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.9 }) : part.base.clone();
+      const mat = part.name === 'Hair' ? new THREE.MeshStandardMaterial({ color: NEUTRAL, roughness: 0.9 }) : part.base.clone();
       // Pantalón corto: a ella se lo pinta su textura (como el mono de Margaux); a él, el shader
-      colorRigMaterial(kind, part.name, mat, look);
+      colorRigMaterial(kind, part.name, mat, neutral);
       vatify(mat, part);
       if (look.shorts && kind === 'man' && /Outfit_(Bottom|Top)/.test(part.name)) bareShader(mat, look.skin, /Bottom/.test(part.name) ? 'legs' : 'arms');
+      if (kind === 'woman') {
+        for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a);
+        varyWoman(mat, look);
+      }
       const im = new THREE.InstancedMesh(g, mat, count);
+      // Él va por piezas: cada pieza se tiñe entera con el color de esa persona
+      const tint = kind === 'man' ? (/Hair|Beard/.test(part.name) ? hair : /Outfit_Top/.test(part.name) ? top : /Outfit_Bottom/.test(part.name) && !look.shorts ? bot : /Wolf3D_(Body|Head)/.test(part.name) ? skin : null) : null;
+      if (tint) {
+        for (let i = 0; i < count; i++) im.setColorAt(i, _c.setRGB(tint[i * 3], tint[i * 3 + 1], tint[i * 3 + 2]));
+      }
+      im.userData.person = true;
       const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
       vatify(depth, part);
       im.customDepthMaterial = depth;
@@ -304,7 +383,8 @@ export class RigCrowd {
   set(i: number, x: number, z: number, q: THREE.Quaternion, p: CrowdPose, y = 0) {
     _q.copy(q).multiply(_q2.setFromAxisAngle(_Y, p.twist * 0.5)).multiply(_q2.setFromAxisAngle(_Z, p.sway * 0.5));
     _v.set(p.shift * 0.5, 0, 0).applyQuaternion(q);
-    _m.compose(_v.set(x + _v.x, y, z + _v.z), _q, _one);
+    _s.set(this.size[i * 2 + 1], this.size[i * 2], this.size[i * 2 + 1]);
+    _m.compose(_v.set(x + _v.x, y, z + _v.z), _q, _s);
     for (const im of this.meshes) im.setMatrixAt(i, _m);
   }
   commit() {
@@ -316,6 +396,6 @@ const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _v = new THREE.Vector3();
-const _one = new THREE.Vector3(1, 1, 1);
+const _s = new THREE.Vector3(1, 1, 1);
 const _Y = new THREE.Vector3(0, 1, 0);
 const _Z = new THREE.Vector3(0, 0, 1);

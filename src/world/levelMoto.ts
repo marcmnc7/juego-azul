@@ -11,7 +11,7 @@ import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
 import { packBag } from '../ui/minis';
-import { disposeObj, type Level, type LevelDone } from './level';
+import { disposeScene, type Level, type LevelDone } from './level';
 
 // Capítulo 5 · MotoTrip4life (Costa Brava, 30 de abril – 4 de mayo de 2026).
 // Bucle: el plan (chat) → la mochila con la lista real de Gas → de paquete por la carretera de la costa
@@ -93,7 +93,7 @@ export class LevelMoto implements Level {
       // Personaje glTF: sentada de verdad (piernas, brazos y cadera mandan las articulaciones),
       // abrazada a la cintura de Gas, y casco blanco pegado a la cabeza
       a.rig.force = { body: 1, legL: 1, legR: 1, armL: 1, armR: 1 };
-      a.root.position.set(0, 0.86 - a.rig.hipsHeight, -0.86);
+      a.root.position.set(0, 0.96 - a.rig.hipsHeight, -0.86); // cadera 7 cm sobre el asiento (a 0,86 se hundía en él)
       a.armL.rotation.set(-1.2, 0, 0.55);
       a.armR.rotation.set(-1.2, 0, -0.55);
       a.elbowL.rotation.x = a.elbowR.rotation.x = -0.55;
@@ -131,7 +131,6 @@ export class LevelMoto implements Level {
       dialogue(MOTO.intro, () => phoneChat(CHATS.motoPlan, () => dialogue(MOTO.packIntro, () => phoneChat(CHATS.mochila, () => this.startPack()))));
     }, 2300);
     audio.startMusic('road');
-    audio.ambience(0.05);
   }
 
   get threeScene() {
@@ -447,6 +446,11 @@ export class LevelMoto implements Level {
       pos = this.v1.set(p.x + 5 * Math.cos(this.t * 0.15), 2.6, p.z + 5 * Math.sin(this.t * 0.15) + 1);
       look = new THREE.Vector3(p.x, 1, p.z);
     }
+    // Si la moto salta lejos (modo prueba, cambio de tramo), la cámara no cruza el mapa persiguiéndola
+    if (this.camera.position.distanceTo(pos) > 60) {
+      this.camera.position.copy(pos);
+      this.camLook.copy(look);
+    }
     this.camera.position.lerp(pos, Math.min(1, dt * (this.phase === 'ride' ? 5 : 2)));
     this.camLook.lerp(look, Math.min(1, dt * 4));
     this.camera.lookAt(this.camLook);
@@ -476,6 +480,6 @@ export class LevelMoto implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

@@ -161,7 +161,7 @@ export const CONCERT = {
   barmanAgain: [{ who: 'Camarero', text: '¿Buscas sitio? Desde el pasillo del centro se ve a Fito de lujo.' }] as Line[],
   smokeFound: '🚭 Tabaco a la papelera',
   airport: [
-    { who: 'Narrador', text: 'Jueves 12 de marzo de 2026. Gas vuela desde Barcelona y Azul, desde Madrid. Destino: Gran Canaria, a ver a Fito.' },
+    { who: 'Narrador', text: 'Jueves 12 de marzo de 2026. Gas vuela desde Barcelona y tú, desde Madrid. Destino: Gran Canaria, a ver a Fito.' },
   ] as Line[],
   airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
   burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],

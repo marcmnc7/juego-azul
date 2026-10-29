@@ -6,7 +6,7 @@ import { Walker } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { CENA } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, Person, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { buildSaFarola, COAST_Z } from './saFarola';
@@ -15,7 +15,8 @@ import { hud, dialogue, toast, timingGauge, phoneChat, fadeFlash, Hud, DebugItem
 import { radar } from '../ui/minis';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
-import { disposeObj } from './level';
+import { disposeScene } from './level';
+import { beacon } from '../core/beacon';
 
 // Capítulo 6 · La cena a escondidas (13 de julio de 2026), en casa de los padres de Azul, junto a Sa Farola.
 // Es el espejo de la piscinita: aquella noche se coló Azul en casa de los padres de Gas; ahora se cuela él.
@@ -160,7 +161,6 @@ export class LevelCena implements Level {
       );
     }, 2300);
     audio.startMusic('night');
-    audio.ambience(0.03);
   }
 
   get threeScene() {
@@ -344,9 +344,9 @@ export class LevelCena implements Level {
     this.phase = 'dinner';
     this.busy = true;
     this.hud.setAction(null);
-    this.player.root.position.set(TABLE.x - 0.95, 0.05, TABLE.z);
+    this.player.root.position.set(TABLE.x - 0.95, seatedRootY(this.player, 0.48), TABLE.z);
     this.player.root.rotation.y = Math.PI / 2;
-    this.gas.root.position.set(TABLE.x + 0.95, 0.05, TABLE.z);
+    this.gas.root.position.set(TABLE.x + 0.95, seatedRootY(this.gas, 0.48), TABLE.z);
     this.gas.root.rotation.y = -Math.PI / 2;
     this.gasWalk = [];
     this.minutes = 21 * 60 + 50;
@@ -363,6 +363,8 @@ export class LevelCena implements Level {
   private gasLeaves() {
     this.phase = 'leaving';
     this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
+    // Ella también se levanta: de pie junto a su silla (si no, se quedaba a la altura de sentada)
+    this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
     this.gasWalk = [GATE.clone().setZ(8.8), GATE.clone().setZ(11.5), new THREE.Vector3(2.4, 0, STREET_Z - 1.6)];
     later(() => {
       if (this.phase !== 'leaving') return;
@@ -428,10 +430,7 @@ export class LevelCena implements Level {
 
   private sit(p: Person) {
     animatePerson(p, 0.016, 'idle');
-    p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2;
-    p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15;
-    p.footL.rotation.x = p.footR.rotation.x = 0.15;
-    p.body.position.y = 0;
+    seatPose(p);
   }
 
   private updateParents(dt: number) {
@@ -552,7 +551,11 @@ export class LevelCena implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 2 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 2 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     // Cámara
     if (free) this.walker.camera(this.camera, dt, this.colliders, 6, 3.4);
@@ -623,7 +626,7 @@ export class LevelCena implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }
 
@@ -790,7 +793,15 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.cyl, 0xf4efe2, TABLE.x, 0.76, TABLE.z, 0, 0, 0, 1.3, 0.05, 1.3);
   m.add(G.cyl, 0x5aa9e6, TABLE.x, 0.79, TABLE.z, 0, 0, 0, 1.0, 0.01, 1.0);
   m.add(G.cyl, 0x777777, TABLE.x, 0.38, TABLE.z, 0, 0, 0, 0.08, 0.76, 0.08);
-  for (const sx of [-1, 1]) m.add(G.rbox, 0x8a6a44, TABLE.x + sx * 0.95, 0.45, TABLE.z, 0, 0, 0, 0.45, 0.9, 0.45);
+  // Dos sillas de madera de verdad (asiento a 48 cm, patas y respaldo hacia fuera): antes eran bloques
+  // macizos de 90 cm y se sentaban encima, a la altura de la mesa
+  for (const sx of [-1, 1]) {
+    const cx = TABLE.x + sx * 0.95;
+    m.add(G.box, 0x8a6a44, cx, 0.46, TABLE.z, 0, 0, 0, 0.44, 0.04, 0.42);
+    for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) m.add(G.box, 0x6e5234, cx + dx, 0.23, TABLE.z + dz, 0, 0, 0, 0.035, 0.46, 0.035);
+    for (const dz of [-0.18, 0.18]) m.add(G.box, 0x6e5234, cx + sx * 0.2, 0.72, TABLE.z + dz, 0, 0, 0, 0.035, 0.55, 0.035);
+    m.add(G.box, 0x8a6a44, cx + sx * 0.2, 0.88, TABLE.z, 0, 0, 0, 0.035, 0.2, 0.4);
+  }
   for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.3, 0.82, TABLE.z, 0, 0, 0, 0.32, 0.03, 0.32); // platos
   colliders.push({ minX: TABLE.x - 1.3, maxX: TABLE.x + 1.3, minZ: TABLE.z - 0.7, maxZ: TABLE.z + 0.7 });
   for (const [x, z] of [[-4.6, 9.6], [4.6, 9.6], [4.6, 0.8]] as [number, number][]) m.add(G.cyl, 0x8a6a44, x, 1.4, z, 0, 0, 0, 0.1, 2.8, 0.1);

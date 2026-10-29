@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Fredoka:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Fredoka:wght@500;600;700&family=Caveat:wght@500;700&display=swap');
 
 /* Estilo de la interfaz: cajas de papel encalado con borde azul mar, como los menús de Pokémon,
    sobre el cielo y el mar de Menorca del propio juego. */
@@ -195,6 +195,8 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   touch-action: none; transition: transform .08s ease; z-index: 3;
 }
 .jump-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--sea); background: var(--gold); }
+/* Nunca encima del mapa, los regalos, el crucigrama, la carta o el móvil */
+#ui:has(.screen, .gift-overlay, .phone-overlay) .jump-btn { display: none; }
 .action-btn.hidden { display: none; }
 .action-btn.pulse { animation: pulse .9s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #6fe0a3, var(--green) 60%, #1f7348); }
 @keyframes pulse { 0%, 100% { box-shadow: 0 5px 0 var(--sea), 0 0 0 0 rgba(47,157,98,.55); } 50% { box-shadow: 0 5px 0 var(--sea), 0 0 0 14px rgba(47,157,98,0); transform: scale(1.05); } }
@@ -259,6 +261,14 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 /* Mensajes de WhatsApp dentro de los diálogos */
 .dialogue.wa { background: #eafbe3; }
 .dialogue.wa .who { background: #25a35a; }
+/* Móvil en horizontal: la caja del narrador tapaba un cuarto de la pantalla */
+@media (max-height: 520px) {
+  .dialogue { width: min(620px, calc(100vw - 180px)); padding: 10px 16px 8px; min-height: 0; bottom: max(10px, env(safe-area-inset-bottom)); }
+  .dialogue .text { font-size: 16px; line-height: 1.35; min-height: 0; }
+  .dialogue .who { font-size: 13px; top: -15px; }
+  .dialogue.speech { max-width: min(300px, calc(100vw - 28px)); padding: 9px 13px 13px; }
+  .dialogue.speech .text { font-size: 15px; }
+}
 
 .toast {
   position: fixed; left: 50%; top: 28%; transform: translate(-50%, -50%);
@@ -650,3 +660,41 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 
 /* Portada mientras se carga: el botón se va llenando */
 .big-btn.loading { opacity: .85; background-image: linear-gradient(90deg, rgba(255,255,255,.35) var(--p, 0%), transparent var(--p, 0%)); cursor: progress; }
+
+/* ---------- Escenas de cine ---------- */
+/* Rótulo grande (un nombre, una fecha) que aparece y se va solo */
+.cine-title {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none !important; z-index: 32; color: #fff8ec; text-align: center;
+  animation: cineTitle var(--secs, 3.2s) ease both;
+}
+.cine-big { font-family: var(--display); font-weight: 700; font-size: clamp(56px, 14vw, 128px); letter-spacing: .08em; text-shadow: 0 4px 30px rgba(255, 190, 110, .55), 0 2px 0 rgba(0,0,0,.35); }
+.cine-sub { font-family: var(--display); font-size: clamp(16px, 3vw, 22px); opacity: .9; margin-top: 6px; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+@keyframes cineTitle { 0% { opacity: 0; transform: scale(1.08); filter: blur(6px); } 18%, 78% { opacity: 1; transform: none; filter: none; } 100% { opacity: 0; transform: scale(.98); } }
+/* Mientras dura una escena de cine no se ven los mandos ni los contadores */
+#ui.filming .hud-top, #ui.filming .stick-base, #ui.filming .action-btn, #ui.filming .jump-btn, #ui.filming .lane-btn, #ui.filming .route, #ui.filming .hint-move, #ui.filming .minimap { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
+
+/* ---------- La carta final, como escena ---------- */
+.letter-cine {
+  /* Toda la pantalla se puede tocar para seguir; el texto va abajo */
+  position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: 0 20px max(22px, env(safe-area-inset-bottom)); text-align: center; color: #fff8ec; cursor: pointer;
+}
+.letter-cine > * { width: min(760px, 100%); }
+.letter-cine .lc-text {
+  font-family: 'Caveat', cursive; font-weight: 500; font-size: clamp(22px, 3.4vw, 31px); line-height: 1.22;
+  padding: 14px 22px; border-radius: 24px;
+  background: radial-gradient(ellipse at center, rgba(8, 16, 46, .62), rgba(8, 16, 46, 0) 72%);
+  text-shadow: 0 2px 12px rgba(8, 16, 50, .95), 0 0 2px rgba(0, 0, 0, .6);
+  animation: lcIn 1.2s ease both;
+}
+.letter-cine .lc-title {
+  font-family: 'Caveat', cursive; font-weight: 700; font-size: clamp(40px, 7vw, 66px); line-height: 1.05;
+  text-shadow: 0 3px 18px rgba(255, 190, 120, .55), 0 2px 8px rgba(8, 16, 50, .9);
+  animation: lcIn 1.4s ease both;
+}
+.letter-cine .out { animation: lcOut .45s ease both; }
+.letter-cine .lc-hint { font-size: 13px; font-weight: 800; opacity: .75; margin-top: 6px; animation: lcIn 1s 1.4s ease both; }
+.letter-cine .lc-buttons { display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 14px; flex-wrap: wrap; animation: lcIn 1s 1.2s ease both; }
+@keyframes lcIn { from { opacity: 0; transform: translateY(12px); filter: blur(4px); } }
+@keyframes lcOut { to { opacity: 0; transform: translateY(-8px); filter: blur(4px); } }

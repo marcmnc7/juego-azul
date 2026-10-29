@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
 import { loadHdriSync } from './assets';
+import { paintStyle } from './paint';
 import { Water } from 'three/examples/jsm/objects/Water.js';
 import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSurfaceTexture, hdNormalTexture, hdMeans, hdRoughMeans, type Surf } from './surfaces';
 
@@ -78,6 +79,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
     sh.uniforms.hdRoughMean = { value: hdRoughMeans };
     sh.uniforms.hdStrength = { value: HD_STRENGTH };
     sh.uniforms.hdNormal = { value: SURF_NORMAL };
+    sh.uniforms.uPaintG = paintStyle;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
       .replace(
@@ -111,6 +113,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         uniform float hdRoughMean[16];
         uniform float hdStrength[16];
         uniform float hdNormal[16];
+        uniform float uPaintG;
         float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float gNoise(vec3 x) {
           vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -133,12 +136,14 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         if (hdOn) {
           // Foto en color (Sponza) proyectada en los tres ejes, normalizada a su color medio para
           // respetar el color elegido de cada pared
-          vec3 sdc = texture(hdTex, vec3(sp.zy, sl)).rgb * bw.x
-                   + texture(hdTex, vec3(sp.xz, sl)).rgb * bw.y
-                   + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).rgb * bw.z;
+          // Estilo pintado: la foto se lee muy borrosa (queda la mancha, no el detalle) y pesa menos
+          float pb = uPaintG * 3.0;
+          vec3 sdc = texture(hdTex, vec3(sp.zy, sl), pb).rgb * bw.x
+                   + texture(hdTex, vec3(sp.xz, sl), pb).rgb * bw.y
+                   + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl), pb).rgb * bw.z;
           vec2 mpc = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
           vec3 smc = texture(hdTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mpc * 0.23 + 0.37, sl)).rgb;
-          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx]);
+          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx] * (1.0 - uPaintG * 0.35));
         } else if (sIdx > 0) {
           float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
                    + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
@@ -182,7 +187,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         if (hdOn) {
           // Relieve triplanar (mezcla "whiteout"): juntas, grietas y teja con volumen de verdad
           vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
-          float ns = hdNormal[sIdx];
+          float ns = hdNormal[sIdx] * (1.0 - uPaintG * 0.8);
           vec3 tx = texture(hdNrm, vec3(sp.zy, sl)).xyz * 2.0 - 1.0;
           vec3 ty = texture(hdNrm, vec3(sp.xz, sl)).xyz * 2.0 - 1.0;
           vec3 tz = texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).xyz * 2.0 - 1.0;
@@ -238,7 +243,10 @@ export function applyEnvironment(scene: THREE.Scene) {
     | undefined;
   const h = hd ? loadHdriSync(hd.url) : null;
   if (hd && h) {
-    scene.environment = pmrem.fromEquirectangular(h.texture).texture;
+    // Se guarda el render target para poder liberarlo entero al salir (unos MB de vídeo por escena)
+    const envRT = pmrem.fromEquirectangular(h.texture);
+    scene.userData.envRT = envRT;
+    scene.environment = envRT.texture;
     scene.environmentIntensity = hd.intensity ?? 0.75;
     if (hd.sunDir) scene.environmentRotation.y = ENV_ROT_SIGN * (Math.atan2(hd.sunDir.z, hd.sunDir.x) - Math.atan2(h.sun.z, h.sun.x));
     // Con un cielo real dando la luz ambiente, la hemisférica casi sobra y el sol manda (como en la prueba)
@@ -255,6 +263,7 @@ export function applyEnvironment(scene: THREE.Scene) {
     tmp.add(c);
   } else tmp.background = scene.background instanceof THREE.Color ? scene.background : new THREE.Color(0x888899);
   const rt = pmrem.fromScene(tmp, 0.03, 0.1, 1000);
+  scene.userData.envRT = rt;
   scene.environment = rt.texture;
   scene.environmentIntensity = 0.9;
   // Con el cielo aportando luz, las luces hemisféricas sobran en parte
@@ -399,12 +408,81 @@ function cloudTexture() {
   return cloudTex;
 }
 
+let paintedCloudTex: THREE.Texture[] | null = null;
+/**
+ * Nubes de acuarela para el estilo pintado: cúmulos con la panza plana en sombra lavanda, la cima al sol
+ * en blanco cálido y el borde deshilachado a pinceladas. Tres formas distintas para que no se repitan.
+ */
+function paintedCloudTextures() {
+  if (paintedCloudTex) return paintedCloudTex;
+  let s = 11;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  paintedCloudTex = [0, 1, 2].map(() => {
+    const W = 512, H = 256;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d')!;
+    const base = H * 0.72;
+    const blobs: [number, number, number][] = [];
+    const n = 6 + Math.floor(rnd() * 4);
+    for (let i = 0; i < n; i++) {
+      const x = W * (0.18 + 0.64 * (i / (n - 1))) + (rnd() - 0.5) * 30;
+      const mid = 1 - Math.abs(i / (n - 1) - 0.5) * 1.6;
+      const r = 34 + mid * 46 + rnd() * 18;
+      blobs.push([x, base - r * (0.45 + rnd() * 0.3), r]);
+    }
+    const blob = (dy: number, grow: number, col: string, alpha: number) => {
+      for (const [x, y, r] of blobs) {
+        const gr = g.createRadialGradient(x, y + dy, r * 0.1, x, y + dy, r * grow);
+        gr.addColorStop(0, `rgba(${col},${alpha})`);
+        gr.addColorStop(0.72, `rgba(${col},${alpha * 0.92})`);
+        gr.addColorStop(1, `rgba(${col},0)`);
+        g.fillStyle = gr;
+        g.beginPath();
+        g.arc(x, y + dy, r * grow, 0, Math.PI * 2);
+        g.fill();
+      }
+    };
+    // Sombra (panza), luego la parte al sol, desplazada hacia arriba
+    blob(10, 1.05, '196,190,226', 0.95);
+    blob(-8, 0.9, '255,250,238', 0.95);
+    blob(-18, 0.55, '255,255,250', 0.7);
+    // Panza plana: se borra lo que cae por debajo de la base, con borde irregular
+    g.globalCompositeOperation = 'destination-out';
+    for (let x = 0; x < W; x += 6) {
+      const y = base + Math.sin(x * 0.05) * 3 + rnd() * 4;
+      g.fillRect(x, y, 7, H - y);
+    }
+    // Pinceladas que deshilachan el borde
+    g.globalCompositeOperation = 'destination-out';
+    g.lineCap = 'round';
+    for (let i = 0; i < 70; i++) {
+      g.strokeStyle = `rgba(0,0,0,${0.15 + rnd() * 0.25})`;
+      g.lineWidth = 2 + rnd() * 5;
+      const x = rnd() * W, y = rnd() * base;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + 20 + rnd() * 40, y + (rnd() - 0.5) * 6);
+      g.stroke();
+    }
+    g.globalCompositeOperation = 'source-over';
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+  return paintedCloudTex;
+}
+
 export interface SkyOptions {
   top: number;
   mid: number;
   bottom: number;
   sun?: { color: number; dir: THREE.Vector3; size?: number };
-  clouds?: { count: number; tint: number };
+  /** painted: nubes de acuarela (estilo pintado) en vez de las redondas. */
+  clouds?: { count: number; tint: number; painted?: boolean };
+  /** Dirección que las nubes pintadas no deben tapar (un sol que no es el del cielo, como el del eclipse). */
+  avoid?: THREE.Vector3;
   stars?: number;
   /** Cielo físico (dispersión atmosférica) en lugar del degradado, con el sol en esa dirección. */
   physical?: { sunDir: THREE.Vector3; turbidity?: number; rayleigh?: number };
@@ -428,8 +506,15 @@ export class Sky {
     const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
     dome.renderOrder = -10;
     this.group.add(dome);
-    this.setColors(opts.top, opts.mid, opts.bottom);
-    if (opts.physical) {
+    // En el estilo pintado el cielo es siempre de acuarela: degradado y nubes pintadas, sin dispersión física.
+    // Y la noche no es negra sino azul ultramar (como en las películas de Ghibli)
+    const painted = paintStyle.value > 0;
+    const night = (hex: number, deep: number) => {
+      const c = new THREE.Color(hex);
+      return painted && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.12 ? c.lerp(new THREE.Color(deep), 0.7).getHex() : hex;
+    };
+    this.setColors(night(opts.top, 0x0b1846), night(opts.mid, 0x1c2f6e), night(opts.bottom, 0x34407e));
+    if (opts.physical && !painted) {
       const ph = new SkyMesh();
       ph.scale.setScalar(410);
       const u = ph.material.uniforms;
@@ -457,12 +542,22 @@ export class Sky {
       this.group.add(s);
     }
     if (opts.clouds) {
+      const painted = opts.clouds.painted || paintStyle.value > 0 ? paintedCloudTextures() : null;
       for (let i = 0; i < opts.clouds.count; i++) {
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTexture(), color: opts.clouds.tint, fog: false, depthWrite: false, transparent: true, opacity: 0.9 }));
-        const a = (i / opts.clouds.count) * Math.PI * 2 + Math.random() * 0.4;
+        const map = painted ? painted[i % painted.length] : cloudTexture();
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: opts.clouds.tint, fog: false, depthWrite: false, transparent: true, opacity: painted ? 1 : 0.9 }));
+        let a = (i / opts.clouds.count) * Math.PI * 2 + Math.random() * 0.4;
+        // Las pintadas son opacas: ninguna delante del sol (en el eclipse tapaban justo el momento)
+        const keepClear = opts.sun?.dir ?? opts.avoid;
+        if (painted && keepClear) {
+          const sa = Math.atan2(keepClear.z, keepClear.x);
+          const off = Math.atan2(Math.sin(a - sa), Math.cos(a - sa));
+          if (Math.abs(off) < 0.6) a = sa + (off < 0 ? -0.6 : 0.6) - off * 0.2;
+        }
         const r = 300 + Math.random() * 60;
-        sp.position.set(Math.cos(a) * r, 50 + Math.random() * 70, Math.sin(a) * r);
-        const w = 90 + Math.random() * 90;
+        // Las pintadas, más bajas y más grandes: cúmulos de verano sobre los tejados
+        sp.position.set(Math.cos(a) * r, (painted ? 32 : 50) + Math.random() * (painted ? 55 : 70), Math.sin(a) * r);
+        const w = (painted ? 130 : 90) + Math.random() * 90;
         sp.scale.set(w, w / 2, 1);
         sp.renderOrder = -8;
         sp.userData.a = a;

@@ -7,7 +7,7 @@ import { Sky, Sun, toon, glowTexture, vibrate, applyShadows, makeSea, hdSurfaces
 import sunsetHdr from '../assets/env/venice_sunset.hdr';
 import { ECLIPSE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeCar, makeDog, animatePerson, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
+import { G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
@@ -19,7 +19,51 @@ import { canvasTex } from './deco';
 import { buildStreet } from './homeStreet';
 import { buildSurroundings } from './surround';
 import type { Box2 } from './ferreries';
-import { disposeObj, type Level, type LevelDone } from './level';
+import { disposeScene, type Level, type LevelDone } from './level';
+import { cinema } from '../core/cinema';
+import { boneAnchor } from '../entities/rig';
+import { juice } from '../core/juice';
+import { beacon } from '../core/beacon';
+
+/**
+ * Corona del sol en la totalidad: un halo nacarado pegado al disco y cientos de rayos finos (más largos
+ * hacia el ecuador del sol), dibujados una vez en un lienzo. El disco ocupa el 14 % del ancho.
+ */
+function coronaTexture() {
+  const S = 512, c = S / 2, R = S * 0.14;
+  const t = canvasTex((g) => {
+    const halo = g.createRadialGradient(c, c, R * 0.92, c, c, c);
+    halo.addColorStop(0, 'rgba(255,255,255,0.95)');
+    halo.addColorStop(0.08, 'rgba(240,244,255,0.6)');
+    halo.addColorStop(0.3, 'rgba(210,222,255,0.16)');
+    halo.addColorStop(1, 'rgba(200,215,255,0)');
+    g.fillStyle = halo;
+    g.fillRect(0, 0, S, S);
+    let seed = 3;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    g.lineCap = 'round';
+    for (let i = 0; i < 420; i++) {
+      const a = rnd() * Math.PI * 2;
+      // Serpentinas largas hacia el ecuador, plumas cortas en los polos
+      const eq = Math.abs(Math.cos(a));
+      const len = R * (0.25 + rnd() * (0.6 + eq * 1.9));
+      const bend = (rnd() - 0.5) * 0.25;
+      const x0 = c + Math.cos(a) * R * 0.97, y0 = c + Math.sin(a) * R * 0.97;
+      const x1 = c + Math.cos(a + bend) * (R + len), y1 = c + Math.sin(a + bend) * (R + len);
+      const gr = g.createLinearGradient(x0, y0, x1, y1);
+      const al = 0.05 + rnd() * 0.16;
+      gr.addColorStop(0, `rgba(255,255,255,${al})`);
+      gr.addColorStop(1, 'rgba(220,230,255,0)');
+      g.strokeStyle = gr;
+      g.lineWidth = 0.6 + rnd() * 2.4;
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.quadraticCurveTo(c + Math.cos(a) * (R + len * 0.5), c + Math.sin(a) * (R + len * 0.5), x1, y1);
+      g.stroke();
+    }
+  }, S, S);
+  return t;
+}
 
 // Capítulo 8 · El eclipse (12 de agosto de 2026). «Ready para un dia que vas a recordar toda tu vida?»
 // 1. El plan de Gas: kayak de Sa Farola a Sa Caleta. Imposible: un ferry os pasa por encima (ese plan nunca
@@ -97,6 +141,8 @@ export class LevelEclipse implements Level {
   private sunDisk!: THREE.Mesh;
   private moon!: THREE.Mesh;
   private corona!: THREE.Sprite;
+  /** El anillo de diamante: el último punto de sol justo antes de la totalidad. */
+  private diamond!: THREE.Sprite;
   private stars: THREE.Points | null = null;
   private hemi!: THREE.HemisphereLight;
   private glasses = false;
@@ -118,7 +164,6 @@ export class LevelEclipse implements Level {
     this.updateHud();
     later(() => dialogue(ECLIPSE.motoIntro, () => lostMoto(() => dialogue(ECLIPSE.afterMoto, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, () => this.startKayak()))))), 1800);
     audio.startMusic('road');
-    audio.ambience(0.05);
   }
 
   get threeScene() {
@@ -149,7 +194,7 @@ export class LevelEclipse implements Level {
     this.scene = sc;
     if (old !== sc && this.scenes.length) {
       old.remove(this.marker);
-      old.traverse(disposeObj);
+      disposeScene(old);
     }
     this.scenes = [sc];
     return sc;
@@ -372,7 +417,7 @@ export class LevelEclipse implements Level {
   }
 
   private buildRocks() {
-    const dusk = { top: 0x2b4a8a, mid: 0xf0985a, bottom: 0xffcf8a, clouds: { count: 5, tint: 0xffc9a0 }, stars: 600 };
+    const dusk = { top: 0x2b4a8a, mid: 0xf0985a, bottom: 0xffcf8a, clouds: { count: 5, tint: 0xffc9a0 }, stars: 600, avoid: this.sunDir };
     const sc = this.newScene(dusk, 0xf3b27a, 0xffc98a, 1.8, this.sunDir.clone().setY(0.35));
     // Con la calidad de la prueba: luz de un atardecer fotografiado, que se apaga con el eclipse
     if (hdSurfaces.value) sc.userData.hdri = { url: sunsetHdr, intensity: 0.9, sunDir: this.sunDir.clone().setY(0.35), hemi: 0.4 };
@@ -388,21 +433,32 @@ export class LevelEclipse implements Level {
     m.add(G.rock2, 0xb8925c, -7, -1.2, -4, 0, 0.5, 0, 10, 3.6, 9);
     m.add(G.rock, 0xd1ad74, 6, -1.4, -3, 0, 1, 0, 9, 3.2, 8);
     for (let i = 0; i < 9; i++) m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xc9a36a : 0xb48a54, -14 + i * 3.6, -1.5, 5 + Math.sin(i * 2.3) * 2, i, i * 0.7, 0, 3 + (i % 3), 1.4, 2.6);
-    m.add(G.box, 0x5aa9e6, 0, 0.0, 0.2, -0.05, 0, 0, 2.4, 0.04, 1.6); // toalla
-    for (let i = 0; i < 3; i++) m.add(G.box, 0xf4efe2, -0.3 + i * 0.25, 0.04, 0.8, 0, i * 0.4, 0, 0.18, 0.01, 0.26); // cartas
+    // Sentados directamente en la roca (sin toalla), con las cartas de La Princesa delante
+    for (let i = 0; i < 3; i++) m.add(G.box, 0xf4efe2, -0.3 + i * 0.25, 0.006, 0.8, 0, i * 0.4, 0, 0.18, 0.01, 0.26); // cartas
     sc.add(m.mesh());
     this.player = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
     for (const [p, x] of [[this.player, -0.45], [this.gas, 0.45]] as [Person, number][]) {
-      p.root.position.set(x, 0.02, 0);
+      // Sentados de verdad: la pose dobla las piernas, pero el cuerpo seguía a la altura de estar de pie
+      // (las caderas a casi un metro de la roca). Se baja la altura de la cadera, como en el kayak,
+      // y quedan apoyados en la piedra
+      p.root.position.set(x, seatedRootY(p, 0.03), 0);
       p.root.rotation.y = 0;
       this.sitPose(p);
       sc.add(p.root);
-      // Gafas de eclipse (se ven cuando se las ponen)
-      const g = new Merger().add(G.box, 0x111111, 0, 0.32, 0.27, 0, 0, 0, 0.5, 0.12, 0.05).mesh();
-      g.name = 'gafas';
-      g.visible = false;
-      p.head.add(g);
+      // Gafas de eclipse (se ven cuando se las ponen): en los personajes con esqueleto, a la altura de
+      // los ojos y pegadas a la cara; en los muñecos, como siempre
+      if (p.rig) {
+        const g = new Merger().add(G.box, 0x111111, 0, 0.085, 0.1, 0, 0, 0, 0.15, 0.045, 0.02).add(G.box, 0x111111, 0.075, 0.085, 0.04, 0, 0, 0, 0.008, 0.012, 0.12).add(G.box, 0x111111, -0.075, 0.085, 0.04, 0, 0, 0, 0.008, 0.012, 0.12).mesh();
+        g.name = 'gafas';
+        g.visible = false;
+        boneAnchor(p, 'Head').add(g);
+      } else {
+        const g = new Merger().add(G.box, 0x111111, 0, 0.32, 0.27, 0, 0, 0, 0.5, 0.12, 0.05).mesh();
+        g.name = 'gafas';
+        g.visible = false;
+        p.head.add(g);
+      }
     }
     // Sol bajo sobre el mar, la luna que se le pone delante y la corona
     const dist = 300;
@@ -411,9 +467,16 @@ export class LevelEclipse implements Level {
     this.sunDisk.lookAt(0, 0, 0);
     this.moon = new THREE.Mesh(new THREE.CircleGeometry(9.2 * 0.97, 40), new THREE.MeshBasicMaterial({ color: 0x0c0c14, fog: false }));
     this.moon.lookAt(this.v1.copy(this.sunDir).multiplyScalar(-1));
-    this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xdfe8ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, opacity: 0 }));
+    this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTexture(), color: 0xeef2ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, opacity: 0 }));
     this.corona.position.copy(this.sunDisk.position);
-    this.corona.scale.setScalar(60);
+    this.corona.scale.setScalar(9 / 0.14);
+    // El último punto de sol: por el lado por donde sale la luna (ver placeMoon)
+    const right = new THREE.Vector3().crossVectors(this.sunDir, new THREE.Vector3(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(right, this.sunDir).normalize();
+    this.diamond = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, opacity: 0 }));
+    this.diamond.position.copy(this.sunDisk.position).addScaledVector(right, 9 * 0.8).addScaledVector(up, -9 * 0.6).addScaledVector(this.sunDir, -2);
+    this.diamond.renderOrder = -4;
+    sc.add(this.diamond);
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     halo.position.copy(this.sunDisk.position);
     halo.scale.setScalar(110);
@@ -618,7 +681,7 @@ export class LevelEclipse implements Level {
   private setGlasses(on: boolean) {
     this.glasses = on;
     for (const p of [this.player, this.gas]) {
-      const g = p.head.getObjectByName('gafas');
+      const g = p.root.getObjectByName('gafas');
       if (g) g.visible = on;
     }
     if (on && !this.glassesEl) {
@@ -648,6 +711,31 @@ export class LevelEclipse implements Level {
       toast(ECLIPSE.photo);
       later(() => this.finish(), 1400);
     }, 700);
+  }
+
+  /**
+   * La totalidad, como en el cine: la corona con teleobjetivo (y el anillo de diamante), los dos de
+   * espaldas frente al mar con las gafas puestas, y su perfil iluminado por la corona.
+   */
+  private totalityScene() {
+    const sun = this.sunDisk.position;
+    const heads = () => this.player.root.position.clone().lerp(this.gas.root.position, 0.5).setY(0.85);
+    const horizon = this.sunDir.clone().multiplyScalar(30).setY(1.5);
+    // Detrás de los dos y alineada con el sol: el eclipse queda entre sus cabezas
+    const back = new THREE.Vector3(this.sunDir.x, 0, this.sunDir.z).normalize();
+    juice.fx?.flashScreen(0xffffff, 0.35);
+    // Los planos son de fuera: sin el oscurecido de mirar a través de las gafas (ellos las llevan puestas)
+    if (this.glassesEl) this.glassesEl.style.opacity = '0';
+    cinema.play([
+      // La corona, de cerca: el último punto de sol y luego los rayos
+      { dur: 4.2, pos: new THREE.Vector3(0, 1.4, -0.4), look: sun, fov: 7.5, fov2: 5.5 },
+      // Los dos de espaldas, sentados en la roca, frente al eclipse sobre el mar
+      { dur: 4.2, pos: back.clone().multiplyScalar(-2.6).setY(0.55), pos2: back.clone().multiplyScalar(-1.9).setY(0.72), look: horizon, fov: 42, focus: heads },
+      // De perfil, con las gafas, a la luz de la corona
+      { dur: 4, pos: new THREE.Vector3(2.3, 0.95, 0.8), pos2: new THREE.Vector3(1.9, 0.92, 0.55), look: heads, fov: 38, focus: heads },
+    ], () => {
+      if (this.glassesEl) this.glassesEl.style.opacity = '1';
+    });
   }
 
   private finish() {
@@ -815,7 +903,11 @@ export class LevelEclipse implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 2.5 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 2.5 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     if (free || this.phase === 'walk') this.walker.camera(this.camera, dt, this.colliders, 6, 3.4);
     else {
@@ -904,6 +996,7 @@ export class LevelEclipse implements Level {
           toast(ECLIPSE.totality);
           audio.fanfare();
           vibrate([40, 40, 120]);
+          this.totalityScene();
         }
       } else {
         this.bareT += dt;
@@ -917,7 +1010,7 @@ export class LevelEclipse implements Level {
     if (this.totalT >= 0 && this.phase === 'eclipse') {
       // En el máximo: una foto juntos, con las gafas puestas
       this.totalT += dt;
-      if (this.totalT > 1.2 && !this.busy) {
+      if (this.totalT > 1.2 && !this.busy && !cinema.active) {
         this.hud.setAction('📸 Foto juntos', true);
         if (this.input.consumeAction()) this.takePhoto();
       }
@@ -935,7 +1028,15 @@ export class LevelEclipse implements Level {
     this.sun.light.intensity = 1.8 * (1 - dark * 0.9);
     if (this.scene.userData.hdri) this.scene.environmentIntensity = 0.9 * (1 - dark * 0.92);
     if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = dark;
-    (this.corona.material as THREE.SpriteMaterial).opacity = Math.max(0, (k - 0.85) / 0.15) * 0.9;
+    // La corona solo se ve en la totalidad (antes la tapa el brillo del sol) y gira muy despacio
+    const cm = this.corona.material as THREE.SpriteMaterial;
+    cm.opacity = this.totalT >= 0 ? Math.min(1, this.totalT / 1.6) : Math.max(0, (k - 0.97) / 0.03) * 0.25;
+    cm.rotation += dt * 0.01;
+    // Anillo de diamante: un destello al empezar la totalidad que se apaga en segundo y medio
+    const dm = this.diamond.material as THREE.SpriteMaterial;
+    const dk = this.totalT >= 0 ? Math.max(0, 1 - this.totalT / 1.5) : Math.max(0, (k - 0.95) / 0.05);
+    dm.opacity = dk;
+    this.diamond.scale.setScalar(6 + dk * 34);
     const halo = this.scene.getObjectByName('halo') as THREE.Sprite | undefined;
     if (halo) (halo.material as THREE.SpriteMaterial).opacity = 1 - dark;
     this.camera.position.lerp(this.v1.set(-1.6, 1.7, -3.4), Math.min(1, dt * 2));
@@ -1022,6 +1123,6 @@ export class LevelEclipse implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

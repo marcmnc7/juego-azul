@@ -7,6 +7,7 @@ import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
 import type { ChatFrag } from '../data/chats';
+import { cinema } from '../core/cinema';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -62,6 +63,8 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
 export interface MapOptions {
   test: boolean;
   onPlay: (level: number) => void;
+  /** La carta final (después del crucigrama). */
+  onLetter: () => void;
   onReset: () => void;
 }
 
@@ -102,7 +105,7 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
   const allDone = opts.test || LEVELS.every((l) => done.has(l.id));
   const fin = el('button', 'level-card final' + (allDone ? '' : ' locked'));
   fin.append(el('div', 'num', '♥'), el('div', 'emoji', '💌'), el('div', 'name', 'La sorpresa final'), el('div', 'place', 'Cuando termines todos los capítulos'), el('div', 'state', allDone ? '▶ Abrir' : '🔒 Bloqueado'));
-  if (allDone) fin.onclick = () => crossword(() => finalLetter(back), back);
+  if (allDone) fin.onclick = () => crossword(opts.onLetter, back);
   list.append(fin);
   s.append(list);
   const g = el('button', 'link-btn', `🎁 Mis regalos (${save.giftsUnlocked.length}/${GIFTS.length})`);
@@ -633,6 +636,8 @@ export function dialogue(lines: Line[], onDone: () => void) {
     }, 22);
   };
   const advance = () => {
+    // Un segundo toque que llega cuando el diálogo ya ha terminado no hace nada
+    if (i >= lines.length) return;
     const full = body(lines[i]);
     if (shown < full.length) {
       shown = full.length;
@@ -830,7 +835,8 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
       chat.append(typing);
       scroll();
     }
-    timer = window.setTimeout(step, nx.kind === 'date' ? 500 : 650 + Math.min(900, (nx.kind === 'msg' ? nx.text.length : 0) * 12));
+    // Ritmo de lectura: lo justo para leer cada mensaje, sin esperas largas entre uno y otro
+    timer = window.setTimeout(step, nx.kind === 'date' ? 400 : 420 + Math.min(700, (nx.kind === 'msg' ? nx.text.length : 0) * 9));
   };
   const finish = () => {
     clearTimeout(timer);
@@ -877,7 +883,11 @@ export function debugPanel(items: DebugItem[]) {
     b.onclick = (e) => {
       e.stopPropagation();
       list.hidden = true;
+      // Saltar de fase cierra lo que hubiera abierto (chats, barras, minijuegos, escenas de cine) y anula sus temporizadores
+      cinema.stop();
       closeDialogue();
+      newEpoch();
+      clearScreens();
       it.run();
     };
     list.append(b);

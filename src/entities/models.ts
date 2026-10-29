@@ -226,9 +226,36 @@ export interface PersonLook {
   shorts?: boolean;
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
+  /** Pelo rizado con volumen arriba (Gas), sobre el pelo corto. */
+  curls?: boolean;
+  /** Bigote fino y perilla (Gas). */
+  stache?: boolean;
 }
 
 export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
+
+/**
+ * Altura a la que poner a alguien que se sienta (piernas dobladas) para que la cadera apoye en un asiento
+ * cuya parte de arriba está a `seatTop` metros. La pose de sentado dobla las piernas pero no baja el
+ * cuerpo: sin esto la cadera se quedaba a la altura de estar de pie y parecían flotar sobre la silla.
+ */
+export function seatedRootY(p: { root: THREE.Object3D; rig?: { hipsHeight: number } }, seatTop: number) {
+  return p.rig ? seatTop + 0.07 - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
+}
+
+/**
+ * Pose de sentado en una silla (muslos hacia delante, rodillas dobladas, pies en el suelo). Se llama
+ * después de animatePerson en cada fotograma. Él tiene el muslo más largo: con el muslo horizontal los
+ * pies le quedaban colgando, así que se le inclina un poco hacia abajo (y la rodilla lo compensa).
+ */
+export function seatPose(p: Person) {
+  const tilt = p.rig?.kind === 'man' ? 0.25 : 0;
+  p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2 + tilt;
+  p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15 - tilt;
+  p.footL.rotation.x = p.footR.rotation.x = 0.15;
+  p.body.rotation.z = 0;
+  p.body.position.y = 0;
+}
 
 export interface Person {
   root: THREE.Group;

@@ -9,8 +9,10 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
+import { Camp } from './camp';
+import { cinema, cineTitle } from '../core/cinema';
 import { Surf } from '../core/surfaces';
-import { clock, type Level, type LevelDone, disposeObj } from './level';
+import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 
 // Capítulo 2 · La ruta de las zamburiñas.
@@ -145,6 +147,8 @@ interface Thing {
 export class Level2 implements Level {
   private scene = new THREE.Scene();
   private terrace: Terrace | null = null;
+  /** La última noche: el camping sin gas (escena de cine). */
+  private camp: Camp | null = null;
   private eating = false;
   private busy = false;
   private hud: Hud;
@@ -371,6 +375,7 @@ export class Level2 implements Level {
   }
 
   get threeScene() {
+    if (this.camp && this.phase === 'logrono') return this.camp.scene;
     return this.terrace && this.phase === 'terrace' ? this.terrace.scene : this.scene;
   }
 
@@ -772,6 +777,10 @@ export class Level2 implements Level {
 
   update(dt: number) {
     this.t += dt;
+    if (this.phase === 'logrono' && this.camp) {
+      this.camp.update(dt, this.camera);
+      return;
+    }
     if (this.phase === 'terrace' && this.terrace) {
       this.terrace.update(dt, this.camera);
       const can = this.phase === 'terrace' && !this.eating && !this.busy;
@@ -1056,18 +1065,57 @@ export class Level2 implements Level {
     this.scene.add(this.logronoTown);
   }
 
+  /**
+   * Nace Gas: la última noche iba a ser cenita de camping entre viñas (estrellas, cartas y el camping
+   * gas) y a él se le olvidó precisamente el gas. Escena de cine: plano general de la mesa bajo las
+   * estrellas, el hornillo que no enciende, los dos, y el nombre.
+   */
   private arriveLogrono() {
     this.phase = 'logrono';
+    this.busy = true;
     this.updateHud();
     audio.chime(2);
-    later(
-      () =>
-        dialogue(ROAD.arriveLogrono, () =>
-          // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
-          phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish())),
-        ),
-      1500,
-    );
+    const [night, noGas, ...after] = ROAD.arriveLogrono;
+    later(() =>
+      fadeFlash(() => {
+        if (!this.camp) {
+          this.camp = new Camp();
+          applyShadows(this.camp.scene);
+        }
+        const c = this.camp;
+        this.laneBtns.forEach((b) => (b.hidden = true));
+        audio.stopMusic();
+        audio.startMusic('night');
+        const mid = () => c.table.clone().setY(1.05);
+        cinema.play([
+          // Plano general entre las viñas, acercándose a la mesa
+          { dur: Infinity, move: 7, pos: new THREE.Vector3(-9, 3.4, -11), pos2: new THREE.Vector3(-3.6, 1.9, -4.4), look: c.table, look2: mid() },
+          // El hornillo: clic, clic, clic… y nada
+          { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove, at: () => c.tryStove() },
+          // Los dos, frente a frente
+          { dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.5), pos2: new THREE.Vector3(0.05, 1.3, -2.0), look: mid, fov: 46, focus: mid },
+        ]);
+        later(() =>
+          dialogue([night], () => {
+            cinema.next();
+            dialogue([noGas], () => {
+              cinema.next();
+              audio.fanfare();
+              // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
+              cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+              later(
+                () =>
+                  dialogue(after, () =>
+                    // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
+                    phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish())),
+                  ),
+                3800,
+              );
+            });
+          }),
+        900);
+      }, 500),
+    1200);
   }
 
   /** En San Vicente: sentados en la terraza de El Ancla comiéndose una zamburiña. */
@@ -1169,6 +1217,7 @@ export class Level2 implements Level {
   }
 
   private finish() {
+    cinema.stop();
     this.phase = 'done';
     const stars = 1 + (this.photos >= 30 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
     this.onComplete({
@@ -1318,7 +1367,8 @@ export class Level2 implements Level {
     this.camera.updateProjectionMatrix();
     this.laneBtns.forEach((b) => b.remove());
     audio.stopMusic();
-    this.scene.traverse(disposeObj);
-    this.terrace?.scene.traverse(disposeObj);
+    disposeScene(this.scene);
+    if (this.terrace) disposeScene(this.terrace.scene);
+    if (this.camp) disposeScene(this.camp.scene);
   }
 }

@@ -17,7 +17,8 @@ import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } fro
 import { embrace, type Embrace } from '../entities/embrace';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
-import { clock, type Level, type LevelDone, disposeObj } from './level';
+import { clock, type Level, type LevelDone, disposeScene } from './level';
+import { beacon } from '../core/beacon';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
@@ -32,9 +33,12 @@ type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug
 
 // Piscina (interior del vaso)
 // La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
-const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 }; // «Muy pequeñita ella», pero algo más de lo que parecía
+const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 };
+/** Tumbados en las toallas: la espalda sobre la toalla (con 0,06 se hundían unos centímetros en el césped). */
+const LIE_Y = 0.14; // «Muy pequeñita ella», pero algo más de lo que parecía
 const WATER_Y = -0.22;
-const SWIM_Y = -1.12;
+// Nadando, el agua por los hombros (con -1,12 la cadera quedaba por encima del agua y parecían flotar de pie)
+const SWIM_Y = -1.4;
 const TOWELS = new THREE.Vector3(-1.6, 0, 11.4);
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
@@ -228,7 +232,6 @@ export class Level4 implements Level {
       );
     }, 2300);
     audio.startMusic('night');
-    audio.ambience(0.03); // grillos y brisa de fondo
   }
 
   get threeScene() {
@@ -641,7 +644,11 @@ export class Level4 implements Level {
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(pp.distanceTo(tgt) < 2 ? null : -rel);
-    } else this.hud.setArrow(null);
+      beacon.at(pp.distanceTo(tgt) < 2 ? null : tgt);
+    } else {
+      this.hud.setArrow(null);
+      beacon.at(null);
+    }
 
     this.updateShooting(dt);
     if (this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') this.updateStars(dt);
@@ -657,7 +664,10 @@ export class Level4 implements Level {
     } else {
       // En el pasillo estrecho, cámara alta y cerca para no tapar con las paredes
       const inCorridor = pp.x < -4.4 && pp.x > CORRIDOR.wallX && pp.z < 8;
-      this.walker.camera(this.camera, dt, this.colliders, swimming ? 5.2 : inCorridor ? 4.2 : 6.5, swimming ? 2.7 : inCorridor ? 8 : 3.6);
+      // Nadando, plano alto sobre la piscina y sin el bloque invisible que impide entrar andando en ella:
+      // con él, la cámara chocaba al momento y acababa en su nuca
+      const swimCam = swimming || this.phase === 'hug';
+      this.walker.camera(this.camera, dt, swimCam ? this.phys.walls : this.colliders, swimCam ? 4.6 : inCorridor ? 4.2 : 6.5, swimCam ? 5.4 : inCorridor ? 8 : 3.6);
     }
     this.sun.follow(this.phase === 'drive' ? this.car.root.position : pp);
     this.sky.update(this.camera, dt);
@@ -946,6 +956,8 @@ export class Level4 implements Level {
     };
     this.player = swap(this.looks.azul);
     this.gas = swap(this.looks.gas);
+    // El control (y la cámara) siguen al modelo visible: si no, al nadar se movía el vestido, invisible
+    this.walker.attach(this.player.root.position);
     this.clothes.visible = on;
   }
 
@@ -1107,7 +1119,7 @@ export class Level4 implements Level {
           this.phase = 'toTowels';
           this.player.root.position.set(0.6, 0, 4.2);
           this.player.body.rotation.x = 0;
-          this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.gas.body.rotation.x = 0;
           this.walker.yaw = this.walker.facing = Math.atan2(TOWELS.x - 0.6, TOWELS.z - 4.2);
@@ -1126,7 +1138,7 @@ export class Level4 implements Level {
     this.input.reset();
     fadeFlash(() => {
       this.phase = 'stars';
-      this.player.root.position.set(TOWELS.x - 0.45, 0.06, TOWELS.z);
+      this.player.root.position.set(TOWELS.x - 0.45, LIE_Y, TOWELS.z);
       this.player.root.rotation.set(-Math.PI / 2, 0, 0);
       animatePerson(this.player, 0.016, 'idle');
       this.camera.position.copy(this.starCamPos);
@@ -1297,7 +1309,7 @@ export class Level4 implements Level {
           reset();
           this.phase = 'toTowels';
           this.player.root.position.set(TOWELS.x + 1.2, 0, TOWELS.z - 0.6);
-          this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.updateHud();
         },
@@ -1306,7 +1318,7 @@ export class Level4 implements Level {
         label: '4 · Unir estrellas',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.nextStar = 0;
           this.lieDown();
@@ -1316,7 +1328,7 @@ export class Level4 implements Level {
         label: '5 · Final',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, 0.06, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.lieDown();
           later(() => {
@@ -1336,6 +1348,6 @@ export class Level4 implements Level {
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);
-    this.scene.traverse(disposeObj);
+    disposeScene(this.scene);
   }
 }

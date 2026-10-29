@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
 import { airOf } from '../core/air';
@@ -42,6 +43,25 @@ export const womanPartAt = (u: number, v: number) => {
   const y = Math.min(511, Math.max(0, Math.floor(v * 512)));
   return Math.round(parts[(y * 512 + x) * 4] / 36);
 };
+const partsTexCache = new Map<string, THREE.DataTexture>();
+/**
+ * La máscara de partes de la textura de ella en una textura (canal rojo = parte × 36), con las piernas
+ * al aire si va con pantalón corto o mono: para recolorear cada parte en el shader (la multitud).
+ */
+export function womanPartsTexture(look: PersonLook) {
+  if (!parts) return null;
+  const k = look.jumpsuit ? 'j' : look.shorts ? 's' : '';
+  let t = partsTexCache.get(k);
+  if (t) return t;
+  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
+  const d = new Uint8Array(512 * 512);
+  for (let i = 0; i < d.length; i++) d[i] = over && over[i] ? over[i] * 36 : parts[i * 4];
+  t = new THREE.DataTexture(d, 512, 512, THREE.RedFormat, THREE.UnsignedByteType);
+  t.magFilter = t.minFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  partsTexCache.set(k, t);
+  return t;
+}
 let loading: Promise<void> | null = null;
 let ready = false;
 
@@ -651,6 +671,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
   if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
+  if (kind === 'man' && (look.curls || look.stache)) gasFace(p, look);
   people.add(p);
   return p;
 }
@@ -1069,6 +1090,132 @@ function straightHair(p: Person, look: PersonLook) {
   anchor.add(mesh);
 }
 
+/** Vértices de las mallas que cumplen `test`, en el espacio de un ancla de hueso (pose de reposo). */
+function meshPointsIn(p: Person, anchor: THREE.Object3D, bone: string, test: (name: string) => boolean) {
+  const out: THREE.Vector3[] = [];
+  const b = p.rig!.bones.get(bone)!;
+  anchor.updateMatrix();
+  const invA = anchor.matrix.clone().invert();
+  p.rig!.model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || !test(m.name)) return;
+    const bi = m.skeleton.bones.indexOf(b as THREE.Bone);
+    if (bi < 0) return;
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const toBone = m.skeleton.boneInverses[bi].clone().multiply(m.bindMatrix);
+    for (let i = 0; i < pos.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toBone).applyMatrix4(invA));
+  });
+  return out;
+}
+
+/**
+ * Gas, sacado de las fotos: rizos castaños con volumen arriba (sobre el pelo corto del modelo) y
+ * bigote fino con perilla. Los rizos son bolitas de pelo fusionadas en una sola malla.
+ */
+function gasFace(p: Person, look: PersonLook) {
+  const anchor = boneAnchor(p, 'Head');
+  const pts = meshPointsIn(p, anchor, 'Head', (n) => /Wolf3D_Head/.test(n));
+  if (pts.length < 50) return;
+  const box = new THREE.Box3().setFromPoints(pts);
+  const c = box.getCenter(new THREE.Vector3());
+  const sz = box.getSize(new THREE.Vector3());
+  const hair = new THREE.Color(look.hair);
+  const parts: THREE.BufferGeometry[] = [];
+  const ball = (r: number, x: number, y: number, z: number, sx = 1, sy = 1, sz2 = 1, col = hair) => {
+    const g = new THREE.SphereGeometry(r, 9, 7);
+    g.scale(sx, sy, sz2);
+    g.translate(x, y, z);
+    const n = g.attributes.position.count;
+    const cols = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) cols.set([col.r, col.g, col.b], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    parts.push(g);
+  };
+  if (look.curls) {
+    // Una sola masa de pelo con relieve de rizos (ruido 3D) y más oscura en los huecos: se lee como
+    // pelo rizado, no como bolitas. Volumen arriba y delante (el tupé de las fotos), lados pegados
+    const rx = sz.x * 0.55, ry = sz.y * 0.5, rz = Math.max(sz.z, sz.x) * 0.56;
+    const cx = c.x, cy = c.y + sz.y * 0.06, cz = c.z - rz * 0.12;
+    const hash = (x: number, y: number, z: number) => {
+      const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+      return h - Math.floor(h);
+    };
+    const vnoise = (x: number, y: number, z: number) => {
+      const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+      const fx = x - ix, fy = y - iy, fz = z - iz;
+      const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+      const L = (a: number, b: number, t: number) => a + (b - a) * t;
+      return L(
+        L(L(hash(ix, iy, iz), hash(ix + 1, iy, iz), u), L(hash(ix, iy + 1, iz), hash(ix + 1, iy + 1, iz), u), v),
+        L(L(hash(ix, iy, iz + 1), hash(ix + 1, iy, iz + 1), u), L(hash(ix, iy + 1, iz + 1), hash(ix + 1, iy + 1, iz + 1), u), v),
+        w,
+      );
+    };
+    const A = 72, S = 44;
+    const pos: number[] = [], col: number[] = [], idx: number[] = [];
+    const keep: boolean[] = [];
+    const tone = new THREE.Color();
+    for (let j = 0; j <= S; j++) {
+      const phi = (j / S) * Math.PI * 0.72; // de la coronilla hasta algo por debajo del ecuador
+      for (let i = 0; i <= A; i++) {
+        const th = (i / A) * Math.PI * 2; // 0 = delante (+z)
+        const d = new THREE.Vector3(Math.sin(phi) * Math.sin(th), Math.cos(phi), Math.sin(phi) * Math.cos(th));
+        const top = Math.max(0, d.y);
+        const side = Math.abs(d.x) > 0.55 && d.y < 0.5;
+        // Rizos: dos escalas de ruido, en bultos redondeados
+        const n = vnoise(d.x * 11 + 3, d.y * 11, d.z * 11) * 0.62 + vnoise(d.x * 23, d.y * 23 + 7, d.z * 23) * 0.38;
+        const bump = Math.pow(n, 1.6);
+        const lift = (side ? 1.0 : 1.02 + top * top * 0.2 + (d.z > 0.1 && d.y > 0.35 ? 0.07 : 0)) + bump * (side ? 0.06 : 0.16);
+        pos.push(cx + d.x * rx * lift, cy + d.y * ry * lift + 0.006, cz + d.z * rz * lift);
+        tone.copy(hair).multiplyScalar(0.45 + bump * 0.9);
+        col.push(tone.r, tone.g, tone.b);
+        keep.push(!(d.z > 0.3 && d.y < 0.42) && !(d.y < -0.05 && d.z > -0.55));
+      }
+    }
+    for (let j = 0; j < S; j++)
+      for (let i = 0; i < A; i++) {
+        const a = j * (A + 1) + i, b = a + A + 1;
+        if (keep[a] && keep[a + 1] && keep[b] && keep[b + 1]) idx.push(a, a + 1, b, b, a + 1, b + 1);
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const curls = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
+    curls.castShadow = true;
+    curls.userData.person = true;
+    anchor.add(curls);
+  }
+  if (look.stache) {
+    // Perfil de la cara por el centro: la nariz es lo que más sale; la barbilla, lo más bajo de delante
+    const mid = pts.filter((q) => Math.abs(q.x - c.x) < sz.x * 0.06);
+    const nose = mid.reduce((a, q) => (q.z > a.z ? q : a), mid[0]);
+    const front = mid.filter((q) => q.z > nose.z - sz.z * 0.35);
+    const chin = front.reduce((a, q) => (q.y < a.y ? q : a), front[0]);
+    const faceZ = (y: number) => front.filter((q) => Math.abs(q.y - y) < sz.y * 0.03).reduce((a, q) => Math.max(a, q.z), -Infinity);
+    const dark = hair.clone().multiplyScalar(0.85);
+    // Bigote fino justo encima del labio, casi pegado a la piel
+    const my = nose.y - (nose.y - chin.y) * 0.21;
+    const mz = faceZ(my);
+    if (isFinite(mz)) {
+      ball(0.012, c.x - 0.012, my, mz - 0.003, 1.45, 0.34, 0.4, dark);
+      ball(0.012, c.x + 0.012, my, mz - 0.003, 1.45, 0.34, 0.4, dark);
+    }
+    // Perilla: una mancha corta en la barbilla, sin salir de la cara
+    const gy = chin.y + (nose.y - chin.y) * 0.12;
+    const gz = faceZ(gy);
+    if (isFinite(gz)) ball(0.013, c.x, gy, gz - 0.006, 0.8, 1.0, 0.32, dark);
+  }
+  if (!parts.length) return;
+  const geo = mergeGeometries(parts);
+  if (!geo) return;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+  mesh.castShadow = true;
+  mesh.userData.person = true;
+  anchor.add(mesh);
+}
+
 /**
  * Punto pegado a un hueso (Head, Hips, Spine2...) con los ejes del personaje en reposo y en metros:
  * para colgar sombreros, delantales o un tambor que sigan al cuerpo animado.
@@ -1209,6 +1356,11 @@ export function updateRigPeople(dt: number) {
 
 /** Al salir de un capítulo. */
 export function clearRigPeople() {
+  // Los que el capítulo sacó de la escena antes de salir no los libera su dispose: sus huesos, aquí
+  for (const p of people)
+    p.root.traverse((o) => {
+      (o as THREE.SkinnedMesh).skeleton?.dispose();
+    });
   people.clear();
   rigTickers.clear();
   rigPost.clear();
