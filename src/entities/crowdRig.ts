@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
-import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, womanPartsTexture, type Kind } from './rig';
+import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, noTails, womanPartsTexture, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
 import womanLodUrl from '../assets/chars/woman_lod.glb';
 import manLodUrl from '../assets/chars/man_lod.glb';
@@ -357,6 +357,8 @@ export class RigCrowd {
       colorRigMaterial(kind, part.name, mat, neutral);
       vatify(mat, part);
       if (look.shorts && kind === 'man' && /Outfit_(Bottom|Top)/.test(part.name)) bareShader(mat, look.skin, /Bottom/.test(part.name) ? 'legs' : 'arms');
+      // Sin faldones de chaqueta (con manga corta ya los quita bareShader)
+      else if (kind === 'man' && /Outfit_Top/.test(part.name)) noTails(mat);
       if (kind === 'woman') {
         for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a);
         varyWoman(mat, look);

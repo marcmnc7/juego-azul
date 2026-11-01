@@ -483,7 +483,7 @@ export class Level3 implements Level {
     this.buildQueue();
     this.buildFlash();
 
-    this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short' });
+    this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short', male: true });
     this.barman.root.position.set(BAR_POS.x - 1.6, 0, BAR_POS.z);
     this.barman.root.rotation.y = Math.PI / 2;
     sc.add(this.barman.root);
@@ -969,7 +969,7 @@ export class Level3 implements Level {
     });
 
     // Banda
-    const guitarist = makePerson({ skin: 0xe2b08c, shirt: 0x111111, pants: 0x222244, hair: 0x111111, hairStyle: 'cap' });
+    const guitarist = makePerson({ skin: 0xe2b08c, shirt: 0x111111, pants: 0x222244, hair: 0x111111, hairStyle: 'cap', male: true });
     guitarist.root.position.set(0, 1.6, 32.5);
     guitarist.root.rotation.y = Math.PI;
     guitarist.body.add(new Merger().add(G.box, 0x9b2335, 0.1, 1.05, 0.28, 0, 0, -0.6, 0.45, 0.9, 0.12).add(G.box, 0x6b4428, -0.35, 1.45, 0.28, 0, 0, -0.6, 0.08, 0.9, 0.06).mesh());
@@ -977,10 +977,10 @@ export class Level3 implements Level {
     bassist.root.position.set(-6, 1.6, 33);
     bassist.root.rotation.y = Math.PI;
     bassist.body.add(new Merger().add(G.box, 0x1f5fbf, 0.1, 1.05, 0.28, 0, 0, -0.6, 0.42, 0.85, 0.12).mesh());
-    const sax = makePerson({ skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x111111, hair: 0x222222, hairStyle: 'short' });
+    const sax = makePerson({ skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x111111, hair: 0x222222, hairStyle: 'short', male: true });
     sax.root.position.set(6, 1.6, 33);
     sax.root.rotation.y = Math.PI;
-    const drummer = makePerson({ skin: 0xe8b894, shirt: 0xffffff, pants: 0x111111, hair: 0x888888, hairStyle: 'short' });
+    const drummer = makePerson({ skin: 0xe8b894, shirt: 0xffffff, pants: 0x111111, hair: 0x888888, hairStyle: 'short', male: true });
     drummer.root.position.set(0, 1.6, 36.8);
     drummer.root.rotation.y = Math.PI;
     this.band = [guitarist, bassist, sax, drummer];

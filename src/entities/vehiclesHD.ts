@@ -4,7 +4,8 @@ import { quality } from '../core/gfx';
 import foxUrl from '../assets/chars/fox.glb';
 import { boneAnchor, grayTexture, makeRigPerson, rigTickers } from './rig';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { makeHelmet, type HelmetOpts } from './helmet';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 import type { Dog, Person, PersonLook } from './models';
@@ -163,77 +164,171 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
   return { root, body, joy, wheels, azul };
 }
 
-/** Moto realista con el piloto montado y casco. Mira hacia +Z. */
-export function makeMotoHD(color: number, rider?: PersonLook) {
+/**
+ * Moto naked de media cilindrada hecha por piezas (depósito, colín y tapas con perfil; chasis
+ * multitubular, motor con aletas, radiador, escape, horquilla, guardabarros, faro con cúpula, cuadro,
+ * retrovisores, intermitentes, matrícula, estriberas, discos y cadena), fundidas por material para que
+ * cueste pocas llamadas de dibujo. Con el piloto montado y su casco integral. Mira hacia +Z.
+ */
+export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts = { color, stripe: 0xf2f2ee }) {
   const root = new THREE.Group();
   const frame = new THREE.Group();
   root.add(frame);
-  const add = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, parent: THREE.Object3D = frame) => {
-    const mesh = new THREE.Mesh(g, m);
-    mesh.position.set(x, y, z);
-    mesh.rotation.set(rx, ry, rz);
-    mesh.scale.set(sx, sy, sz);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    parent.add(mesh);
-    return mesh;
-  };
   const body = paint(color);
   const chrome = phys({ color: 0xdfe3e8, metalness: 1, roughness: 0.15 });
   const darkMetal = phys({ color: 0x2a2c30, metalness: 0.8, roughness: 0.45 });
+  const frameMat = phys({ color: 0x18191c, metalness: 0.5, roughness: 0.35, clearcoat: 0.6 });
+  const alu = phys({ color: 0xa9adb3, metalness: 0.9, roughness: 0.3 });
   const rubber = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92 });
-  const leather = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+  const leather = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.62 });
   const lamp = new THREE.MeshStandardMaterial({ color: 0xfff7d8, emissive: 0xfff1c0, emissiveIntensity: 1.2, roughness: 0.2 });
   const tail = new THREE.MeshStandardMaterial({ color: 0xff2020, emissive: 0xff1010, emissiveIntensity: 0.8 });
-  const sphere = new THREE.SphereGeometry(0.5, 24, 16);
-  const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+  const amber = new THREE.MeshStandardMaterial({ color: 0xff9a20, emissive: 0xff7a00, emissiveIntensity: 0.35, roughness: 0.3 });
+  const screen = new THREE.MeshStandardMaterial({ color: 0x0c1418, emissive: 0x3aa0ff, emissiveIntensity: 0.5, roughness: 0.3 });
+  const plate = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.5 });
+  const smoke = phys({ color: 0x1c2630, roughness: 0.05, metalness: 0.2, clearcoat: 1, transparent: true, opacity: 0.7 });
+
+  // Piezas agrupadas por material y fundidas al final (las ruedas, aparte, porque giran)
+  const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const put = (into: Map<THREE.Material, THREE.BufferGeometry[]>, g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
+    let gg = g.index ? g.toNonIndexed() : g.clone();
+    gg.deleteAttribute('uv');
+    if (gg.attributes.uv1) gg.deleteAttribute('uv1');
+    gg = gg.applyMatrix4(m4.compose(new THREE.Vector3(x, y, z), q.setFromEuler(e.set(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)));
+    let list = into.get(m);
+    if (!list) into.set(m, (list = []));
+    list.push(gg);
+  };
+  const add = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => put(parts, g, m, x, y, z, rx, ry, rz, sx, sy, sz);
+  const flush = (from: Map<THREE.Material, THREE.BufferGeometry[]>, parent: THREE.Object3D) => {
+    for (const [m, list] of from) {
+      const mesh = new THREE.Mesh(mergeGeometries(list)!, m);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+    }
+  };
   const box = new THREE.BoxGeometry(1, 1, 1);
+  const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+  const sphere = new THREE.SphereGeometry(0.5, 20, 14);
+  /** Tubo recto de a a b (radio r). */
+  const tube = (a: [number, number, number], b: [number, number, number], r: number, m: THREE.Material) => {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+    const d = B.clone().sub(A);
+    const g = new THREE.CylinderGeometry(r, r, d.length(), 10).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
+    add(g, m, (A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2);
+  };
 
-  add(sphere, body, 0, 0.78, 0.18, 0.12, 0, 0, 0.34, 0.24, 0.62); // depósito
-  add(sphere, leather, 0, 0.8, -0.42, 0, 0, 0, 0.3, 0.1, 0.62); // asiento
-  add(sphere, body, 0, 0.82, -0.86, -0.2, 0, 0, 0.22, 0.12, 0.42); // colín
-  add(box, darkMetal, 0, 0.5, -0.08, 0, 0, 0, 0.3, 0.3, 0.62); // motor
-  for (const sx of [-0.16, 0.16]) add(cyl, chrome, sx, 0.5, -0.06, Math.PI / 2, 0, 0, 0.16, 0.12, 0.16); // tapas
-  add(cyl, chrome, 0.19, 0.4, -0.55, Math.PI / 2 - 0.12, 0, 0, 0.09, 0.8, 0.09); // escape
-  add(cyl, darkMetal, 0.19, 0.44, -0.97, Math.PI / 2 - 0.12, 0, 0, 0.1, 0.1, 0.1);
-  for (const sx of [-0.09, 0.09]) add(cyl, chrome, sx, 0.66, 0.66, -0.38, 0, 0, 0.045, 0.72, 0.045); // horquilla
-  add(cyl, darkMetal, 0, 1.0, 0.56, 0, 0, Math.PI / 2, 0.035, 0.7, 0.035); // manillar
-  for (const sx of [-0.33, 0.33]) add(cyl, rubber, sx, 1.0, 0.56, 0, 0, Math.PI / 2, 0.045, 0.12, 0.045); // puños
-  add(sphere, chrome, 0, 0.9, 0.76, 0, 0, 0, 0.2, 0.2, 0.16); // faro
-  add(sphere, lamp, 0, 0.9, 0.83, 0, 0, 0, 0.16, 0.16, 0.04);
-  add(box, tail, 0, 0.84, -1.07, 0, 0, 0, 0.12, 0.05, 0.03); // piloto
-  add(box, darkMetal, 0, 0.62, -0.55, -0.5, 0, 0, 0.06, 0.06, 0.62); // basculante
+  // Depósito, sillín, colín y tapas laterales (perfiles de lado extruidos a lo ancho)
+  add(profile([[0.46, 0.78], [0.36, 0.95], [0.12, 1.0], [-0.12, 0.96], [-0.2, 0.86], [-0.16, 0.76], [0.1, 0.72], [0.4, 0.71]], 0.38, 0.07), body, 0, 0, 0);
+  add(profile([[-0.17, 0.83], [-0.22, 0.87], [-0.58, 0.87], [-0.72, 0.9], [-1.0, 0.91], [-1.03, 0.85], [-0.6, 0.8], [-0.2, 0.79]], 0.3, 0.05), leather, 0, 0, 0);
+  add(profile([[-0.9, 0.82], [-1.0, 0.9], [-1.2, 0.89], [-1.24, 0.84], [-1.06, 0.78]], 0.22, 0.03), body, 0, 0, 0);
+  add(profile([[-0.14, 0.6], [-0.18, 0.8], [-0.72, 0.8], [-0.58, 0.6]], 0.27, 0.02), darkMetal, 0, 0, 0);
+  // Chasis multitubular: de la pipa de dirección al eje del basculante, por los dos lados
+  for (const sx of [-1, 1]) {
+    tube([sx * 0.06, 0.92, 0.5], [sx * 0.14, 0.82, 0.05], 0.022, frameMat);
+    tube([sx * 0.14, 0.82, 0.05], [sx * 0.14, 0.5, -0.22], 0.022, frameMat);
+    tube([sx * 0.06, 0.86, 0.46], [sx * 0.14, 0.55, 0.15], 0.02, frameMat);
+    tube([sx * 0.14, 0.55, 0.15], [sx * 0.14, 0.5, -0.22], 0.02, frameMat);
+    tube([sx * 0.14, 0.82, 0.05], [sx * 0.14, 0.55, 0.15], 0.016, frameMat);
+    tube([sx * 0.14, 0.82, -0.2], [sx * 0.1, 0.84, -0.95], 0.016, frameMat); // subchasis
+    tube([sx * 0.14, 0.52, -0.22], [sx * 0.1, 0.8, -0.8], 0.014, frameMat);
+    // Basculante y estriberas (piloto y paquete)
+    add(box, alu, sx * 0.13, 0.4, -0.5, 0.14, 0, 0, 0.05, 0.08, 0.6);
+    add(cyl, darkMetal, sx * 0.2, 0.42, -0.24, 0, 0, Math.PI / 2, 0.025, 0.12, 0.025);
+    add(cyl, darkMetal, sx * 0.2, 0.5, -0.7, 0, 0, Math.PI / 2, 0.022, 0.1, 0.022);
+    // Asidero del paquete
+    tube([sx * 0.12, 0.92, -0.78], [sx * 0.11, 0.95, -1.05], 0.012, darkMetal);
+  }
+  add(cyl, frameMat, 0, 0.9, 0.52, -0.38, 0, 0, 0.07, 0.18, 0.07); // pipa de dirección
+  // Motor: cárter, culata con aletas, tapas de cromo y radiador delante
+  add(box, darkMetal, 0, 0.44, -0.02, 0, 0, 0, 0.34, 0.24, 0.44);
+  for (let k = 0; k < 5; k++) add(box, alu, 0, 0.6 + k * 0.035, 0.08 + k * 0.012, -0.25, 0, 0, 0.32, 0.014, 0.3);
+  add(box, darkMetal, 0, 0.78, 0.13, -0.25, 0, 0, 0.26, 0.05, 0.22);
+  for (const sx of [-0.18, 0.18]) add(cyl, chrome, sx, 0.44, -0.04, 0, 0, Math.PI / 2, 0.17, 0.05, 0.17);
+  add(box, darkMetal, 0, 0.66, 0.39, -0.2, 0, 0, 0.36, 0.3, 0.05);
+  for (let k = 0; k < 6; k++) add(box, alu, 0, 0.54 + k * 0.045, 0.415 - k * 0.009, -0.2, 0, 0, 0.32, 0.01, 0.012);
+  // Escape: colectores por debajo y silencioso alto en el lado derecho
+  const header = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.04, 0.6, 0.3), new THREE.Vector3(0.06, 0.34, 0.36), new THREE.Vector3(0.1, 0.24, 0.1), new THREE.Vector3(0.16, 0.3, -0.3), new THREE.Vector3(0.2, 0.42, -0.55)]), 24, 0.03, 8);
+  add(header, chrome, 0, 0, 0);
+  add(header, chrome, -0.08, 0, 0);
+  add(cyl, alu, 0.21, 0.47, -0.72, Math.PI / 2 - 0.22, 0, 0, 0.14, 0.42, 0.14);
+  add(cyl, darkMetal, 0.21, 0.52, -0.95, Math.PI / 2 - 0.22, 0, 0, 0.1, 0.04, 0.1);
+  // Cadena y piñones
+  for (const y of [0.45, 0.39]) tube([0.15, y, -0.08], [0.15, y - 0.05 + (y > 0.42 ? 0.03 : -0.03), -0.78], 0.009, darkMetal);
+  add(cyl, darkMetal, 0.15, 0.42, -0.08, 0, 0, Math.PI / 2, 0.08, 0.02, 0.08);
+  // Horquilla invertida con sus tijas, guardabarros delantero y trasero
+  for (const sx of [-0.09, 0.09]) {
+    tube([sx, 1.0, 0.5], [sx, 0.62, 0.66], 0.03, alu);
+    tube([sx, 0.64, 0.65], [sx, 0.34, 0.8], 0.022, chrome);
+  }
+  add(box, darkMetal, 0, 0.97, 0.52, -0.38, 0, 0, 0.26, 0.04, 0.09);
+  add(box, darkMetal, 0, 0.8, 0.59, -0.38, 0, 0, 0.24, 0.04, 0.08);
+  const fender = (r: number, a0: number, a1: number) => new THREE.CylinderGeometry(r, r, 0.13, 20, 1, true, a0, a1).rotateZ(Math.PI / 2);
+  add(fender(0.37, -0.35, 1.6), body, 0, 0.34, 0.8);
+  add(fender(0.37, 3.6, 1.0), darkMetal, 0, 0.34, -0.78);
+  // Faro redondo con aro de cromo y cúpula ahumada; cuadro digital; manillar, puños, manetas y espejos
+  add(cyl, chrome, 0, 0.92, 0.72, Math.PI / 2, 0, 0, 0.22, 0.12, 0.22);
+  add(cyl, lamp, 0, 0.92, 0.785, Math.PI / 2, 0, 0, 0.18, 0.01, 0.18);
+  add(box, smoke, 0, 1.08, 0.66, -0.6, 0, 0, 0.24, 0.16, 0.01);
+  add(box, darkMetal, 0, 1.03, 0.6, -0.5, 0, 0, 0.14, 0.09, 0.05);
+  add(box, screen, 0, 1.05, 0.625, -0.5, 0, 0, 0.11, 0.06, 0.005);
+  tube([-0.36, 1.04, 0.5], [0.36, 1.04, 0.5], 0.016, darkMetal);
+  for (const sx of [-1, 1]) {
+    add(cyl, rubber, sx * 0.33, 1.04, 0.5, 0, 0, Math.PI / 2, 0.045, 0.13, 0.045);
+    add(box, alu, sx * 0.27, 1.05, 0.56, 0, sx * 0.25, 0, 0.16, 0.012, 0.02);
+    tube([sx * 0.22, 1.05, 0.52], [sx * 0.3, 1.25, 0.48], 0.008, darkMetal);
+    add(sphere, darkMetal, sx * 0.31, 1.27, 0.48, 0, 0, 0, 0.13, 0.08, 0.03);
+    // Intermitentes y tapas del radiador
+    add(box, amber, sx * 0.14, 0.86, 0.72, 0, 0, 0, 0.06, 0.03, 0.04);
+    add(box, amber, sx * 0.1, 0.8, -1.22, 0, 0, 0, 0.05, 0.03, 0.04);
+    add(box, body, sx * 0.19, 0.68, 0.36, 0, sx * 0.35, 0, 0.03, 0.3, 0.2);
+  }
+  // Piloto, portamatrículas y matrícula
+  add(box, tail, 0, 0.86, -1.24, 0.2, 0, 0, 0.13, 0.05, 0.03);
+  add(box, darkMetal, 0, 0.74, -1.18, 0.6, 0, 0, 0.12, 0.02, 0.22);
+  add(box, plate, 0, 0.66, -1.26, -0.15, 0, 0, 0.2, 0.14, 0.01);
+  flush(parts, frame);
 
+  // Ruedas: neumático, llanta de cinco radios, disco y pinza (cada una gira sobre su eje)
   const wheels: THREE.Object3D[] = [];
-  const tire = new THREE.TorusGeometry(0.27, 0.07, 14, 32).rotateY(Math.PI / 2);
-  const rim = new THREE.CylinderGeometry(0.2, 0.2, 0.07, 24).rotateZ(Math.PI / 2);
-  const spoke = new THREE.BoxGeometry(0.03, 0.4, 0.025);
-  for (const z of [0.8, -0.78]) {
+  const tire = new THREE.TorusGeometry(0.265, 0.075, 14, 36).rotateY(Math.PI / 2);
+  const rimRing = new THREE.TorusGeometry(0.2, 0.016, 8, 32).rotateY(Math.PI / 2);
+  for (const [z, front] of [[0.8, true], [-0.78, false]] as const) {
     const w = new THREE.Group();
     w.position.set(0, 0.34, z);
-    add(tire, rubber, 0, 0, 0, 0, 0, 0, 1, 1, 1, w);
-    add(rim, chrome, 0, 0, 0, 0, 0, 0, 1, 1, 1, w);
-    for (let k = 0; k < 3; k++) add(spoke, darkMetal, 0, 0, 0, (k * Math.PI) / 3, 0, 0, 1, 1, 1, w);
+    const wp = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    put(wp, tire, rubber, 0, 0, 0);
+    put(wp, rimRing, darkMetal, 0, 0, 0);
+    for (let k = 0; k < 5; k++) put(wp, box, darkMetal, 0, 0, 0, (k * Math.PI * 2) / 5, 0, 0, 0.03, 0.36, 0.035);
+    put(wp, cyl, alu, 0, 0, 0, 0, 0, Math.PI / 2, 0.08, 0.1, 0.08);
+    put(wp, cyl, chrome, front ? -0.07 : 0.07, 0, 0, 0, 0, Math.PI / 2, front ? 0.3 : 0.24, 0.008, front ? 0.3 : 0.24);
+    flush(wp, w);
     root.add(w);
     wheels.push(w);
+    // Pinza de freno (no gira con la rueda)
+    const cal = new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: 0.4 }));
+    cal.scale.set(0.04, 0.09, 0.06);
+    cal.position.set(front ? -0.08 : 0.08, 0.34 + 0.11, z - 0.06);
+    root.add(cal);
   }
 
   let person: Person | null = null;
   if (rider) {
     const p = makeRigPerson(rider, 1, new THREE.Object3D());
     p.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
-    p.legL.rotation.set(-1.15, 0, -0.22);
-    p.legR.rotation.set(-1.15, 0, 0.22);
-    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.65;
-    p.armL.rotation.set(-1.0, 0, -0.18);
-    p.armR.rotation.set(-1.0, 0, 0.18);
-    p.elbowL.rotation.x = p.elbowR.rotation.x = -0.35;
-    p.root.position.set(0, 0.94 - p.rig!.hipsHeight, -0.45); // cadera 7 cm sobre el asiento (a 0,84 se hundía en él)
-    // Casco integral con visera
-    const helmet = new THREE.Group();
-    add(new THREE.SphereGeometry(0.15, 24, 16), body, 0, 0.12, 0.01, 0, 0, 0, 1, 1.05, 1.08, helmet);
-    add(new THREE.SphereGeometry(0.152, 24, 12, -0.9, 1.8, 1.05, 0.75), phys({ color: 0x223040, metalness: 0.2, roughness: 0.05, clearcoat: 1 }), 0, 0.12, 0.012, 0, 0, 0, 1, 1.05, 1.08, helmet);
-    boneAnchor(p, 'Head').add(helmet);
+    // Pies en las estriberas y manos en los puños
+    p.legL.rotation.set(-1.1, 0, -0.24);
+    p.legR.rotation.set(-1.1, 0, 0.24);
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.75;
+    p.armL.rotation.set(-1.05, 0, -0.22);
+    p.armR.rotation.set(-1.05, 0, 0.22);
+    p.elbowL.rotation.x = p.elbowR.rotation.x = -0.4;
+    p.root.position.set(0, 0.94 - p.rig!.hipsHeight, -0.45); // cadera 7 cm sobre el sillín
+    boneAnchor(p, 'Head').add(makeHelmet(helmet));
     root.add(p.root);
     person = p;
   }

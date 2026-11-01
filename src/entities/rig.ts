@@ -555,11 +555,13 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
     if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
     m.material = mat;
-    if (look.stripes && /Outfit_Top/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
+    // La parte de arriba del modelo de hombre es una chaqueta con faldones (parecía un chaqué): a él
+    // siempre se le recortan por la cintura y queda una camisa; la de rayas es la camiseta del Barça
+    if ((look.stripes || kind === 'man') && /Outfit_Top/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
       const tee = teeFor(m as THREE.SkinnedMesh, kind);
       m.userData.restSrc = m.geometry;
       m.geometry = tee.geo;
-      stripes(mat, tee.axis, tee.period, look.stripes);
+      if (look.stripes) stripes(mat, tee.axis, tee.period, look.stripes);
     }
     // Ropa de verano: pantalón corto y manga corta (a ella se lo pinta su textura)
     if (kind === 'man' && look.shorts && /Outfit_(Bottom|Top)/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
@@ -748,6 +750,22 @@ export function bareShader(mat: THREE.Material, skin: number, part: 'legs' | 'ar
       .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>\n${part === 'arms' ? 'if (vRest.x < 0.53) discard;' : ''}\nif (${cond}) diffuseColor.rgb = bareSkin * 0.92;`);
   };
   mat.customProgramCacheKey = () => prevKey() + '|bare-' + part;
+}
+
+/** Sin los faldones de la chaqueta del modelo de hombre (lo de debajo de la cintura): una camisa normal. */
+export function noTails(mat: THREE.Material) {
+  const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.onBeforeCompile = (sh, r) => {
+    prev?.call(mat, sh, r);
+    if (sh.fragmentShader.includes('varying vec2 vRest;')) {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\nif (vRest.x < 0.53) discard;');
+      return;
+    }
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRest;\nvarying vec2 vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vRest;').replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\nif (vRest.x < 0.53) discard;');
+  };
+  mat.customProgramCacheKey = () => prevKey() + '|notails';
 }
 
 // ---------- Camiseta a rayas (la del Barça) ----------
