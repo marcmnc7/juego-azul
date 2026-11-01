@@ -414,6 +414,9 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   100% { transform: translate(var(--dx), 60vh) rotate(var(--r)); opacity: 0; }
 }
 .result { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.result-chapter { font-size: 13px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: var(--paper); text-shadow: 0 1px 2px rgba(0,0,0,.4); text-align: center; }
+/* El confeti va al final y es fixed: el botón es el último de verdad y cierra el centrado vertical */
+.chapter-result > .big-btn { margin-bottom: auto; }
 .stars { font-size: 44px; letter-spacing: 6px; }
 .stars span { color: rgba(255,255,255,.3); display: inline-block; -webkit-text-stroke: 2px var(--sea); paint-order: stroke fill; }
 .stars span.on { color: var(--gold); text-shadow: 0 0 22px rgba(255,207,92,.7); animation: starpop .5s cubic-bezier(.3,1.8,.5,1) both; }
@@ -649,6 +652,23 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .pr-card.blocked { opacity: .45; outline-color: transparent; }
 .pr-guess { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 560px; padding: 12px; border-radius: 16px; background: var(--paper); color: var(--ink); border: 4px solid var(--sea); }
 .pr-guess > div { width: 100%; font-weight: 600; }
+/* Con el móvil en horizontal la mesa no cabía (tus cartas cortadas y el botón de seguir fuera de la
+   pantalla): todo más compacto y la elección del Guardia, encima de la mesa */
+@media (max-height: 520px) {
+  .princesa-screen { gap: 5px; padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .pr-head h2 { font-size: 24px; }
+  .pr-row { min-height: 0; gap: 8px; }
+  .pr-card { width: 52px; height: 74px; padding: 4px; gap: 2px; border-width: 2px; }
+  .pr-card b { top: 3px; left: 5px; font-size: 12px; }
+  .pr-card .pr-icon { font-size: 22px; }
+  .pr-card .pr-name { font-size: 9px; }
+  .pr-log { min-height: 0; padding: 5px 12px; font-size: 14px; }
+  .pr-help { min-height: 0; font-size: 12px; line-height: 1.3; }
+  .princesa-screen .mini-skip { min-height: 0; padding: 4px 12px; }
+  .princesa-screen .big-btn { min-height: 44px; padding: 8px 28px; }
+  .pr-guess { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; width: min(560px, 92vw); padding: 10px; gap: 6px; box-shadow: var(--shadow); }
+  .pr-guess .link-btn { min-height: 38px; padding: 6px 12px; }
+}
 
 .mini-screen { gap: 10px; }
 .mini-canvas { width: min(96vw, calc((100dvh - 150px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto; border-radius: 16px; background: #0f1530; border: 4px solid var(--sea); box-shadow: var(--shadow); touch-action: none; }

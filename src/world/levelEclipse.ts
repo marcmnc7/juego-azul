@@ -520,6 +520,13 @@ export class LevelEclipse implements Level {
     this.ferryT = 0;
     this.flipT = 0;
     this.kayakV = 0;
+    // Sin restos de una vuelta anterior (modo prueba): ni ferry a la vista ni el kayak volcado
+    this.ferry.visible = false;
+    const roll = this.boat?.roll;
+    if (roll) {
+      roll.position.y = 0;
+      roll.rotation.set(0, 0, 0);
+    }
     this.updateHud();
   }
 
@@ -778,8 +785,10 @@ export class LevelEclipse implements Level {
     const k = this.kayak.position;
     const roll = this.boat!.roll;
     if (this.phase === 'kayak') {
-      this.ferryT += dt;
-      if (this.input.consumeAction()) {
+      // Mientras dura la introducción (diálogos y el minijuego de la moto) el kayak solo se mece: el
+      // ferry no sale hasta que se puede remar (si no, volcaba en mitad de los diálogos)
+      if (!this.busy) this.ferryT += dt;
+      if (!this.busy && this.input.consumeAction()) {
         this.kayakV = Math.min(2.6, this.kayakV + 0.45);
         this.stroke = 1;
       }
@@ -829,7 +838,8 @@ export class LevelEclipse implements Level {
       audio.splash();
       this.fx.burst(splash, 'spray', 7, 0.8, 0.6);
     }
-    this.hud.setAction(this.phase === 'kayak' ? '🛶 Remar' : null, this.phase === 'kayak');
+    const rowing = this.phase === 'kayak' && !this.busy;
+    this.hud.setAction(rowing ? '🛶 Remar' : null, rowing);
     const f = this.ferry.position;
     const pos = this.phase === 'ferry' ? this.v1.set(k.x - 14, 4.5, k.z + 9) : this.v1.set(k.x - 6.5, 2.4, k.z - 2.8);
     const look = this.phase === 'ferry' ? new THREE.Vector3((k.x + f.x) / 2, 3, Math.max(k.z - 28, (k.z + f.z) / 2)) : new THREE.Vector3(k.x + 6, 0.6, k.z + 1);

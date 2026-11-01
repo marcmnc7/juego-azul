@@ -224,7 +224,8 @@ export class Level1 implements Level {
     this.carme.root.position.copy(this.world.marcPos);
     this.carme.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.carme.root);
-    this.marc.root.position.copy(this.world.marcPos).add(new THREE.Vector3(3.2, 0, 2.2));
+    // (a un paso de los escalones de la iglesia, no encima: bailando se le metían las piernas en ellos)
+    this.marc.root.position.copy(this.world.marcPos).add(new THREE.Vector3(3.2, 0, 1.4));
     this.marc.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.marc.root);
 

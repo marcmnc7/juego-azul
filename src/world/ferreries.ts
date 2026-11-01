@@ -4,7 +4,7 @@ import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLi
 import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
 import { paintStyle } from '../core/paint';
 import dayHdr from '../assets/env/quarry.hdr';
-import { FerreriesHD } from './hd/ferreriesHD';
+import { FerreriesHD, CHURCH_STEP_Z } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
 import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
 
@@ -186,7 +186,12 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
     m.add(ROOF_GEO, ROOF, chx, h + 2.3, chz, 0, 0, 0, 0.9, 0.35, 0.9);
   }
   m.add(G.cyl, 0x8a8e90, cx + w / 2 - 0.5, h / 2, fz + facing * 0.08, 0, 0, 0, 0.12, h, 0.12);
-  m.add(G.box, MARES, cx - w / 2 + (w / cols) * (Math.floor(cols / 2) + 0.5), 0.06, fz + facing * 0.3, 0, 0, 0, 1.7, 0.12, 0.5);
+  // Lo que sobresale de la fachada a ras de suelo también choca (franja de `depth` metros delante de ella)
+  const front = (x: number, half: number, depth: number) => colliders.push({ minX: x - half, maxX: x + half, minZ: Math.min(fz, fz + facing * depth), maxZ: Math.max(fz, fz + facing * depth) });
+  const doorX = cx - w / 2 + (w / cols) * (Math.floor(cols / 2) + 0.5);
+  m.add(G.box, MARES, doorX, 0.06, fz + facing * 0.3, 0, 0, 0, 1.7, 0.12, 0.5);
+  // El escalón no se pisa: el suelo del pueblo es plano y quien se subía se quedaba con los pies hundidos en él
+  front(doorX, 0.85, 0.55);
   if (r() < 0.25) {
     const bx = cx + (r() - 0.5) * (w - 2);
     for (let k = 0; k < 6; k++) m.add(G.sphere, k % 2 ? 0xd6338a : 0x3e7a3a, bx + (r() - 0.5) * 1.6, 1 + r() * 2.5, fz + facing * 0.2, 0, 0, 0, 0.9, 0.7, 0.4);
@@ -196,6 +201,7 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
     const px = cx + (r() < 0.5 ? -1 : 1) * (w / 2 - 0.8);
     m.add(G.cyl, 0xb5603b, px, 0.3, fz + facing * 0.4, 0, 0, 0, 0.6, 0.6, 0.6);
     m.add(G.sphere, 0x3e7a3a, px, 0.9, fz + facing * 0.4, 0, 0, 0, 0.9, 0.9, 0.9);
+    front(px, 0.45, 0.85);
   }
   colliders.push({ minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 });
 }
@@ -318,7 +324,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
 
   const m = new Merger();
-  const hdOut = { lamps, hangs };
+  const hdOut = { lamps, hangs, blocks: colliders };
 
   // Calle mayor (z -5..5) y plaza (x -12..12, z 5..26)
   let x = -50;
@@ -414,10 +420,16 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     m.add(G.cyl, 0xd8c39a, 0, 7.4, 25.95, Math.PI / 2, 0, 0, 2.8, 0.1, 2.8); // rosetón
     m.add(G.cyl, 0x8fb3d9, 0, 7.4, 25.9, Math.PI / 2, 0, 0, 2.2, 0.1, 2.2);
     for (let k = 0; k < 8; k++) m.add(G.box, 0xd8c39a, 0, 7.4, 25.86, 0, 0, (k * Math.PI) / 8, 0.1, 2.2, 0.05);
-    for (let k = 0; k < 3; k++) m.add(G.box, 0xcab58e, 0, 0.1 + k * 0.2, 25.3 - k * 0.4, 0, 0, 0, 6 - k, 0.2, 1.2); // escalones
+    // Escalones macizos hasta la fachada: el de abajo, el más ancho, es el que sale más a la plaza
+    for (let k = 0; k < 3; k++) {
+      const z0 = CHURCH_STEP_Z + k * 0.4;
+      m.add(G.box, 0xcab58e, 0, 0.1 * (k + 1), (z0 + 25.9) / 2, 0, 0, 0, 6 - k, 0.2 * (k + 1), 25.9 - z0);
+    }
   }
   colliders.push({ minX: TX - 1.8, maxX: TX + 1.8, minZ: TZ - 1.8, maxZ: TZ + 1.8 });
   colliders.push({ minX: -7, maxX: 7, minZ: 26, maxZ: 34 });
+  // Los escalones del portal: el suelo es plano, así que no se suben, se rodean
+  colliders.push({ minX: -3, maxX: 3, minZ: CHURCH_STEP_Z, maxZ: 26 });
 
   // Vallas al final de la calle
   for (const ex of [-46, 46]) {

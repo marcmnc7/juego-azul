@@ -33,7 +33,7 @@ import { Post, GRADES, NEUTRAL, type Grade } from './core/post';
 import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
-import { titleScreen, mapScreen, showGift, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
+import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -418,9 +418,11 @@ function buildLevel(n: number, ready: () => void) {
         crossword(startLetter, goMap);
       } else goMap();
     };
-    // Después del vale (si lo hay) caen las fotos del capítulo; luego mapa o, al final, crucigrama y carta
+    // Después del vale (o, si el capítulo no tiene, de sus estrellas) caen las fotos del capítulo; luego
+    // mapa o, al final, crucigrama y carta
     const photos = () => memories(n, after);
     if (g) showGift(g, photos, result);
+    else if (result) chapterResult(n, result, photos);
     else photos();
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
@@ -484,7 +486,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */

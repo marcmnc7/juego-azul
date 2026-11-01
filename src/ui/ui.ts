@@ -450,6 +450,38 @@ function cssConfetti(parent: HTMLElement, n = 70) {
   }
 }
 
+/** Las estrellas del capítulo, que entran una a una, y sus números. */
+function resultBlock(result: LevelResult) {
+  const res = el('div', 'result');
+  const stars = el('div', 'stars');
+  for (let i = 0; i < 3; i++) {
+    const st = el('span', i < result.stars ? 'on' : '', '★');
+    st.style.animationDelay = `${0.3 + i * 0.25}s`;
+    stars.append(st);
+  }
+  const st = el('div', 'result-stats');
+  for (const [k, v] of result.stats) st.append(el('div', '', `<span>${k}</span><b>${v}</b>`));
+  res.append(stars, st);
+  setTimeout(() => result.stars > 0 && audio.pickup(), 300);
+  return res;
+}
+
+/** Final de un capítulo sin vale: sus estrellas y sus números, con confeti, antes de las fotos o del mapa. */
+export function chapterResult(n: number, result: LevelResult, onClose: () => void) {
+  clearScreens();
+  const o = el('div', 'gift-overlay chapter-result');
+  o.append(el('div', 'result-chapter', `Capítulo ${n} · ${LEVELS[n - 1].name}`), el('h1', 'gift-title', '¡Capítulo superado!'), resultBlock(result));
+  const b = el('button', 'big-btn', 'Seguir');
+  b.onclick = () => {
+    o.remove();
+    onClose();
+  };
+  o.append(b);
+  root.append(o);
+  audio.fanfare();
+  cssConfetti(o, 40);
+}
+
 /** Regalo: primero una caja que tiembla, al tocarla se abre con confeti y aparece el vale. */
 export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
   clearScreens();
@@ -458,19 +490,8 @@ export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
   const box = el('button', 'giftbox');
   box.append(el('div', 'lid'), el('div', 'base'), el('div', 'ribbon'));
   const tapHint = el('p', 'gift-hint', 'Toca la caja para abrirla');
-  if (result) {
-    const stars = el('div', 'stars');
-    for (let i = 0; i < 3; i++) {
-      const st = el('span', i < result.stars ? 'on' : '', '★');
-      st.style.animationDelay = `${0.3 + i * 0.25}s`;
-      stars.append(st);
-    }
-    const st = el('div', 'result-stats');
-    for (const [k, v] of result.stats) st.append(el('div', '', `<span>${k}</span><b>${v}</b>`));
-    o.append(el('div', 'result', ''), title);
-    o.querySelector('.result')!.append(stars, st);
-    setTimeout(() => result.stars > 0 && audio.pickup(), 300);
-  } else o.append(title);
+  if (result) o.append(resultBlock(result), title);
+  else o.append(title);
   o.append(box, tapHint);
   root.append(o);
   audio.fanfare();

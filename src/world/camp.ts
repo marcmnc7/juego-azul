@@ -5,6 +5,7 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
+import { later } from '../ui/ui';
 
 // Final del capítulo 3: la última noche, en La Rioja. Iba a ser cenita de camping (estrellas, cartas
 // y el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: entre
@@ -120,7 +121,7 @@ export class Camp {
   /** Él intenta encender el hornillo: clic, clic, clic… y nada. */
   tryStove() {
     for (let i = 0; i < 3; i++)
-      setTimeout(() => {
+      later(() => {
         audio.knock(0.5, 3200, 0.03);
         this.sparkT = 0.14;
         for (const sp of this.sparks) {

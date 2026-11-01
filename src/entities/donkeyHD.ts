@@ -115,8 +115,21 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, b
     if (hi - lo < best) (best = hi - lo), (standT = act.time);
     reach = Math.max(reach, hi - lo);
   }
+  // El lomo de verdad es el de la pose de parado (el galope lo sube unos centímetros respecto a la
+  // malla en reposo): ahí van la manta y el jinete, que si no se hundían en él
+  act.time = standT;
+  mixer.update(0);
+  let standBack = -Infinity;
+  for (let i = 0; i < n; i++) {
+    let y = pos.getY(i), z = pos.getZ(i);
+    dummy.morphTargetInfluences!.forEach((w, m) => {
+      y += w * morphs[m].getY(i);
+      z += w * morphs[m].getZ(i);
+    });
+    if (Math.abs(z) < 25) standBack = Math.max(standBack, y);
+  }
   mixer.uncacheRoot(dummy);
-  return { geo, clip, name: src.name, scale, minY, backY, standT, stride: reach * scale * 1.6 };
+  return { geo, clip, name: src.name, scale, minY, backY: Math.max(backY, standBack), standT, stride: reach * scale * 1.6 };
 }
 
 /**

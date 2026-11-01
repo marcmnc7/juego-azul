@@ -557,7 +557,11 @@ export class Level4 implements Level {
 
   private target(): THREE.Vector3 | null {
     if (this.phase === 'atBar') return this.pickedUp ? this.carDoor() : PINS;
-    if (this.phase === 'arrive') return this.v2.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -14.4);
+    if (this.phase === 'arrive') {
+      // Desde la calle, primero a la verja peatonal (el pasillo queda detrás del muro); ya dentro, al pasillo
+      if (this.player.root.position.z < STREET.wallZ + 0.4) return this.v2.set((STREET.gate.minX + STREET.gate.maxX) / 2, 0, STREET.wallZ + 0.7);
+      return this.v2.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -14.4);
+    }
     if (this.phase === 'toPool') return this.v2.set(-4.95, 0, (POOL.minZ + POOL.maxZ) / 2);
     if (this.phase === 'toTowels') return TOWELS;
     return null;

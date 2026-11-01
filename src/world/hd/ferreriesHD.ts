@@ -9,10 +9,14 @@ import { makeHdMaterials, shutterMat, type HdMats } from './materials';
 // balcones de hierro.
 
 const FLOWERS = [0xe0245e, 0xff5a7a, 0xd7263d, 0xf28f3b];
+/** Donde empieza el escalón de abajo de la iglesia (su fachada está en z = 26). */
+export const CHURCH_STEP_Z = 23.9;
 
 export interface HdHouseOut {
   lamps: { p: THREE.Vector3 }[];
   hangs: { x: number; y: number; z: number; facing: 1 | -1 }[];
+  /** Lo que sobresale de la fachada a ras de suelo (escalón, maceta grande), para las colisiones. */
+  blocks?: { minX: number; maxX: number; minZ: number; maxZ: number }[];
 }
 
 export class FerreriesHD {
@@ -30,6 +34,12 @@ export class FerreriesHD {
     const facing: 1 | -1 = Math.cos(ry) >= 0 ? 1 : -1;
     const h = floors * 3 + 0.4;
     const fz = d / 2;
+    // Rectángulo delante de la fachada (x0..x1 a lo ancho, `depth` hacia fuera) como caja del mundo
+    const block = (x0: number, x1: number, depth: number) => {
+      const a = world(x0, 0, fz);
+      const c = world(x1, 0, fz + depth);
+      out.blocks?.push({ minX: Math.min(a.x, c.x), maxX: Math.max(a.x, c.x), minZ: Math.min(a.z, c.z), maxZ: Math.max(a.z, c.z) });
+    };
     const wall = M.whites[Math.floor(r() * M.whites.length)];
     const sh = shutterMat(M, shutter);
     b.box(wall, [0, h / 2, 0], [w, h, d], { parent: P, tile: 3 });
@@ -60,6 +70,8 @@ export class FerreriesHD {
           b.box(M.mares, [x, 1.3, fz + 0.03], [1.6, 2.7, 0.08], { parent: P, tile: 1.5 });
           b.decal(M.doors, [x, 1.2, fz + 0.08], 1.25, 2.35, ARCH_DOOR, P);
           b.box(M.mares, [x, 0.06, fz + 0.3], [1.7, 0.12, 0.5], { parent: P, tile: 1.5 });
+          // El suelo es plano: el escalón no se pisa (quien se subía se quedaba con los pies hundidos)
+          block(x - 0.85, x + 0.85, 0.55);
           if (r() < 0.6) {
             b.box(M.iron, [x + 1.0, 2.6, fz + 0.15], [0.05, 0.05, 0.3], { parent: P });
             b.box(M.iron, [x + 1.0, 2.68, fz + 0.3], [0.3, 0.06, 0.3], { parent: P });
@@ -117,9 +129,11 @@ export class FerreriesHD {
       }
     }
     if (r() < 0.5) {
-      const pp = world((r() < 0.5 ? -1 : 1) * (w / 2 - 0.8), 0, fz + 0.4);
+      const lx = (r() < 0.5 ? -1 : 1) * (w / 2 - 0.8);
+      const pp = world(lx, 0, fz + 0.4);
       m.add(G.cyl, 0xb5603b, pp.x, 0.3, pp.z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, pp.x, 0.9, pp.z, 0, 0, 0, 0.9, 0.9, 0.9);
+      block(lx - 0.45, lx + 0.45, 0.85);
     }
   }
 
@@ -179,7 +193,11 @@ export class FerreriesHD {
     // Portal con la puerta grande de madera y escalones
     b.box(M.maresDark, [0, 2.4, 25.95], [3.6, 4.8, 0.1], { tile: 1.5 });
     b.decal(M.doors, [0, 2.2, 0], 2.6, 4.4, ARCH_DOOR, new THREE.Matrix4().makeTranslation(0, 0, 25.88).multiply(new THREE.Matrix4().makeRotationY(Math.PI)));
-    for (let k = 0; k < 3; k++) b.box(M.mares, [0, 0.1 + k * 0.2, 25.3 - k * 0.4], [6 - k, 0.2, 1.2], { tile: 1.5 });
+    // Escalones macizos hasta el portal: el de abajo, el más ancho, es el que sale más a la plaza
+    for (let k = 0; k < 3; k++) {
+      const z0 = CHURCH_STEP_Z + k * 0.4;
+      b.box(M.mares, [0, 0.1 * (k + 1), (z0 + 25.9) / 2], [6 - k, 0.2 * (k + 1), 25.9 - z0], { tile: 1.5 });
+    }
     // Rosetón (vidriera) con su aro de piedra
     m.add(G.cyl, 0x8fb3d9, 0, 7.4, 25.9, Math.PI / 2, 0, 0, 2.2, 0.1, 2.2);
     b.cyl(M.maresDark, [0, 7.4, 25.93], 1.4, 1.4, 0.1, { rx: Math.PI / 2, seg: 32 });

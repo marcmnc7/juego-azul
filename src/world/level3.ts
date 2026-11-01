@@ -697,6 +697,19 @@ export class Level3 implements Level {
         b.o.visible = false;
         continue;
       }
+      // A los viajeros no los atraviesa: les da en los pies y sale rebotada hacia donde venía
+      for (const t of this.travelers) {
+        const r = t.p.root.position;
+        const dx = b.o.position.x - r.x;
+        const dz = b.o.position.z - r.z;
+        if (dx * dx + dz * dz < 0.55 * 0.55 && dx * b.v.x < 0) {
+          b.v.x *= -0.5;
+          b.v.z = (dz >= 0 ? 1 : -1) * (Math.abs(b.v.z) * 0.5 + 0.6);
+          b.o.rotation.y = Math.atan2(b.v.x, b.v.z);
+          const d = Math.hypot(r.x - pp.x, r.z - pp.z);
+          if (d < 14) audio.knock(0.35 / (1 + d * 0.3), 260, 0.06);
+        }
+      }
       if (this.invuln <= 0 && Math.hypot(b.o.position.x - pp.x, b.o.position.z - pp.z) < 0.6 && b.o.position.y < 2) {
         this.invuln = 1.2;
         this.burgerHits++;
@@ -1031,6 +1044,9 @@ export class Level3 implements Level {
       const z = -16 + Math.random() * 21;
       if (this.colliders.some((c) => x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) continue;
       if (Math.hypot(x, z + 18) < 2) continue;
+      // Ni a los pies de nadie del público ni en la cola de los baños (se quedaban metidos en los zapatos)
+      if (this.people.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + 0.3)) continue;
+      if (Math.abs(z - Q_Z) < 0.7 && x > Q_X0 - 7 * Q_GAP - 0.6) continue;
       const mesh = new THREE.Mesh(cupGeo, mats[n % mats.length]);
       mesh.castShadow = true;
       this.scene.add(mesh);
@@ -1810,6 +1826,19 @@ export class Level3 implements Level {
       m.z = pp0.z;
       m.vx = this.walker.vx;
       m.vz = this.walker.vz;
+      // Los demás también apartan los vasos con los pies: la otra (Azul o Gas) y la gente de la cola
+      let k = 1;
+      const push = (x: number, z: number, vx: number, vz: number) => {
+        const o = (this.movers[k++] ??= { x: 0, z: 0, vx: 0, vz: 0, r: 0.3, height: 1.7 });
+        o.x = x;
+        o.z = z;
+        o.vx = vx;
+        o.vz = vz;
+      };
+      const other = this.player === this.gas ? this.azul : this.gas;
+      if (other.root.visible) push(other.root.position.x, other.root.position.z, 0, 0);
+      for (const n of this.npcs) if (n.p.root.visible) push(n.p.root.position.x, n.p.root.position.z, n.vx ?? 0, n.vz ?? 0);
+      while (k < this.movers.length) push(1e4, 1e4, 0, 0);
       this.phys.step(dt, this.movers);
       this.stepBall();
       for (const im of this.phys.impacts) {
@@ -1871,7 +1900,8 @@ export class Level3 implements Level {
         this.updateHud();
       };
     } else if (walking && this.phase === 'airport') {
-      if (pp.z > AIR.maxZ - 2.5) {
+      // La flecha y la columna de luz se apagan a 3 m de la puerta: para entonces el botón ya tiene que estar
+      if (pp.z > AIR.maxZ - 4.5) {
         label = '🛫 Embarcar';
         action = () => this.board();
       }

@@ -121,7 +121,14 @@ export function princesaGame(onWin: (rounds: number) => void) {
     const meRow = el('div', 'pr-row me');
     const help = el('div', 'pr-help');
     head.append(el('h2', '', MINIS.princesa.title), el('div', 'pr-sub', `Ronda ${rounds}`));
-    o.append(head, gasRow, mid, log, meRow, help);
+    // Como en los demás minijuegos, se puede saltar: la noche en las rocas sigue igual
+    const skip = el('button', 'link-btn mini-skip', 'Saltar ›');
+    skip.onclick = () => {
+      over = true;
+      o.remove();
+      onWin(rounds);
+    };
+    o.append(head, gasRow, mid, log, meRow, help, skip);
 
     const cardEl = (v: number | null, small = false) => {
       const c = el('div', 'pr-card' + (v === null ? ' back' : '') + (small ? ' small' : ''));
@@ -165,6 +172,7 @@ export function princesaGame(onWin: (rounds: number) => void) {
     };
     const end = (iWin: boolean, why: string) => {
       over = true;
+      skip.remove();
       render();
       say(why);
       const b = el('button', 'big-btn', iWin ? MINIS.princesa.winBtn : MINIS.princesa.again);
