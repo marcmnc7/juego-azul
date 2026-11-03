@@ -11,7 +11,8 @@ import { G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, Ca
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
-import { princesaGame, lostMoto } from '../ui/minis';
+import { princesaGame, lostMoto, type LoveLetterStage } from '../ui/minis';
+import { cardCanvas } from '../ui/cards';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
 import { FAROLA_WALK, COAST_Z, buildSaFarola } from './saFarola';
 import { buildKayak as kayakBoat, buildFerry, type Kayak } from './kayak';
@@ -125,6 +126,17 @@ export class LevelEclipse implements Level {
   /** Cancela y puerta de casa de Azul (o la verja de casa de Gas): se abren a quien llega. */
   private doors: Door[] = [];
   private doorWho: THREE.Vector3[] = [];
+  // Love Letter en las rocas
+  private llStage: LoveLetterStage | null = null;
+  private llTurn: 'me' | 'gas' = 'me';
+  private llPiles: { me: THREE.Object3D[]; gas: THREE.Object3D[] } = { me: [], gas: [] };
+  private flying: { c: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; spin: number }[] = [];
+  private handFans = new Map<Person, THREE.Group>();
+  private llPlayT = new Map<Person, number>();
+  private llCheerT = 0;
+  private llWinner: Person | null = null;
+  private cardTexs = new Map<string, THREE.Texture>();
+  private llFill: THREE.PointLight | null = null;
   private flipT = 0;
 
   // Coches y aparcamiento
@@ -443,7 +455,6 @@ export class LevelEclipse implements Level {
     m.add(G.rock, 0xd1ad74, 6, -1.4, -3, 0, 1, 0, 9, 3.2, 8);
     for (let i = 0; i < 9; i++) m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xc9a36a : 0xb48a54, -14 + i * 3.6, -1.5, 5 + Math.sin(i * 2.3) * 2, i, i * 0.7, 0, 3 + (i % 3), 1.4, 2.6);
     // Sentados directamente en la roca (sin toalla), con las cartas de La Princesa delante
-    for (let i = 0; i < 3; i++) m.add(G.box, 0xf4efe2, -0.3 + i * 0.25, 0.006, 0.8, 0, i * 0.4, 0, 0.18, 0.01, 0.26); // cartas
     sc.add(m.mesh());
     this.player = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
@@ -680,9 +691,11 @@ export class LevelEclipse implements Level {
     this.busy = true;
     this.updateHud();
     audio.startMusic('night');
+    this.setupCards();
     dialogue(ECLIPSE.rocks, () =>
       princesaGame((rounds) => {
         this.rounds = rounds;
+        this.endCards();
         dialogue(ECLIPSE.afterCards, () => {
           this.phase = 'eclipse';
           this.busy = false;
@@ -690,8 +703,149 @@ export class LevelEclipse implements Level {
           this.bareT = 0;
           this.updateHud();
         });
-      }),
+      }, this.llStage ?? undefined),
     );
+  }
+
+  // ---------------- Love Letter en las rocas ----------------
+
+  /** Textura de una carta (cara v o dorso con null). */
+  private cardTex(v: number | null) {
+    const key = String(v);
+    let t = this.cardTexs.get(key);
+    if (!t) {
+      t = new THREE.CanvasTexture(cardCanvas(v));
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      this.cardTexs.set(key, t);
+    }
+    return t;
+  }
+
+  /** Una carta física: cara por delante y dorso por detrás. */
+  private cardMesh(v: number | null) {
+    const g = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(0.09, 0.126);
+    const front = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: this.cardTex(v), roughness: 0.6 }));
+    const back = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: this.cardTex(null), roughness: 0.6 }));
+    back.rotation.y = Math.PI;
+    front.position.z = back.position.z = 0;
+    back.position.z = -0.0006;
+    for (const m of [front, back]) m.castShadow = true;
+    g.add(front, back);
+    return g;
+  }
+
+  /** Los dos sentados frente a frente en la roca, cada uno con sus cartas en la mano. */
+  private setupCards() {
+    // (frente a frente y un poco abiertos hacia tierra: la cámara les ve la cara con el mar detrás)
+    const seats: [Person, number, number][] = [[this.player, -0.6, 1.85], [this.gas, 0.6, -1.85]];
+    for (const [p, x, ry] of seats) {
+      p.root.position.x = x;
+      p.root.position.z = 0.1;
+      p.root.rotation.y = ry;
+    }
+    // Con el sol de la tarde detrás quedaban a contraluz: una luz cálida de relleno desde la cámara
+    this.llFill = new THREE.PointLight(0xffd2a8, 5, 6, 1.4);
+    this.llFill.position.set(0, 1.5, -1.1);
+    this.scene.add(this.llFill);
+    for (const p of [this.player, this.gas]) {
+      const fan = new THREE.Group();
+      fan.name = 'mano-cartas';
+      p.handR.add(fan);
+      this.handFans.set(p, fan);
+    }
+    this.llStage = {
+      play: (who, v) => {
+        const p = who === 'me' ? this.player : this.gas;
+        const from = p.handR.getWorldPosition(new THREE.Vector3());
+        const pile = this.llPiles[who];
+        const n = pile.length;
+        const c = this.cardMesh(v);
+        c.position.copy(from);
+        this.scene.add(c);
+        // Cae boca arriba en su lado de la roca, un poco torcida, encima de las anteriores
+        const to = new THREE.Vector3(who === 'me' ? -0.2 : 0.2, 0.035 + n * 0.002, 0.42 + (n % 3) * 0.03);
+        pile.push(c);
+        this.flying.push({ c, from, to, t: 0, spin: (Math.random() - 0.5) * 0.8 + (who === 'me' ? 0.3 : -0.3) });
+        audio.knock(0.25, 1800, 0.03);
+        this.llPlayT.set(p, 0.5);
+      },
+      turn: (who) => (this.llTurn = who),
+      hands: (me, gas) => {
+        for (const [p, k] of [[this.player, me], [this.gas, gas]] as [Person, number][]) {
+          const fan = this.handFans.get(p)!;
+          while (fan.children.length > k) fan.remove(fan.children[fan.children.length - 1]);
+          // Las de la mano se ven de dorso desde fuera (cada uno mira las suyas)
+          while (fan.children.length < k) fan.add(this.cardMesh(null));
+          fan.children.forEach((c, i) => {
+            c.position.set(0, -0.06, 0.03 + i * 0.004);
+            c.rotation.set(-Math.PI / 2 + 0.25, 0, (i - (k - 1) / 2) * 0.35);
+          });
+        }
+      },
+      reset: () => {
+        for (const who of ['me', 'gas'] as const) {
+          for (const c of this.llPiles[who]) c.removeFromParent();
+          this.llPiles[who] = [];
+        }
+        this.flying = [];
+      },
+      end: (iWin) => {
+        this.llCheerT = 2.2;
+        this.llWinner = iWin ? this.player : this.gas;
+      },
+    };
+  }
+
+  /** Recoge las cartas y vuelven a sentarse juntos mirando al mar para el eclipse. */
+  private endCards() {
+    this.llStage?.reset();
+    for (const fan of this.handFans.values()) fan.removeFromParent();
+    this.handFans.clear();
+    this.llStage = null;
+    this.llFill?.removeFromParent();
+    this.llFill?.dispose();
+    this.llFill = null;
+    for (const [p, x] of [[this.player, -0.45], [this.gas, 0.45]] as [Person, number][]) {
+      p.root.position.set(x, p.root.position.y, 0);
+      p.root.rotation.y = 0;
+    }
+  }
+
+  /** Brazos con las cartas, cartas que vuelan al montón y la cámara por encima del hombro de quien no juega. */
+  private updateCards(dt: number) {
+    for (const p of [this.player, this.gas]) {
+      const playT = (this.llPlayT.get(p) ?? 0) - dt;
+      this.llPlayT.set(p, playT);
+      const cheer = this.llCheerT > 0 && this.llWinner === p;
+      // Mano con las cartas delante del pecho; al jugar, el brazo se estira hacia la roca
+      const reach = playT > 0 ? Math.sin((playT / 0.5) * Math.PI) : 0;
+      p.armR.rotation.set(cheer ? -2.6 : -1.0 - reach * 0.35, 0, cheer ? 0.4 : 0.28);
+      p.elbowR.rotation.x = cheer ? -0.3 : -1.25 + reach * 0.9;
+      p.armL.rotation.set(-0.5, 0, -0.15);
+      p.elbowL.rotation.x = -0.9;
+      p.head.rotation.x = -0.25;
+      // Rodillas dobladas (con las piernas estiradas se metían en las del otro)
+      p.legL.rotation.set(-1.15, 0, -0.32);
+      p.legR.rotation.set(-1.15, 0, 0.32);
+      p.kneeL.rotation.x = p.kneeR.rotation.x = 1.95;
+    }
+    this.llCheerT -= dt;
+    for (const f of this.flying) {
+      f.t = Math.min(1, f.t + dt / 0.5);
+      const e = f.t * f.t * (3 - 2 * f.t);
+      f.c.position.lerpVectors(f.from, f.to, e);
+      f.c.position.y += Math.sin(f.t * Math.PI) * 0.18;
+      f.c.rotation.set(-Math.PI / 2 * e, 0, f.spin * e);
+    }
+    this.flying = this.flying.filter((f) => f.t < 1);
+    // Plano a dos desde tierra, con el mar y el sol de la tarde detrás; la cámara se arrima un poco a quien
+    // le toca. Mira por debajo de las caras: así quedan en la franja libre entre el título y las cartas
+    const lean = this.llTurn === 'me' ? -0.28 : 0.28;
+    this.camera.position.lerp(this.v1.set(lean, 1.3, -1.55), Math.min(1, dt * 1.6));
+    this.camLook.lerp(new THREE.Vector3(lean * 0.4, 0.42, 0.15), Math.min(1, dt * 2));
+    this.camera.lookAt(this.camLook);
   }
 
   private setGlasses(on: boolean) {
@@ -1020,6 +1174,7 @@ export class LevelEclipse implements Level {
       this.sitPose(p);
       p.head.rotation.x = -0.12;
     }
+    if (this.llStage) this.updateCards(dt);
     if (this.phase === 'eclipse' && !this.busy && this.totalT < 0) {
       this.hud.setAction(this.glasses ? '🕶️ Quitarse las gafas' : '🕶️ Ponerse las gafas', !this.glasses);
       if (this.input.consumeAction()) this.setGlasses(!this.glasses);
@@ -1075,9 +1230,11 @@ export class LevelEclipse implements Level {
     this.diamond.scale.setScalar(6 + dk * 34);
     const halo = this.scene.getObjectByName('halo') as THREE.Sprite | undefined;
     if (halo) (halo.material as THREE.SpriteMaterial).opacity = 1 - dark;
-    this.camera.position.lerp(this.v1.set(-1.6, 1.7, -3.4), Math.min(1, dt * 2));
-    this.camLook.lerp(this.phase === 'eclipse' || this.phase === 'done' ? this.v1.copy(this.sunDir).multiplyScalar(40) : new THREE.Vector3(0, 1.2, 6), Math.min(1, dt * 1.5));
-    this.camera.lookAt(this.camLook);
+    if (!this.llStage) {
+      this.camera.position.lerp(this.v1.set(-1.6, 1.7, -3.4), Math.min(1, dt * 2));
+      this.camLook.lerp(this.phase === 'eclipse' || this.phase === 'done' ? this.v1.copy(this.sunDir).multiplyScalar(40) : new THREE.Vector3(0, 1.2, 6), Math.min(1, dt * 1.5));
+      this.camera.lookAt(this.camLook);
+    }
     this.sun.follow(this.player.root.position);
   }
 
@@ -1104,6 +1261,7 @@ export class LevelEclipse implements Level {
       this.busy = false;
       this.input.reset();
       this.setGlasses(false);
+      if (this.llStage) this.endCards();
       document.querySelectorAll('.mini-screen, .dialogue, .phone-overlay, .princesa-screen').forEach((e) => e.remove());
     };
     return [

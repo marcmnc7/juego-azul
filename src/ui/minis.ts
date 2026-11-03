@@ -3,6 +3,7 @@ import { vibrate } from '../core/gfx';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { MINIS } from '../data/story';
 import { phoneChat, toast } from './ui';
+import { cardUrl } from './cards';
 
 // Minijuegos en HTML: la mochila de la Costa Brava, «La princesa» en las rocas del eclipse y los
 // cuatro interludios cortos entre capítulos (el avión en el radar, la moto perdida, el agility de Joy
@@ -90,17 +91,34 @@ const CARDS: Card[] = [
 ];
 const card = (v: number) => CARDS[v - 1];
 
+/** Lo que pasa en la escena 3D mientras se juega (las rocas, con los dos sentados frente a frente). */
+export interface LoveLetterStage {
+  /** Alguien juega una carta: vuela de su mano a su montón de descartes. */
+  play(who: 'me' | 'gas', v: number): void;
+  /** A quién le toca (la cámara lo mira por encima del hombro del otro). */
+  turn(who: 'me' | 'gas'): void;
+  /** Cartas que tiene cada uno en la mano. */
+  hands(me: number, gas: number): void;
+  /** Ronda nueva: se recoge todo. */
+  reset(): void;
+  end(iWin: boolean): void;
+}
+
 /**
- * Una mano de «La princesa» contra Gas, con las reglas de dos jugadores. Ella empieza con la Princesa
- * y Gas juega con la cabeza en otra parte (el eclipse), así que ganar está en su mano. Si pierde, revancha.
+ * Una partida de Love Letter contra Gas, con las reglas de dos jugadores. Ella empieza con la Princesa
+ * y Gas juega con la cabeza en otra parte (el eclipse), así que ganar está en su mano. Si pierde,
+ * revancha; a la tercera, Gas se rinde (el eclipse no espera). Se juega sobre la escena: se ve a los dos
+ * en las rocas y la interfaz solo pone las cartas.
  */
-export function princesaGame(onWin: (rounds: number) => void) {
-  const o = el('div', 'screen princesa-screen');
+export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetterStage) {
+  const o = el('div', 'princesa-screen ll');
   root.append(o);
   let rounds = 0;
+  const T = MINIS.princesa;
   const play = () => {
     rounds++;
     o.innerHTML = '';
+    stage?.reset();
     const deck: number[] = [];
     for (const [v, n] of [[1, 5], [2, 2], [3, 2], [4, 2], [5, 2], [6, 1], [7, 1]] as const) for (let i = 0; i < n; i++) deck.push(v);
     deck.sort(() => Math.random() - 0.5);
@@ -114,37 +132,46 @@ export function princesaGame(onWin: (rounds: number) => void) {
     const discards: { me: number[]; gas: number[] } = { me: [], gas: [] };
     let over = false;
 
-    const head = el('div', 'pr-head');
-    const gasRow = el('div', 'pr-row');
-    const mid = el('div', 'pr-mid');
-    const log = el('div', 'pr-log', MINIS.princesa.start);
+    const top = el('div', 'll-top');
+    const title = el('div', 'll-title', `${T.title} <span>Ronda ${rounds}</span>`);
+    const gasInfo = el('div', 'll-gas');
+    top.append(title, gasInfo);
+    const log = el('div', 'pr-log ll-log', T.start);
+    const bottom = el('div', 'll-bottom');
+    const help = el('div', 'pr-help ll-help');
     const meRow = el('div', 'pr-row me');
-    const help = el('div', 'pr-help');
-    head.append(el('h2', '', MINIS.princesa.title), el('div', 'pr-sub', `Ronda ${rounds}`));
-    // Como en los demás minijuegos, se puede saltar: la noche en las rocas sigue igual
-    const skip = el('button', 'link-btn mini-skip', 'Saltar ›');
-    skip.onclick = () => {
-      over = true;
-      o.remove();
-      onWin(rounds);
-    };
-    o.append(head, gasRow, mid, log, meRow, help, skip);
+    // Abajo, juntos: lo que pasa, qué hace cada carta y tu mano. El centro de la pantalla queda para ellos dos
+    bottom.append(log, help, meRow);
+    o.append(top, bottom);
 
-    const cardEl = (v: number | null, small = false) => {
-      const c = el('div', 'pr-card' + (v === null ? ' back' : '') + (small ? ' small' : ''));
-      if (v !== null) {
-        const k = card(v);
-        c.innerHTML = `<b>${k.v}</b><span class="pr-icon">${k.icon}</span><span class="pr-name">${k.name}</span>`;
-      }
+    const mini = (v: number | null) => {
+      const i = el('img', 'll-mini');
+      i.src = cardUrl(v);
+      i.alt = v === null ? 'Carta' : card(v).name;
+      return i;
+    };
+    const cardEl = (v: number) => {
+      const c = el('div', 'pr-card');
+      const img = el('img', 'll-face');
+      img.src = cardUrl(v);
+      img.alt = card(v).name;
+      img.draggable = false;
+      c.append(img, el('span', 'pr-name', card(v).name));
       return c;
     };
     const render = () => {
-      gasRow.innerHTML = '';
-      gasRow.append(el('div', 'pr-who', `Gas ${gasSafe ? '🌸' : ''}`), ...gas.map(() => cardEl(null)), el('div', 'pr-disc', discards.gas.map((v) => card(v).icon).join(' ')));
-      mid.innerHTML = '';
-      mid.append(el('div', 'pr-deck', `🂠 ${deck.length}`), el('div', 'pr-up', 'Fuera: ' + faceUp.map((v) => card(v).icon).join(' ')));
+      gasInfo.innerHTML = '';
+      gasInfo.append(el('b', '', `Gas${gasSafe ? ' 🌸' : ''}`));
+      for (let i = 0; i < gas.length; i++) gasInfo.append(mini(null));
+      if (discards.gas.length) {
+        const d = el('div', 'll-disc');
+        for (const v of discards.gas) d.append(mini(v));
+        gasInfo.append(d);
+      }
+      const up = el('div', 'll-up', `🂠 ${deck.length} · fuera:`);
+      for (const v of faceUp) up.append(mini(v));
+      gasInfo.append(up);
       meRow.innerHTML = '';
-      meRow.append(el('div', 'pr-who', `Tú ${meSafe ? '🌸' : ''}`));
       const forced = me.includes(7) && (me.includes(5) || me.includes(6));
       me.forEach((v, i) => {
         const c = cardEl(v);
@@ -153,18 +180,23 @@ export function princesaGame(onWin: (rounds: number) => void) {
           if (forced && v !== 7) c.classList.add('blocked');
           c.onclick = () => {
             if (forced && v !== 7) {
-              toast(MINIS.princesa.countess);
+              toast(T.countess);
               return;
             }
             playMine(i);
           };
-          c.onpointerenter = () => (help.textContent = `${card(v).name}: ${card(v).text}`);
         }
         meRow.append(c);
       });
-      meRow.append(el('div', 'pr-disc', discards.me.map((v) => card(v).icon).join(' ')));
-      // En el móvil no hay "hover": las dos cartas se explican siempre debajo
-      if (me.length === 2 && !over) help.innerHTML = me.map((v) => `<b>${card(v).name}</b>: ${card(v).text}`).join('<br>');
+      if (discards.me.length) {
+        const d = el('div', 'll-disc mine');
+        for (const v of discards.me) d.append(mini(v));
+        meRow.append(d);
+      }
+      if (meSafe) meRow.append(el('div', 'll-safe', '🌸'));
+      // En el móvil no hay "hover": las dos cartas se explican siempre encima
+      help.innerHTML = me.length === 2 && !over ? me.map((v) => `<b>${card(v).name}</b>: ${card(v).text}`).join('<br>') : '';
+      stage?.hands(me.length, gas.length);
     };
     const say = (t: string) => {
       log.textContent = t;
@@ -172,21 +204,23 @@ export function princesaGame(onWin: (rounds: number) => void) {
     };
     const end = (iWin: boolean, why: string) => {
       over = true;
-      skip.remove();
       render();
-      say(why);
-      const b = el('button', 'big-btn', iWin ? MINIS.princesa.winBtn : MINIS.princesa.again);
+      // A la tercera ronda perdida, Gas se rinde: ya empieza el eclipse
+      const concede = !iWin && rounds >= 3;
+      say(concede ? `${why} ${T.concede}` : why);
+      stage?.end(iWin || concede);
+      const b = el('button', 'big-btn', iWin || concede ? T.winBtn : T.again);
       if (iWin) {
         audio.fanfare();
         vibrate([30, 40, 60]);
       } else audio.boo();
       b.onclick = () => {
-        if (iWin) {
+        if (iWin || concede) {
           o.remove();
           onWin(rounds);
         } else play();
       };
-      o.append(b);
+      bottom.append(b);
     };
     const draw = (who: 'me' | 'gas') => {
       if (!deck.length) return false;
@@ -197,11 +231,11 @@ export function princesaGame(onWin: (rounds: number) => void) {
       const a = me[0];
       const b = gas[0];
       const msg = `Se acaba el mazo. Tú: ${card(a).name} · Gas: ${card(b).name}.`;
-      if (a !== b) end(a > b, `${msg} ${a > b ? MINIS.princesa.win : MINIS.princesa.lose}`);
+      if (a !== b) end(a > b, `${msg} ${a > b ? T.win : T.lose}`);
       else {
         const sa = discards.me.reduce((x, y) => x + y, 0);
         const sb = discards.gas.reduce((x, y) => x + y, 0);
-        end(sa >= sb, `${msg} Empate: ${sa >= sb ? MINIS.princesa.win : MINIS.princesa.lose}`);
+        end(sa >= sb, `${msg} Empate: ${sa >= sb ? T.win : T.lose}`);
       }
     };
     const afterTurn = (next: 'me' | 'gas') => {
@@ -210,6 +244,7 @@ export function princesaGame(onWin: (rounds: number) => void) {
         compareEnd();
         return;
       }
+      stage?.turn(next);
       if (next === 'me') {
         meSafe = false;
         draw('me');
@@ -218,7 +253,7 @@ export function princesaGame(onWin: (rounds: number) => void) {
         gasSafe = false;
         draw('gas');
         render();
-        setTimeout(gasTurn, 1100);
+        setTimeout(gasTurn, 1400);
       }
     };
     /** Aplica el efecto de una carta. Devuelve true si la partida ha terminado. */
@@ -291,14 +326,16 @@ export function princesaGame(onWin: (rounds: number) => void) {
     const playMine = (i: number) => {
       const v = me.splice(i, 1)[0];
       discards.me.push(v);
+      stage?.play('me', v);
       help.textContent = '';
       if (v === 1 && !gasSafe) {
         render();
         // Elegir qué carta crees que tiene Gas
         const pick = el('div', 'pr-guess');
-        pick.append(el('div', '', MINIS.princesa.guess));
+        pick.append(el('div', '', T.guess));
         for (const g of CARDS.slice(1)) {
-          const b = el('button', 'link-btn', `${g.icon} ${g.name}`);
+          const b = el('button', 'll-guess');
+          b.append(mini(g.v), el('span', '', g.name));
           b.onclick = () => {
             pick.remove();
             if (!effect('me', 1, g.v)) afterTurn('gas');
@@ -323,12 +360,14 @@ export function princesaGame(onWin: (rounds: number) => void) {
       }
       const v = gas.splice(idx, 1)[0];
       discards.gas.push(v);
+      stage?.play('gas', v);
       const guesses = [2, 3, 4, 5, 6, 7].filter((g) => g !== me[0]);
       const guess = guesses[Math.floor(Math.random() * guesses.length)];
       if (!effect('gas', v, guess)) afterTurn('me');
       else render();
     };
     // Empieza ella
+    stage?.turn('me');
     draw('me');
     render();
   };

@@ -426,8 +426,9 @@ export const MINIS = {
     nope: 'Gas: «Ma menos»',
   },
   princesa: {
-    title: 'La Princesa',
-    start: 'Tú tienes la Princesa 👑. Si la descartas o te eliminan, pierdes. Toca una carta para jugarla.',
+    title: 'Love Letter',
+    start: 'Tú tienes la Princesa. Si la descartas o te eliminan, pierdes. Toca una carta para jugarla.',
+    concede: 'Gas: «Venga, va, te la dejo: que empieza el eclipse».',
     countess: 'Con el Rey o el Príncipe en la mano, la Condesa se juega sí o sí',
     guess: '¿Qué carta crees que tiene Gas?',
     win: 'Ganas tú 👑',

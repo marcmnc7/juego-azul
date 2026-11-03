@@ -652,23 +652,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .pr-card.blocked { opacity: .45; outline-color: transparent; }
 .pr-guess { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 560px; padding: 12px; border-radius: 16px; background: var(--paper); color: var(--ink); border: 4px solid var(--sea); }
 .pr-guess > div { width: 100%; font-weight: 600; }
-/* Con el móvil en horizontal la mesa no cabía (tus cartas cortadas y el botón de seguir fuera de la
-   pantalla): todo más compacto y la elección del Guardia, encima de la mesa */
-@media (max-height: 520px) {
-  .princesa-screen { gap: 5px; padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
-  .pr-head h2 { font-size: 24px; }
-  .pr-row { min-height: 0; gap: 8px; }
-  .pr-card { width: 52px; height: 74px; padding: 4px; gap: 2px; border-width: 2px; }
-  .pr-card b { top: 3px; left: 5px; font-size: 12px; }
-  .pr-card .pr-icon { font-size: 22px; }
-  .pr-card .pr-name { font-size: 9px; }
-  .pr-log { min-height: 0; padding: 5px 12px; font-size: 14px; }
-  .pr-help { min-height: 0; font-size: 12px; line-height: 1.3; }
-  .princesa-screen .mini-skip { min-height: 0; padding: 4px 12px; }
-  .princesa-screen .big-btn { min-height: 44px; padding: 8px 28px; }
-  .pr-guess { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; width: min(560px, 92vw); padding: 10px; gap: 6px; box-shadow: var(--shadow); }
-  .pr-guess .link-btn { min-height: 38px; padding: 6px 12px; }
-}
 
 .mini-screen { gap: 10px; }
 .mini-canvas { width: min(96vw, calc((100dvh - 150px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto; border-radius: 16px; background: #0f1530; border: 4px solid var(--sea); box-shadow: var(--shadow); touch-action: none; }
@@ -693,6 +676,8 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 @keyframes cineTitle { 0% { opacity: 0; transform: scale(1.08); filter: blur(6px); } 18%, 78% { opacity: 1; transform: none; filter: none; } 100% { opacity: 0; transform: scale(.98); } }
 /* Mientras dura una escena de cine no se ven los mandos ni los contadores */
 #ui.filming .hud-top, #ui.filming .stick-base, #ui.filming .action-btn, #ui.filming .jump-btn, #ui.filming .lane-btn, #ui.filming .route, #ui.filming .hint-move, #ui.filming .minimap { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
+/* Jugando a las cartas en las rocas: fuera el HUD del capítulo (la partida trae el suyo) */
+#ui:has(.ll) .hud-top, #ui:has(.ll) .stick-base, #ui:has(.ll) .action-btn, #ui:has(.ll) .jump-btn, #ui:has(.ll) .hint-move { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
 
 /* ---------- La carta final, como escena ---------- */
 .letter-cine {
@@ -718,3 +703,46 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .letter-cine .lc-buttons { display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 14px; flex-wrap: wrap; animation: lcIn 1s 1.2s ease both; }
 @keyframes lcIn { from { opacity: 0; transform: translateY(12px); filter: blur(4px); } }
 @keyframes lcOut { to { opacity: 0; transform: translateY(-8px); filter: blur(4px); } }
+
+/* ---------- Love Letter en las rocas: la mesa es la escena 3D (se les ve a los dos); aquí solo van las cartas ---------- */
+.ll { position: fixed; inset: 0; z-index: 30; pointer-events: none; display: block; background: none; padding: 0; color: var(--paper); }
+.ll::before { display: none; }
+.ll > * { pointer-events: auto; }
+.ll-top { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 96vw; }
+.ll-title { font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 24px; color: #f4d27a; text-shadow: 0 2px 0 #6a0f1c, 0 0 12px rgba(0,0,0,.55); }
+.ll-title span { font-family: var(--display, inherit); font-style: normal; font-size: 13px; color: var(--paper); margin-left: 8px; opacity: .9; }
+.ll-gas { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: center; background: rgba(24,14,22,.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 14px; font-size: 13px; }
+.ll-gas b { font-weight: 800; margin-right: 2px; }
+.ll-mini { width: 26px; height: 36px; border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,.4); }
+.ll-disc { display: flex; gap: 2px; margin-left: 4px; padding-left: 7px; border-left: 1px solid rgba(255,255,255,.25); }
+.ll-up { display: flex; align-items: center; gap: 2px; margin-left: 4px; padding-left: 7px; border-left: 1px solid rgba(255,255,255,.25); font-size: 12px; opacity: .9; }
+.ll-up .ll-mini { width: 20px; height: 28px; opacity: .75; }
+.ll .ll-log { width: max-content; max-width: min(520px, 88vw); min-height: 0; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+.ll-bottom { position: absolute; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ll .ll-help { max-width: min(560px, 92vw); min-height: 0; text-align: center; font-size: 13px; color: var(--paper); background: rgba(24,14,22,.6); padding: 6px 12px; border-radius: 12px; }
+.ll .ll-help:empty { display: none; }
+.ll .ll-help b { color: #f4d27a; }
+.ll .pr-row { min-height: 0; gap: 12px; align-items: flex-end; }
+.ll .pr-card { width: 118px; height: 165px; padding: 0; border: 0; background: none; box-shadow: none; border-radius: 12px; }
+.ll .pr-card .ll-face { width: 100%; height: 100%; display: block; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.45); -webkit-user-drag: none; user-select: none; }
+.ll .pr-card .pr-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ll .pr-card.playable { outline: none; cursor: pointer; animation: llIn .35s ease both; }
+.ll .pr-card.playable .ll-face { box-shadow: 0 0 0 3px #f4d27a, 0 10px 24px rgba(0,0,0,.45); }
+.ll .pr-card.playable:active { transform: translateY(-10px) scale(1.04); }
+.ll .pr-card.blocked { opacity: .5; }
+@keyframes llIn { from { transform: translateY(30px); opacity: 0; } }
+.ll-safe { font-size: 26px; align-self: center; }
+.ll .pr-guess { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 5; width: min(560px, 94vw); background: rgba(255,248,230,.97); border-color: #9e1b2c; box-shadow: var(--shadow); }
+.ll-guess { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; color: var(--ink); font-size: 12px; font-weight: 700; padding: 4px; border-radius: 10px; }
+.ll-guess .ll-mini { width: 46px; height: 64px; }
+.ll-guess:active { background: rgba(158,27,44,.12); }
+@media (max-height: 520px) {
+  .ll-title { font-size: 19px; }
+  .ll-top { top: 6px; gap: 4px; }
+  .ll .pr-card { width: 76px; height: 106px; }
+  .ll .ll-log { font-size: 13px; padding: 4px 12px; border-width: 2px; }
+  .ll .ll-help { font-size: 11.5px; line-height: 1.3; padding: 4px 10px; }
+  .ll-bottom { gap: 5px; bottom: 6px; }
+  .ll .big-btn { min-height: 42px; padding: 7px 26px; }
+  .ll-guess .ll-mini { width: 36px; height: 50px; }
+}
