@@ -474,7 +474,8 @@ export const MINIS = {
   },
   voley: {
     title: 'Vóley playa nivel 6',
-    hint: 'Toca justo cuando la pelota llegue a Gas',
+    hint: 'Dale justo cuando la pelota te llegue',
+    btn: '🏐 ¡Toca!',
     miss: '¡Al suelo!',
     early: 'Muy pronto',
     late: 'Tarde',

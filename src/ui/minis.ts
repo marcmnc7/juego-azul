@@ -5,6 +5,7 @@ import { MINIS } from '../data/story';
 import { phoneChat, toast } from './ui';
 import { cardUrl } from './cards';
 import { parkingMission } from '../world/missions/parking';
+import { beachMission } from '../world/missions/beach';
 
 // Minijuegos en HTML: la mochila de la Costa Brava, «La princesa» en las rocas del eclipse y los
 // cuatro interludios cortos entre capítulos (el avión en el radar, la moto perdida, el agility de Joy
@@ -814,130 +815,8 @@ function agility(onDone: () => void) {
 
 /** 2 de septiembre: vóley con Gas. Toca cuando la pelota llega a tus manos. */
 export function voley(onDone: () => void) {
-  const T = MINIS.voley;
-  phoneChat(CHATS.voley, () =>
-    canvasScreen(T.title, T.hint, (W, H, finish) => {
-      const GROUND = 330;
-      const ME = { x: 170 };
-      const GAS = { x: 560 };
-      let ball = { x: GAS.x, y: 200, vx: 0, vy: 0 };
-      let toMe = true;
-      let t = 0;
-      let flight = 0;
-      let dur = 1.3;
-      let passes = 0;
-      let misses = 0;
-      let tapped = false;
-      let msgT = 0;
-      let msg = '';
-      const launch = (fromX: number, toX: number) => {
-        dur = Math.max(0.85, 1.35 - passes * 0.04);
-        ball = { x: fromX, y: GROUND - 120, vx: (toX - fromX) / dur, vy: -420 };
-        flight = 0;
-        tapped = false;
-      };
-      launch(GAS.x, ME.x);
-      return {
-        update(dt) {
-          t += dt;
-          msgT = Math.max(0, msgT - dt);
-          flight += dt;
-          // Parábola: vuelve a la altura de las manos al final del vuelo
-          const g = (2 * 420) / dur;
-          ball.x += ball.vx * dt;
-          ball.y = GROUND - 120 - 420 * flight + 0.5 * g * flight * flight;
-          if (flight >= dur + 0.25) {
-            if (toMe && !tapped) {
-              misses++;
-              msg = T.miss;
-              msgT = 1;
-              audio.boo();
-              if (misses >= 3) {
-                toast(T.done(passes));
-                finish();
-                return;
-              }
-              launch(GAS.x, ME.x);
-            } else if (!toMe) {
-              // Gas siempre la devuelve
-              toMe = true;
-              audio.knock(0.25, 500, 0.06);
-              launch(GAS.x, ME.x);
-            }
-          }
-        },
-        draw(c) {
-          const sky = c.createLinearGradient(0, 0, 0, H);
-          sky.addColorStop(0, '#ffcf8a');
-          sky.addColorStop(1, '#ffe9c9');
-          c.fillStyle = sky;
-          c.fillRect(0, 0, W, H);
-          c.fillStyle = '#4fa3d8';
-          c.fillRect(0, GROUND - 40, W, 14);
-          c.fillStyle = '#f0d9a0';
-          c.fillRect(0, GROUND, W, H - GROUND);
-          c.fillStyle = '#333';
-          c.fillRect(W / 2 - 3, GROUND - 150, 6, 150);
-          c.fillStyle = 'rgba(255,255,255,.85)';
-          c.fillRect(W / 2 - 2, GROUND - 150, 4, 60);
-          // Ella (rubia, de azul) y Gas
-          const person = (px: number, shirt: string, hair: string) => {
-            c.fillStyle = shirt;
-            c.fillRect(px - 14, GROUND - 90, 28, 46);
-            c.fillStyle = '#f4d0b0';
-            c.beginPath();
-            c.arc(px, GROUND - 104, 15, 0, Math.PI * 2);
-            c.fill();
-            c.fillStyle = hair;
-            c.beginPath();
-            c.arc(px, GROUND - 110, 15, Math.PI, 0);
-            c.fill();
-            c.fillStyle = '#2d2d3a';
-            c.fillRect(px - 12, GROUND - 44, 9, 44);
-            c.fillRect(px + 3, GROUND - 44, 9, 44);
-          };
-          person(ME.x, '#5aa9e6', '#f2d27a');
-          person(GAS.x, '#e07b39', '#2b1d14');
-          // Zona buena cuando viene hacia ella
-          if (toMe) {
-            const k = flight / dur;
-            const good = k > 0.82 && k < 1.12;
-            c.strokeStyle = good ? '#22c08a' : 'rgba(255,255,255,.6)';
-            c.lineWidth = 4;
-            c.beginPath();
-            c.arc(ME.x, GROUND - 120, 30, 0, Math.PI * 2);
-            c.stroke();
-            c.lineWidth = 1;
-          }
-          text(c, '🏐', ball.x, ball.y, 30);
-          text(c, `🤝 ${passes}`, 20, 24, 20, '#1b1f33', 'left');
-          text(c, '❌'.repeat(misses), W - 20, 24, 18, '#1b1f33', 'right');
-          if (msgT > 0) text(c, msg, W / 2, 70, 22, '#1b1f33');
-        },
-        down() {
-          if (!toMe || tapped) return;
-          const k = flight / dur;
-          if (k > 0.82 && k < 1.12) {
-            tapped = true;
-            passes++;
-            audio.knock(0.3, 700, 0.06);
-            vibrate(20);
-            toMe = false;
-            if (passes >= 10) {
-              toast(T.done(passes));
-              audio.fanfare();
-              finish();
-              return;
-            }
-            launch(ME.x, GAS.x);
-          } else {
-            msg = k < 0.82 ? T.early : T.late;
-            msgT = 0.8;
-          }
-        },
-      };
-    }, onDone),
-  );
+  // Misión en la playa (3D): ella a un lado de la red, Gas al otro
+  phoneChat(CHATS.voley, () => beachMission(onDone));
 }
 
 /** En orden real: el avión (9/7), la moto (2/8), el vóley (2/9) y el agility (6/10). */

@@ -34,8 +34,8 @@ class Stage {
     return !!this.current;
   }
 
-  /** Empieza una misión: `make` construye su escena (y su HUD) con la cámara y el control del juego. */
-  start(make: (ctx: MissionCtx) => Mission) {
+  /** Empieza una misión: `make` construye su escena (y su HUD) con la cámara y el control del juego. walk: si se anda (si no, fuera el joystick). */
+  start(make: (ctx: MissionCtx) => Mission, walk = true) {
     const c = this.ctx!;
     this.end();
     this.camPos.copy(c.camera.position);
@@ -43,6 +43,7 @@ class Stage {
     this.camFov = c.camera.fov;
     c.input.reset();
     document.getElementById('ui')?.classList.add('mission');
+    document.getElementById('ui')?.classList.toggle('mission-static', !walk);
     this.current = make(c);
     this.onStart?.(this.current.scene);
   }
@@ -59,7 +60,7 @@ class Stage {
     c.camera.fov = this.camFov;
     c.camera.updateProjectionMatrix();
     c.input.reset();
-    document.getElementById('ui')?.classList.remove('mission');
+    document.getElementById('ui')?.classList.remove('mission', 'mission-static');
   }
 }
 
