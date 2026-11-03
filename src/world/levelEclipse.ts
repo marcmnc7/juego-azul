@@ -120,6 +120,7 @@ export class LevelEclipse implements Level {
   private boat: Kayak | null = null;
   private stroke = 0;
   private ferryT = 0;
+  private ferryV = 26;
   private flipT = 0;
 
   // Coches y aparcamiento
@@ -806,10 +807,27 @@ export class LevelEclipse implements Level {
       }
     } else if (this.phase === 'ferry') {
       this.input.consumeAction();
-      // Da igual lo que remes: el ferry siempre llega
-      this.ferry.position.z += dt * 26;
-      this.ferry.position.x += (k.x + 1.5 - this.ferry.position.x) * Math.min(1, dt * 0.8);
-      this.ferry.position.y = WATER_Y + Math.sin(this.t * 0.7) * 0.08;
+      // Da igual lo que remes: el ferry siempre llega. Después del golpe da máquina atrás y vira, y se
+      // queda en el agua: nunca se mete en la costa (antes seguía de largo y cruzaba rocas y muros)
+      const f = this.ferry;
+      if (this.flipT === 0) {
+        this.ferryV = 26;
+        f.position.x += (k.x + 1.5 - f.position.x) * Math.min(1, dt * 0.8);
+      } else {
+        this.ferryV *= Math.exp(-dt * 2.6);
+        f.rotation.y += (-Math.PI / 2 + 0.35 - f.rotation.y) * Math.min(1, dt * 0.9);
+      }
+      const yaw = f.rotation.y;
+      // El modelo mira a su +x local: hacia (cos, -sen) en el mundo
+      f.position.x += Math.cos(yaw) * this.ferryV * dt;
+      f.position.z += -Math.sin(yaw) * this.ferryV * dt;
+      // La proa (31 m por delante del centro) siempre a más de 7 m de la orilla
+      const bowZ = f.position.z - Math.sin(yaw) * 31;
+      if (bowZ > COAST_Z - 7) {
+        f.position.z -= bowZ - (COAST_Z - 7);
+        this.ferryV = 0;
+      }
+      f.position.y = WATER_Y + Math.sin(this.t * 0.7) * 0.08;
       if (this.flipT === 0 && this.ferry.position.z + 31 > k.z - 1) {
         this.flipT = 0.001;
         audio.hit();
