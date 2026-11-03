@@ -302,17 +302,26 @@ export const MOTO = {
   ride: [
     { who: 'Narrador', text: 'Sábado. De L’Escala hacia Cap de Creus por la costa.' },
     { who: 'Gas', text: 'Tú solo acompaña las curvas conmigo. Si yo me inclino, tú también.' },
+    { who: 'Gas', text: 'Y si viene una moto de frente, se saluda. A los coches, no.' },
   ] as Line[],
-  rideHint: 'Inclínate con las curvas: izquierda o derecha',
+  rideHint: 'Inclínate con las curvas y saluda a las motos (a los coches, no)',
+  wave: {
+    btn: '✌️ Saludar',
+    ok: ['✌️ Saludo motero', '✌️ Te devuelve el saludo', '✌️ Hermandad de la carretera'],
+    car: ['🚗 ¡A los coches no se les saluda!', '🚗 Eso era un coche…', '🚗 El del coche no entiende nada'],
+    missed: '🏍️ Te ha saludado… y no le has devuelto el saludo',
+  },
   photoHint: '📷 ¡Foto!',
   photoOk: ['📷 Foto guardada', '📷 Otra para el álbum', '📷 Esta es la buena'],
   lean: { good: 'Fluida ✨', bad: 'Uy, acompaña la curva' },
   creus: [
-    { who: 'Narrador', text: 'Cap de Creus. Ya no queda carretera, solo mar.' },
+    { who: 'Narrador', text: 'El faro de Cap de Creus, ahí delante… y la carretera, cortada. El último tramo está cerrado.' },
+    { who: 'Narrador', text: 'Hasta aquí llegasteis. Media vuelta, con el faro de fondo.' },
     { who: 'Narrador', text: 'Esa noche, cena y helado en L’Escala. Con el conjunto de paseo, claro.' },
   ] as Line[],
   back: [{ who: 'Narrador', text: 'El lunes por la mañana devolvéis la moto.' }] as Line[],
-  stats: (fluid: number, photos: number) => [['Curvas fluidas', `${fluid}%`], ['Fotos', `${photos}/3`]] as [string, string][],
+  stats: (fluid: number, photos: number, waves: number, motos: number, wrong: number) =>
+    [['Curvas fluidas', `${fluid}%`], ['Saludos moteros', `${waves}/${motos}${wrong ? ` · ${wrong} a coches 🚗` : ''}`], ['Fotos', `${photos}/3`]] as [string, string][],
   pack: [
     { icon: '🏍️', label: 'Conjunto de moto (tejanos, chupa, guantes)', ok: true },
     { icon: '👕', label: '2 camisetas finas de manga larga', ok: true },

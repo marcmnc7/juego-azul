@@ -5,8 +5,10 @@ import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { Surf } from '../core/surfaces';
 import { MOTO } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makeMoto, makePerson, type Person } from '../entities/models';
+import { G, Merger, makeMoto, makeCar, makePerson, type Person, type PersonLook } from '../entities/models';
+import { canvasTex } from './deco';
 import { boneAnchor } from '../entities/rig';
+import { makeHelmet } from '../entities/helmet';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
@@ -15,8 +17,9 @@ import { disposeScene, type Level, type LevelDone } from './level';
 
 // Capítulo 5 · MotoTrip4life (Costa Brava, 30 de abril – 4 de mayo de 2026).
 // Bucle: el plan (chat) → la mochila con la lista real de Gas → de paquete por la carretera de la costa
-// hasta Cap de Creus: Gas conduce y tú acompañas las curvas inclinándote con él, y en tres miradores
-// sacas la foto → cena y helado → el chat del lunes al devolver la moto.
+// hacia Cap de Creus: Gas conduce y tú acompañas las curvas inclinándote con él, saludas a las motos que
+// vienen de frente (a los coches no) y en tres miradores sacas la foto → el último tramo hasta el faro
+// está cortado: media vuelta → cena y helado → el chat del lunes al devolver la moto.
 
 type Phase = 'intro' | 'pack' | 'ride' | 'creus' | 'done';
 
@@ -25,6 +28,35 @@ const ROAD_W = 8.4;
 const SAMPLES = 420;
 const PHOTO_AT = [0.27, 0.55, 0.8];
 const PHOTO_WIN = 0.035;
+/** Donde la carretera está cortada: el último tramo hasta el faro estaba cerrado. */
+const CLOSED_AT = 0.95;
+// Lo que viene de frente por el otro carril (dónde os cruzáis): a las motos se las saluda, a los coches no
+const ONCOMING: [number, 'moto' | 'car'][] = [[0.1, 'moto'], [0.17, 'car'], [0.36, 'moto'], [0.43, 'car'], [0.49, 'moto'], [0.63, 'car'], [0.7, 'moto'], [0.88, 'moto']];
+const ONCOMING_V = 12;
+const RIDERS: PersonLook[] = [
+  { skin: 0xe2b08c, shirt: 0x1b1b22, pants: 0x2a3550, hair: 0x2b1d14, hairStyle: 'short', male: true },
+  { skin: 0xf0c8a6, shirt: 0x8a2a2a, pants: 0x1b1b22, hair: 0x6a4a2a, hairStyle: 'short', male: true },
+];
+const DRIVERS: PersonLook[] = [
+  { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x5a3a22, hairStyle: 'short', male: true },
+  { skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0xb07a3a, hairStyle: 'long' },
+];
+
+interface Oncoming {
+  kind: 'moto' | 'car';
+  root: THREE.Object3D;
+  wheels: THREE.Object3D[];
+  rider: Person | null;
+  s: number;
+  live: boolean;
+  /** Ya le has saludado (o lo has intentado, si era un coche). */
+  greeted: boolean;
+  passed: boolean;
+  /** El de la moto de enfrente saluda: segundos que le quedan con la mano fuera. */
+  waveT: number;
+  waved: boolean;
+  k: number;
+}
 
 // Carretera de la costa: el mar queda a la derecha de la moto
 const PTS: [number, number][] = [
@@ -51,6 +83,13 @@ export class LevelMoto implements Level {
   private wobbleT = 0;
   private photos = 0;
   private photoTaken = PHOTO_AT.map(() => false);
+  private oncoming: Oncoming[] = [];
+  private nextEv = 0;
+  private waves = 0;
+  private motosMet = 0;
+  private wrongWaves = 0;
+  private azulWaveT = 0;
+  private azulWaveK = 0;
   private flash: THREE.Sprite;
   private lighthouse = new THREE.Vector3();
   private t = 0;
@@ -98,24 +137,18 @@ export class LevelMoto implements Level {
       a.armR.rotation.set(-1.2, 0, -0.55);
       a.elbowL.rotation.x = a.elbowR.rotation.x = -0.55;
       a.body.rotation.x = 0.28;
-      const helmet = new THREE.Group();
-      const shell = new THREE.MeshPhysicalMaterial({ color: 0xf4f4f4, roughness: 0.25, clearcoat: 1 });
-      const visor = new THREE.MeshPhysicalMaterial({ color: 0x223040, metalness: 0.2, roughness: 0.05, clearcoat: 1 });
-      const sh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 16), shell);
-      const vi = new THREE.Mesh(new THREE.SphereGeometry(0.152, 24, 12, -0.9, 1.8, 1.05, 0.75), visor);
-      for (const m of [sh, vi]) {
-        // Algo más grande que el de Gas: le tapa también el moño
-        m.position.set(0, 0.12, -0.02);
-        m.scale.set(1.3, 1.3, 1.45);
-        m.castShadow = true;
-        helmet.add(m);
-      }
+      // Casco integral blanco con la franja azul; algo más grande que el de Gas: le tapa también la melena
+      const helmet = makeHelmet({ color: 0xf4f4f4, stripe: 0x3a8fd8 });
+      helmet.position.set(0, 0.12, -0.02);
+      helmet.scale.set(1.22, 1.22, 1.36);
       boneAnchor(a, 'Head').add(helmet);
     } else a.head.add(new Merger().add(G.ball, 0xf4f4f4, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh());
     this.moto.root.add(a.root);
     this.moto.root.rotation.order = 'YXZ';
     sc.add(this.moto.root);
     this.placeMoto(0);
+    this.buildTraffic();
+    this.buildClosure();
 
     this.flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
     this.flash.scale.setScalar(6);
@@ -312,9 +345,9 @@ export class LevelMoto implements Level {
   private updateHud() {
     const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
     this.hud.setObjective(
-      this.phase === 'ride' ? MOTO.rideHint : this.phase === 'pack' ? 'La mochila' : this.phase === 'creus' || this.phase === 'done' ? 'Cap de Creus' : '30 de abril · Costa Brava',
+      this.phase === 'ride' ? MOTO.rideHint : this.phase === 'pack' ? 'La mochila' : this.phase === 'creus' || this.phase === 'done' ? 'Cap de Creus · carretera cortada' : '30 de abril · Costa Brava',
     );
-    this.hud.setCounters(this.phase === 'ride' || this.phase === 'creus' ? `<span class="chip">🏍️ ${pct}%</span><span class="chip">📷 ${this.photos}/3</span>` : '');
+    this.hud.setCounters(this.phase === 'ride' || this.phase === 'creus' ? `<span class="chip">🏍️ ${pct}%</span><span class="chip">✌️ ${this.waves}/${this.motosMet}</span><span class="chip">📷 ${this.photos}/3</span>` : '');
   }
 
   private startPack() {
@@ -328,6 +361,9 @@ export class LevelMoto implements Level {
     this.s = 0.02;
     this.speed = 0;
     this.good = this.total = 0;
+    this.waves = this.motosMet = this.wrongWaves = 0;
+    this.nextEv = 0;
+    for (const o of this.oncoming) o.live = o.root.visible = false;
     this.updateHud();
     toast(MOTO.rideHint);
   }
@@ -366,7 +402,9 @@ export class LevelMoto implements Level {
           phoneChat(CHATS.motoTrip, () => {
             this.phase = 'done';
             const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
-            this.onComplete({ stars: 1 + (pct >= 70 ? 1 : 0) + (this.photos >= 3 ? 1 : 0), stats: MOTO.stats(pct, this.photos) });
+            // Tres cosas: curvas fluidas, las tres fotos y el saludo motero sin fallos (dos de tres ya dan las tres estrellas)
+            const ok = (pct >= 70 ? 1 : 0) + (this.photos >= 3 ? 1 : 0) + (this.waves >= this.motosMet && this.wrongWaves === 0 ? 1 : 0);
+            this.onComplete({ stars: Math.min(3, 1 + ok), stats: MOTO.stats(pct, this.photos, this.waves, this.motosMet, this.wrongWaves) });
           }),
         ),
       ),
@@ -381,12 +419,12 @@ export class LevelMoto implements Level {
       const target = SPEED * (this.wobbleT > 0 ? 0.75 : 1);
       this.speed += (target - this.speed) * Math.min(1, dt * 1.5);
       this.s += (this.speed * dt) / this.len;
-      if (this.s >= 0.995) {
-        this.s = 0.995;
-        this.arrive();
-      }
+      // Frena antes de la valla (con 14 m/s y 8 m/s² se para a unos 7 m de ella)
+      if (this.s >= CLOSED_AT - 19 / this.len) this.arrive();
+      this.updateTraffic(dt);
     } else if (this.phase === 'creus') this.speed = Math.max(0, this.speed - dt * 8);
-    if (this.phase === 'creus') this.s = Math.min(0.999, this.s + (this.speed * dt) / this.len);
+    if (this.phase === 'creus') this.s = Math.min(CLOSED_AT - 6 / this.len, this.s + (this.speed * dt) / this.len);
+    this.updateWave(dt);
     curv = this.placeMoto(this.s);
 
     // Inclinación de la moto (la que manda Gas) y la de Azul (la que pone la jugadora)
@@ -423,6 +461,12 @@ export class LevelMoto implements Level {
           act = () => this.takePhoto(i);
         }
       });
+      // Viene alguien de frente: el botón de saludar sale igual para motos y coches (hay que fijarse)
+      const o = label ? null : this.waveTarget();
+      if (o) {
+        label = MOTO.wave.btn;
+        act = () => this.wave(o);
+      }
     }
     this.hud.setAction(label, !!label);
     const pressed = this.input.consumeAction();
@@ -440,8 +484,9 @@ export class LevelMoto implements Level {
       pos = this.v1.copy(p).addScaledVector(fwd, -5.5).setY(2.6);
       look = new THREE.Vector3().copy(p).addScaledVector(fwd, 7).setY(1.2);
     } else if (this.phase === 'creus' || this.phase === 'done') {
-      pos = this.v1.copy(p).addScaledVector(fwd, -6).add(new THREE.Vector3(-fwd.z * 4, 3.5, fwd.x * 4));
-      look = this.lighthouse.clone();
+      // Por detrás y un poco de lado: la moto parada, la valla y, al fondo, el faro al que no se llega
+      pos = this.v1.copy(p).addScaledVector(fwd, -5.5).add(new THREE.Vector3(-fwd.z * 1.8, 2.3, fwd.x * 1.8));
+      look = this.lighthouse.clone().setY(5);
     } else {
       pos = this.v1.set(p.x + 5 * Math.cos(this.t * 0.15), 2.6, p.z + 5 * Math.sin(this.t * 0.15) + 1);
       look = new THREE.Vector3(p.x, 1, p.z);
@@ -458,6 +503,197 @@ export class LevelMoto implements Level {
     this.sky.update(this.camera, dt);
   }
 
+  // ---------- Tráfico de frente y saludo motero ----------
+
+  /** Dos motos y dos coches que se reutilizan (se crean al principio: así no hay tirones al cruzarse). */
+  private buildTraffic() {
+    const motoCols = [0x1f3a6b, 0xe8e8e4];
+    for (let i = 0; i < 2; i++) {
+      const mo = makeMoto(motoCols[i], RIDERS[i]);
+      mo.root.visible = false;
+      mo.root.rotation.order = 'YXZ';
+      this.scene.add(mo.root);
+      this.oncoming.push({ kind: 'moto', root: mo.root, wheels: mo.wheels, rider: mo.rider, s: 0, live: false, greeted: false, passed: false, waveT: 0, waved: false, k: 0 });
+    }
+    const carCols = [0xf2f2ee, 0x6b1f2a];
+    for (let i = 0; i < 2; i++) {
+      const car = makeCar(carCols[i], { luggage: false, joy: false, driver: DRIVERS[i] });
+      // Solo el conductor
+      const az = (car as { azul?: THREE.Object3D }).azul;
+      if (az) az.visible = false;
+      car.root.visible = false;
+      this.scene.add(car.root);
+      this.oncoming.push({ kind: 'car', root: car.root, wheels: (car as { wheels?: THREE.Object3D[] }).wheels ?? [], rider: null, s: 0, live: false, greeted: false, passed: false, waveT: 0, waved: false, k: 0 });
+    }
+  }
+
+  private placeOncoming(o: Oncoming) {
+    const u = THREE.MathUtils.clamp(o.s, 0, 1);
+    const p = this.curve.getPointAt(u);
+    const t = this.curve.getTangentAt(u);
+    // Por el carril de la izquierda, en sentido contrario
+    o.root.position.set(p.x + t.z * 1.7, 0.05, p.z - t.x * 1.7);
+    o.root.rotation.y = Math.atan2(t.x, t.z) + Math.PI;
+  }
+
+  private updateTraffic(dt: number) {
+    const len = this.len;
+    // Cada uno sale cuando el punto de cruce queda a unos 85 m, desde donde llegue a tiempo (nunca de detrás de la valla)
+    while (this.nextEv < ONCOMING.length) {
+      const [meet, kind] = ONCOMING[this.nextEv];
+      if ((meet - this.s) * len > 85) break;
+      this.nextEv++;
+      const o = this.oncoming.find((x) => x.kind === kind && !x.live);
+      if (!o) continue;
+      const t = Math.max(0, ((meet - this.s) * len) / SPEED);
+      o.s = Math.min(meet + (ONCOMING_V * t) / len, CLOSED_AT - 10 / len);
+      o.live = o.root.visible = true;
+      o.greeted = o.passed = o.waved = false;
+      o.waveT = 0;
+      this.placeOncoming(o);
+    }
+    for (const o of this.oncoming) {
+      if (!o.live) continue;
+      o.s -= (ONCOMING_V * dt) / len;
+      this.placeOncoming(o);
+      for (const w of o.wheels) w.rotation.x += (ONCOMING_V * dt) / 0.33;
+      const d = (o.s - this.s) * len; // metros por delante
+      // El de la moto de enfrente saluda ya de cerca: brazo fuera, abajo, dos dedos
+      if (o.kind === 'moto' && !o.waved && d < 24) {
+        o.waved = true;
+        o.waveT = 1.6;
+      }
+      if (!o.passed && d < -3) {
+        o.passed = true;
+        if (o.kind === 'moto') {
+          this.motosMet++;
+          if (!o.greeted) toast(MOTO.wave.missed);
+          this.updateHud();
+        }
+      }
+      if (d < -30) o.live = o.root.visible = false;
+    }
+  }
+
+  /** Lo que viene de frente y aún no has saludado, si está a tiro (entre 45 m por delante y justo al cruzaros). */
+  private waveTarget() {
+    for (const o of this.oncoming) {
+      if (!o.live || o.greeted) continue;
+      const d = (o.s - this.s) * this.len;
+      if (d < 45 && d > -3) return o;
+    }
+    return null;
+  }
+
+  private wave(o: Oncoming) {
+    o.greeted = true;
+    this.azulWaveT = 1.3;
+    if (o.kind === 'moto') {
+      this.waves++;
+      if (o.waveT <= 0) o.waveT = 1.2;
+      toast(MOTO.wave.ok[(this.waves - 1) % MOTO.wave.ok.length]);
+      audio.pickup();
+      vibrate(20);
+    } else {
+      this.wrongWaves++;
+      toast(MOTO.wave.car[(this.wrongWaves - 1) % MOTO.wave.car.length]);
+      audio.boo();
+    }
+    this.updateHud();
+  }
+
+  /** Brazos de los que saludan: Azul suelta la cintura de Gas; el de enfrente saca la mano del manillar. */
+  private updateWave(dt: number) {
+    this.azulWaveT -= dt;
+    this.azulWaveK += ((this.azulWaveT > 0 ? 1 : 0) - this.azulWaveK) * Math.min(1, dt * 8);
+    const a = this.azul;
+    if (a.rig) {
+      const k = this.azulWaveK;
+      // El brazo del lado del otro carril: de abrazar a Gas a fuera y arriba
+      a.armR.rotation.set(THREE.MathUtils.lerp(-1.2, -0.35, k), 0, THREE.MathUtils.lerp(-0.55, 1.35, k));
+      a.elbowR.rotation.x = THREE.MathUtils.lerp(-0.55, -0.25, k) + Math.sin(this.t * 14) * 0.15 * k;
+    }
+    for (const o of this.oncoming) {
+      if (!o.rider) continue;
+      o.waveT -= dt;
+      o.k += ((o.waveT > 0 ? 1 : 0) - o.k) * Math.min(1, dt * 8);
+      o.rider.armR.rotation.set(THREE.MathUtils.lerp(-1.25, -0.45, o.k), 0, THREE.MathUtils.lerp(0.3, 0.75, o.k));
+      o.rider.elbowR.rotation.x = THREE.MathUtils.lerp(-0.25, -0.05, o.k);
+    }
+  }
+
+  // ---------- Carretera cortada ----------
+
+  /** El último tramo hasta el faro, cerrado: bloques de hormigón rojos y blancos, valla y carteles. */
+  private buildClosure() {
+    const p = this.curve.getPointAt(CLOSED_AT);
+    const t = this.curve.getTangentAt(CLOSED_AT);
+    const g = new THREE.Group();
+    g.position.set(p.x, 0.05, p.z);
+    g.rotation.y = Math.atan2(t.x, t.z);
+    const m = new Merger();
+    // Bloques de hormigón de lado a lado (x a lo ancho, z a lo largo de la carretera)
+    for (let i = 0; i < 4; i++) {
+      const x = -3.15 + i * 2.1;
+      m.add(G.box, i % 2 ? 0xd7263d : 0xf2f2ee, x, 0.38, 0, 0, 0, 0, 2.0, 0.76, 0.55);
+      m.add(G.box, i % 2 ? 0xf2f2ee : 0xd7263d, x, 0.8, 0, 0, 0, 0, 2.0, 0.08, 0.34);
+    }
+    // Valla metálica de obra detrás, con sus pies
+    for (let i = 0; i < 4; i++) {
+      const x = -3.15 + i * 2.1;
+      for (const dx of [-0.95, 0.95]) {
+        m.add(G.box, 0x9a9ea4, x + dx, 1.05, 0.7, 0, 0, 0, 0.04, 2.0, 0.04);
+        m.add(G.box, 0x3a3a3e, x + dx, 0.05, 0.7, 0, 0, 0, 0.12, 0.1, 0.5);
+      }
+      for (const y of [0.1, 2.0]) m.add(G.box, 0x9a9ea4, x, y, 0.7, 0, 0, 0, 1.9, 0.04, 0.04);
+      for (let k = 0; k < 10; k++) m.add(G.box, 0xb8bcc2, x - 0.85 + k * 0.19, 1.05, 0.7, 0, 0, 0, 0.012, 1.9, 0.012);
+    }
+    // Conos naranjas delante
+    for (const x of [-3.6, -1.2, 1.2, 3.6]) {
+      m.add(G.cone, 0xff7a1a, x, 0.35, -1.6, 0, 0, 0, 0.36, 0.7, 0.36);
+      m.add(G.cyl, 0xf2f2ee, x, 0.4, -1.6, 0, 0, 0, 0.24, 0.08, 0.24);
+    }
+    // Postes de las señales
+    m.add(G.cyl, 0x9a9ea4, -4.6, 1.3, -0.3, 0, 0, 0, 0.08, 2.6, 0.08);
+    m.add(G.cyl, 0x9a9ea4, 4.6, 1.2, -0.3, 0, 0, 0, 0.08, 2.4, 0.08);
+    g.add(m.mesh());
+    const sign = (draw: (c: CanvasRenderingContext2D, w: number, h: number) => void, w: number, h: number, x: number, y: number, tw: number, th: number) => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, h), toon({ map: canvasTex(draw, tw, th), roughness: 0.6, side: THREE.DoubleSide }));
+      s.position.set(x, y, -0.36);
+      s.rotation.y = Math.PI; // mirando a quien llega
+      g.add(s);
+    };
+    // Entrada prohibida
+    sign((c, w, h) => {
+      c.fillStyle = '#c8202a';
+      c.beginPath();
+      c.arc(w / 2, h / 2, w / 2 - 4, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 8;
+      c.stroke();
+      c.fillStyle = '#ffffff';
+      c.fillRect(w * 0.2, h * 0.42, w * 0.6, h * 0.16);
+    }, 0.9, 0.9, -4.6, 2.5, 256, 256);
+    // Cartel de carretera cortada
+    sign((c, w, h) => {
+      c.fillStyle = '#f2f2ee';
+      c.fillRect(0, 0, w, h);
+      c.strokeStyle = '#c8202a';
+      c.lineWidth = 18;
+      c.strokeRect(9, 9, w - 18, h - 18);
+      c.fillStyle = '#1b1b22';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.font = 'bold 74px Arial, sans-serif';
+      c.fillText('CARRETERA', w / 2, h * 0.3);
+      c.fillText('CORTADA', w / 2, h * 0.55);
+      c.font = '600 38px Arial, sans-serif';
+      c.fillText('Accés tancat · Cap de Creus', w / 2, h * 0.8);
+    }, 2.2, 1.1, 4.6, 2.2, 512, 256);
+    this.scene.add(g);
+  }
+
   debug(): DebugItem[] {
     return [
       { label: '1 · La mochila', run: () => this.startPack() },
@@ -467,7 +703,8 @@ export class LevelMoto implements Level {
         run: () => {
           document.querySelector('.pack-screen')?.remove();
           this.phase = 'ride';
-          this.s = 0.97;
+          this.s = CLOSED_AT - 60 / this.len;
+          this.nextEv = ONCOMING.length;
           this.speed = SPEED;
           this.updateHud();
         },

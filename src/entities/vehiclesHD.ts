@@ -276,12 +276,13 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
   add(box, smoke, 0, 1.08, 0.66, -0.6, 0, 0, 0.24, 0.16, 0.01);
   add(box, darkMetal, 0, 1.03, 0.6, -0.5, 0, 0, 0.14, 0.09, 0.05);
   add(box, screen, 0, 1.05, 0.625, -0.5, 0, 0, 0.11, 0.06, 0.005);
-  tube([-0.36, 1.04, 0.5], [0.36, 1.04, 0.5], 0.016, darkMetal);
+  tube([-0.36, 1.04, 0.41], [0.36, 1.04, 0.41], 0.016, darkMetal);
+  for (const sx of [-0.08, 0.08]) tube([sx, 1.0, 0.5], [sx, 1.05, 0.42], 0.014, darkMetal); // elevadores del manillar
   for (const sx of [-1, 1]) {
-    add(cyl, rubber, sx * 0.33, 1.04, 0.5, 0, 0, Math.PI / 2, 0.045, 0.13, 0.045);
-    add(box, alu, sx * 0.27, 1.05, 0.56, 0, sx * 0.25, 0, 0.16, 0.012, 0.02);
-    tube([sx * 0.22, 1.05, 0.52], [sx * 0.3, 1.25, 0.48], 0.008, darkMetal);
-    add(sphere, darkMetal, sx * 0.31, 1.27, 0.48, 0, 0, 0, 0.13, 0.08, 0.03);
+    add(cyl, rubber, sx * 0.33, 1.04, 0.41, 0, 0, Math.PI / 2, 0.045, 0.13, 0.045);
+    add(box, alu, sx * 0.27, 1.05, 0.47, 0, sx * 0.25, 0, 0.16, 0.012, 0.02);
+    tube([sx * 0.22, 1.05, 0.43], [sx * 0.3, 1.25, 0.39], 0.008, darkMetal);
+    add(sphere, darkMetal, sx * 0.31, 1.27, 0.39, 0, 0, 0, 0.13, 0.08, 0.03);
     // Intermitentes y tapas del radiador
     add(box, amber, sx * 0.14, 0.86, 0.72, 0, 0, 0, 0.06, 0.03, 0.04);
     add(box, amber, sx * 0.1, 0.8, -1.22, 0, 0, 0, 0.05, 0.03, 0.04);
@@ -319,16 +320,20 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
   let person: Person | null = null;
   if (rider) {
     const p = makeRigPerson(rider, 1, new THREE.Object3D());
-    p.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
-    // Pies en las estriberas y manos en los puños
-    p.legL.rotation.set(-1.1, 0, -0.24);
-    p.legR.rotation.set(-1.1, 0, 0.24);
-    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.75;
-    p.armL.rotation.set(-1.05, 0, -0.22);
-    p.armR.rotation.set(-1.05, 0, 0.22);
-    p.elbowL.rotation.x = p.elbowR.rotation.x = -0.4;
+    p.rig!.force = { body: 1, legL: 1, legR: 1, armL: 1, armR: 1 };
+    // Un poco echado hacia delante, pies en las estriberas y manos en los puños
+    p.body.rotation.x = 0.3;
+    p.legL.rotation.set(-1.4, 0, -0.24);
+    p.legR.rotation.set(-1.4, 0, 0.24);
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.95;
+    p.armL.rotation.set(-1.25, 0, -0.3);
+    p.armR.rotation.set(-1.25, 0, 0.3);
+    p.elbowL.rotation.x = p.elbowR.rotation.x = -0.25;
     p.root.position.set(0, 0.94 - p.rig!.hipsHeight, -0.45); // cadera 7 cm sobre el sillín
-    boneAnchor(p, 'Head').add(makeHelmet(helmet));
+    const h = makeHelmet(helmet);
+    h.position.set(0, 0.12, 0.01); // el centro del casco, en el centro de la cabeza (el hueso está en la base)
+    h.scale.set(1, 1.05, 1.08);
+    boneAnchor(p, 'Head').add(h);
     root.add(p.root);
     person = p;
   }

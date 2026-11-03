@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { quality } from '../core/gfx';
 
 // Casco integral de moto: carcasa con la ventana de los ojos abierta, mentonera, visera ahumada que
-// sobresale un poco, ribete de goma abajo, franja de color por encima, alerón y tomas de aire. Va
+// sobresale un poco, ribete de goma abajo, franja de color por encima y tomas de aire. Va
 // pegado al hueso de la cabeza (origen en el centro de la cabeza, mirando hacia +Z).
 
 export interface HelmetOpts {
@@ -78,14 +78,11 @@ export function makeHelmet(o: HelmetOpts) {
     st.scale.set(2.2, 1, 1); // más ancha que alta: una franja pintada, no un tubo
     st.castShadow = false;
   }
-  // Alerón de atrás y dos tomas de aire en la frente
-  const spoiler = add(geo('spoiler', () => new THREE.BoxGeometry(0.11, 0.018, 0.05)), shellMat);
-  spoiler.position.set(0, R * 0.35, -R * 0.97);
-  spoiler.rotation.x = 0.5;
+  // Dos tomas de aire en la frente, casi a ras de la carcasa (el alerón parecía una oreja)
   for (const sx of [-1, 1]) {
-    const v = add(geo('vent', () => new THREE.BoxGeometry(0.03, 0.012, 0.03)), rubber);
-    v.position.set(sx * 0.035, R * 0.86, R * 0.5);
-    v.rotation.x = -0.55;
+    const v = add(geo('vent', () => new THREE.BoxGeometry(0.028, 0.006, 0.026)), rubber);
+    v.position.set(sx * 0.035, R * 0.9, R * 0.42);
+    v.rotation.x = -0.45;
   }
   return g;
 }

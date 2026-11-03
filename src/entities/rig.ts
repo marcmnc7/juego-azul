@@ -412,7 +412,14 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
     mat.roughness = 0.75;
     return true;
   }
-  if (/Outfit_Top/.test(name) && mat.map) { mat.map = grayTexture(mat.map); mat.color = lin(look.shirt); }
+  // La parte de arriba del modelo es una chaqueta de esmoquin (solapas y pajarita en la textura): se
+  // cambia por tela lisa de algodón, que con el corte por la cintura queda una camisa normal
+  if (/Outfit_Top/.test(name) && mat.map) {
+    mat.map = fabricTexture();
+    mat.normalMap = null;
+    mat.color = lin(look.shirt);
+    mat.roughness = 0.85;
+  }
   else if (/Outfit_Bottom/.test(name) && mat.map) { mat.map = grayTexture(mat.map); mat.color = lin(look.pants); }
   else if (/Footwear/.test(name) && mat.map) { mat.map = grayTexture(mat.map); mat.color = lin(look.shoes ?? 0x2a2420); }
   else if (/Wolf3D_Body/.test(name)) mat.color = lin(look.skin);
@@ -426,6 +433,32 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
   }
   mat.roughness = Math.max(mat.roughness, 0.6);
   return true;
+}
+
+let fabric: THREE.Texture | null = null;
+/** Tela de algodón: un grano muy suave que se repite (no depende de cómo vengan las UV del modelo). */
+function fabricTexture() {
+  if (fabric) return fabric;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(64, 64);
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let y = 0; y < 64; y++)
+    for (let x = 0; x < 64; x++) {
+      // Trama de tejido (hilos en las dos direcciones) con un poco de ruido
+      const v = 235 + ((x + y) % 2) * 6 + Math.floor(rnd() * 12) - 6;
+      const i = (y * 64 + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.min(255, v);
+      img.data[i + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+  fabric = new THREE.CanvasTexture(c);
+  fabric.wrapS = fabric.wrapT = THREE.RepeatWrapping;
+  fabric.repeat.set(10, 10);
+  fabric.colorSpace = THREE.SRGBColorSpace;
+  return fabric;
 }
 
 /** Datos ya preparados de un tipo de modelo (para la multitud). */
