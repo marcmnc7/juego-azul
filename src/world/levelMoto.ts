@@ -142,7 +142,12 @@ export class LevelMoto implements Level {
       helmet.position.set(0, 0.12, -0.02);
       helmet.scale.set(1.22, 1.22, 1.36);
       boneAnchor(a, 'Head').add(helmet);
-    } else a.head.add(new Merger().add(G.ball, 0xf4f4f4, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh());
+    } else {
+      const helmet = makeHelmet({ color: 0xf4f4f4, stripe: 0x3a8fd8 });
+      helmet.position.set(0, 0.3, -0.02);
+      helmet.scale.setScalar(2.25);
+      a.head.add(helmet);
+    }
     this.moto.root.add(a.root);
     this.moto.root.rotation.order = 'YXZ';
     sc.add(this.moto.root);

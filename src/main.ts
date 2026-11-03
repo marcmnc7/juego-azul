@@ -280,6 +280,8 @@ const mapOpts = {
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo, panel de prueba y botón de saltar. */
 function leaveLevel() {
   stage.end();
+  // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
+  document.querySelectorAll('.ll, .panel-overlay, .radar-overlay, .trick-bar, .trick-say, .mission-card').forEach((e) => e.remove());
   cinema.stop();
   beacon.at(null);
   uiRoot.classList.remove('filming');

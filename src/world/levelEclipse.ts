@@ -17,6 +17,7 @@ import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena'
 import { FAROLA_WALK, COAST_Z, buildSaFarola } from './saFarola';
 import { buildKayak as kayakBoat, buildFerry, type Kayak } from './kayak';
 import { Door } from './door';
+import { stage } from '../core/stage';
 import { canvasTex } from './deco';
 import { buildStreet } from './homeStreet';
 import { buildSurroundings } from './surround';
@@ -843,7 +844,9 @@ export class LevelEclipse implements Level {
     // Plano a dos desde tierra, con el mar y el sol de la tarde detrás; la cámara se arrima un poco a quien
     // le toca. Mira por debajo de las caras: así quedan en la franja libre entre el título y las cartas
     const lean = this.llTurn === 'me' ? -0.28 : 0.28;
-    this.camera.position.lerp(this.v1.set(lean, 1.3, -1.55), Math.min(1, dt * 1.6));
+    // Con el móvil en vertical, más atrás: que entren los dos enteros
+    const back = this.camera.aspect < 1 ? 2.15 : 1;
+    this.camera.position.lerp(this.v1.set(lean * back, 1.3 + (back - 1) * 0.35, -1.55 * back), Math.min(1, dt * 1.6));
     this.camLook.lerp(new THREE.Vector3(lean * 0.4, 0.42, 0.15), Math.min(1, dt * 2));
     this.camera.lookAt(this.camLook);
   }
@@ -1262,7 +1265,8 @@ export class LevelEclipse implements Level {
       this.input.reset();
       this.setGlasses(false);
       if (this.llStage) this.endCards();
-      document.querySelectorAll('.mini-screen, .dialogue, .phone-overlay, .princesa-screen').forEach((e) => e.remove());
+      stage.end();
+      document.querySelectorAll('.dialogue, .phone-overlay, .princesa-screen, .panel-overlay').forEach((e) => e.remove());
     };
     return [
       { label: '1 · Kayak', run: () => { reset(); this.buildKayak(); applyShadows(this.scene); this.startKayak(); } },

@@ -154,15 +154,21 @@ class ParkingMission implements Mission {
     this.hud.setCounters(`<span class="chip">🔦 ${this.bays.filter((b) => b.checked).length}</span>`);
   }
 
+  /** La moto que tiene delante (desde el pasillo, el centro de una moto queda a metro y medio largo). */
   private nearBay() {
     const p = this.player.root.position;
+    const f = this.walker.facing;
     let best: Bay | null = null;
-    let bd = 1.6;
+    let bd = Infinity;
     for (const b of this.bays) {
       if (b.checked) continue;
       const d = Math.hypot(b.x - p.x, b.z - p.z);
-      if (d < bd) {
-        bd = d;
+      if (d > 2.1) continue;
+      // Mejor la que queda en la dirección en la que mira
+      const a = Math.atan2(b.x - p.x, b.z - p.z) - f;
+      const score = d + (1 - Math.cos(Math.atan2(Math.sin(a), Math.cos(a)))) * 0.8;
+      if (score < bd) {
+        bd = score;
         best = b;
       }
     }

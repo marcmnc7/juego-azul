@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { airOf } from '../core/air';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { makeHelmet } from './helmet';
 import { toon, addOutline, hdSurfaces } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
 import { RigCrowd, crowdReady } from './crowdRig';
@@ -1128,7 +1129,9 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
     person.legR.rotation.z = 0.15;
     person.armL.rotation.x = person.armR.rotation.x = -1.1;
     person.body.rotation.x = 0.25;
-    const helmet = new Merger(false).add(G.ball, 0x1b1d22, 0, 0.3, -0.02, 0, 0, 0, 0.68, 0.64, 0.66).add(G.box, 0x223040, 0, 0.3, 0.3, 0, 0, 0, 0.5, 0.2, 0.06).mesh();
+    const helmet = makeHelmet({ color, stripe: 0xf2f2ee });
+    helmet.position.set(0, 0.3, -0.02);
+    helmet.scale.setScalar(2.15);
     person.head.add(helmet);
     root.add(person.root);
   }

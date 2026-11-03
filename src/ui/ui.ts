@@ -8,6 +8,7 @@ import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
+import { stage } from '../core/stage';
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -905,6 +906,7 @@ export function debugPanel(items: DebugItem[]) {
       e.stopPropagation();
       list.hidden = true;
       // Saltar de fase cierra lo que hubiera abierto (chats, barras, minijuegos, escenas de cine) y anula sus temporizadores
+      stage.end();
       cinema.stop();
       closeDialogue();
       newEpoch();

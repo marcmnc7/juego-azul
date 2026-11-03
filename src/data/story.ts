@@ -375,7 +375,7 @@ export const ECLIPSE = {
   ] as Line[],
   rocks: [
     { who: 'Narrador', text: 'Por fin solos. A la roca de Es Castellar, a esperar el eclipse.' },
-    { who: 'Gas', text: '¿Una partida a La Princesa mientras tanto?' },
+    { who: 'Gas', text: '¿Una partida a Love Letter mientras tanto?' },
   ] as Line[],
   afterCards: [{ who: 'Narrador', text: 'Te ha ganado ella. Como siempre. Y empieza el eclipse.' }] as Line[],
   glassesHint: 'Ponte las gafas de eclipse 🕶️',
@@ -384,7 +384,7 @@ export const ECLIPSE = {
   kitchenHint: 'Entra con Gas: sus padres están en la cocina',
   totality: '🌘 Ya está',
   end: [{ who: 'Narrador', text: 'La luna tapa el sol. Se hace de noche un momento.' }] as Line[],
-  stats: (rounds: number, parkTries: number) => [['Partidas a La Princesa', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
+  stats: (rounds: number, parkTries: number) => [['Partidas a Love Letter', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
 };
 
 // Capítulo 9: un año después, otra vez Ferreries. Como en el 1, el pueblo habla en menorquín y ella y Gas, en castellano. Chats: tarde, veintidos, asesOnce, bocata, fecha.
