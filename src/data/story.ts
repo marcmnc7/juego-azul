@@ -447,8 +447,12 @@ export const MINIS = {
   moto: {
     title: '¿Dónde está la moto?',
     hint: 'Busca la moto de Gas con la linterna',
+    goal: 'Busca con la linterna la moto de Gas: negra, con su casco rojo encima',
+    check: '🔦 ¿Es esta?',
     found: '¡Ahí está! 🏍️',
     nope: 'Esa no es…',
+    hint1: 'Gas: «Era negra. Y con mi casco encima, eso seguro»',
+    hint2: 'Gas: «¡Ahora me acuerdo! Al fondo, cerca de una farola». Mira la luz',
   },
   tricks: {
     title: 'Adiestrar a Joy',

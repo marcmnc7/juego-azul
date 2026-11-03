@@ -4,6 +4,7 @@ import { CHATS, type ChatFrag } from '../data/chats';
 import { MINIS } from '../data/story';
 import { phoneChat, toast } from './ui';
 import { cardUrl } from './cards';
+import { parkingMission } from '../world/missions/parking';
 
 // Minijuegos en HTML: la mochila de la Costa Brava, «La princesa» en las rocas del eclipse y los
 // cuatro interludios cortos entre capítulos (el avión en el radar, la moto perdida, el agility de Joy
@@ -558,82 +559,9 @@ export function radar(onDone: () => void) {
 
 /** 2 de agosto: Gas no sabe dónde ha dejado la moto en el parking. Linterna y a buscar. */
 export function lostMoto(onDone: () => void) {
-  const T = MINIS.moto;
   const [before, after] = split(CHATS.motoPerdida, 2);
-  phoneChat(before, () =>
-    canvasScreen(T.title, T.hint, (W, H, finish) => {
-      const colors = ['#c23030', '#1f3a6b', '#e0e0e0', '#1b1d22', '#2f6b46', '#d9a020', '#1b1d22', '#7a3fa0'];
-      const motos: { x: number; y: number; c: string; helmet: boolean }[] = [];
-      for (let r = 0; r < 4; r++)
-        for (let i = 0; i < 8; i++) motos.push({ x: 70 + i * 82, y: 70 + r * 88, c: colors[(i * 3 + r * 5) % colors.length], helmet: false });
-      const target = motos[13 + Math.floor(Math.random() * 12)];
-      target.c = '#1b1d22';
-      target.helmet = true;
-      let light = { x: W / 2, y: H / 2 };
-      let taps = 0;
-      let found = false;
-      const moto = (c: CanvasRenderingContext2D, m: (typeof motos)[number]) => {
-        c.fillStyle = '#111';
-        c.beginPath();
-        c.arc(m.x - 22, m.y + 12, 11, 0, Math.PI * 2);
-        c.arc(m.x + 22, m.y + 12, 11, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = m.c;
-        c.beginPath();
-        c.roundRect(m.x - 24, m.y - 8, 48, 16, 6);
-        c.fill();
-        c.fillStyle = '#222';
-        c.fillRect(m.x - 6, m.y - 14, 22, 7);
-        if (m.helmet) {
-          c.fillStyle = '#1b1d22';
-          c.beginPath();
-          c.arc(m.x + 4, m.y - 20, 10, Math.PI, 0);
-          c.fill();
-          c.fillStyle = '#4f7cff';
-          c.fillRect(m.x - 2, m.y - 24, 12, 4);
-        }
-      };
-      return {
-        update() {},
-        draw(c) {
-          c.fillStyle = '#3a3a40';
-          c.fillRect(0, 0, W, H);
-          c.strokeStyle = '#f2f2ee';
-          c.lineWidth = 2;
-          for (const m of motos) c.strokeRect(m.x - 38, m.y - 36, 76, 72);
-          for (const m of motos) moto(c, m);
-          // Oscuridad con el círculo de la linterna
-          c.save();
-          c.fillStyle = found ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,.93)';
-          c.beginPath();
-          c.rect(0, 0, W, H);
-          c.arc(light.x, light.y, 70, 0, Math.PI * 2, true);
-          c.fill();
-          c.restore();
-          text(c, `🔦 ${taps}`, 20, 22, 18, '#fff', 'left');
-        },
-        down(x, y) {
-          light = { x, y };
-          const hit = motos.find((m) => Math.abs(m.x - x) < 34 && Math.abs(m.y - y) < 32);
-          if (!hit) return;
-          taps++;
-          if (hit === target) {
-            found = true;
-            audio.fanfare();
-            vibrate([30, 40, 60]);
-            toast(T.found);
-            finish();
-          } else {
-            audio.boo();
-            toast(T.nope);
-          }
-        },
-        move(x, y) {
-          light = { x, y };
-        },
-      };
-    }, () => phoneChat(after, onDone)),
-  );
+  // Misión en el aparcamiento de verdad (3D): entre filas de motos, con la linterna del móvil
+  phoneChat(before, () => parkingMission(() => phoneChat(after, onDone)));
 }
 
 /** 6 de octubre: Joy, campeona de agility. Toca para saltar las vallas. */

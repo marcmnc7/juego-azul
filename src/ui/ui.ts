@@ -929,8 +929,9 @@ export interface Hud {
   remove(): void;
 }
 
-export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrastra a la izquierda para andar · a la derecha para girar la cámara'): Hud {
-  const top = el('div', 'hud-top');
+/** mission: el HUD de una misión (mientras dura, el del capítulo se esconde). */
+export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrastra a la izquierda para andar · a la derecha para girar la cámara', mission = false): Hud {
+  const top = el('div', 'hud-top' + (mission ? ' m-hud' : ''));
   const obj = el('div', 'objective');
   const arrow = el('span', 'arrow', '⬆');
   const objText = el('span');
@@ -945,13 +946,13 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
   menu.onclick = onMenu;
   top.append(obj, counters, el('div', 'spacer'), mute, menu);
 
-  const act = el('button', 'action-btn hidden');
+  const act = el('button', 'action-btn hidden' + (mission ? ' m-hud' : ''));
   act.onpointerdown = (e) => {
     e.stopPropagation();
     e.preventDefault();
     onAction();
   };
-  const hint = el('div', 'hint-move', hintText);
+  const hint = el('div', 'hint-move' + (mission ? ' m-hud' : ''), hintText);
   setTimeout(() => hint.remove(), 9000);
   root.append(top, act, hint);
   return {
@@ -979,4 +980,17 @@ export function rotateHint() {
   const r = el('div', 'rotate active', '<div class="phone">📱</div><div>Gira el móvil para jugar en horizontal</div>');
   r.style.pointerEvents = 'none';
   root.append(r);
+}
+
+/** Rótulo de misión que entra y se va solo: «MISIÓN · título» y el objetivo (o «MISIÓN CUMPLIDA»). */
+export function missionCard(title: string, goal = '', done = false) {
+  const c = el('div', 'mission-card' + (done ? ' done' : ''));
+  c.append(el('div', 'm-kicker', done ? 'MISIÓN CUMPLIDA' : 'MISIÓN'), el('div', 'm-title', title));
+  if (goal) c.append(el('div', 'm-goal', goal));
+  root.append(c);
+  if (done) {
+    audio.fanfare();
+    vibrate([30, 40, 60]);
+  } else audio.chime(1);
+  setTimeout(() => c.remove(), 3300);
 }

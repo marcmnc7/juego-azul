@@ -746,3 +746,12 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   .ll .big-btn { min-height: 42px; padding: 7px 26px; }
   .ll-guess .ll-mini { width: 36px; height: 50px; }
 }
+
+/* ---------- Misiones: mientras dura una, el HUD del capítulo se esconde (queda el suyo) ---------- */
+#ui.mission > .hud-top:not(.m-hud), #ui.mission > .action-btn:not(.m-hud), #ui.mission > .hint-move:not(.m-hud), #ui.mission .minimap, #ui.mission .lane-btn, #ui.mission .route { display: none !important; }
+.mission-card { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 40; pointer-events: none; text-align: center; animation: missionIn 3.2s ease both; }
+.mission-card .m-kicker { font-size: 12px; font-weight: 900; letter-spacing: .28em; color: var(--gold); text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.mission-card .m-title { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 5vw, 40px); color: var(--paper); -webkit-text-stroke: 1.5px var(--sea); paint-order: stroke fill; text-shadow: 0 3px 0 var(--sea), 0 0 24px rgba(0,0,0,.4); }
+.mission-card .m-goal { margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--paper); text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+.mission-card.done .m-kicker { color: #7dffb0; }
+@keyframes missionIn { 0% { opacity: 0; transform: translate(-50%, 14px) scale(.96); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }

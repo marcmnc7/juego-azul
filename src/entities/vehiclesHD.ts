@@ -170,7 +170,7 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
  * retrovisores, intermitentes, matrícula, estriberas, discos y cadena), fundidas por material para que
  * cueste pocas llamadas de dibujo. Con el piloto montado y su casco integral. Mira hacia +Z.
  */
-export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts = { color, stripe: 0xf2f2ee }) {
+export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts = { color, stripe: 0xf2f2ee }, collect?: Map<THREE.Material, THREE.BufferGeometry[]>) {
   const root = new THREE.Group();
   const frame = new THREE.Group();
   root.add(frame);
@@ -187,6 +187,7 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
   const screen = new THREE.MeshStandardMaterial({ color: 0x0c1418, emissive: 0x3aa0ff, emissiveIntensity: 0.5, roughness: 0.3 });
   const plate = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.5 });
   const smoke = phys({ color: 0x1c2630, roughness: 0.05, metalness: 0.2, clearcoat: 1, transparent: true, opacity: 0.7 });
+  const caliperMat = new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: 0.4 });
 
   // Piezas agrupadas por material y fundidas al final (las ruedas, aparte, porque giran)
   const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
@@ -203,7 +204,16 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
     list.push(gg);
   };
   const add = (g: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => put(parts, g, m, x, y, z, rx, ry, rz, sx, sy, sz);
-  const flush = (from: Map<THREE.Material, THREE.BufferGeometry[]>, parent: THREE.Object3D) => {
+  // collect: en vez de mallas, las piezas ya colocadas (para una flota de motos instanciadas)
+  const flush = (from: Map<THREE.Material, THREE.BufferGeometry[]>, parent: THREE.Object3D, at?: THREE.Vector3) => {
+    if (collect) {
+      for (const [m, list] of from) {
+        let to = collect.get(m);
+        if (!to) collect.set(m, (to = []));
+        for (const g of list) to.push(at ? g.clone().translate(at.x, at.y, at.z) : g);
+      }
+      return;
+    }
     for (const [m, list] of from) {
       const mesh = new THREE.Mesh(mergeGeometries(list)!, m);
       mesh.castShadow = true;
@@ -307,15 +317,23 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
     for (let k = 0; k < 5; k++) put(wp, box, darkMetal, 0, 0, 0, (k * Math.PI * 2) / 5, 0, 0, 0.03, 0.36, 0.035);
     put(wp, cyl, alu, 0, 0, 0, 0, 0, Math.PI / 2, 0.08, 0.1, 0.08);
     put(wp, cyl, chrome, front ? -0.07 : 0.07, 0, 0, 0, 0, Math.PI / 2, front ? 0.3 : 0.24, 0.008, front ? 0.3 : 0.24);
-    flush(wp, w);
+    flush(wp, w, w.position);
     root.add(w);
     wheels.push(w);
     // Pinza de freno (no gira con la rueda)
-    const cal = new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: 0.4 }));
+    const calMat = caliperMat;
+    if (collect) {
+      const cp = new Map<THREE.Material, THREE.BufferGeometry[]>();
+      put(cp, box, calMat, front ? -0.08 : 0.08, 0.34 + 0.11, z - 0.06, 0, 0, 0, 0.04, 0.09, 0.06);
+      flush(cp, root);
+      continue;
+    }
+    const cal = new THREE.Mesh(box, calMat);
     cal.scale.set(0.04, 0.09, 0.06);
     cal.position.set(front ? -0.08 : 0.08, 0.34 + 0.11, z - 0.06);
     root.add(cal);
   }
+  if (collect) return { root, wheels, rider: null };
 
   let person: Person | null = null;
   if (rider) {
@@ -338,6 +356,31 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
     person = p;
   }
   return { root, wheels, rider: person };
+}
+
+/**
+ * Muchas motos aparcadas con muy pocas llamadas de dibujo: la misma moto, fundida por material e
+ * instanciada; cada una con su color de carrocería (y su sitio y su giro).
+ */
+export function motoFleet(spots: { x: number; z: number; ry: number; color: number }[]) {
+  const collect = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  makeMotoHD(0xffffff, undefined, undefined, collect);
+  const body = paint(0xffffff);
+  const g = new THREE.Group();
+  const m4 = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const one = new THREE.Vector3(1, 1, 1);
+  for (const [mat, list] of collect) {
+    const im = new THREE.InstancedMesh(mergeGeometries(list)!, mat, spots.length);
+    spots.forEach((p, i) => {
+      im.setMatrixAt(i, m4.compose(new THREE.Vector3(p.x, 0, p.z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.ry), one));
+      if (mat === body) im.setColorAt(i, new THREE.Color(p.color));
+    });
+    im.castShadow = true;
+    im.receiveShadow = true;
+    g.add(im);
+  }
+  return g;
 }
 
 /** Joy: perra negra mediana, animada (quieta, al paso o corriendo según lo rápido que se mueva). Mira hacia +Z. */

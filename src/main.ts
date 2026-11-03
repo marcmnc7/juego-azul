@@ -33,6 +33,7 @@ import { Post, GRADES, NEUTRAL, type Grade } from './core/post';
 import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
+import { stage } from './core/stage';
 import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -175,6 +176,17 @@ function draw(scene: THREE.Scene, dt = 1 / 60) {
   post.draw(scene, dt);
 }
 const input = new Input(canvas, uiRoot);
+// Las misiones usan la misma cámara y el mismo control; al empezar, su escena se prepara como la de un capítulo
+stage.setContext({ camera, input });
+stage.onStart = (sc) => {
+  if (paintStyle.value) paintScene(sc);
+  applyShadows(sc);
+  try {
+    renderer.compile(sc, camera);
+  } catch {
+    /* se compila al dibujar */
+  }
+};
 
 // Saltar: botón en pantalla (solo mientras se controla a alguien andando) y tecla J en el ordenador
 const jumpBtn = document.createElement('button');
@@ -267,6 +279,7 @@ const mapOpts = {
 
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo, panel de prueba y botón de saltar. */
 function leaveLevel() {
+  stage.end();
   cinema.stop();
   beacon.at(null);
   uiRoot.classList.remove('filming');
@@ -486,7 +499,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input, stage,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */
@@ -551,11 +564,15 @@ function frame() {
   debt = Math.min(0.1, raw - dt);
   smoothDt += (dt - smoothDt) * 0.15;
   renderer.info.reset();
-  if (level) {
+  // Una misión en marcha (el aparcamiento, la playa…) manda: se dibuja su escena y el capítulo espera
+  const mission = stage.current;
+  if (level || mission) {
+    const sc = mission ? mission.scene : level!.threeScene;
     const gdt = juice.scaleDt(dt) * cinema.timeScale;
-    dust.attach(level.threeScene);
-    beacon.attach(level.threeScene);
-    level.update(gdt);
+    dust.attach(sc);
+    beacon.attach(sc);
+    if (mission) mission.update(gdt);
+    else level!.update(gdt);
     dust.update(gdt);
     updateRigPeople(gdt);
     // Escenas de cine: mandan sobre la cámara que haya puesto el capítulo
@@ -583,17 +600,17 @@ function frame() {
       camera.lookAt(v[3], v[4], v[5]);
     }
     // Capítulos que pasan del día a la noche: cambia la luz al cambiar de sitio
-    if (level.mood !== lookMood) {
+    if (level && !mission && level.mood !== lookMood) {
       lookMood = level.mood;
       applyLook(lookN, paintStyle.value > 0, lookMood);
     }
     // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pinta
-    if (paintStyle.value && (level.threeScene !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
-      paintedScene = level.threeScene;
+    if (paintStyle.value && (sc !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
+      paintedScene = sc;
       paintedAt = clock.elapsedTime;
       paintScene(paintedScene);
     }
-    draw(level.threeScene, dt);
+    draw(sc, dt);
     if (shotReq) {
       shotReq(canvas.toDataURL('image/png'));
       shotReq = null;
