@@ -190,7 +190,9 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
 
   // --- Casa: fachada a la calle (planta baja + piso, alero de teja) ---
   const FZ = -15;
-  m.add(G.box, YELLOW, 0, 3.3, FZ - 0.06, 0, 0, 0, 9, 6.6, 0.12);
+  // La fachada termina justo en FZ: todo lo que va pegado a ella (ventanas, garaje, puerta) queda unos
+  // centímetros por delante (antes el fondo del garaje estaba en el mismo plano que la pared y parpadeaba)
+  m.add(G.box, YELLOW, 0, 3.3, FZ + 0.06, 0, 0, 0, 9, 6.6, 0.12);
   m.add(G.box, WHITE, 0, 6.62, FZ - 0.18, 0, 0, 0, 9.3, 0.14, 0.36); // cornisa
   m.add(ROOF_GEO, 0xb8623e, 0, 6.68, FZ - 0.35, 0, 0, 0, 9.6, 0.55, 1.0); // alero de teja
   m.add(G.box, WHITE, -1.6, 8.0, -13.4, 0, 0, 0, 0.7, 1.8, 0.7); // chimenea
@@ -202,9 +204,9 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   window_(m, -0.4, 1.6, FZ, 1.0, 1.2, 0xf4f4f0, true);
   // Garaje abierto con luz dentro
   m.add(G.box, WHITE, 2.3, 1.25, FZ - 0.08, 0, 0, 0, 3.3, 2.7, 0.06);
-  m.add(G.box, 0x3a3630, 2.3, 1.15, FZ - 0.1, 0, 0, 0, 3.0, 2.3, 0.04);
-  m.add(G.box, 0xdddddd, 2.3, 2.2, FZ - 0.14, 0, 0, 0, 3.0, 0.25, 0.06); // puerta basculante recogida
-  m.add(G.box, 0xff9a3a, 2.3, 0.9, FZ - 0.12, 0, 0, 0, 1.2, 0.5, 0.02);
+  m.add(G.box, 0x3a3630, 2.3, 1.15, FZ - 0.13, 0, 0, 0, 3.0, 2.3, 0.04);
+  m.add(G.box, 0xdddddd, 2.3, 2.2, FZ - 0.2, 0, 0, 0, 3.0, 0.25, 0.06); // puerta basculante recogida
+  m.add(G.box, 0xff9a3a, 2.3, 0.9, FZ - 0.16, 0, 0, 0, 1.2, 0.5, 0.02);
   // Puerta de entrada
   m.add(G.box, WHITE, S.door.x, 1.2, FZ - 0.08, 0, 0, 0, 1.3, 2.5, 0.06);
   m.add(G.box, 0x6b4a2e, S.door.x, 1.1, FZ - 0.12, 0, 0, 0, 1.0, 2.2, 0.06);
