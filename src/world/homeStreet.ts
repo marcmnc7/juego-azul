@@ -3,6 +3,7 @@ import { G, Merger } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
+import { Door } from './door';
 
 // La calle de casa de Gas, la carretera y la fachada vista desde la calle, sacadas de las fotos
 // que pasó Marc (las texturas del Bar Imperi se usan en el Born, born.ts):
@@ -162,6 +163,10 @@ function genericHouse(m: Merger, x: number, frontZ: number, faceZ: number, color
 export interface StreetWorld {
   colliders: Box2[];
   lamps: THREE.Points;
+  /** Puerta peatonal (se abre hacia dentro al llegar alguien). */
+  gate: Door;
+  /** Corredera del coche (se desliza detrás del muro de piedra). */
+  slider: Door;
 }
 
 /** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). */
@@ -226,20 +231,35 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
     m.add(G.cone, WHITE, x, 1.75, S.wallZ, 0, Math.PI / 4, 0, 0.85, 0.3, 0.85);
   };
   for (const x of [4.3, 0.55, -2.15, -3.95]) pillar(x);
-  // Puerta corredera blanca de lamas verticales
-  const gx = open ? -0.9 : 2.4; // abierta, queda recogida detrás del muro de piedra
-  const gz = open ? S.wallZ + 0.3 : S.wallZ - 0.05;
-  m.add(G.box, 0xf2f2ee, gx, 0.75, gz, 0, 0, 0, 3.3, 1.35, 0.08);
-  for (let i = 0; i < 9; i++) m.add(G.box, 0xdcdcd6, gx - 1.45 + i * 0.36, 0.75, gz - 0.05, 0, 0, 0, 0.03, 1.25, 0.02);
-  m.add(G.box, 0xdcdcd6, gx, 1.0, gz - 0.05, 0, 0, 0, 3.2, 0.04, 0.02);
+  // Puerta corredera blanca de lamas verticales: corre por detrás del muro de piedra (se abre para el coche)
+  const slider = new Door({ hinge: new THREE.Vector3(0.75, 0, S.wallZ + 0.24), ry: 0, width: 3.3, slide: 3.2, reach: 9, speed: 1.6, sound: 'metal' });
+  {
+    const gm = new Merger();
+    gm.add(G.box, 0xf2f2ee, 1.65, 0.75, 0, 0, 0, 0, 3.3, 1.35, 0.08);
+    for (let i = 0; i < 9; i++) gm.add(G.box, 0xdcdcd6, 0.2 + i * 0.36, 0.75, -0.05, 0, 0, 0, 0.03, 1.25, 0.02);
+    gm.add(G.box, 0xdcdcd6, 1.65, 1.0, -0.05, 0, 0, 0, 3.2, 0.04, 0.02);
+    slider.leaf.add(gm.mesh());
+  }
+  sc.add(slider.group);
   // Muro de piedra seca con remate blanco
   m.add(G.box, WHITE, -0.8, 0.65, S.wallZ, 0, 0, 0, 2.2, 1.3, 0.3);
   m.add(G.box, WHITE, -0.8, 1.35, S.wallZ, 0, 0, 0, 2.3, 0.12, 0.36);
   // Muro tras el buzón, hasta el muro del pasillo
   m.add(G.box, WHITE, (-3.95 + CORRIDOR.wallX) / 2, 0.65, S.wallZ, 0, 0, 0, -3.95 - CORRIDOR.wallX, 1.3, 0.3);
   m.add(G.box, 0x1b1b1b, -3.95, 1.25, S.wallZ - 0.36, 0, 0, 0, 0.36, 0.42, 0.12); // buzón negro
-  // Puerta peatonal abierta hacia dentro
-  m.add(G.box, 0xf2f2ee, S.gate.minX + 0.05, 0.75, S.wallZ + 0.6, 0, 0, 0, 0.06, 1.35, 1.1);
+  // Puerta peatonal: se abre hacia dentro cuando llega alguien y se cierra cuando ha pasado. La
+  // bisagra, del lado de la corredera: abierta queda pegada a ese lado y no estorba el camino al pasillo
+  const gw = S.gate.maxX - S.gate.minX - 0.06;
+  const gate = new Door({ hinge: new THREE.Vector3(S.gate.maxX - 0.03, 0, S.wallZ), ry: Math.PI, width: gw, swing: 1.65, reach: 1.6, speed: 0.5, sound: 'metal' });
+  {
+    const pm = new Merger();
+    pm.add(G.box, 0xf2f2ee, gw / 2, 0.75, 0, 0, 0, 0, gw, 1.35, 0.06);
+    // (girada media vuelta: su +z local mira a la calle)
+    for (let i = 0; i < 4; i++) pm.add(G.box, 0xdcdcd6, 0.16 + i * ((gw - 0.32) / 3), 0.75, 0.04, 0, 0, 0, 0.03, 1.25, 0.02);
+    pm.add(G.box, 0x9a9a9a, gw - 0.1, 0.9, 0.06, 0, 0, 0, 0.03, 0.14, 0.03); // manilla
+    gate.leaf.add(pm.mesh());
+  }
+  sc.add(gate.group);
   if (open) {
     colliders.push({ minX: S.gate.maxX, maxX: 0.85, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
     colliders.push({ minX: 3.95, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
@@ -329,5 +349,5 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
 
   const mesh = m.mesh();
   sc.add(mesh);
-  return { colliders, lamps };
+  return { colliders, lamps, gate, slider };
 }

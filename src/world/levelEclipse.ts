@@ -15,6 +15,7 @@ import { princesaGame, lostMoto } from '../ui/minis';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
 import { FAROLA_WALK, COAST_Z, buildSaFarola } from './saFarola';
 import { buildKayak as kayakBoat, buildFerry, type Kayak } from './kayak';
+import { Door } from './door';
 import { canvasTex } from './deco';
 import { buildStreet } from './homeStreet';
 import { buildSurroundings } from './surround';
@@ -121,6 +122,9 @@ export class LevelEclipse implements Level {
   private stroke = 0;
   private ferryT = 0;
   private ferryV = 26;
+  /** Cancela y puerta de casa de Azul (o la verja de casa de Gas): se abren a quien llega. */
+  private doors: Door[] = [];
+  private doorWho: THREE.Vector3[] = [];
   private flipT = 0;
 
   // Coches y aparcamiento
@@ -179,6 +183,7 @@ export class LevelEclipse implements Level {
     const old = this.scene;
     this.boat?.stop();
     this.boat = null;
+    this.doors = [];
     const sc = new THREE.Scene();
     sc.fog = new THREE.Fog(fog, 110, 420);
     this.sky = new Sky(sky);
@@ -245,6 +250,7 @@ export class LevelEclipse implements Level {
   private buildAzul() {
     const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(0.4, 1, 0.6));
     const place = buildAzulHouse(sc, this.colliders, true);
+    this.doors = [place.gate, place.door];
     place.beam.visible = false;
     place.steam.forEach((s) => (s.visible = false));
     this.walkers = place.walkers;
@@ -286,6 +292,7 @@ export class LevelEclipse implements Level {
   private buildMarc() {
     const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(-0.4, 1, -0.5));
     const street = buildStreet(sc, { gateOpen: true });
+    this.doors = [street.slider, street.gate];
     street.lamps.visible = false;
     this.colliders.push(...street.colliders, { minX: -4.6, maxX: 4.6, minZ: -15.05, maxZ: -12 }, { minX: -40, maxX: 40, minZ: -28.2, maxZ: -27.8 });
     this.car = makeCar(0x1f3a6b, { luggage: false, joy: false });
@@ -1077,6 +1084,13 @@ export class LevelEclipse implements Level {
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    if (this.doors.length) {
+      this.doorWho.length = 0;
+      for (const p of [this.player, this.gas, ...this.others.map((o) => o.p), ...this.followers.map((f) => f.p)]) if (p?.root.visible && p.root.parent) this.doorWho.push(p.root.position);
+      // Aparcando, la corredera se abre para el coche
+      if (this.phase === 'park' && this.car.root.parent) this.doorWho.push(this.car.root.position);
+      for (const d of this.doors) d.update(dt, this.doorWho, this.camera.position);
+    }
     if (this.phase === 'kayak' || this.phase === 'ferry') this.updateKayak(dt);
     else if (this.phase === 'arrive' || this.phase === 'parents' || this.phase === 'walk') this.updateAzul(dt);
     else if (this.phase === 'park') this.updatePark(dt);

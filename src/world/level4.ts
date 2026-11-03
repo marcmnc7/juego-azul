@@ -9,6 +9,7 @@ import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
+import { Door } from './door';
 import { buildSurroundings } from './surround';
 import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
 import { Particles } from '../entities/fx';
@@ -78,6 +79,9 @@ export class Level4 implements Level {
   private player: Person;
   private walker: Walker;
   private gas: Person;
+  /** La puerta peatonal de casa: se abre al llegar y se cierra detrás. */
+  private gate!: Door;
+  private gateWho: THREE.Vector3[] = [];
   private looks!: { azul: [Person, Person]; gas: [Person, Person] };
   private clothes!: THREE.Object3D;
   private nudeOn = false;
@@ -163,6 +167,7 @@ export class Level4 implements Level {
     this.fx = new Particles(sc);
 
     const street = buildStreet(sc);
+    this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
     for (const [x, z, i] of [[-8, 9, 14], [8, -9, 14], [IMPERI.x + 2, IMPERI.z, 12]]) {
       const l = new THREE.PointLight(0xffc27a, i, 16, 1.5);
@@ -572,6 +577,9 @@ export class Level4 implements Level {
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    this.gateWho.length = 0;
+    for (const p of [this.player, this.gas]) if (p.root.visible) this.gateWho.push(p.root.position);
+    this.gate.update(dt, this.gateWho, this.camera.position);
     if (this.phase !== 'intro' && this.phase !== 'done' && this.phase !== 'ending') this.playTime += dt;
     this.waterTex.offset.set(Math.sin(this.t * 0.3) * 0.2, this.t * 0.03);
     const ffp = this.fireflies.geometry.attributes.position as THREE.BufferAttribute;

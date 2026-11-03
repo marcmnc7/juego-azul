@@ -20,6 +20,7 @@ import { disposeScene } from './level';
 import { cinema, headOf, rel } from '../core/cinema';
 import { juice } from '../core/juice';
 import { beacon } from '../core/beacon';
+import { Door } from './door';
 
 // Capítulo 4 · Fito en Gran Canaria.
 // Aeropuerto (Azul esquiva maletas camino de la puerta 26, asiento 26D «pasillo») → en el estadio juegas con Gas, que tiene que ir al baño una y
@@ -99,6 +100,8 @@ interface Npc extends SteerState {
   wc: number;
   walk: number;
   circle: Circle;
+  /** Siguiente punto del camino (para no cortar por las cabinas al entrar o salir del WC). */
+  next?: [number, number];
 }
 // Camino serpenteante entre el público hasta Gas
 const CROWD_PATH: [number, number][] = [[-8.5, 4], [-5.5, 9], [-10, 13.5], [-6, 18], [-9.5, 21.5], [GAS_POS.x, GAS_POS.z]];
@@ -384,6 +387,9 @@ export class Level3 implements Level {
   private wcBusyT = WC_Z.map((_, i) => (WC_BROKEN.includes(i) ? Infinity : 4 + Math.random() * 16));
   private wcRes = WC_Z.map(() => false);
   private wcLights: THREE.MeshBasicMaterial[] = [];
+  /** Puertas de los WC: se abren a quien entra o sale. */
+  private wcDoors: Door[] = [];
+  private wcWho: THREE.Vector3[] = [];
   // La cola de los baños: gente que avanza, entra, sale y se une al final (Gas también, varias veces)
   private npcs: Npc[] = [];
   private queue: Npc[] = [];
@@ -1216,21 +1222,33 @@ export class Level3 implements Level {
       m.add(G.box, 0x2a63c4, WC_X, 1.15, z, 0, 0, 0, 1.2, 2.3, 1.3); // cabina de plástico
       m.add(G.cyl, 0xe9eef5, WC_X, 2.36, z, 0, 0, 0, 1.45, 0.14, 1.45); // techo blanco
       m.add(G.box, 0xe9eef5, WC_X, 0.04, z, 0, 0, 0, 1.3, 0.08, 1.4); // base
-      m.add(G.box, 0x2457b3, fx - 0.02, 1.08, z, 0, 0, 0, 0.04, 2.0, 1.0); // puerta
-      for (let k = 0; k < 4; k++) m.add(G.box, 0x1b3f80, fx - 0.05, 1.9 + k * 0.07, z, 0, 0, 0, 0.02, 0.025, 0.6); // rejilla
-      m.add(G.box, 0xc0c4cc, fx - 0.06, 1.05, z - 0.36, 0, 0, 0, 0.05, 0.22, 0.06); // tirador
-      const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), signMat);
-      pl.position.set(fx - 0.05, 1.45, z + 0.1);
-      pl.rotation.y = -Math.PI / 2;
-      sc.add(pl);
-      // Indicador libre / ocupado
+      // Lo de dentro, que se ve con la puerta abierta
+      const dark = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.0), new THREE.MeshBasicMaterial({ color: 0x0c1220 }));
+      dark.position.set(fx - 0.004, 1.08, z);
+      dark.rotation.y = -Math.PI / 2;
+      sc.add(dark);
+      // La puerta: bisagra en el lado de +z, se abre hacia fuera cuando alguien entra o sale. Su x local
+      // va de la bisagra al tirador y su -z local mira hacia fuera
       const mat = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
-      const ind = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.22), mat);
-      ind.position.set(fx - 0.06, 1.2, z - 0.36);
+      const door = new Door({ hinge: new THREE.Vector3(fx - 0.02, 0, z + 0.5), ry: Math.PI / 2, width: 1.0, swing: 1.7, reach: 1.25, speed: 0.4, sound: 'plastic' });
+      const dm = new Merger();
+      dm.add(G.box, 0x2457b3, 0.5, 1.08, 0, 0, 0, 0, 1.0, 2.0, 0.04);
+      for (let k = 0; k < 4; k++) dm.add(G.box, 0x1b3f80, 0.5, 1.9 + k * 0.07, -0.03, 0, 0, 0, 0.6, 0.025, 0.02); // rejilla
+      dm.add(G.box, 0xc0c4cc, 0.86, 1.05, -0.04, 0, 0, 0, 0.06, 0.22, 0.05); // tirador
+      door.leaf.add(dm.mesh());
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), signMat);
+      pl.position.set(0.4, 1.45, -0.03);
+      pl.rotation.y = Math.PI;
+      // Indicador libre / ocupado junto al tirador
+      const ind = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.04), mat);
+      ind.position.set(0.86, 1.2, -0.04);
+      door.leaf.add(pl, ind);
+      sc.add(door.group);
+      this.wcDoors.push(door);
       // Piloto grande encima de la puerta, visible desde lejos
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat);
       lamp.position.set(fx - 0.05, 2.15, z);
-      sc.add(ind, lamp);
+      sc.add(lamp);
       this.wcLights.push(mat);
     }
     this.colliders.push({ minX: WC_X - 0.65, maxX: WC_X + 0.65, minZ: WC_Z[0] - 0.7, maxZ: WC_Z[WC_Z.length - 1] + 0.7 });
@@ -1288,6 +1306,7 @@ export class Level3 implements Level {
     n.p.root.position.set(x, 0, z);
     n.tx = x;
     n.tz = z;
+    n.next = undefined;
     n.vx = n.vz = 0;
     return n;
   }
@@ -1325,12 +1344,16 @@ export class Level3 implements Level {
     for (let i = 0; i < WC_Z.length; i++) {
       if (this.wcBusyT[i] <= 0) continue;
       this.wcBusyT[i] -= dt;
+      // Va a salir alguien: primero se abre la puerta
+      if (this.wcBusyT[i] < 0.5 && !this.wcRes[i]) this.wcDoors[i].hold(1.3);
       if (this.wcBusyT[i] <= 0 && !this.wcRes[i]) {
-        // Sale alguien y se vuelve al concierto
-        const n = this.spawn(WC_X - 0.9, WC_Z[i]);
+        // Sale alguien (de dentro, por la puerta abierta) y se vuelve al concierto
+        const n = this.spawn(WC_X - 0.3, WC_Z[i]);
         n.mode = 'leave';
-        n.tx = 2 + Math.random() * 8;
-        n.tz = -2 + Math.random() * 6;
+        // Primero sale por la puerta, recto; luego al concierto
+        n.tx = WC_X - 1.2;
+        n.tz = WC_Z[i];
+        n.next = [2 + Math.random() * 8, -2 + Math.random() * 6];
         const d = pp.distanceTo(n.p.root.position);
         if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 180, 0.08);
       }
@@ -1343,8 +1366,10 @@ export class Level3 implements Level {
         this.queue.shift();
         head.mode = 'toWc';
         head.wc = i;
-        head.tx = WC_X - 0.95;
+        // Delante de su puerta y luego dentro (la puerta se le abre al llegar)
+        head.tx = WC_X - 1.0;
         head.tz = WC_Z[i];
+        head.next = [WC_X - 0.3, WC_Z[i]];
         this.wcRes[i] = true;
         this.headT = 0.8;
       }
@@ -1372,15 +1397,24 @@ export class Level3 implements Level {
       const r = n.p.root.position;
       if (n.mode === 'queue') this.stepTo(n.p, n, n.tx, n.tz, 1.5, dt, Math.PI / 2);
       else if (n.mode === 'toWc') {
-        if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt, undefined, true, this.movingAvoid, n.circle)) {
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt, undefined, true, this.movingAvoid, n.circle) && n.next) {
+          [n.tx, n.tz] = n.next;
+          n.next = undefined;
+        } else if (!n.next && Math.hypot(n.p.root.position.x - n.tx, n.p.root.position.z - n.tz) < 0.12) {
           this.wcBusyT[n.wc] = 12 + Math.random() * 10;
           this.wcRes[n.wc] = false;
+          this.wcDoors[n.wc].hold(0.4);
           this.hide(n);
           const d = pp.distanceTo(this.v1.set(WC_X, 0, WC_Z[n.wc]));
           if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 160, 0.1);
         }
       } else if (n.mode === 'leave') {
-        if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt, undefined, true, this.movingAvoid, n.circle)) this.hide(n);
+        if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt, undefined, true, this.movingAvoid, n.circle)) {
+          if (n.next) {
+            [n.tx, n.tz] = n.next;
+            n.next = undefined;
+          } else this.hide(n);
+        }
       } else if (n.mode === 'tail') {
         this.slot(this.queue.length);
         if (this.stepTo(n.p, n, this.v1.x, Q_Z, 1.7, dt, undefined, true, this.movingAvoid, n.circle) || Math.hypot(r.x - this.v1.x, r.z - Q_Z) < 0.5) {
@@ -1392,6 +1426,10 @@ export class Level3 implements Level {
       n.circle.z = r.z;
     }
     for (const n of this.npcs) if (n.mode === 'free') n.circle.x = n.circle.z = 1e4;
+    this.wcWho.length = 0;
+    for (const n of this.npcs) if (n.p.root.visible) this.wcWho.push(n.p.root.position);
+    if (this.player.root.visible) this.wcWho.push(this.player.root.position);
+    for (const d of this.wcDoors) d.update(dt, this.wcWho, this.camera.position);
     this.paintToilets();
   }
 

@@ -17,6 +17,7 @@ import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
 import { beacon } from '../core/beacon';
+import { Door } from './door';
 
 // Capítulo 6 · La cena a escondidas (13 de julio de 2026), en casa de los padres de Azul, junto a Sa Farola.
 // Es el espejo de la piscinita: aquella noche se coló Azul en casa de los padres de Gas; ahora se cuela él.
@@ -78,6 +79,9 @@ export class LevelCena implements Level {
   private carGoing = false;
   private carSpeed = 0;
   private gasCarT = -1;
+  /** La cancela y la puerta de casa: se abren para quien llega y se cierran detrás. */
+  private doors: Door[] = [];
+  private doorWho: THREE.Vector3[] = [];
   private gasWalk: THREE.Vector3[] = [];
   private scares = 0;
   private grade = 0;
@@ -108,6 +112,7 @@ export class LevelCena implements Level {
     sc.add(kitchen);
 
     const place = buildAzulHouse(sc, this.colliders);
+    this.doors = [place.gate, place.door];
     this.pan = place.pan;
     this.steam = place.steam;
     this.beam = place.beam;
@@ -205,6 +210,7 @@ export class LevelCena implements Level {
       { at: 3.5, dad: out(PARENT_CAR_X + 1.2), mom: out(PARENT_CAR_X - 0.8) },
       { at: 6, dad: DOOR.clone(), msg: CENA.waitEvents[1] },
       { at: 8, msg: CENA.waitEvents[2] },
+      { at: 8.7, dad: DOOR.clone().setZ(-0.9) }, // entra en casa (por la puerta, que se abre)
       { at: 9.5, dad: 'hide' },
       { at: 10, mom: out(PARENT_CAR_X - 2), msg: CENA.waitEvents[3] },
       { at: 12, dad: GATE.clone() },
@@ -475,6 +481,10 @@ export class LevelCena implements Level {
     this.fx.update(dt);
     this.beam.rotation.y = this.t * 0.9;
     this.updateParents(dt);
+    // Quien esté cerca de la cancela o de la puerta la abre (y al alejarse se cierra)
+    this.doorWho.length = 0;
+    for (const p of [this.dad, this.mom, this.gas, this.player]) if (p.root.visible) this.doorWho.push(p.root.position);
+    for (const d of this.doors) d.update(dt, this.doorWho, this.camera.position);
 
     // Coche de Gas: del fondo de la calle a la cancela en ~2,5 s
     if (this.gasCarT >= 0) {
@@ -680,7 +690,6 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     m.add(G.box, SHUTTER, x, 1.2, 0.06, 0, 0, 0, 1.15, 2.4, 0.08);
     for (let k = 0; k < 14; k++) m.add(G.box, 0x24603a, x, 0.2 + k * 0.155, 0.11, 0, 0, 0, 1.05, 0.03, 0.03);
   }
-  m.add(G.box, 0x1e1e22, 0, 1.05, 0.04, 0, 0, 0, 1.0, 2.1, 0.06); // puerta oscura
   m.add(G.box, 0xe9e4d8, 0, 2.18, 0.08, 0, 0, 0, 1.2, 0.1, 0.12);
   m.add(G.box, 0xd84a3a, 0.9, 2.35, 0.08, 0, 0, 0, 0.28, 0.28, 0.03); // la placa roja con la cruz de Malta
   // Escalera exterior: peldaños de barro sobre obra blanca, subiendo hacia la derecha
@@ -696,7 +705,8 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.box, 0x2c6a48, -3.0, 2.48, 3.2, 0, 0, 0, 4.2, 0.28, 0.03);
   for (const x of [-5.0, -1.0]) m.add(G.box, 0x2c6a48, x, 2.0, 3.2, 0, 0, 0, 0.05, 4.0, 0.05);
   const lit = new Merger();
-  lit.add(G.box, 0xffcf8a, 0, 1.05, 0.08, 0, 0, 0, 0.9, 2.0, 0.02); // luz que sale de la puerta
+  // Lo que se ve por la puerta abierta: la luz de dentro (de día, la penumbra de la casa)
+  lit.add(G.box, day ? 0x4a4036 : 0xffcf8a, 0, 1.05, 0.012, 0, 0, 0, 1.0, 2.1, 0.02);
   for (const [x, z, w] of [[-2.4, 0.76, 1.8], [-0.4, 0.76, 1.5]] as [number, number, number][]) lit.add(G.box, 0xffd9a0, x, 4.15, z, 0, 0, 0, w, 0.5, 0.02);
   sc.add(new THREE.Mesh(lit.build(), new THREE.MeshBasicMaterial({ vertexColors: true })));
   // Pérgola de hierro verde cubierta de buganvilla, del porche hasta la valla de la derecha
@@ -751,13 +761,30 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   }
   m.add(G.box, 0xd9cfa6, 2.2, 0.75, 10.47, 0, 0, 0, 0.5, 0.3, 0.03); // placa con el nombre de la casa
   m.add(G.box, 0x7a6a56, 1.6, 0.5, 10.48, 0, 0, 0, 0.04, 0.4, 0.04); // tirador
-  for (let k = 0; k < 6; k++) {
-    // Cancela de madera de acebuche: travesaños curvos (aquí, tablas ligeramente inclinadas)
-    m.add(G.box, 0x8a7a66, 0, 0.18 + k * 0.2, 10.3, 0, 0, Math.sin(k * 1.9) * 0.08, 1.6, 0.09, 0.07);
+  // Cancela de madera de acebuche (travesaños algo torcidos): se abre hacia el jardín cuando llega
+  // alguien y se cierra cuando ha pasado
+  const gate = new Door({ hinge: new THREE.Vector3(-0.8, 0, 10.3), ry: 0, width: 1.6, swing: 1.6, reach: 1.7, speed: 0.55 });
+  {
+    const gm = new Merger();
+    for (let k = 0; k < 6; k++) gm.add(G.box, 0x8a7a66, 0.8, 0.18 + k * 0.2, 0, 0, 0, Math.sin(k * 1.9) * 0.08, 1.56, 0.09, 0.07);
+    gm.add(G.box, 0x7a6a56, 0.08, 0.65, 0, 0, 0, 0, 0.1, 1.3, 0.09);
+    gm.add(G.box, 0x7a6a56, 1.52, 0.65, 0, 0, 0, 0, 0.1, 1.3, 0.09);
+    gm.add(G.box, 0x7a6a56, 0.8, 0.65, 0, 0, 0, 0.62, 0.08, 1.75, 0.08);
+    gate.leaf.add(gm.mesh());
   }
-  m.add(G.box, 0x7a6a56, -0.72, 0.65, 10.3, 0, 0, 0, 0.1, 1.3, 0.09);
-  m.add(G.box, 0x7a6a56, 0.72, 0.65, 10.3, 0, 0, 0, 0.1, 1.3, 0.09);
-  m.add(G.box, 0x7a6a56, 0, 0.65, 10.3, 0, 0, 0.62, 0.08, 1.75, 0.08);
+  sc.add(gate.group);
+  // Puerta de la casa: acristalada con marco oscuro, se abre hacia fuera (a su izquierda)
+  const door = new Door({ hinge: new THREE.Vector3(-0.5, 0, 0.07), ry: 0, width: 1.0, swing: -1.75, reach: 1.4, speed: 0.5 });
+  {
+    const dm = new Merger();
+    for (const [x, y, w, h] of [[0.04, 1.05, 0.08, 2.1], [0.96, 1.05, 0.08, 2.1], [0.5, 2.06, 1.0, 0.08], [0.5, 0.06, 1.0, 0.12], [0.5, 1.0, 1.0, 0.06]] as const) dm.add(G.box, 0x1e1e22, x, y, 0, 0, 0, 0, w, h, 0.05);
+    dm.add(G.box, 0xc8ccd0, 0.86, 1.0, 0.04, 0, 0, 0, 0.03, 0.18, 0.03); // manilla
+    door.leaf.add(dm.mesh());
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.9, 0.015), new THREE.MeshStandardMaterial({ color: 0x3a4652, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.45 }));
+    glass.position.set(0.5, 1.07, 0);
+    door.leaf.add(glass);
+  }
+  sc.add(door.group);
   for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.35 + Math.sin(i) * 0.1, 9.9, 0, i, 0, 0.7, 0.9, 0.6);
   for (const sx of [-5.2, 5.2]) {
     m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
@@ -885,5 +912,5 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   );
   beam.position.copy(farola.lamp);
   sc.add(beam);
-  return { pan, steam, beam, bulbs, walkers: farola.walkers };
+  return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door };
 }
