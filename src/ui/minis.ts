@@ -2,7 +2,7 @@ import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { MINIS } from '../data/story';
-import { phoneChat, toast } from './ui';
+import { phoneChat, toast, missionCard } from './ui';
 import { cardUrl } from './cards';
 import { parkingMission } from '../world/missions/parking';
 import { beachMission } from '../world/missions/beach';
@@ -31,8 +31,10 @@ export interface PackItem {
 }
 
 /** Meter en la mochila lo de la lista de Gas y nada más. Devuelve los intentos de colar algo de más. */
+/** La mochila del viaje en moto, como misión: el panel encima de la escena (se ve la moto detrás). */
 export function packBag(items: PackItem[], onDone: (extras: number) => void) {
-  const o = el('div', 'screen pack-screen');
+  const o = el('div', 'pack-screen panel-overlay');
+  missionCard(MINIS.pack.title, MINIS.pack.hint);
   const need = items.filter((i) => i.ok).length;
   let got = 0;
   let extras = 0;
@@ -51,7 +53,7 @@ export function packBag(items: PackItem[], onDone: (extras: number) => void) {
         vibrate(15);
         count.textContent = `🎒 ${got}/${need}`;
         if (got === need) {
-          audio.fanfare();
+          missionCard(MINIS.pack.title, '', true);
           setTimeout(() => {
             o.remove();
             onDone(extras);
@@ -388,178 +390,206 @@ export interface MiniGame {
   run: (onDone: () => void) => void;
 }
 
-interface CanvasGame {
-  update(dt: number): void;
-  draw(ctx: CanvasRenderingContext2D): void;
-  down?(x: number, y: number): void;
-  move?(x: number, y: number): void;
-  up?(): void;
-}
 
-/** Lienzo a pantalla completa con título e instrucciones. El juego llama a finish() al acabar. */
-function canvasScreen(title: string, hint: string, make: (w: number, h: number, finish: () => void) => CanvasGame, onDone: () => void) {
-  const o = el('div', 'screen mini-screen');
-  const W = 720;
-  const H = 405;
-  const cv = el('canvas', 'mini-canvas') as HTMLCanvasElement;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  cv.width = W * dpr;
-  cv.height = H * dpr;
-  const hintEl = el('p', 'mini-hint', hint);
-  const skip = el('button', 'link-btn mini-skip', 'Saltar ›');
-  o.append(el('h1', '', title), cv, hintEl, skip);
-  root.append(o);
-  const ctx = cv.getContext('2d')!;
-  ctx.scale(dpr, dpr);
-  let done = false;
-  const g = make(W, H, () => {
-    if (done) return;
-    done = true;
-    setTimeout(() => {
-      o.remove();
-      onDone();
-    }, 900);
-  });
-  skip.onclick = () => {
-    if (done) return;
-    done = true;
-    o.remove();
-    onDone();
-  };
-  const pos = (e: PointerEvent) => {
-    const r = cv.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H] as const;
-  };
-  cv.onpointerdown = (e) => {
-    cv.setPointerCapture(e.pointerId);
-    g.down?.(...pos(e));
-  };
-  cv.onpointermove = (e) => g.move?.(...pos(e));
-  cv.onpointerup = cv.onpointercancel = () => g.up?.();
-  let last = performance.now();
-  const loop = () => {
-    if (!o.isConnected) return;
-    const now = performance.now();
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    if (!done) g.update(dt);
-    ctx.clearRect(0, 0, W, H);
-    g.draw(ctx);
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
-}
 
 /** Un fragmento partido en dos: lo de antes del juego y lo de después. */
 function split(f: ChatFrag, n: number): [ChatFrag, ChatFrag] {
   return [{ ...f, msgs: f.msgs.slice(0, n) }, { ...f, msgs: f.msgs.slice(n) }];
 }
 
-function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size = 18, color = '#fff', align: CanvasTextAlign = 'center') {
-  ctx.font = `600 ${size}px Outfit, system-ui, sans-serif`;
-  ctx.fillStyle = color;
-  ctx.textAlign = align;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(s, x, y);
-}
 
-/** 9 de julio: seguir con el dedo el avión de Gas en el radar, de Barcelona a Mahón. */
+/**
+ * 9 de julio: Azul sigue en el móvil el vuelo de Gas de Barcelona a Menorca, como en una app de radar de
+ * vuelos. Es una misión dentro del capítulo: el móvil aparece sobre la escena (se sigue viendo el jardín
+ * detrás) y hay que seguir el avión con el dedo todo el vuelo.
+ */
 export function radar(onDone: () => void) {
   const T = MINIS.radar;
-  canvasScreen(T.title, T.hint, (W, H, finish) => {
-    const from = { x: 140, y: 120 };
-    const to = { x: 590, y: 270 };
-    const DUR = 14;
-    let t = 0;
-    let on = 0;
-    let finger: { x: number; y: number } | null = null;
-    let sweep = 0;
-    const plane = { x: from.x, y: from.y };
-    return {
-      update(dt) {
-        t += dt;
-        sweep += dt * 2;
-        const k = Math.min(1, t / DUR);
-        const e = k * k * (3 - 2 * k);
-        plane.x = from.x + (to.x - from.x) * e + Math.sin(k * 9) * 18;
-        plane.y = from.y + (to.y - from.y) * e + Math.sin(k * 6 + 1) * 14;
-        if (finger && Math.hypot(finger.x - plane.x, finger.y - plane.y) < 46) on += dt;
-        if (k >= 1) {
-          const pct = Math.round((on / DUR) * 100);
-          toast(pct >= 70 ? T.good(pct) : T.ok(pct));
-          audio.fanfare();
-          finish();
-        }
-      },
-      draw(c) {
-        c.fillStyle = '#04140c';
-        c.fillRect(0, 0, W, H);
-        c.strokeStyle = 'rgba(80,255,150,.15)';
-        for (let r = 60; r < 420; r += 60) {
-          c.beginPath();
-          c.arc(W / 2, H / 2, r, 0, Math.PI * 2);
-          c.stroke();
-        }
-        c.save();
-        c.translate(W / 2, H / 2);
-        c.rotate(sweep);
-        const gr = c.createLinearGradient(0, 0, 400, 0);
-        gr.addColorStop(0, 'rgba(80,255,150,.35)');
-        gr.addColorStop(1, 'rgba(80,255,150,0)');
-        c.fillStyle = gr;
-        c.beginPath();
-        c.moveTo(0, 0);
-        c.arc(0, 0, 420, -0.25, 0);
-        c.fill();
-        c.restore();
-        // Costa de Barcelona y Menorca
-        c.fillStyle = '#1d4a33';
-        c.beginPath();
-        c.moveTo(0, 40);
-        c.quadraticCurveTo(110, 60, 150, 130);
-        c.quadraticCurveTo(170, 200, 120, 405);
-        c.lineTo(0, 405);
-        c.fill();
-        c.beginPath();
-        c.ellipse(610, 275, 70, 26, -0.15, 0, Math.PI * 2);
-        c.fill();
-        text(c, 'BCN', from.x - 30, from.y - 22, 14, '#7dffb0');
-        text(c, 'MAH', to.x + 20, to.y + 40, 14, '#7dffb0');
-        // Ruta
-        c.setLineDash([6, 8]);
-        c.strokeStyle = 'rgba(125,255,176,.4)';
-        c.beginPath();
-        c.moveTo(from.x, from.y);
-        c.lineTo(to.x, to.y);
-        c.stroke();
-        c.setLineDash([]);
-        if (finger) {
-          c.strokeStyle = 'rgba(255,255,255,.7)';
-          c.lineWidth = 3;
-          c.beginPath();
-          c.arc(finger.x, finger.y, 46, 0, Math.PI * 2);
-          c.stroke();
-          c.lineWidth = 1;
-        }
-        text(c, '✈️', plane.x, plane.y, 34);
-        text(c, 'VY 3717 · Gas', plane.x, plane.y - 30, 12, '#7dffb0');
-        const pct = Math.round((on / DUR) * 100);
-        text(c, `👀 ${pct}%`, 20, 24, 18, '#fff', 'left');
-      },
-      down(x, y) {
-        finger = { x, y };
-      },
-      move(x, y) {
-        if (finger) finger = { x, y };
-      },
-      up() {
-        finger = null;
-      },
-    };
-  }, () => phoneChat(CHATS.loveLanguage, onDone));
+  const W = 360, H = 440;
+  const o = el('div', 'phone-overlay radar-overlay');
+  const ph = el('div', 'phone radar-phone');
+  const bar = el('div', 'phone-bar radar-bar', `<span class="pb-avatar">✈</span><span class="pb-name"><b>VY3717 · BCN → MAH</b><small class="rd-live">En vuelo · 34.000 ft</small></span>`);
+  const cv = el('canvas', 'radar-canvas') as HTMLCanvasElement;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W * dpr;
+  cv.height = H * dpr;
+  const foot = el('div', 'radar-foot', T.hint);
+  ph.append(bar, cv, foot);
+  o.append(ph);
+  root.append(o);
+  missionCard(T.title, T.hint);
+  const ctx = cv.getContext('2d')!;
+  ctx.scale(dpr, dpr);
+  const live = bar.querySelector('.rd-live') as HTMLElement;
+  // Mapa: costa catalana arriba a la izquierda, Mallorca abajo y Menorca a la derecha
+  const BCN = { x: 74, y: 92 };
+  const MAH = { x: 322, y: 232 };
+  const coast: [number, number][] = [[0, 0], [70, 0], [62, 34], [70, 66], [86, 96], [74, 124], [52, 170], [40, 230], [22, 300], [0, 360]];
+  const mallorca: [number, number][] = [[150, 300], [178, 278], [214, 282], [246, 296], [262, 318], [250, 346], [222, 352], [198, 368], [170, 350], [152, 326]];
+  const menorca: [number, number][] = [[276, 224], [298, 214], [322, 216], [336, 226], [330, 240], [306, 244], [284, 240]];
+  const ibiza: [number, number][] = [[58, 388], [76, 376], [90, 386], [80, 404], [62, 402]];
+  const land = (pts: [number, number][], closeToEdge = false) => {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    if (closeToEdge) ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#2c4c3c';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(160,220,190,.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+  const DUR = 14;
+  let t = 0;
+  let on = 0;
+  let finger: { x: number; y: number } | null = null;
+  let done = false;
+  const trail: { x: number; y: number }[] = [];
+  const posAt = (k: number) => {
+    const e = k * k * (3 - 2 * k);
+    // Un arco suave (ruta de verdad: por el norte de Mallorca)
+    const x = BCN.x + (MAH.x - BCN.x) * e;
+    const y = BCN.y + (MAH.y - BCN.y) * e - Math.sin(e * Math.PI) * 26;
+    return { x, y };
+  };
+  const label = (s: string, x: number, y: number, size = 12, color = '#cfeee0') => {
+    ctx.font = `700 ${size}px Outfit, system-ui, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(s, x, y);
+  };
+  const plane = (x: number, y: number, a: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.fillStyle = '#ffd23f';
+    ctx.strokeStyle = '#3a2a00';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(4, -2.5);
+    ctx.lineTo(-2, -13);
+    ctx.lineTo(-6, -13);
+    ctx.lineTo(-3, -2.5);
+    ctx.lineTo(-10, -2);
+    ctx.lineTo(-13, -7);
+    ctx.lineTo(-15, -7);
+    ctx.lineTo(-13, 0);
+    ctx.lineTo(-15, 7);
+    ctx.lineTo(-13, 7);
+    ctx.lineTo(-10, 2);
+    ctx.lineTo(-3, 2.5);
+    ctx.lineTo(-6, 13);
+    ctx.lineTo(-2, 13);
+    ctx.lineTo(4, 2.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  };
+  const pos = (e: PointerEvent) => {
+    const r = cv.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H };
+  };
+  cv.onpointerdown = (e) => {
+    cv.setPointerCapture(e.pointerId);
+    finger = pos(e);
+  };
+  cv.onpointermove = (e) => {
+    if (finger) finger = pos(e);
+  };
+  cv.onpointerup = cv.onpointercancel = () => (finger = null);
+  let last = performance.now();
+  const loop = () => {
+    if (!o.isConnected) return;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (!done) t += dt;
+    const k = Math.min(1, t / DUR);
+    const p = posAt(k);
+    const q = posAt(Math.min(1, k + 0.01));
+    if (!done && finger && Math.hypot(finger.x - p.x, finger.y - p.y) < 44) on += dt;
+    if (trail.length === 0 || Math.hypot(trail[trail.length - 1].x - p.x, trail[trail.length - 1].y - p.y) > 3) trail.push(p);
+    // Mar con su rejilla
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#0d2c4e');
+    g.addColorStop(1, '#14406c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(140,190,255,.08)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = 0; y < H; y += 40) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    land(coast, true);
+    land(mallorca);
+    land(menorca);
+    land(ibiza);
+    label('Barcelona', BCN.x + 34, BCN.y - 8);
+    label('Mallorca', 206, 324, 11, 'rgba(207,238,224,.7)');
+    label('Menorca', 306, 260);
+    for (const a of [BCN, MAH]) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Ruta prevista (discontinua) y lo ya volado (amarillo)
+    ctx.setLineDash([5, 7]);
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const s = posAt(i / 40);
+      if (i) ctx.lineTo(s.x, s.y);
+      else ctx.moveTo(s.x, s.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    trail.forEach((s, i) => (i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y)));
+    ctx.stroke();
+    // El dedo: verde si está encima del avión
+    if (finger) {
+      const near = Math.hypot(finger.x - p.x, finger.y - p.y) < 44;
+      ctx.strokeStyle = near ? 'rgba(125,255,176,.9)' : 'rgba(255,255,255,.6)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(finger.x, finger.y, 40, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    plane(p.x, p.y, Math.atan2(q.y - p.y, q.x - p.x));
+    const pct = Math.round((on / DUR) * 100);
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillRect(10, H - 38, 110, 28);
+    label(`👀 ${pct}%`, 65, H - 18, 15, '#ffffff');
+    live.textContent = done ? 'Aterrizado en Menorca' : `En vuelo · ${Math.round(34000 - Math.max(0, k - 0.7) * 100000).toLocaleString('es-ES')} ft`;
+    if (k >= 1 && !done) {
+      done = true;
+      toast(pct >= 70 ? T.good(pct) : T.ok(pct));
+      missionCard(T.title, '', true);
+      setTimeout(() => {
+        o.remove();
+        phoneChat(CHATS.loveLanguage, onDone);
+      }, 1600);
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
 }
 
-/** 2 de agosto: Gas no sabe dónde ha dejado la moto en el parking. Linterna y a buscar. */
 export function lostMoto(onDone: () => void) {
   const [before, after] = split(CHATS.motoPerdida, 2);
   // Misión en el aparcamiento de verdad (3D): entre filas de motos, con la linterna del móvil
