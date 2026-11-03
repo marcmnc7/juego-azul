@@ -470,6 +470,9 @@ export const MINIS = {
   agility: {
     title: 'Joy, campeona de agility',
     hint: 'Toca para saltar vallas y aros. En los túneles, no saltes',
+    btn: '🐕 ¡Salta!',
+    knock: '¡Uy, la barra!',
+    overTunnel: 'Por el túnel se pasa por dentro 😅',
     done: (hits: number) => `Joy: ${hits} obstáculos perfectos. A campeonatos 🏆`,
   },
   voley: {
