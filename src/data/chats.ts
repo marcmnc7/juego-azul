@@ -31,7 +31,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "19:46",
-    "text": "Ara nam"
+    "text": "Ahora vamos"
    },
    {
     "me": true,
@@ -41,7 +41,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "19:46",
-    "text": "Que dius"
+    "text": "Qué dices"
    },
    {
     "me": false,
@@ -236,7 +236,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "23:30",
-    "text": "Bona nit"
+    "text": "Buenas noches"
    },
    {
     "me": true,
@@ -246,9 +246,319 @@ export const CHATS = {
   ]
  },
  "imperi": {
-  "date": "26 de agosto de 2025",
+  "date": "Hoy",
   "contact": "Marc",
   "msgs": [
+   {
+    "me": true,
+    "t": "17:53",
+    "text": "Quiero saber aun donde queda esa playa que me dijiste 🙄🙄"
+   },
+   {
+    "me": false,
+    "t": "18:08",
+    "text": "Holaaaaa ojazosss"
+   },
+   {
+    "me": false,
+    "t": "18:09",
+    "text": "¿Has descansadoo?"
+   },
+   {
+    "me": false,
+    "t": "18:10",
+    "text": "Hahahaha no es nada del otro mundo pero me pilla muy cerca de casa y me encanta nadar de noche ahii 🤭"
+   },
+   {
+    "me": false,
+    "t": "18:11",
+    "text": "Si usted quiere podríamos ir dsppp"
+   },
+   {
+    "me": true,
+    "t": "19:44",
+    "text": "Hahahaha siii bueno mas o menos"
+   },
+   {
+    "me": true,
+    "t": "19:44",
+    "text": "Hoy tb descansaré"
+   },
+   {
+    "me": true,
+    "t": "19:44",
+    "text": "Tu que tal?"
+   },
+   {
+    "me": true,
+    "t": "19:45",
+    "text": "Por donde vives tuu"
+   },
+   {
+    "me": false,
+    "t": "20:26",
+    "text": "Suficiente para haber podido trabajar sin morir en el intento hahahaha"
+   },
+   {
+    "me": false,
+    "t": "20:26",
+    "text": "Por Sa Caleta!!"
+   },
+   {
+    "me": false,
+    "t": "20:27",
+    "text": "Bueno, esto es casa de mis padres. Yo realmente vivoo en Barcelona !"
+   },
+   {
+    "me": false,
+    "t": "20:27",
+    "text": "Youu??"
+   },
+   {
+    "me": true,
+    "t": "20:28",
+    "text": "Hajahahaha literalmente yo tb asi"
+   },
+   {
+    "me": true,
+    "t": "20:31",
+    "text": "Brutaaal"
+   },
+   {
+    "me": true,
+    "t": "20:32",
+    "text": "Todo el año?"
+   },
+   {
+    "me": true,
+    "t": "20:32",
+    "text": "Yo estoy en sa farola! Tb con los padres, madrid todo el año"
+   },
+   {
+    "me": false,
+    "t": "20:37",
+    "text": "Hahahaha veo que lo has conseguido tonsesss!!"
+   },
+   {
+    "me": false,
+    "t": "20:37",
+    "text": "Y de que trabajas??"
+   },
+   {
+    "me": false,
+    "t": "20:37",
+    "text": "Yes !! En verano y fechas clave vengo muchisimo pero de base Bcn."
+   },
+   {
+    "me": false,
+    "t": "20:38",
+    "text": "Ojo hay nivel hahahahaha"
+   },
+   {
+    "me": false,
+    "t": "20:39",
+    "text": "Madrid que guay… tuviése mar no dudes que seria uno mas ahi hahahahah"
+   },
+   {
+    "me": false,
+    "t": "20:39",
+    "text": "Igual este año justooo tendre que hacerle muchas visitas a la capi ! Que una amiga empieza a estudiar ahi y hay que aprovechar ese Airbnb hahahaha"
+   },
+   {
+    "me": true,
+    "t": "21:35",
+    "text": "Trabajo en amazon"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Esos dias online"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Y tu?"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Si te queda a 30 min nada mas"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Ahahahaahah ya seeee le falta mar"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Pero bueno"
+   },
+   {
+    "me": true,
+    "t": "21:36",
+    "text": "Hay la gente 😌😌"
+   },
+   {
+    "me": true,
+    "t": "21:37",
+    "text": "Pues ya sabes tienes otra amiga para avisar"
+   },
+   {
+    "me": true,
+    "t": "21:41",
+    "text": "📷 Foto"
+   },
+   {
+    "me": false,
+    "t": "21:56",
+    "text": "Que dicessss y en que parte??"
+   },
+   {
+    "me": false,
+    "t": "21:59",
+    "text": "Yoo en “Dogfy Diet”, como Software Manager"
+   },
+   {
+    "me": false,
+    "t": "22:00",
+    "text": "En eso no te quito la razónnn… aparte del mar casi todo es mejor ahi hahahaha"
+   },
+   {
+    "me": false,
+    "t": "22:01",
+    "text": "<b>Sabes que lo haré</b>"
+   },
+   {
+    "me": false,
+    "t": "22:02",
+    "text": "Hahahah no parasss! No tocaba descansar habíamos dicho? 😂"
+   },
+   {
+    "me": true,
+    "t": "22:02",
+    "text": "En marketplsce como account manager"
+   },
+   {
+    "me": true,
+    "t": "22:03",
+    "text": "Superrrr tengo un perrito tienes descuentos para amigos ? 🥹"
+   },
+   {
+    "me": true,
+    "t": "22:03",
+    "text": "Esperemos que si"
+   },
+   {
+    "me": true,
+    "t": "22:03",
+    "text": "Hahaahahah siiii"
+   },
+   {
+    "me": true,
+    "t": "22:03",
+    "text": "Pero tomando cocacola"
+   },
+   {
+    "me": true,
+    "t": "22:03",
+    "text": "Tengo cuidado"
+   },
+   {
+    "me": true,
+    "t": "22:04",
+    "text": "Tu estas en casa ?"
+   },
+   {
+    "me": false,
+    "t": "22:10",
+    "text": "Muy top !! Tas bien colocada"
+   },
+   {
+    "me": false,
+    "t": "22:11",
+    "text": "Ma muero 😍 de hecho creo que lo he visto por algun lado de tu insta !! Es ese negro ??"
+   },
+   {
+    "me": false,
+    "t": "22:11",
+    "text": "Y respondiendo a tu pregunta… tengo hahahaha"
+   },
+   {
+    "me": false,
+    "t": "22:12",
+    "text": "A cambio de que me montes un buen tardeíto"
+   },
+   {
+    "me": false,
+    "t": "22:12",
+    "text": "Hahahahaha brutal"
+   },
+   {
+    "me": false,
+    "t": "22:13",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "22:18",
+    "text": "Buenooo no me quejo ahaha"
+   },
+   {
+    "me": true,
+    "t": "22:19",
+    "text": "Siii es un perrito negro bueno no tan chiquito ahahah de hecho grande pero muy tierno"
+   },
+   {
+    "me": true,
+    "t": "22:19",
+    "text": "🎥 Vídeo"
+   },
+   {
+    "me": true,
+    "t": "22:19",
+    "text": "🤝🏻🤝🏻🤝🏻"
+   },
+   {
+    "me": true,
+    "t": "22:20",
+    "text": "100% ya sabes que me gusta la fiesta"
+   },
+   {
+    "me": true,
+    "t": "22:20",
+    "text": "Ufff planazo"
+   },
+   {
+    "me": true,
+    "t": "22:21",
+    "text": "Bueno entonces cuando nadamos"
+   },
+   {
+    "me": false,
+    "t": "22:25",
+    "text": "No puede ser ME FUNDO…."
+   },
+   {
+    "me": false,
+    "t": "22:25",
+    "text": "Que guapo ❤️"
+   },
+   {
+    "me": false,
+    "t": "22:25",
+    "text": "Ojalá tenerrrrr uno ara lo querré conocer"
+   },
+   {
+    "me": false,
+    "t": "22:26",
+    "text": "Pues te cojo la mano también 🤝🏻🤝🏻🤝🏻"
+   },
+   {
+    "me": false,
+    "t": "22:27",
+    "text": "Dificilmente superable, solo se me ocurre una variante"
+   },
    {
     "me": false,
     "t": "22:27",
@@ -402,7 +712,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "22:58",
-    "text": "HHahaah vale per en tu casa pues"
+    "text": "HHahaah vale pero en tu casa pues"
    },
    {
     "me": true,
@@ -487,7 +797,7 @@ export const CHATS = {
   ]
  },
  "pins": {
-  "date": "26 de agosto de 2025",
+  "date": "Hoy",
   "contact": "Marc",
   "msgs": [
    {
@@ -609,7 +919,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "1:11",
-    "text": "Y por si no se, si el vibe no seguia desp de ayer"
+    "text": "Y por si no se, si la vibra no seguia desp de ayer"
    },
    {
     "me": false,
@@ -1048,7 +1358,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "16:50",
-    "text": "Ew no me gusta la fanta"
+    "text": "Puaj no me gusta la fanta"
    },
    {
     "me": true,
@@ -1068,7 +1378,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "16:55",
-    "text": "Pff ganaste, es luxuryyyy"
+    "text": "Pff ganaste, es un lujooo"
    },
    {
     "me": false,
@@ -1163,7 +1473,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "16:58",
-    "text": "Wtf"
+    "text": "Pero qué"
    },
    {
     "me": true,
@@ -1270,7 +1580,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "22:42",
-    "text": "Hize video dont worry"
+    "text": "Hice video no te preocupes"
    },
    {
     "me": false,
@@ -1378,7 +1688,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "19:13",
-    "text": "Okeeeeeyyyy ingeniero del sonido, ganas de comprobar la full experience"
+    "text": "Vaaaaale ingeniero del sonido, ganas de comprobar la experiencia completa"
    },
    {
     "me": true,
@@ -1484,7 +1794,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "2:33",
-    "text": "Bona nit 🫂"
+    "text": "Buenas noches 🫂"
    }
   ]
  },
@@ -1653,7 +1963,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "17:18",
-    "text": "Estava"
+    "text": "Estaba"
    },
    {
     "me": true,
@@ -2017,7 +2327,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "20:48",
-    "text": "Wait"
+    "text": "Espera"
    },
    {
     "me": true,
@@ -2235,7 +2545,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "23:50",
-    "text": "Poc a poc se me quitará la tonteria de no decirte las cosas ahaha"
+    "text": "Poco a poco se me quitará la tonteria de no decirte las cosas ahaha"
    },
    {
     "me": true,
@@ -2245,12 +2555,12 @@ export const CHATS = {
    {
     "me": true,
     "t": "23:52",
-    "text": "Bona niit 🤍✨🫂"
+    "text": "Buenas noches 🤍✨🫂"
    },
    {
     "me": true,
     "t": "23:52",
-    "text": "Baciniii"
+    "text": "Besitooos"
    },
    {
     "me": false,
@@ -2291,7 +2601,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "8:17",
-    "text": "Bon diaaa ☀️☀️☀️"
+    "text": "Buenos díaaas ☀️☀️☀️"
    },
    {
     "me": true,
@@ -2687,7 +2997,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "19:28",
-    "text": "Baciii"
+    "text": "Besooos"
    },
    {
     "me": true,
@@ -2702,7 +3012,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "19:36",
-    "text": "Mi manchi giá"
+    "text": "Ya te echo de menos"
    },
    {
     "me": false,
@@ -2886,7 +3196,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "10:20",
-    "text": "Heeeellooo"
+    "text": "Holaaaaaa"
    },
    {
     "me": true,
@@ -3126,7 +3436,7 @@ export const CHATS = {
    {
     "me": true,
     "t": "22:22",
-    "text": "Es mi love language"
+    "text": "Es mi lenguaje del amor"
    },
    {
     "me": true,

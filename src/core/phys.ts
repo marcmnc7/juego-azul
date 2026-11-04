@@ -59,7 +59,7 @@ export class Phys {
         e.c.setCollisionGroups(g);
         Object.assign(e, { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
       } else {
-        const c = this.world.createCollider(RAPIER.ColliderDesc.cuboid(hx, HALF_H, hz).setTranslation(cx, 0, cz).setCollisionGroups(g));
+        const c = this.world.createCollider((b.round ? RAPIER.ColliderDesc.cylinder(HALF_H, hx) : RAPIER.ColliderDesc.cuboid(hx, HALF_H, hz)).setTranslation(cx, 0, cz).setCollisionGroups(g));
         this.boxes.set(b, { c, minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
       }
       this.dirty = true;

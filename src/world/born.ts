@@ -185,7 +185,8 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(G.box, 0xf4e6c0, fx, R + 4.2, fz, 0, Math.PI / 4, 0, 0.45, 0.6, 0.45);
   }
   // (la cámara pasa por encima de la verja y la peana; si no, se pegaba a Azul al andar junto al obelisco)
-  col(-3.2, 3.2, -3.2, 3.2, true);
+  // La verja es redonda: con una caja, Azul chocaba en las esquinas del cuadrado sin tocar nada
+  colliders.push({ minX: -3.25 + ox, maxX: 3.25 + ox, minZ: -3.25 + oz, maxZ: 3.25 + oz, low: true, round: true });
 
   // --- Oeste, al fondo a la derecha: el Ajuntament (antiguo alcázar): almenas, ojivas y torre ---
   const W = BORN.minX;

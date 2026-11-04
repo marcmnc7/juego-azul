@@ -13,6 +13,8 @@ import { Door } from './door';
 import { buildSurroundings } from './surround';
 import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
 import { Particles } from '../entities/fx';
+import { PoolWater } from '../core/poolWater';
+import { Trail } from '../core/follow';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
 import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
 import { embrace, type Embrace } from '../entities/embrace';
@@ -27,24 +29,38 @@ import { beacon } from '../core/beacon';
 // Empieza en el Bar Imperi con el chat real de esa noche. Azul va hacia Pins, Gas llega en el coche azul,
 // van a Sa Son 69 B4 y no entran por la puerta: por el pasillo de la derecha hasta la piscina.
 // Bucle: cruzar sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden las
-// ventanas de arriba) → desnudarse, al agua y abrazarse → nadar un rato juntos → tumbarse en el césped →
-// unir las estrellas → el chat real de la 01:01.
+// ventanas de arriba) → desnudarse, al agua y abrazarse → nadar un rato juntos → salir por la escalera
+// de la piscina → subir las escaleras al césped → en la hamaca, hacer el amor (a pixeles) → hablar un
+// rato → unir las estrellas → el chat real de la 01:01.
+//
+// El nado es de verdad: crol con el cuerpo tumbado en el agua, brazos que entran y salen, patada,
+// y cada brazada empuja el agua de la malla de ondas (PoolWater); de pie, se mantiene a flote.
 
-type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'toTowels' | 'stars' | 'ending' | 'done';
+type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'toTowels' | 'love' | 'stars' | 'ending' | 'done';
 
 // Piscina (interior del vaso)
 // La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
 const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 };
-/** Tumbados en las toallas: la espalda sobre la toalla (con 0,06 se hundían unos centímetros en el césped). */
-const LIE_Y = 0.14; // «Muy pequeñita ella», pero algo más de lo que parecía
+/** El césped de arriba: se sube por las escaleras desde la piscina. */
+const LAWN_Y = 0.9;
+const STAIRS = { minX: -3.6, maxX: -1.6, z0: 10.55, z1: 11.75 };
+/** Altura del suelo del jardín: abajo, las escaleras (rampa de peldaños) y el césped de arriba. */
+const gardenH = (x: number, z: number) => (z >= STAIRS.z1 ? LAWN_Y : z > STAIRS.z0 && x > STAIRS.minX - 0.3 && x < STAIRS.maxX + 0.3 ? (LAWN_Y * (z - STAIRS.z0)) / (STAIRS.z1 - STAIRS.z0) : 0);
+/** Lo alto de la colchoneta de la hamaca. */
+const BED_Y = LAWN_Y + 0.5;
+/** Tumbados en la hamaca: la espalda sobre la colchoneta. */
+const LIE_Y = BED_Y + 0.1; // «Muy pequeñita ella», pero algo más de lo que parecía
 const WATER_Y = -0.22;
 // Nadando, el agua por los hombros (con -1,12 la cadera quedaba por encima del agua y parecían flotar de pie)
 const SWIM_Y = -1.4;
-const TOWELS = new THREE.Vector3(-1.6, 0, 11.6);
-/** Largo de la toalla: cabe él (1,85 m) de la cabeza a los pies. */
-const TOWEL_LEN = 2.1;
-/** Tumbado, la raíz (a los pies) queda en este z y la cabeza hacia la piscina, sobre la toalla. */
-const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.1;
+/** La hamaca doble, en el césped de arriba. */
+const TOWELS = new THREE.Vector3(1.0, LAWN_Y, 13.05);
+/** Largo de la hamaca: cabe él (1,85 m) de la cabeza a los pies. */
+const TOWEL_LEN = 2.2;
+/** Tumbado, la raíz (a los pies) queda en este z y la cabeza hacia la piscina, sobre la colchoneta. */
+const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.12;
+/** La escalera para salir de la piscina, en su lado oeste. */
+const LADDER = new THREE.Vector3(POOL.minX + 0.12, 0, 7.2);
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
 // de la carretera, así el coche azul usa el mismo carril en los dos sitios
@@ -73,7 +89,9 @@ const T_SNEAK_HINT = () => txt<string>('sneakHint', 'Llega a la piscina sin hace
 const T_LIGHT_ON = () => txt<string>('lightOn', '💡 Se ha encendido una luz arriba… ¡quieta!');
 const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga.' }]);
 // Sin ropa: el mismo muñeco con todo del color de la piel
-const nude = (l: PersonLook): PersonLook => ({ ...l, shirt: l.skin, pants: l.skin, shoes: l.skin, skirt: false });
+const nude = (l: PersonLook): PersonLook => ({ ...l, shirt: l.skin, pants: l.skin, shoes: l.skin, skirt: false, jumpsuit: false, shorts: false, stripes: undefined, nude: true });
+/** Altura de la cadera sobre los pies, para tumbar al que nada con la espalda a ras de agua. */
+const hipsOf = (p: Person) => p.rig?.hipsHeight ?? 0.7;
 
 export class Level4 implements Level {
   private scene = new THREE.Scene();
@@ -106,6 +124,15 @@ export class Level4 implements Level {
   private solids: Circle[] = [];
   private swimT = 0;
   private waterTex: THREE.Texture;
+  private pool!: PoolWater;
+  private swimOut = false;
+  private gasTrail = new Trail();
+  private swimSt = new Map<Person, { k: number; ph: number; prev: number }>();
+  /** La censura de la hamaca: un mosaico de píxeles grandes que tapa a los dos. */
+  private mosaic!: THREE.Mesh;
+  private mosaicData!: THREE.DataTexture;
+  private mosaicT = 0;
+  private ballMesh!: THREE.Mesh;
   private fireflies!: THREE.Points;
   private marker: THREE.Group;
   private busy = false;
@@ -118,7 +145,6 @@ export class Level4 implements Level {
   private phys = new PhysicsWorld();
   private ball!: Body;
   private movers: Mover[] = [{ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 }];
-  private ripples: { m: THREE.Mesh; t: number; max: number; size: number }[] = [];
   private rippleT = 0;
   private diveFrom = new THREE.Vector3();
   private diveTo = new THREE.Vector3();
@@ -204,6 +230,10 @@ export class Level4 implements Level {
     this.looks = { azul: [this.player, makePerson(nude(MARGAUX_LOOK))], gas: [this.gas, makePerson(nude(MARC_LOOK))] };
     for (const p of [this.looks.azul[1], this.looks.gas[1]]) {
       p.root.visible = false;
+      // (la sombra de pega se quedaría flotando dentro del agua)
+      p.root.traverse((o) => {
+        if (o.userData.blob) o.visible = false;
+      });
       sc.add(p.root);
     }
     // La ropa en el borde de la piscina, para cuando os la quitéis
@@ -223,6 +253,7 @@ export class Level4 implements Level {
     sc.add(this.marker);
 
     this.buildConstellation();
+    this.buildMosaic();
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
     this.updateHud();
@@ -249,22 +280,36 @@ export class Level4 implements Level {
 
   // ---------------- Construcción ----------------
 
+  /** Cáusticas del fondo: la red de líneas de luz de una piscina (ruido celular que empalma por los bordes). */
   private causticTexture() {
+    const S = 256, N = 34;
+    const pts = Array.from({ length: N }, () => [Math.random() * S, Math.random() * S]);
     const t = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#1f9fd0';
-      ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = 'rgba(200,250,255,0.55)';
-      ctx.lineWidth = 3;
-      for (let i = 0; i < 70; i++) {
-        const x = Math.random() * w;
-        const y = Math.random() * h;
-        ctx.beginPath();
-        ctx.ellipse(x, y, 10 + Math.random() * 18, 6 + Math.random() * 12, Math.random() * 3, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
+      const img = ctx.createImageData(w, h);
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          let f1 = 1e9, f2 = 1e9;
+          for (const [px, py] of pts) {
+            let dx = Math.abs(px - x), dy = Math.abs(py - y);
+            if (dx > S / 2) dx = S - dx;
+            if (dy > S / 2) dy = S - dy;
+            const d = Math.hypot(dx, dy);
+            if (d < f1) {
+              f2 = f1;
+              f1 = d;
+            } else if (d < f2) f2 = d;
+          }
+          const l = Math.pow(Math.max(0, 1 - (f2 - f1) / 9), 3);
+          const i = (y * w + x) * 4;
+          img.data[i] = 26 + l * 150;
+          img.data[i + 1] = 138 + l * 105;
+          img.data[i + 2] = 190 + l * 60;
+          img.data[i + 3] = 255;
+        }
+      ctx.putImageData(img, 0, 0);
+    }, S, S);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(2, 2.5);
+    t.repeat.set(2, 1.2);
     return t;
   }
 
@@ -341,18 +386,24 @@ export class Level4 implements Level {
     const pw = POOL.maxX - POOL.minX;
     const pd = POOL.maxZ - POOL.minZ;
     m.add(G.box, 0x2b6fb0, cx, -1.5, cz, 0, 0, 0, pw, 0.1, pd);
+    // El fondo, con las cáusticas moviéndose: se ve a través del agua
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd).rotateX(-Math.PI / 2), toon({ map: this.waterTex, color: 0x8fd8ee, emissive: 0x1c7fa8, emissiveMap: this.waterTex, emissiveIntensity: 1.1, roughness: 0.6 }));
+    floor.position.set(cx, -1.44, cz);
+    floor.userData.noCast = true;
+    sc.add(floor);
     m.add(G.box, 0x3584c8, cx, -0.75, POOL.minZ - 0.05, 0, 0, 0, pw, 1.5, 0.1);
     m.add(G.box, 0x3584c8, cx, -0.75, POOL.maxZ + 0.05, 0, 0, 0, pw, 1.5, 0.1);
     m.add(G.box, 0x3584c8, POOL.minX - 0.05, -0.75, cz, 0, 0, 0, 0.1, 1.5, pd);
     m.add(G.box, 0x3584c8, POOL.maxX + 0.05, -0.75, cz, 0, 0, 0, 0.1, 1.5, pd);
-    // Escalera
-    for (const sx of [-0.25, 0.25]) m.add(G.cyl, 0xd0d6dc, POOL.maxX - 0.6 + sx, 0.3, POOL.minZ + 0.05, 0.25, 0, 0, 0.05, 1.2, 0.05);
-    const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(pw, pd).rotateX(-Math.PI / 2),
-      toon({ map: this.waterTex, color: 0x7fd8ee, emissive: 0x2a9fc0, emissiveMap: this.waterTex, emissiveIntensity: 0.9, roughness: 0.06, metalness: 0.1, transparent: true, opacity: 0.8, depthWrite: false }),
-    );
-    water.position.set(cx, WATER_Y, cz);
-    sc.add(water);
+    // Escalera de la piscina, en el lado de las losas: pasamanos curvos y peldaños
+    for (const dz of [-0.28, 0.28]) {
+      m.add(G.cyl, 0xd0d6dc, LADDER.x - 0.08, -0.3, LADDER.z + dz, 0, 0, 0.08, 0.05, 1.5, 0.05);
+      m.add(G.cyl, 0xd0d6dc, LADDER.x - 0.34, 0.62, LADDER.z + dz, 0, 0, 1.2, 0.05, 0.62, 0.05);
+      m.add(G.cyl, 0xd0d6dc, LADDER.x - 0.62, 0.42, LADDER.z + dz, 0, 0, 0, 0.05, 0.6, 0.05);
+    }
+    for (const y of [-0.15, -0.5, -0.85]) m.add(G.box, 0xe8ecef, LADDER.x + 0.02, y, LADDER.z, 0, 0, 0, 0.14, 0.03, 0.54);
+    this.pool = new PoolWater(POOL, WATER_Y, 0x1c9ec8, new THREE.Vector3(-0.5, 1, 0.4));
+    sc.add(this.pool.mesh);
     this.colliders.push({ minX: POOL.minX - 0.1, maxX: POOL.maxX + 0.1, minZ: POOL.minZ - 0.1, maxZ: POOL.maxZ + 0.1, low: true });
     this.buildPoolPhysics();
 
@@ -430,24 +481,37 @@ export class Level4 implements Level {
     m.add(G.cyl, 0xdddddd, 3.6, 1.2, 0.7, 0, 0, 0, 0.08, 2.4, 0.08);
     m.add(G.cone, 0x2b4fa0, 3.6, 2.5, 0.7, 0, 0, 0, 2.4, 0.6, 2.4);
     this.colliders.push({ minX: 3.45, maxX: 3.75, minZ: 0.55, maxZ: 0.85 });
-    // Tumbonas al fondo del jardín, mirando a la piscina
-    for (const x of [0.7, 2.0, 3.3]) {
-      const z = 13.0;
-      m.add(G.box, 0xf4efe2, x, 0.3, z, 0, 0, 0, 0.7, 0.12, 1.6);
-      m.add(G.box, 0xf4efe2, x, 0.55, z + 0.65, -0.6, 0, 0, 0.7, 0.1, 0.6);
-      m.add(G.box, 0x2b4fa0, x, 0.38, z - 0.1, 0, 0, 0, 0.6, 0.04, 1.3);
-      this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.85, maxZ: z + 0.85 });
+    // El césped de arriba: muro de contención de marès, las escaleras desde la piscina y, arriba, la hamaca
+    {
+      const X0 = CORRIDOR.wallX + 0.13, X1 = 4.47;
+      m.add(G.box, GRASS, (X0 + X1) / 2, LAWN_Y / 2 - 0.01, (STAIRS.z1 + 14.5) / 2, 0, 0, 0, X1 - X0, LAWN_Y, 14.5 - STAIRS.z1);
+      m.add(G.box, 0xd8c7a5, (X0 + STAIRS.minX) / 2, LAWN_Y / 2 + 0.03, STAIRS.z1 - 0.06, 0, 0, 0, STAIRS.minX - X0, LAWN_Y + 0.06, 0.12);
+      m.add(G.box, 0xd8c7a5, (STAIRS.maxX + X1) / 2, LAWN_Y / 2 + 0.03, STAIRS.z1 - 0.06, 0, 0, 0, X1 - STAIRS.maxX, LAWN_Y + 0.06, 0.12);
+      this.colliders.push({ minX: X0 - 0.1, maxX: STAIRS.minX, minZ: STAIRS.z1 - 0.13, maxZ: STAIRS.z1 + 0.05, low: true });
+      this.colliders.push({ minX: STAIRS.maxX, maxX: X1 + 0.1, minZ: STAIRS.z1 - 0.13, maxZ: STAIRS.z1 + 0.05, low: true });
+      const N = 6;
+      const dz = (STAIRS.z1 - STAIRS.z0) / N;
+      const sw = STAIRS.maxX - STAIRS.minX, scx = (STAIRS.minX + STAIRS.maxX) / 2;
+      for (let i = 0; i < N; i++) m.add(G.box, i % 2 ? 0xd8c7a5 : 0xe2d3b4, scx, ((i + 1) * LAWN_Y) / N / 2, STAIRS.z0 + (i + 0.5) * dz, 0, 0, 0, sw, ((i + 1) * LAWN_Y) / N, dz + 0.004);
+      for (const sx of [STAIRS.minX - 0.08, STAIRS.maxX + 0.08]) {
+        m.add(G.box, 0xc9b890, sx, LAWN_Y / 2 + 0.08, (STAIRS.z0 + STAIRS.z1) / 2, 0, 0, 0, 0.16, LAWN_Y + 0.16, STAIRS.z1 - STAIRS.z0);
+        this.colliders.push({ minX: sx - 0.08, maxX: sx + 0.08, minZ: STAIRS.z0, maxZ: STAIRS.z1, low: true });
+      }
+      // Hamaca doble: bastidor de madera, patas, colchoneta y dos cojines (la cabeza, hacia la piscina)
+      const H = TOWELS, Y = LAWN_Y;
+      m.add(G.box, 0x8a6a44, H.x, Y + 0.32, H.z, 0, 0, 0, 1.75, 0.08, TOWEL_LEN + 0.1);
+      for (const [lx, lz] of [[-0.78, -1.0], [0.78, -1.0], [-0.78, 1.0], [0.78, 1.0]]) m.add(G.box, 0x6e5234, H.x + lx, Y + 0.14, H.z + lz, 0, 0, 0, 0.09, 0.3, 0.09);
+      m.add(G.rbox, 0xf1ecdf, H.x, Y + 0.43, H.z, 0, 0, 0, 1.65, 0.14, TOWEL_LEN);
+      for (const sx of [-0.4, 0.4]) m.add(G.rbox, 0x5aa9e6, H.x + sx, Y + 0.55, H.z - TOWEL_LEN / 2 + 0.27, 0.15, 0, 0, 0.66, 0.13, 0.42);
+      this.colliders.push({ minX: H.x - 0.9, maxX: H.x + 0.9, minZ: H.z - TOWEL_LEN / 2 - 0.05, maxZ: H.z + TOWEL_LEN / 2 + 0.05, low: true });
     }
-    // Toallas en el césped para mirar las estrellas
-    m.add(G.box, 0xe2547a, TOWELS.x - 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, TOWEL_LEN);
-    m.add(G.box, 0x5aa9e6, TOWELS.x + 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, TOWEL_LEN);
 
     // Muros del jardín y setos
     m.add(G.box, 0xf4efe2, 4.6, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
     this.colliders.push({ minX: 4.47, maxX: 4.73, minZ: 0, maxZ: 14.5, low: true });
     m.add(G.box, 0xf4efe2, (CORRIDOR.wallX + 4.6) / 2, 0.9, 14.6, 0, 0, 0, 4.6 - CORRIDOR.wallX + 0.2, 1.8, 0.25);
     m.add(G.box, 0x2f5f2a, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4);
-    for (const [x, z] of [[-5.5, 13.6], [-3.8, 1.8], [3.9, 4.8]]) {
+    for (const [x, z] of [[-5.5, 10.9], [-3.8, 1.8], [3.9, 4.8]]) {
       m.add(G.cyl, 0xb5603b, x, 0.3, z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, x, 0.9, z, 0, 0, 0, 0.9, 0.9, 0.9);
     }
@@ -491,9 +555,40 @@ export class Level4 implements Level {
     sc.add(this.fireflies);
   }
 
-  /** Estrellas grandes que forman un corazón en el cielo, vistas desde las toallas. */
+  /** La censura: píxeles grandes de colores de piel, pelo y colchoneta, en un cartel que mira a la cámara. */
+  private buildMosaic() {
+    const W = 11, H = 7;
+    this.mosaicData = new THREE.DataTexture(new Uint8Array(W * H * 4), W, H, THREE.RGBAFormat);
+    this.mosaicData.magFilter = this.mosaicData.minFilter = THREE.NearestFilter;
+    this.mosaicData.colorSpace = THREE.SRGBColorSpace;
+    this.mosaic = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({ map: this.mosaicData, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    this.mosaic.visible = false;
+    this.mosaic.renderOrder = 5;
+    this.scene.add(this.mosaic);
+    this.shuffleMosaic();
+  }
+
+  private shuffleMosaic() {
+    const d = this.mosaicData.image.data as Uint8Array;
+    const W = this.mosaicData.image.width, H = this.mosaicData.image.height;
+    const pal = [MARGAUX_LOOK.skin, MARC_LOOK.skin, MARGAUX_LOOK.hair, MARC_LOOK.hair, 0xf1ecdf, 0xe2a98c, 0xc98e64];
+    for (let j = 0; j < H; j++)
+      for (let i = 0; i < W; i++) {
+        const e = Math.hypot((i - (W - 1) / 2) / (W / 2), (j - (H - 1) / 2) / (H / 2));
+        const c = pal[Math.floor(Math.random() * pal.length)];
+        const k = (j * W + i) * 4;
+        const shade = 0.8 + Math.random() * 0.25;
+        d[k] = Math.min(255, ((c >> 16) & 255) * shade);
+        d[k + 1] = Math.min(255, ((c >> 8) & 255) * shade);
+        d[k + 2] = Math.min(255, (c & 255) * shade);
+        d[k + 3] = e > 1.02 ? 0 : 255;
+      }
+    this.mosaicData.needsUpdate = true;
+  }
+
+  /** Estrellas grandes que forman un corazón en el cielo, vistas desde la hamaca. */
   private buildConstellation() {
-    this.starCamPos.set(TOWELS.x, 1.0, TOWELS.z - 1.2);
+    this.starCamPos.set(TOWELS.x, LIE_Y + 0.5, TOWELS.z - 0.9);
     const dir = new THREE.Vector3(0.05, 0.78, 0.62).normalize();
     const center = this.starCamPos.clone().addScaledVector(dir, 90);
     this.starCamLook.copy(center);
@@ -552,16 +647,19 @@ export class Level4 implements Level {
         h.setObjective('🫂');
         break;
       case 'swim':
-        h.setObjective('Nada un rato con Marc 💙');
+        h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : 'Nada un rato con Marc 💙');
         break;
       case 'toTowels':
-        h.setObjective('Túmbate en las toallas del césped');
+        h.setObjective('Sube las escaleras hasta la hamaca del césped');
+        break;
+      case 'love':
+        h.setObjective('💙');
         break;
       case 'stars':
         h.setObjective('Une las estrellas en orden');
         break;
       default:
-        h.setObjective('💙 Feliz cumpleaños 💙');
+        h.setObjective('💙');
     }
   }
 
@@ -573,7 +671,13 @@ export class Level4 implements Level {
       return this.v2.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -14.4);
     }
     if (this.phase === 'toPool') return this.v2.set(-4.95, 0, (POOL.minZ + POOL.maxZ) / 2);
-    if (this.phase === 'toTowels') return TOWELS;
+    if (this.phase === 'swim' && this.swimOut) return LADDER;
+    if (this.phase === 'toTowels') {
+      const p = this.player.root.position;
+      // Primero al pie de las escaleras: por el muro no se sube
+      if (p.z < STAIRS.z1 - 0.1) return this.v2.set((STAIRS.minX + STAIRS.maxX) / 2, 0, STAIRS.z0 + 0.6);
+      return TOWELS;
+    }
     return null;
   }
 
@@ -587,6 +691,7 @@ export class Level4 implements Level {
     this.gate.update(dt, this.gateWho, this.camera.position);
     if (this.phase !== 'intro' && this.phase !== 'done' && this.phase !== 'ending') this.playTime += dt;
     this.waterTex.offset.set(Math.sin(this.t * 0.3) * 0.2, this.t * 0.03);
+    if (this.player.root.position.x > -100) this.pool.update(dt);
     const ffp = this.fireflies.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < ffp.count; i++) ffp.setY(i, ffp.getY(i) + Math.sin(this.t * 1.3 + i) * dt * 0.25);
     ffp.needsUpdate = true;
@@ -601,16 +706,16 @@ export class Level4 implements Level {
     if (this.phase === 'diving') this.updateDive(dt);
     else if (this.phase === 'drive') this.updateDrive(dt);
     else if (this.phase === 'hug') this.updateHug(dt);
+    else if (this.phase === 'love') this.updateLove(dt);
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
-      this.walker.speed = swimming ? 3.4 : 5.0;
-      this.walker.traction = swimming ? 0.45 : 1;
+      // Nadando no se corre: la velocidad sube y baja con cada brazada y el agua frena y deja deslizar
+      const stroke = this.swimSt.get(this.player);
+      this.walker.speed = swimming ? 1.5 + 0.8 * Math.max(0, Math.sin(stroke?.ph ?? 0)) : 5.0;
+      this.walker.traction = swimming ? 0.28 : 1;
       this.solids.length = 0;
-      if (this.phase === 'toTowels') {
-        // Tumbado ocupa de los pies a la cabeza: no se le puede pasar por encima
-        for (const t of [0.25, 0.8, 1.35]) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z - t, r: 0.32 });
-      } else this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
+      if (this.phase !== 'toTowels') this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       const bounds = swimming
-        ? { minX: POOL.minX + 0.4, maxX: POOL.maxX - 0.4, minZ: POOL.minZ + 0.4, maxZ: POOL.maxZ - 0.4 }
+        ? { minX: POOL.minX + 0.85, maxX: POOL.maxX - 0.85, minZ: POOL.minZ + 0.85, maxZ: POOL.maxZ - 0.85 } // (tumbado, la cabeza va por delante)
         : this.phase === 'intro' || this.phase === 'atBar'
           ? BAR_AREA
           : this.phase === 'arrive'
@@ -620,11 +725,10 @@ export class Level4 implements Level {
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
       // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
       if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
+      if (this.phase === 'toTowels') pp.y = gardenH(pp.x, pp.z) + this.walker.hop;
       this.player.root.rotation.y = this.walker.facing;
-      if (swimming) {
-        this.swimPose(this.player, move);
-        if (move > 0.3 && Math.random() < dt * 6) this.fx.burst(this.v1.copy(pp).setY(WATER_Y + 0.2), '💦', 1, 1, 0.4);
-      } else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
+      if (swimming) this.swimPose(this.player, move, dt);
+      else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     }
 
     this.updateGas(dt);
@@ -633,10 +737,13 @@ export class Level4 implements Level {
     if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
     this.updatePoolPhysics(dt);
 
-    // Un rato nadando juntos, sin prisa: luego al césped
-    if (this.phase === 'swim' && swimming && !this.busy) {
+    // Un rato nadando juntos, sin prisa; luego, por la escalera y al césped, a pie
+    if (this.phase === 'swim' && swimming && !this.busy && !this.swimOut) {
       this.swimT += dt;
-      if (this.swimT > 12) this.finishSwim();
+      if (this.swimT > 12) {
+        this.swimOut = true;
+        this.updateHud();
+      }
     }
 
     // Acción contextual
@@ -648,9 +755,12 @@ export class Level4 implements Level {
     } else if (!this.busy && this.phase === 'toPool' && this.nearPoolEdge()) {
       label = '👙 Fuera ropa';
       action = () => this.undress();
-    } else if (!this.busy && this.phase === 'toTowels' && pp.distanceTo(TOWELS) < 1.8) {
-      label = '✨ Tumbarse';
-      action = () => this.lieDown();
+    } else if (!this.busy && this.phase === 'swim' && this.swimOut && Math.hypot(pp.x - LADDER.x, pp.z - LADDER.z) < 1.7) {
+      label = '🪜 Salir del agua';
+      action = () => this.climbOut();
+    } else if (!this.busy && this.phase === 'toTowels' && Math.hypot(pp.x - TOWELS.x, pp.z - TOWELS.z) < 2.2 && pp.y > LAWN_Y - 0.1) {
+      label = '💙 Hacer el amor';
+      action = () => this.makeLove();
     }
     this.hud.setAction(label, !!label);
     if (this.input.consumeAction() && action) action();
@@ -680,6 +790,8 @@ export class Level4 implements Level {
       this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
       this.camLook.lerp(this.v2.set(c.x + 3, 1, c.z), Math.min(1, dt * 4));
       this.camera.lookAt(this.camLook);
+    } else if (this.phase === 'love') {
+      this.camera.lookAt(this.camLook);
     } else {
       // En el pasillo estrecho, la cámara se pone en su eje: detrás de Azul, sin atravesar la casa ni
       // ver solo tejados desde arriba
@@ -703,7 +815,6 @@ export class Level4 implements Level {
     return Math.hypot(dx, dz) < 1.2;
   }
 
-  /** Nadar: el cuerpo medio sumergido y brazos de crol. */
   private buildPoolPhysics() {
     const ph = this.phys;
     ph.walls = this.colliders.filter((c) => !(c.minX === POOL.minX - 0.1 && c.maxZ === POOL.maxZ + 0.1));
@@ -712,26 +823,15 @@ export class Level4 implements Level {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), toon({ map: beachBallTexture(), roughness: 0.35 }));
     ball.castShadow = true;
     this.scene.add(ball);
+    this.ballMesh = ball;
     this.ball = new Body(ball, { kind: 'ball', r: 0.3, mass: 0.12, bounce: 0.7, drag: 0.22, density: 0.06 });
     this.ball.pos.set(2.6, WATER_Y + 0.4, 8.2);
     ph.add(this.ball);
-    // Ondas: anillos que se abren y se desvanecen sobre el agua
-    const geo = new THREE.RingGeometry(0.42, 0.5, 40).rotateX(-Math.PI / 2);
-    for (let i = 0; i < 14; i++) {
-      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xdff8ff, transparent: true, opacity: 0, depthWrite: false }));
-      m.visible = false;
-      m.renderOrder = 2;
-      this.scene.add(m);
-      this.ripples.push({ m, t: 0, max: 1, size: 1 });
-    }
   }
 
-  private ripple(x: number, z: number, size = 1, life = 1.4) {
-    const r = this.ripples.reduce((a, b) => (b.t <= 0 ? b : a.t <= 0 ? a : a.t < b.t ? a : b));
-    r.m.position.set(x, WATER_Y + 0.015, z);
-    r.t = r.max = life;
-    r.size = size;
-    r.m.visible = true;
+  /** Empuja el agua: la onda sale de ahí y rebota en las paredes. */
+  private ripple(x: number, z: number, size = 1) {
+    this.pool.disturb(x, z, -0.55 * size, 0.2 + size * 0.1);
   }
 
   private updatePoolPhysics(dt: number) {
@@ -747,40 +847,86 @@ export class Level4 implements Level {
     this.phys.step(dt, this.movers);
     const bp = this.ball.pos;
     const inPool = bp.x > POOL.minX && bp.x < POOL.maxX && bp.z > POOL.minZ && bp.z < POOL.maxZ;
+    if (inPool) this.ballMesh.position.y += this.pool.height(bp.x, bp.z);
     if (inPool && wasY - this.ball.r > WATER_Y && bp.y - this.ball.r <= WATER_Y) {
-      this.ripple(bp.x, bp.z, 1.2, 1.6);
+      this.ripple(bp.x, bp.z, 1.2);
       audio.knock(0.35, 700, 0.18);
     }
     for (const im of this.phys.impacts) if (im.at.distanceTo(pp) < 12) audio.knock(Math.min(0.5, im.strength * 2), 520, 0.1);
-    // Ondas del que nada y de la pelota al moverse
+    // La pelota, al moverse, también abre ondas (las de los que nadan las hace cada brazada)
     this.rippleT -= dt;
     if (this.rippleT <= 0) {
-      this.rippleT = 0.32;
-      if (swimming && this.walker.currentSpeed > 0.4) this.ripple(pp.x, pp.z, 1.3 + this.walker.currentSpeed * 0.3);
-      if (this.phase === 'swim' && this.gas.root.visible) this.ripple(this.gas.root.position.x, this.gas.root.position.z, 1.1);
-      if (inPool && Math.hypot(this.ball.vel.x, this.ball.vel.z) > 0.25) this.ripple(bp.x, bp.z, 0.8, 1);
-    }
-    for (const r of this.ripples) {
-      if (r.t <= 0) continue;
-      r.t -= dt;
-      const k = 1 - r.t / r.max;
-      r.m.scale.setScalar(0.4 + k * 2.6 * r.size);
-      (r.m.material as THREE.MeshBasicMaterial).opacity = (1 - k) * 0.45;
-      if (r.t <= 0) r.m.visible = false;
+      this.rippleT = 0.25;
+      if (inPool && Math.hypot(this.ball.vel.x, this.ball.vel.z) > 0.25) this.ripple(bp.x, bp.z, 0.5);
+      if (swimming && this.phase === 'swim' && this.walker.currentSpeed > 0.5) this.pool.disturb(pp.x + Math.sin(this.walker.facing) * 0.75, pp.z + Math.cos(this.walker.facing) * 0.75, 0.35, 0.3); // la ola de proa
     }
   }
 
-  private swimPose(p: Person, move: number) {
-    animatePerson(p, 0.016, 'idle');
-    const t = this.t * (3 + move * 4);
-    p.root.position.y = SWIM_Y + Math.sin(this.t * 2) * 0.04;
-    p.body.rotation.x = 0.35 * move;
-    p.armL.rotation.x = -Math.PI / 2 + Math.sin(t) * (0.6 + move * 1.2);
-    p.armR.rotation.x = -Math.PI / 2 - Math.sin(t) * (0.6 + move * 1.2);
-    p.armL.rotation.z = -0.4;
-    p.armR.rotation.z = 0.4;
-    p.legL.rotation.x = Math.sin(t * 2) * 0.4;
-    p.legR.rotation.x = -Math.sin(t * 2) * 0.4;
+  /**
+   * Nadar de verdad. Parado: de pie en el agua, a flote, moviendo brazos y piernas despacio. En marcha:
+   * crol, con el cuerpo tumbado a ras de agua (gira desde la cadera, y las piernas con él), brazos que
+   * entran por delante, tiran bajo el agua y vuelven por encima con el codo alto, patada corta, el cuerpo
+   * rodando con cada brazada y la cabeza mirando al frente. Cada mano que entra empuja el agua y salpica.
+   */
+  private swimPose(p: Person, move: number, dt: number) {
+    let st = this.swimSt.get(p);
+    if (!st) this.swimSt.set(p, (st = { k: 0, ph: Math.random() * 6, prev: 0 }));
+    st.k += ((move > 0.12 ? 1 : 0) - st.k) * Math.min(1, dt * 2.6);
+    const k = st.k;
+    const K = k * k * (3 - 2 * k);
+    st.ph += dt * (1.2 + K * (2.4 + move * 2));
+    const ph = st.ph;
+    animatePerson(p, dt, 'idle');
+    if (p.rig) p.rig.force = { body: 1, head: 1, armL: 1, armR: 1, legL: 1, legR: 1 };
+    const lerp = THREE.MathUtils.lerp;
+    const TAU = Math.PI * 2;
+    // Altura: de pie, con los hombros fuera; tumbado, la espalda a ras de agua. Sube y baja con la brazada
+    const lay = WATER_Y - 0.05 - hipsOf(p);
+    const pos = p.root.position;
+    const surf = this.pool.height(pos.x, pos.z);
+    pos.y = lerp(SWIM_Y + Math.sin(this.t * 1.7 + ph * 0.1) * 0.05, lay + Math.sin(ph * 2) * 0.025, K) + surf;
+    p.body.rotation.x = lerp(0.1, 1.36, K);
+    p.body.rotation.y = Math.sin(ph) * 0.24 * K; // rueda a un lado y a otro
+    p.body.rotation.z = 0;
+    p.head.rotation.x = lerp(0.05, -1.05, K);
+    p.head.rotation.y = K * Math.max(0, Math.sin(ph)) * Math.sin(ph) * -0.5; // respira de lado
+    const arm = (a: THREE.Object3D, el: THREE.Object3D, off: number, side: number) => {
+      const w = (ph + off) % TAU;
+      const rx = -Math.PI + w; // -π por delante · 0 a la altura de la cadera, ya bajo el agua · π/2 por encima de la espalda
+      const rec = rx > 0 ? Math.sin(rx) : 0; // vuelve por fuera del agua
+      const pull = rx < 0 ? Math.sin(-rx) : 0;
+      const tread = Math.sin(this.t * 1.6 + off) * 0.35;
+      a.rotation.x = lerp(-0.45 + tread * 0.5, rx, K);
+      a.rotation.y = 0;
+      a.rotation.z = side * lerp(1.05 + tread * 0.4, 0.12 + rec * 0.3, K);
+      el.rotation.x = lerp(-0.5 + tread * 0.3, -0.25 - rec * 1.25 - pull * 0.55, K);
+    };
+    arm(p.armL, p.elbowL, 0, -1);
+    arm(p.armR, p.elbowR, Math.PI, 1);
+    const kick = Math.sin(ph * 3) * 0.2 * K;
+    const tr = Math.sin(this.t * 1.3) * 0.3 * (1 - K);
+    p.legL.rotation.set(kick + tr - 0.05, 0, 0.03);
+    p.legR.rotation.set(-kick - tr - 0.05, 0, -0.03);
+    p.kneeL.rotation.x = lerp(0.35 + Math.max(0, tr), 0.14 + Math.max(0, kick), K);
+    p.kneeR.rotation.x = lerp(0.35 + Math.max(0, -tr), 0.14 + Math.max(0, -kick), K);
+    p.footL.rotation.x = p.footR.rotation.x = K * 0.7; // punta estirada
+    // Una mano entra en el agua: empuja el agua y salpica. Y al patear, espuma detrás
+    const yaw = p.root.rotation.y;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const q = Math.floor((ph % TAU) / Math.PI);
+    if (K > 0.5 && q !== st.prev) {
+      st.prev = q;
+      const sx = q ? 0.22 : -0.22;
+      const hx = pos.x + fx * 0.85 + fz * sx, hz = pos.z + fz * 0.85 - fx * sx;
+      this.pool.disturb(hx, hz, -1.5, 0.2);
+      this.fx.burst(this.v1.set(hx, WATER_Y + 0.08, hz), 'drop', 7, 0.7, 0.55);
+      audio.knock(0.1, 900 + Math.random() * 300, 0.05);
+    }
+    if (K > 0.5 && Math.random() < dt * 9) {
+      const bx = pos.x - fx * 0.85, bz = pos.z - fz * 0.85;
+      this.pool.disturb(bx, bz, 0.5, 0.18);
+      if (Math.random() < 0.35) this.fx.burst(this.v1.set(bx, WATER_Y + 0.05, bz), 'drop', 2, 0.35, 0.3);
+    }
   }
 
   private updateGas(dt: number) {
@@ -793,15 +939,21 @@ export class Level4 implements Level {
       const x = Math.cos(a) * 2.6;
       const z = 7.6 + Math.sin(a) * 1.1;
       // Flota: sube y baja con cada brazada y se balancea un poco
-      g.root.position.set(x, SWIM_Y + Math.sin(this.t * 3.2) * 0.035, z);
+      g.root.position.set(x, g.root.position.y, z);
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
-      g.root.rotation.z = Math.sin(this.t * 1.6) * 0.06;
-      this.swimPose(g, 0.6);
-    } else if (this.phase === 'stars' || this.phase === 'toTowels' || this.phase === 'ending' || this.phase === 'done') {
+      this.swimPose(g, 0.6, dt);
+    } else if (this.phase === 'toTowels') {
+      // Te sigue a pie: por la escalera, no por el muro
+      const pp = this.player.root.position;
+      const moving = this.gasTrail.step(g.root, pp, 1.5, 4.2, dt, this.colliders, 0.26);
+      g.root.position.y = gardenH(g.root.position.x, g.root.position.z);
+      animatePerson(g, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      if (!moving) g.root.rotation.y = Math.atan2(pp.x - g.root.position.x, pp.z - g.root.position.z);
+    } else if (this.phase === 'love' || this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
       animatePerson(g, dt, 'idle');
       g.eyes.scale.y = 1;
     } else if (this.phase === 'diving') {
-      this.swimPose(g, 0.2);
+      this.swimPose(g, 0, dt);
     } else if (this.phase === 'hug') {
       return;
     } else {
@@ -1016,16 +1168,18 @@ export class Level4 implements Level {
     this.player.root.rotation.y = Math.atan2(g.x - p.x, g.z - p.z);
     const close = g.distanceTo(this.v1) < 0.15;
     for (const q of [this.player, this.gas]) {
-      this.swimPose(q, close ? 0 : 0.5);
       if (close) {
+        // Abrazados no nadan: el abrazo manda en los brazos
+        if (q.rig) q.rig.force = undefined;
+        animatePerson(q, dt, 'idle');
+        q.body.rotation.set(0, 0, 0);
+        q.head.rotation.set(0, 0, 0);
         q.root.position.y = SWIM_Y + 0.12;
-        q.legL.rotation.x = q.legR.rotation.x = 0;
-      }
+      } else this.swimPose(q, 0, dt);
     }
     // El abrazo: se rodean con los brazos de verdad y se sueltan al final
     if (close) this.hugE ??= embrace(this.player, this.gas, 'hug');
     if (this.hugE) this.hugE.k = THREE.MathUtils.clamp(this.hugE.k + dt * (this.hugT < 4.3 ? 1.2 : -1.6), 0, 1);
-    if (close && Math.random() < dt * 4) this.fx.burst(this.v2.copy(p).setY(0.9), '❤️', 1, 0.8, 0.6);
     if (this.hugT > 5) {
       this.hugE?.stop();
       this.hugE = null;
@@ -1092,9 +1246,8 @@ export class Level4 implements Level {
         this.diveStage = 1;
         audio.splash();
         vibrate(50);
-        this.fx.burst(this.v1.copy(p).setY(0.2), '💦', 10, 3, 1.2);
-        this.ripple(p.x, p.z, 2.2, 2);
-        this.ripple(p.x, p.z, 1.4, 1.5);
+        this.fx.burst(this.v1.copy(p).setY(WATER_Y + 0.1), 'drop', 40, 1.9, 1.3);
+        this.pool.disturb(p.x, p.z, -5, 0.5);
         // El agua frena de golpe: se pierde casi toda la velocidad
         v.multiplyScalar(0.35);
         // Ola que empuja la pelota si está cerca
@@ -1119,7 +1272,7 @@ export class Level4 implements Level {
     p.x = Math.max(POOL.minX + 0.4, Math.min(POOL.maxX - 0.4, p.x));
     p.z = Math.max(POOL.minZ + 0.4, Math.min(POOL.maxZ - 0.4, p.z));
     const y = p.y;
-    this.swimPose(this.player, 0.3);
+    this.swimPose(this.player, 0, h);
     p.y = y; // la altura la manda la física, no la pose
     // Bajo el agua se va enderezando hasta la postura de nado
     this.divePitch += (0.35 - this.divePitch) * Math.min(1, h * 3);
@@ -1130,49 +1283,96 @@ export class Level4 implements Level {
     }
   }
 
-  private finishSwim() {
+  /** Por la escalera de la piscina: ya secos y vestidos (la ropa estaba en el borde), y a pie al césped. */
+  private climbOut() {
     this.busy = true;
     this.hud.setAction(null);
-    audio.fanfare();
-    later(() => {
-      dialogue(NIGHT.swimDone, () => {
-        fadeFlash(() => {
-          // Fuera del agua, ya secos y vestidos, junto a las toallas
-          this.setNude(false);
-          this.phase = 'toTowels';
-          this.player.root.position.set(0.6, 0, 4.2);
-          this.player.body.rotation.x = 0;
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
-          this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
-          this.gas.body.rotation.x = 0;
-          this.walker.yaw = this.walker.facing = Math.atan2(TOWELS.x - 0.6, TOWELS.z - 4.2);
-          this.busy = false;
-          this.updateHud();
-        });
-      });
+    this.input.reset();
+    this.walker.stop();
+    audio.splash();
+    fadeFlash(() => {
+      this.setNude(false);
+      this.phase = 'toTowels';
+      this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
+      this.walker.yaw = this.walker.facing = 0;
+      this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z - 1.2);
+      this.gas.root.rotation.set(0, 0, 0);
+      this.gasTrail = new Trail();
+      this.busy = false;
+      this.updateHud();
+    }, 400);
+  }
+
+  /** Los dos tumbados uno al lado del otro en la hamaca. */
+  private layDown() {
+    for (const [p, sx] of [[this.player, -0.38], [this.gas, 0.38]] as const) {
+      p.root.position.set(TOWELS.x + sx, LIE_Y, LIE_FEET_Z);
+      p.root.rotation.set(-Math.PI / 2, 0, 0);
+      p.body.rotation.set(0, 0, 0);
+      animatePerson(p, 0.016, 'idle');
+    }
+  }
+
+  /**
+   * En la hamaca. Es la censura de toda la vida: un plano fijo de lejos, el mosaico tapándolos del todo
+   * y nada más. Luego hablan un rato tumbados y, ya, las estrellas.
+   */
+  private makeLove() {
+    this.busy = true;
+    this.hud.setAction(null);
+    this.input.reset();
+    this.walker.stop();
+    fadeFlash(() => {
+      this.phase = 'love';
+      this.layDown();
+      this.updateHud();
+      this.camera.position.set(TOWELS.x + 4.4, LAWN_Y + 2.6, TOWELS.z - 3.6);
+      this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z);
+      this.camera.lookAt(this.camLook);
+      this.mosaic.position.set(TOWELS.x, LIE_Y + 0.28, TOWELS.z);
+      this.mosaic.quaternion.copy(this.camera.quaternion);
+      this.mosaic.visible = true;
+      later(() => {
+        if (this.phase !== 'love') return;
+        dialogue(NIGHT.love, () =>
+          fadeFlash(() => {
+            this.mosaic.visible = false;
+            // Hablando, de cerca: las dos caras en la hamaca
+            this.camera.position.set(TOWELS.x + 1.5, LIE_Y + 0.75, TOWELS.z - 1.7);
+            this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z - 0.45);
+            this.camera.lookAt(this.camLook);
+            later(() => dialogue(NIGHT.talk, () => fadeFlash(() => this.startStars(), 400)), 500);
+          }, 500),
+        );
+      }, 4200);
     }, 500);
+  }
+
+  private updateLove(dt: number) {
+    this.mosaicT -= dt;
+    if (this.mosaic.visible && this.mosaicT <= 0) {
+      this.mosaicT = 0.22;
+      this.shuffleMosaic();
+    }
+    animatePerson(this.player, dt, 'idle');
   }
 
   // ---------------- Estrellas ----------------
 
-  private lieDown() {
+  private startStars() {
     this.busy = true;
     this.hud.setAction(null);
     this.input.reset();
-    fadeFlash(() => {
-      this.phase = 'stars';
-      this.player.root.position.set(TOWELS.x - 0.45, LIE_Y, LIE_FEET_Z);
-      this.player.root.rotation.set(-Math.PI / 2, 0, 0);
-      animatePerson(this.player, 0.016, 'idle');
-      this.camera.position.copy(this.starCamPos);
-      this.camera.lookAt(this.starCamLook);
-      this.starSprites.forEach((s) => (s.visible = true));
-      this.updateHud();
-      dialogue(NIGHT.lie, () => {
-        this.busy = false;
-        window.addEventListener('pointerdown', this.onTap);
-      });
-    }, 500);
+    this.phase = 'stars';
+    this.layDown();
+    this.camera.position.copy(this.starCamPos);
+    this.camera.lookAt(this.starCamLook);
+    this.starSprites.forEach((s) => (s.visible = true));
+    this.updateHud();
+    dialogue(NIGHT.lie, () => {
+      this.busy = false;
+      window.addEventListener('pointerdown', this.onTap);
+    });
   }
 
   /** Toque en pantalla: ¿está cerca de la estrella que toca? */
@@ -1222,7 +1422,7 @@ export class Level4 implements Level {
   }
 
   private updateStars(dt: number) {
-    // La cámara mira al cielo desde las toallas, con un vaivén suave
+    // La cámara mira al cielo desde la hamaca, con un vaivén suave
     this.camera.position.copy(this.starCamPos);
     this.v1.copy(this.starCamLook).add(this.v2.set(Math.sin(this.t * 0.2) * 1.5, Math.sin(this.t * 0.15) * 1, 0));
     this.camera.lookAt(this.v1);
@@ -1242,6 +1442,7 @@ export class Level4 implements Level {
       // (lejos de la cámara, que está en las toallas: de cerca tapaban la pantalla entera)
       if (Math.random() < dt * 3) this.fx.burst(this.v1.copy(this.starCamLook).sub(this.starCamPos).setLength(11).add(this.starCamPos), '❤️', 1, 1, 0.6);
     }
+    animatePerson(this.player, dt, 'idle');
     // Azul y Gas tumbados respiran
     for (const p of [this.player, this.gas]) p.body.position.y = Math.sin(this.t * 1.5) * 0.01;
   }
@@ -1281,6 +1482,9 @@ export class Level4 implements Level {
       this.gas.root.rotation.set(0, Math.PI, 0);
       this.player.root.visible = this.gas.root.visible = true;
       this.car.azul.visible = false;
+      this.mosaic.visible = false;
+      this.swimOut = false;
+      this.swimT = 0;
     };
     return [
       {
@@ -1328,13 +1532,15 @@ export class Level4 implements Level {
         },
       },
       {
-        label: '3 · Tumbarse',
+        label: '3 · Al césped',
         run: () => {
           reset();
           this.phase = 'toTowels';
-          this.player.root.position.set(TOWELS.x + 1.2, 0, TOWELS.z - 0.6);
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
-          this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
+          this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
+          this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z - 1.2);
+          this.gas.root.rotation.set(0, 0, 0);
+          this.walker.yaw = this.walker.facing = 0;
+          this.gasTrail = new Trail();
           this.updateHud();
         },
       },
@@ -1342,19 +1548,15 @@ export class Level4 implements Level {
         label: '4 · Unir estrellas',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
-          this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.nextStar = 0;
-          this.lieDown();
+          this.startStars();
         },
       },
       {
         label: '5 · Final',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
-          this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
-          this.lieDown();
+          this.startStars();
           later(() => {
             while (this.phase === 'stars') {
               this.busy = false;

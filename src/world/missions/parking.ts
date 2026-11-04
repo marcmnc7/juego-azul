@@ -204,7 +204,7 @@ class ParkingMission implements Mission {
     const mag = this.walker.move(dt, free ? input.axes() : { x: 0, y: 0 }, this.colliders, BOUNDS);
     const p = this.player.root.position;
     this.player.root.rotation.y = this.walker.facing;
-    animatePerson(this.player, dt, this.found ? 'cheer' : mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+    animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker); // (encontrarla no es para ponerse a bailar)
     if (!this.found) {
       // El brazo con el móvil, delante, alumbrando
       this.player.armR.rotation.x = -1.25;
@@ -215,7 +215,7 @@ class ParkingMission implements Mission {
     const back = new THREE.Vector3(p.x - Math.sin(this.walker.facing) * 1.4, 0, p.z - Math.cos(this.walker.facing) * 1.4);
     const far = g.distanceTo(back) > 0.4;
     if (far) steerTo(this.gas.root, this.gasSteer, back.x, back.z, 3.2, dt, [{ x: p.x, z: p.z, r: 0.4 }]);
-    animatePerson(this.gas, dt, this.found ? 'cheer' : far ? 'walk' : 'idle');
+    animatePerson(this.gas, dt, far ? 'walk' : 'idle');
     if (!far && !this.found) this.gas.root.rotation.y = Math.atan2(p.x - g.x, p.z - g.z);
 
     const b = free ? this.nearBay() : null;

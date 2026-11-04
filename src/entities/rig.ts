@@ -306,7 +306,7 @@ const texCache = new Map<string, THREE.Texture>();
 
 /** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}`;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}${look.nude ? 'n' : ''}`;
   const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
   let t = texCache.get(k);
   if (t) return t;
@@ -334,7 +334,8 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
     const l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
     const mean = sum[p] / Math.max(1, cnt[p]);
     const r = l / Math.max(8, mean);
-    const f = p === 6 ? Math.min(1.25, Math.max(0.7, 1 + (r - 1) * 0.45)) : Math.min(1.7, Math.max(0.3, r));
+    // Sin ropa, la piel es lisa: los pliegues y costuras de la textura la delatarían
+    const f = p === 6 ? Math.min(1.25, Math.max(0.7, 1 + (r - 1) * 0.45)) : look.nude && p !== 2 ? 1 : Math.min(1.7, Math.max(0.3, r));
     const col = target[p];
     px[i] = Math.min(255, col.r * 255 * f);
     px[i + 1] = Math.min(255, col.g * 255 * f);
@@ -414,6 +415,14 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
   if (kind === 'woman') {
     if (mat.map) mat.map = womanTexture(mat.map, look);
     mat.roughness = 0.75;
+    if (look.nude) mat.normalMap = null;
+    return true;
+  }
+  if (look.nude && /Outfit|Footwear/.test(name)) {
+    mat.map = null;
+    mat.normalMap = null;
+    mat.color = lin(look.skin);
+    mat.roughness = 0.62;
     return true;
   }
   // La parte de arriba del modelo es una chaqueta de esmoquin (solapas y pajarita en la textura): se

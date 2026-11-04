@@ -7,9 +7,9 @@ import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
 import { later } from '../ui/ui';
 
-// Final del capítulo 3: la última noche, en La Rioja. Iba a ser cenita de camping (estrellas, cartas
-// y el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: entre
-// viñas, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
+// Capítulo 3, entre Cafetería Marcial y San Vicente: iba a ser cenita de camping (estrellas, cartas y
+// el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: en un claro
+// entre matorral y pinos, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
 
 export class Camp {
   scene = new THREE.Scene();
@@ -31,7 +31,7 @@ export class Camp {
   constructor() {
     const sc = this.scene;
     sc.fog = new THREE.Fog(0x1a2347, 25, 120);
-    // Noche de octubre: estrellas y, al fondo, el resplandor naranja de Logroño
+    // Noche de octubre: estrellas y, al fondo, el último resplandor en el horizonte
     this.sky = new Sky({ top: 0x1a2f72, mid: 0x34509a, bottom: 0x9a7090, stars: 2200 });
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0x7f8fd8, 0x2a2230, 0.6));
@@ -39,10 +39,10 @@ export class Camp {
     this.fx = new Particles(sc);
 
     const m = new Merger();
-    // Tierra, el claro de grava y las hileras de viñas (cepas con su poste), menos donde está la mesa
+    // Tierra, el claro de grava y matorral bajo alrededor, menos donde está la mesa
     m.add(G.box, 0x5e4a38, 0, -0.05, 0, 0, 0, 0, 160, 0.1, 160);
     m.add(G.cyl, 0x8a7a66, 0, -0.03, 0, 0, 0, 0, 7, 0.06, 7);
-    // Las cepas, instanciadas y de pocos polígonos (son muchas: con esferas normales la escena iba a tirones)
+    // El matorral, instanciado y de pocos polígonos (es mucho: con esferas normales la escena iba a tirones)
     const vines: THREE.Matrix4[] = [];
     const tint: THREE.Color[] = [];
     const VC = [0x3f5a2e, 0x4b6a34, 0x5a6e2c].map((c) => new THREE.Color(c));
@@ -51,10 +51,16 @@ export class Camp {
       for (let z = -40; z <= 40; z += 1.6) {
         if (Math.abs(x) < 6.5 && Math.abs(z) < 6.5) continue;
         const j = Math.sin(row * 12.9 + z * 3.7);
-        vines.push(new THREE.Matrix4().compose(new THREE.Vector3(x + j * 0.1, 0.5, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), j * 0.15), new THREE.Vector3(0.55, 0.5 + j * 0.06, 1.25)));
+        const sx = x + Math.sin(z * 9.1 + row) * 1.2, sz = z + Math.cos(row * 5.3 + z) * 0.7;
+        if (Math.abs(sx) < 6.5 && Math.abs(sz) < 6.5) continue;
+        vines.push(new THREE.Matrix4().compose(new THREE.Vector3(sx, 0.32, sz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), j * 3), new THREE.Vector3(0.7 + j * 0.2, 0.42 + j * 0.12, 0.8)));
         tint.push(VC[Math.abs(row + Math.round(z)) % 3]);
-        if (Math.round(z / 1.6) % 4 === 0) m.add(G.box, 0x6b5238, x, 0.5, z + 0.8, 0, 0, 0, 0.06, 1.1, 0.06);
       }
+    }
+    // Unos pinos, recortados contra las estrellas
+    for (const [px, pz, h] of [[-14, 12, 8], [11, 15, 9], [18, -6, 7.5], [-20, -9, 8.5], [6, -19, 9], [-8, -22, 7], [25, 10, 8], [-27, 6, 9.5]]) {
+      m.add(G.cyl, 0x3f3026, px, h / 2, pz, 0.04, 0, 0.05, 0.42, h, 0.42);
+      for (let k = 0; k < 5; k++) m.add(G.bush, k % 2 ? 0x24402a : 0x2c4c30, px + Math.cos(k * 1.3) * 1.9, h + Math.sin(k * 2) * 0.5, pz + Math.sin(k * 1.3) * 1.9, 0, k, 0, 3.2, 1.5, 3.0);
     }
     const vineMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), toon({ color: 0xffffff, roughness: 0.9 }), vines.length);
     vines.forEach((mx, i) => {

@@ -140,6 +140,10 @@ export class LevelEclipse implements Level {
   private cardTexs = new Map<string, THREE.Texture>();
   private llFill: THREE.PointLight | null = null;
   private flipT = 0;
+  private getOutT = -1;
+  private joy: Dog | null = null;
+  private joyOutT = -1;
+  private houseDoor: Door | null = null;
 
   // Coches y aparcamiento
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
@@ -288,17 +292,23 @@ export class LevelEclipse implements Level {
     sc.add(this.gas.root);
     const dad = makePerson(DAD_LOOK);
     const mom = makePerson(MOM_LOOK);
-    dad.root.position.set(-0.8, 0, 1.2);
-    mom.root.position.set(0.6, 0, 1.0);
+    dad.root.position.set(-1.25, 0, 1.3);
+    mom.root.position.set(1.05, 0, 1.3);
     const eric = makePerson(ERIC_LOOK, 0.55);
     eric.root.position.set(1.4, 0, 1.6);
+    // Joy espera dentro de casa: saldrá por la puerta cuando lleguéis
     const joy = makeDog();
-    joy.root.position.set(2.2, 0, 3.2);
+    joy.root.position.set(0, 0, -1.3);
+    joy.root.visible = false;
+    this.joy = joy;
+    this.joyOutT = -1;
+    this.getOutT = -1;
+    this.houseDoor = place.door;
     sc.add(dad.root, mom.root, eric.root, joy.root);
     this.others = [{ p: dad, mode: 'idle' }, { p: mom, mode: 'idle' }, { p: eric, mode: 'idle' }];
     for (const p of [dad, mom]) this.colliders.push({ minX: p.root.position.x - 0.3, maxX: p.root.position.x + 0.3, minZ: p.root.position.z - 0.3, maxZ: p.root.position.z + 0.3 });
-    // Joy no se separa de Azul; Eric va con Gas cuando salen
-    this.followers = [{ p: joy, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 }];
+    // Eric va con Gas cuando salen
+    this.followers = [];
     this.car = makeCar(0x1f3a6b, { luggage: false, joy: false });
     this.car.root.rotation.y = -Math.PI / 2;
     this.car.root.position.set(40, 0, STREET_Z + 0.6);
@@ -584,17 +594,90 @@ export class LevelEclipse implements Level {
   /** El coche ya está aparcado delante de casa: os bajáis y Gas te sigue hasta la puerta. */
   private getOut() {
     this.car.azul.visible = false;
+    const c = this.car.root.position;
     this.player.root.visible = this.gas.root.visible = true;
-    this.player.root.position.set(5.2, 0, STREET_Z - 1.7);
-    this.gas.root.position.set(6.4, 0, STREET_Z - 1.2);
+    // Salen de dentro del coche: ella por su lado (el de casa) y él por el otro, y rodea el morro
+    this.player.root.position.set(c.x + 0.2, -0.45, c.z - 0.2);
+    this.player.root.rotation.y = Math.PI;
+    this.gas.root.position.set(c.x + 0.3, -0.45, c.z + 0.3);
+    this.gas.root.rotation.y = 0;
     this.walker.facing = this.walker.yaw = Math.PI;
-    this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
+    this.getOutT = 0;
     audio.pop();
-    dialogue(ECLIPSE.arriveAzul, () => {
-      this.phase = 'parents';
-      this.busy = false;
-      this.updateHud();
-    });
+  }
+
+  /** Se bajan del coche a la vista, sin aparecer de golpe. */
+  private stepGetOut(dt: number) {
+    this.getOutT += dt;
+    const t = this.getOutT;
+    const ss = THREE.MathUtils.smoothstep;
+    const c = this.car.root.position;
+    const a = this.player.root.position;
+    a.z = THREE.MathUtils.lerp(c.z - 0.2, c.z - 1.75, ss(t, 0, 0.95));
+    a.y = THREE.MathUtils.lerp(-0.45, 0, ss(t, 0, 0.55));
+    animatePerson(this.player, dt, t < 1 ? 'walk' : 'idle', 0.7);
+    const g = this.gas.root;
+    const WP: [number, number][] = [[c.x + 0.3, c.z + 1.45], [c.x - 3.1, c.z + 1.45], [c.x - 3.1, c.z - 1.75], [c.x - 1.3, c.z - 2.0]];
+    if (t < 1.05) {
+      g.position.z = THREE.MathUtils.lerp(c.z + 0.3, c.z + 1.45, ss(t, 0.15, 1.05));
+      g.position.y = THREE.MathUtils.lerp(-0.45, 0, ss(t, 0.15, 0.7));
+      animatePerson(this.gas, dt, 'walk', 0.7);
+    } else {
+      g.position.y = 0;
+      let d = (t - 1.05) * 3.1;
+      let moving = false;
+      for (let i = 0; i + 1 < WP.length; i++) {
+        const [x0, z0] = WP[i], [x1, z1] = WP[i + 1];
+        const L = Math.hypot(x1 - x0, z1 - z0);
+        if (d <= L) {
+          g.position.x = x0 + ((x1 - x0) * d) / L;
+          g.position.z = z0 + ((z1 - z0) * d) / L;
+          const want = Math.atan2(x1 - x0, z1 - z0);
+          g.rotation.y += Math.atan2(Math.sin(want - g.rotation.y), Math.cos(want - g.rotation.y)) * Math.min(1, dt * 8);
+          moving = true;
+          break;
+        }
+        d -= L;
+      }
+      animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.8);
+      if (!moving) {
+        this.getOutT = -1;
+        this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
+        dialogue(ECLIPSE.arriveAzul, () => {
+          this.phase = 'parents';
+          this.busy = false;
+          this.updateHud();
+        });
+      }
+    }
+  }
+
+  /** Joy estaba esperando dentro: al oíros llegar, sale corriendo por la puerta y ya no se separa de Azul. */
+  private updateJoy(dt: number) {
+    const j = this.joy;
+    if (!j || !this.houseDoor) return;
+    const pp = this.player.root.position;
+    if (this.joyOutT < 0) {
+      if (this.phase === 'parents' && Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 6.5) {
+        this.joyOutT = 0;
+        this.houseDoor.hold(2.2);
+      }
+      return;
+    }
+    if (this.joyOutT >= 9) return;
+    this.joyOutT += dt;
+    if (this.houseDoor.open < 0.55) return;
+    j.root.visible = true;
+    j.root.position.z += dt * 3.6;
+    j.root.rotation.y = 0;
+    const k = Math.sin(this.t * 16) * 0.7;
+    j.legs.forEach((l, i) => (l.rotation.x = i % 2 ? k : -k));
+    j.tail.rotation.z = Math.sin(this.t * 14) * 0.6;
+    if (j.root.position.z > 2.0) {
+      this.joyOutT = 9;
+      audio.pop();
+      this.followers.push({ p: j, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 });
+    }
   }
 
   private meetParents() {
@@ -1038,6 +1121,8 @@ export class LevelEclipse implements Level {
       this.rig?.update(dt, (prev - this.car.root.position.x) / Math.max(dt, 1e-3), 0, 1.3);
       if (this.carT >= 4 && this.phase === 'arrive') this.getOut();
     } else this.rig?.update(dt, 0);
+    if (this.getOutT >= 0) this.stepGetOut(dt);
+    this.updateJoy(dt);
     const pp = this.player.root.position;
     // Gente paseando por el paseo marítimo
     for (const p of this.walkers) {
@@ -1065,7 +1150,7 @@ export class LevelEclipse implements Level {
       const move = this.walker.move(dt, this.input.axes(), this.colliders, bounds);
       this.player.root.rotation.y = this.walker.facing;
       animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
-    } else animatePerson(this.player, dt, this.busy && this.phase === 'parents' ? 'talk' : 'idle');
+    } else if (this.getOutT < 0) animatePerson(this.player, dt, this.busy && this.phase === 'parents' ? 'talk' : 'idle');
 
     let label: string | null = null;
     let act: (() => void) | null = null;

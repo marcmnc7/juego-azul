@@ -18,6 +18,8 @@ export interface Box2 {
   maxZ: number;
   /** Muro bajo, piscina, seto…: nadie lo atraviesa, pero la cámara pasa por encima sin acercarse. */
   low?: boolean;
+  /** Redondo: un cilindro inscrito en la caja (la verja del obelisco), para rodearlo pegado a él. */
+  round?: boolean;
 }
 
 export interface Crowd {

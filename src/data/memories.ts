@@ -36,7 +36,7 @@ export const MEMORIES: Memory[] = [
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
   { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },
   { level: 3, chat: CHATS.vuelta.msgs, caption: '3 de noviembre, de vuelta a Barcelona' },
-  { level: 3, chat: CHATS.zamburinasCumple.msgs, caption: 'Tu cumpleaños, 28 de noviembre' },
+  { level: 3, chat: CHATS.zamburinasCumple.msgs, caption: '28 de noviembre de 2025' },
   { level: 3, chat: CHATS.sanVicente.msgs, caption: '«Ya sabes dónde se quedó mi corazón»' },
   { level: 4, src: vueloLpa, caption: '«VOY TARDEEEE?!» «tu vas pronto»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },

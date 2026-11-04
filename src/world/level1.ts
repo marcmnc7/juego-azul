@@ -417,7 +417,7 @@ export class Level1 implements Level {
         h.setCounters('');
         break;
       default:
-        h.setObjective('❤ Feliz cumpleaños ❤');
+        h.setObjective(this.V.findFirst ? '❤ Feliz cumpleaños ❤' : '❤'); // solo el último capítulo, el de su día
         h.setCounters('');
     }
   }

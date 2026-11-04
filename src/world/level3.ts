@@ -6,6 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
@@ -39,7 +40,7 @@ const T_WC_AGAIN = () => txt<string[]>('wcAgain', ['🚻 Otra vez a la cola del 
 const T_FILM_INTRO = () =>
   txt<Line[]>('filmIntro', [
     { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en el baño.' },
-    { who: 'Azul', text: '(WhatsApp) Hize vídeo, don’t worry.' },
+    { who: 'Azul', text: '(WhatsApp) Hice vídeo, no te preocupes.' },
     { who: 'Narrador', text: 'Grábale la canción: mantén a Fito dentro del encuadre aunque la gente salte delante.' },
   ]);
 const T_FILM_DONE = () => txt<string>('filmDone', '🎥 Vídeo guardado. Gas no se lo pierde (casi)');
@@ -476,8 +477,9 @@ export class Level3 implements Level {
     this.player.root.position.set(0, 0, -18);
     sc.add(this.player.root);
 
-    // Gas vuela por su cuenta: aparece ya en el estadio
-    this.gas = makePerson(MARC_LOOK);
+    // Gas vuela por su cuenta y te espera en el aeropuerto; aquí ya salís juntos. Lleva su camiseta de Fito, azul y roja
+    this.gas = makePerson({ ...MARC_LOOK, shirt: 0x1f4fa8 });
+    shirtPrint(this.gas, fitoPrint(), 0.3);
     this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);
     sc.add(this.gas.root);
     // El público y Azul (cuando no la llevas tú) no se pueden atravesar
@@ -539,6 +541,148 @@ export class Level3 implements Level {
 
   // ---------------- Aeropuerto ----------------
 
+  /**
+   * La puerta 26: cristalera con vistas a la pista y el avión esperando, finger conectado, puerta abierta
+   * al túnel, pantalla de embarque, mostradores con su personal, tornos de la tarjeta, cinta para la cola y
+   * gente haciendo cola con la maleta.
+   */
+  private buildGate(m: Merger, cx: number) {
+    const sc = this.scene;
+    const Z = AIR.maxZ + 3.2;
+    const X0 = AIR.minX - 0.3, X1 = AIR.maxX + 0.3;
+    const DW = 1.1; // media anchura de la puerta
+    // Dintel y faldón de la cristalera
+    m.add(G.box, 0xd8dde3, cx, 5.2, Z, 0, 0, 0, X1 - X0, 1.6, 0.3);
+    m.add(G.box, 0x4a525c, cx, 0.12, Z, 0, 0, 0, X1 - X0, 0.24, 0.3);
+    // Montantes de la cristalera
+    for (let x = X0; x <= X1 + 0.01; x += 1.5) if (Math.abs(x - cx) > DW + 0.1) m.add(G.box, 0x3f4750, x, 2.3, Z, 0, 0, 0, 0.09, 4.4, 0.16);
+    m.add(G.box, 0x3f4750, cx, 3.0, Z, 0, 0, 0, X1 - X0, 0.08, 0.14);
+    for (const s of [-1, 1]) m.add(G.box, 0x3f4750, cx + s * (DW + 0.05), 1.5, Z, 0, 0, 0, 0.14, 3, 0.2);
+    const glass = toon({ color: 0xbfe2f4, transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false });
+    for (const [a, b] of [[X0, cx - DW], [cx + DW, X1]]) {
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(b - a, 4.4), glass);
+      g.position.set((a + b) / 2, 2.3, Z + 0.02);
+      g.rotation.y = Math.PI;
+      g.userData.noCast = true;
+      sc.add(g);
+    }
+    // La puerta abierta: se ve el túnel del finger, con luz al fondo
+    const tunnel = canvasTex((ctx, w, h) => {
+      for (let i = 0; i < 9; i++) {
+        const k = i / 9;
+        const v = 110 + k * 140;
+        ctx.fillStyle = `rgb(${v},${v + 4},${v + 10})`;
+        ctx.fillRect(w * 0.44 * k, h * 0.44 * k, w * (1 - 0.88 * k), h * (1 - 0.88 * k));
+      }
+      ctx.fillStyle = '#fbfbff';
+      ctx.fillRect(w * 0.42, h * 0.38, w * 0.16, h * 0.24);
+      ctx.fillStyle = '#3a4250';
+      ctx.fillRect(0, h * 0.86, w, h * 0.14);
+    }, 256, 256);
+    const hole = new THREE.Mesh(new THREE.PlaneGeometry(DW * 2, 3), new THREE.MeshBasicMaterial({ map: tunnel }));
+    hole.position.set(cx, 1.5, Z + 0.1);
+    hole.rotation.y = Math.PI;
+    sc.add(hole);
+    // Pantalla de embarque sobre la puerta
+    const screen = canvasTex((ctx, w, h) => {
+      ctx.fillStyle = '#0d1420';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#ffd23f';
+      ctx.font = 'bold 74px sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('26', 26, h * 0.32);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 50px sans-serif';
+      ctx.fillText('Gran Canaria · LPA', 150, h * 0.32);
+      ctx.fillStyle = '#4ade80';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText('EMBARCANDO', 26, h * 0.74);
+      ctx.fillStyle = '#9fb0c4';
+      ctx.font = '36px sans-serif';
+      ctx.fillText('Filas 20 a 30', 400, h * 0.74);
+    }, 720, 180);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.05), new THREE.MeshBasicMaterial({ map: screen }));
+    scr.position.set(cx, 3.72, Z - 0.2);
+    scr.rotation.y = Math.PI;
+    sc.add(scr);
+    m.add(G.box, 0x1a1f28, cx, 3.72, Z - 0.13, 0, 0, 0, 4.36, 1.2, 0.08);
+    // Mostradores de embarque a los dos lados de la puerta
+    for (const s of [-1, 1]) {
+      const x = cx + s * 3.4;
+      m.add(G.rbox, 0x2b3a55, x, 0.55, AIR.maxZ + 0.2, 0, 0, 0, 2.4, 1.1, 0.75);
+      m.add(G.box, 0xe9ecef, x, 1.12, AIR.maxZ + 0.2, 0, 0, 0, 2.5, 0.05, 0.85);
+      m.add(G.box, 0x14181f, x - 0.5, 1.33, AIR.maxZ + 0.32, -0.25, 0, 0, 0.46, 0.32, 0.03); // monitor
+      m.add(G.box, 0xd7263d, x, 0.62, AIR.maxZ - 0.18, 0, 0, 0, 2.3, 0.2, 0.02);
+      this.colliders.push({ minX: x - 1.3, maxX: x + 1.3, minZ: AIR.maxZ - 0.2, maxZ: AIR.maxZ + 0.6, low: true });
+      const staff = makePerson({ skin: s < 0 ? 0xe8b894 : 0xd9a27c, shirt: 0x1f2d4d, pants: 0x1f2d4d, hair: s < 0 ? 0x2b1d14 : 0x5a3a22, hairStyle: s < 0 ? 'short' : 'straight', male: s < 0 });
+      staff.root.position.set(x + s * 0.2, 0, AIR.maxZ + 1.0);
+      staff.root.rotation.y = Math.PI;
+      sc.add(staff.root);
+    }
+    // Tornos de la tarjeta de embarque, con sus aletas
+    for (const s of [-1, 1]) {
+      m.add(G.rbox, 0x8f98a4, cx + s * 0.86, 0.5, AIR.maxZ + 1.6, 0, 0, 0, 0.26, 1, 0.9);
+      m.add(G.box, 0x4ade80, cx + s * 0.86, 1.02, AIR.maxZ + 1.35, 0, 0, 0, 0.18, 0.02, 0.18);
+      m.add(G.box, 0xbfe2f4, cx + s * 0.5, 0.62, AIR.maxZ + 1.6, 0, s * 0.9, 0, 0.5, 0.6, 0.02);
+    }
+    // La cola: postes con cinta (el pasillo central queda libre) y gente con su maleta
+    for (const s of [-1, 1])
+      for (let k = 0; k < 4; k++) {
+        const z = AIR.maxZ - 8 + k * 2.1;
+        m.add(G.cyl, 0x8f98a4, cx + s * 1.45, 0.48, z, 0, 0, 0, 0.06, 0.96, 0.06);
+        m.add(G.cyl, 0x8f98a4, cx + s * 1.45, 0.02, z, 0, 0, 0, 0.3, 0.04, 0.3);
+        if (k < 3) m.add(G.box, 0xd7263d, cx + s * 1.45, 0.88, z + 1.05, 0, 0, 0, 0.02, 0.06, 2.1);
+        this.colliders.push({ minX: cx + s * 1.45 - 0.08, maxX: cx + s * 1.45 + 0.08, minZ: z - 0.08, maxZ: z + 2.2 * (k < 3 ? 1 : 0) + 0.08, low: true });
+      }
+    const Q: PersonLook[] = [
+      { skin: 0xf0c8a6, shirt: 0x34495e, pants: 0x2a2a2a, hair: 0x6b4a2e, hairStyle: 'short', male: true },
+      { skin: 0xd9a27c, shirt: 0xb4364c, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'straight' },
+      { skin: 0xe2b08c, shirt: 0x7a8a5a, pants: 0x222222, hair: 0x3a2414, hairStyle: 'short', male: true },
+    ];
+    Q.forEach((lk, i) => {
+      const p = makePerson(lk);
+      const x = cx + 2.3 + (i % 2) * 0.25, z = AIR.maxZ - 5.2 + i * 1.5;
+      p.root.position.set(x, 0, z);
+      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf][i], 0.42, 0.35, -0.22, 0, 0, 0, 0.34, 0.55, 0.24).mesh());
+      sc.add(p.root);
+      this.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
+    });
+    // Filas de asientos de la zona de embarque
+    for (const s of [-1, 1])
+      for (let k = 0; k < 2; k++) {
+        const x = cx + s * (4.7 - k * 0.0), z0 = AIR.maxZ - 10 + k * 3.2;
+        m.add(G.box, 0x4a525c, x, 0.3, z0, 0, 0, 0, 0.5, 0.05, 2.4);
+        for (let j = 0; j < 4; j++) {
+          m.add(G.rbox, 0x2b3a55, x, 0.47, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.5, 0.1, 0.5);
+          m.add(G.rbox, 0x2b3a55, x + s * 0.22, 0.75, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.08, 0.5, 0.5);
+        }
+        this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z0 - 1.25, maxZ: z0 + 1.25 });
+      }
+    // Fuera: la pista, el finger y el avión
+    const av = new Merger();
+    av.add(G.box, 0x7d8087, cx, -0.02, Z + 40, 0, 0, 0, 240, 0.1, 80);
+    for (let i = -6; i < 7; i++) av.add(G.box, 0xf2d24a, cx + i * 8, 0.04, Z + 7, 0, 0, 0, 5, 0.01, 0.16);
+    const AZ = Z + 13;
+    av.add(G.capsule, 0xf6f7f8, cx + 3, 4, AZ, 0, 0, Math.PI / 2, 3.7, 15, 3.7);
+    av.add(G.box, 0xd7263d, cx + 3, 3.3, AZ - 1.82, 0, 0, 0, 24, 0.22, 0.05);
+    av.add(G.box, 0xf2c230, cx + 3, 3.05, AZ - 1.78, 0, 0, 0, 24, 0.12, 0.05);
+    for (let i = 0; i < 26; i++) av.add(G.rbox, 0x1b2430, cx + 3 - 12 + i * 0.95, 4.42, AZ - 1.8, 0, 0, 0, 0.3, 0.42, 0.06);
+    av.add(G.box, 0x9aa3ad, cx - 0.2, 3.9, AZ - 1.82, 0, 0, 0, 1.0, 2.0, 0.05); // la puerta del avión
+    av.add(G.box, 0xdfe3e8, cx + 7, 2.9, AZ - 6, 0, 0.3, 0, 7, 0.28, 9); // ala
+    av.add(G.cyl, 0xc9ced6, cx + 6, 1.7, AZ - 5.5, 0, 0, Math.PI / 2, 1.7, 3.4, 1.7); // motor
+    av.add(G.cyl, 0x2a2e36, cx + 4.3, 1.7, AZ - 5.5, 0, 0, Math.PI / 2, 1.45, 0.1, 1.45);
+    av.add(G.box, 0xd7263d, cx + 18.5, 8, AZ, 0, 0, -0.35, 4, 6, 0.3); // deriva
+    av.add(G.box, 0xf2c230, cx + 19.8, 9.6, AZ, 0, 0, -0.35, 2.4, 1.2, 0.32);
+    for (const dx of [-7, 6]) av.add(G.cyl, 0x22262c, cx + 3 + dx, 0.9, AZ, Math.PI / 2, 0, 0, 1.2, 1.5, 1.2); // ruedas
+    // Finger: de la puerta 26 a la del avión, subiendo un poco
+    av.add(G.box, 0xdfe3e8, cx, 2.35, Z + 5.4, -0.2, 0, 0, 2.7, 2.9, 11.6);
+    av.add(G.box, 0x3a4250, cx, 2.5, Z + 5.4, -0.2, 0, 0, 2.74, 0.5, 8);
+    av.add(G.cyl, 0x8f98a4, cx, 1.3, Z + 7.6, 0, 0, 0, 0.5, 2.6, 0.5);
+    const avm = av.mesh();
+    avm.userData.noCam = true;
+    sc.add(avm);
+  }
+
   /** Terminal de Barajas: pasillo largo, tiendas y la puerta del vuelo a Gran Canaria (el burger del «NUNCA más» fue el de Gas, en Barcelona). */
   private buildAirport() {
     const sc = this.scene;
@@ -558,7 +702,7 @@ export class Level3 implements Level {
     m.add(G.box, 0xd8dde3, cx, 3, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
     // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
     this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.maxZ + 3.1, maxZ: A.maxZ + 7 });
-    m.add(G.box, 0xd8dde3, cx, 3, A.maxZ + 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    this.buildGate(m, cx);
     // Barajas T4: pilares en «Y» que van del amarillo al rojo a lo largo de la terminal, y techo
     // ondulado de lamas de bambú
     for (let z = A.minZ - 1, k = 0; z <= A.maxZ + 1; z += 7.5, k++) {
@@ -605,7 +749,6 @@ export class Level3 implements Level {
       sc.add(p);
     };
     BURGERS.forEach(([x, z], i) => sign(['DUTY FREE', 'CAFÉ', 'PRENSA'][i % 3], x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#1b2a4a', '#ffffff'));
-    sign('Puerta 26 · LPA', cx, 4.4, A.maxZ + 3.0, Math.PI, 5, '#1b2a4a', '#ffd23f');
     sign('Salidas · Departures', cx, 4.6, A.minZ - 3.0, 0, 5, '#1b2a4a', '#ffffff');
     for (const z of [-24, -12, 0, 12, 24]) {
       const l = new THREE.PointLight(0xfff6e8, 22, 20, 1.3);
@@ -1745,7 +1888,7 @@ export class Level3 implements Level {
         setObj(CONCERT.rhythm);
         break;
       default:
-        setObj('💙 Feliz cumpleaños 💙');
+        setObj('💙');
     }
   }
 

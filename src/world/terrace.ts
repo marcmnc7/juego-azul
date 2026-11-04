@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
-import { Sky, Sun, toon, vibrate } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, glowTexture } from '../core/gfx';
+import { rigPost } from '../entities/rig';
+import { twoBone } from '../entities/embrace';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeScallop, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { Particles } from '../entities/fx';
@@ -30,13 +32,17 @@ export class Terrace {
   scene = new THREE.Scene();
   private sky: Sky;
   private fx: Particles;
-  private azul: Person;
-  private gas: Person;
+  readonly azul: Person;
+  readonly gas: Person;
   private plate = new THREE.Group();
   private bite: THREE.Group;
   private t = 0;
   private eatT = -1;
-  private onAte: (() => void) | null = null;
+  /** Brillo dorado de la zamburiña, en el primer plano. */
+  private shine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffcf7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  private biteFrom = new THREE.Vector3();
+  private mouth = new THREE.Vector3();
+  private post: ((dt: number) => void) | null = null;
   private camPos = new THREE.Vector3(1.5, 1.65, -3.3);
   private camLook = new THREE.Vector3(0.8, 1.4, 1.0);
   /** Punto de la mesa en coordenadas de mundo, para tocar. */
@@ -214,10 +220,44 @@ export class Terrace {
     camera.lookAt(this.camLook);
   }
 
-  eat(onDone: () => void) {
+  /** Dónde está la zamburiña que se come, para encuadrarla. */
+  bitePos() {
+    return this.bite.getWorldPosition(new THREE.Vector3());
+  }
+
+  /** Empieza: la coge del plato y se la lleva a la boca (el tiempo lo frena la cámara lenta de la escena). */
+  eat() {
     if (this.eatT >= 0) return;
     this.eatT = 0;
-    this.onAte = onDone;
+    this.bite.getWorldPosition(this.biteFrom);
+    this.shine.scale.setScalar(0.3);
+    this.scene.add(this.shine);
+    const a = this.azul;
+    const r = a.rig;
+    if (!r) return;
+    // La mano de verdad hasta la boca: del hombro al codo y del codo a la mano, sin atravesar la cara
+    const side = r.bones.get('RightHand') === a.handR.parent ? 'Right' : 'Left';
+    const B = (n: string) => r.bones.get(side + n)!;
+    const t = new THREE.Vector3();
+    const pole = new THREE.Vector3();
+    const q = new THREE.Vector3();
+    this.post = () => {
+      if (!a.root.parent || this.eatT < 0) return;
+      const e = this.eatT;
+      const w = THREE.MathUtils.smoothstep(e, 0, 0.3) * (1 - THREE.MathUtils.smoothstep(e, 1.5, 2.1));
+      if (w <= 0) return;
+      const head = r.bones.get('Head')!.getWorldPosition(q);
+      a.root.updateWorldMatrix(true, false);
+      // Delante de la boca, en los ejes de ella
+      a.root.localToWorld(this.mouth.set(0, 0, 0));
+      const fx = Math.sin(a.root.rotation.y), fz = Math.cos(a.root.rotation.y);
+      this.mouth.set(head.x + fx * 0.15, head.y - 0.06, head.z + fz * 0.15);
+      const k = THREE.MathUtils.smoothstep(e, 0.22, 1.02);
+      t.copy(this.biteFrom).lerp(this.mouth, k);
+      pole.set(head.x - fx * 0.1 + fz * (side === 'Right' ? -0.7 : 0.7), head.y - 0.75, head.z - fz * 0.1 - fx * (side === 'Right' ? -0.7 : 0.7));
+      twoBone(B('Arm'), B('ForeArm'), B('Hand'), t, pole, w);
+    };
+    rigPost.add(this.post);
   }
 
   private sit(p: Person) {
@@ -236,22 +276,25 @@ export class Terrace {
     if (this.eatT >= 0) {
       this.eatT += dt;
       const k = Math.min(1, this.eatT / 1.0);
-      // Azul coge la zamburiña y se la lleva a la boca
-      this.azul.armR.rotation.x = -Math.sin(k * Math.PI * 0.5) * 2.1;
+      // Sin esqueleto (modo ligero): el brazo a la boca a mano
+      if (!this.azul.rig) {
+        this.azul.armR.rotation.x = -Math.sin(k * Math.PI * 0.5) * 1.1;
+        this.azul.elbowR.rotation.x = -Math.sin(k * Math.PI * 0.5) * 1.9;
+      }
       const hand = this.azul.handR.getWorldPosition(new THREE.Vector3());
-      if (this.eatT < 1.1) this.bite.position.copy(this.plate.worldToLocal(hand.clone()));
-      if (this.eatT >= 1.1 && this.bite.visible) {
+      // La coge al llegar la mano al plato y va con ella hasta la boca
+      if (this.eatT > 0.22 && this.eatT < 1.14) this.bite.position.copy(this.plate.worldToLocal(hand.clone()));
+      const sm = this.shine.material;
+      sm.opacity = this.bite.visible ? THREE.MathUtils.smoothstep(this.eatT, 0.3, 0.75) * (0.42 + Math.sin(this.t * 3) * 0.08) : Math.max(0, sm.opacity - dt * 3);
+      this.bite.getWorldPosition(this.shine.position);
+      if (this.eatT >= 1.14 && this.bite.visible) {
         this.bite.visible = false;
         audio.pickup();
         vibrate(30);
-        this.fx.burst(hand.setY(hand.y + 0.4), '💕', 8, 1.2, 0.8);
-        this.fx.burst(this.tableTop.clone().setY(1.6), '😋', 1, 0.6, 1);
       }
-      if (this.eatT > 1.6) this.azul.armR.rotation.x = THREE.MathUtils.lerp(this.azul.armR.rotation.x, 0, 0.1);
-      if (this.eatT > 2.2 && this.onAte) {
-        const cb = this.onAte;
-        this.onAte = null;
-        cb();
+      if (this.eatT > 2.3 && this.post) {
+        rigPost.delete(this.post);
+        this.post = null;
       }
     }
     camera.position.lerp(this.camPos, Math.min(1, dt * 2));

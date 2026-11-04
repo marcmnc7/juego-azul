@@ -21,6 +21,7 @@ interface P {
   max: number;
   dust?: boolean;
   spray?: boolean;
+  drop?: boolean;
   small?: boolean;
 }
 
@@ -71,10 +72,13 @@ export class Particles {
   }
 
   burst(at: THREE.Vector3, kind: string, n = 8, spread = 2.5, up = 1) {
+    const drop = kind === 'drop'; // gotitas finas (la piscina): como 'spray', pero del tamaño de una gota
+    if (drop) kind = 'spray';
     this.tex[kind] ??= emojiTexture(kind);
     for (let i = 0; i < n; i++) {
       const p = this.pool.find((q) => q.life <= 0);
       if (!p) return;
+      p.drop = drop;
       p.s.material.map = this.tex[kind];
       p.s.position.copy(at);
       p.v.set((Math.random() - 0.5) * spread, (2 + Math.random() * 2.5) * up, (Math.random() - 0.5) * spread);
@@ -95,7 +99,7 @@ export class Particles {
       p.s.position.copy(at).addScaledVector(dir, i * 0.04);
       const sp = speed * (0.85 + Math.random() * 0.3);
       p.v.copy(dir).multiplyScalar(sp).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3));
-      p.dust = p.small = false;
+      p.dust = p.small = p.drop = false;
       p.spray = true;
       // Las gotas del final salen más tarde: un chorro, no una nube
       p.max = p.life = 0.7 + i * 0.03;
@@ -114,7 +118,7 @@ export class Particles {
         p.s.material.opacity = k * 0.7;
       } else {
         p.v.y -= (p.spray ? 7 : 2.5) * dt;
-        p.s.scale.setScalar(p.spray ? 0.12 + (1 - k) * 0.25 : p.small ? 0.22 + (1 - k) * 0.1 : 0.5 + (1 - k) * 0.3);
+        p.s.scale.setScalar(p.drop ? 0.035 + (1 - k) * 0.03 : p.spray ? 0.12 + (1 - k) * 0.25 : p.small ? 0.22 + (1 - k) * 0.1 : 0.5 + (1 - k) * 0.3);
         p.s.material.opacity = p.small ? Math.min(0.75, k * 1.5) : Math.min(1, k * 2);
       }
       p.s.position.addScaledVector(p.v, dt);

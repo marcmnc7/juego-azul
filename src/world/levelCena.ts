@@ -38,7 +38,7 @@ const GAS_CAR_X = 24;
 const GARDEN: Box2 = { minX: -5, maxX: 5, minZ: 0.6, maxZ: 9.7 };
 
 export const DAD_LOOK: PersonLook = { skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true };
-export const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'bun', skirt: true };
+export const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'straight', skirt: true };
 
 /** Un paso del guion de los padres: hacia dónde va cada uno y qué pasa al llegar. */
 interface Beat {
@@ -646,6 +646,113 @@ export class LevelCena implements Level {
 }
 
 /**
+ * Lo que hay delante de casa de Azul: un vallecito que baja de la calle a una entrada de mar muy estrecha
+ * con una playa pequeñísima al fondo. Casas, solo en la otra orilla.
+ */
+function buildValley(sc: THREE.Scene, day: boolean) {
+  const X = 380, Z = 170; // de z = 16.7 hacia allá
+  const Z0 = 16.7;
+  const WATER = -7;
+  const ss = THREE.MathUtils.smoothstep;
+  const n = (x: number, z: number) => Math.sin(x * 0.13 + z * 0.07) * 0.6 + Math.sin(x * 0.37 - z * 0.23) * 0.3 + Math.sin(x * 0.9 + z * 0.8) * 0.12;
+  const H = (x: number, z: number) => {
+    const bank = -9.5 * ss(z, Z0 + 1.5, Z0 + 21) + 13.5 * ss(z, Z0 + 37, Z0 + 57); // baja, el fondo del agua y sube a la otra orilla
+    const up = ss(z, Z0 + 57, Z0 + 150) * 4;
+    // Al este, la entrada se acaba: el fondo sube y deja la playita
+    const head = ss(x, 18, 46);
+    const y = bank + up;
+    const closed = Math.max(y, -5.2 - 0.0 * x + Math.abs(z - (Z0 + 28)) * 0.12);
+    return THREE.MathUtils.lerp(y, closed, head) + n(x, z) * ss(z, Z0 + 1, Z0 + 6) * (y < WATER + 0.6 ? 0.2 : 1);
+  };
+  const geo = new THREE.PlaneGeometry(X, Z, 130, 70).rotateX(-Math.PI / 2);
+  geo.translate(0, 0, Z0 + Z / 2);
+  const P = geo.attributes.position as THREE.BufferAttribute;
+  const col = new Float32Array(P.count * 3);
+  const c = new THREE.Color();
+  const SCRUB = new THREE.Color(0x6e7f46), SCRUB2 = new THREE.Color(0x56703c), ROCK = new THREE.Color(0xb7a27c), SAND = new THREE.Color(0xecdcb0), DEEP = new THREE.Color(0x2c6f7e);
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), z = P.getZ(i);
+    const y = H(x, z);
+    P.setY(i, y);
+    const v = 0.5 + 0.5 * Math.sin(x * 0.31 + z * 0.47) * Math.sin(x * 0.11 - z * 0.19);
+    c.copy(SCRUB).lerp(SCRUB2, v);
+    const shore = y - WATER;
+    if (shore < 2.4) c.lerp(ROCK, ss(2.4 - shore, 0, 1.6));
+    if (shore < 1.5 && x > 10 && x < 44) c.lerp(SAND, ss(1.5 - shore, 0, 0.7)); // la playita
+    if (shore < -0.4) c.copy(DEEP);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const ground = new THREE.Mesh(geo, toon({ vertexColors: true, roughness: 1 }));
+  ground.userData.noCast = true;
+  sc.add(ground);
+  // El agua de la cala
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(X, 62).rotateX(-Math.PI / 2), toon({ color: day ? 0x2a93ad : 0x0d2340, emissive: day ? 0x06303c : 0x030a18, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.93 }));
+  water.position.set(0, WATER, Z0 + 28);
+  water.userData.noCast = true;
+  sc.add(water);
+
+  const m = new Merger();
+  // El muro de marès de la calle, y lo que crece en la ladera
+  m.add(G.box, 0xc9b48f, 0, 0.3, Z0 + 0.15, 0, 0, 0, X, 0.6, 0.35);
+  let k = 0;
+  for (let i = 0; i < 420 && k < 110; i++) {
+    const x = -170 + ((i * 37.3) % 340), z = Z0 + 2.5 + ((i * 11.7) % 110);
+    const y = H(x, z);
+    if (y < WATER + 1.4) continue;
+    k++;
+    if (i % 9 === 0) {
+      // Pino
+      const h = 6 + (i % 4);
+      m.add(G.cyl, 0x5a4634, x, y + h / 2, z, 0.05, 0, 0.05, 0.4, h, 0.4);
+      for (let j = 0; j < 4; j++) m.add(G.bush, j % 2 ? 0x2f5a2c : 0x3a6a34, x + Math.cos(j * 1.7) * 1.7, y + h + Math.sin(j) * 0.4, z + Math.sin(j * 1.7) * 1.7, 0, j, 0, 3, 1.4, 2.8);
+    } else m.add(G.bush, i % 3 ? 0x5f7a40 : 0x7d8a52, x, y + 0.45, z, 0, i, 0, 1.4 + (i % 4) * 0.5, 1 + (i % 3) * 0.3, 1.3 + (i % 3) * 0.5);
+  }
+  // Rocas de la orilla
+  for (let i = 0; i < 60; i++) {
+    const x = -180 + i * 6.3 + Math.sin(i) * 2;
+    if (x > 16) break;
+    for (const zz of [Z0 + 14 + Math.sin(i * 2.3) * 1.4, Z0 + 43 + Math.sin(i * 1.7) * 1.4])
+      m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, x, WATER + 0.25, zz, 0, i, 0, 2.2 + (i % 3), 1 + (i % 2) * 0.5, 2 + (i % 3));
+  }
+  // Barcas fondeadas
+  for (const [x, z, ry, cc] of [[-40, Z0 + 26, 0.4, 0xf4f4f0], [-14, Z0 + 31, -0.3, 0x2f6b8a], [-78, Z0 + 28, 1.1, 0xf4f4f0], [2, Z0 + 25, 0.9, 0xc23030]] as [number, number, number, number][]) {
+    m.add(G.capsule, cc, x, WATER + 0.12, z, Math.PI / 2, ry, 0, 1.1, 1.7, 0.55);
+    m.add(G.box, 0x8a6a44, x, WATER + 0.34, z, 0, ry, 0, 0.8, 0.05, 1.5);
+  }
+  // Solo en la otra orilla, casas blancas mirando al agua
+  const WIN = day ? 0x30384a : 0xffd9a0;
+  const ROOF = [0xb8623e, 0xc0653d, 0xf6f1e6];
+  let s = 0;
+  for (let x = -170; x < 170; x += 11.5, s++) {
+    const z = Z0 + 66 + (s % 3) * 8 + Math.sin(s * 1.3) * 2;
+    const y = H(x, z);
+    const h = s % 2 ? 6 : 3.4;
+    const w = 7 + (s % 3), d = 6;
+    m.add(G.box, 0xf6f1e6, x, y + h / 2 - 0.4, z, 0, 0, 0, w, h + 0.8, d);
+    if (s % 3 === 2) m.add(G.box, 0xf6f1e6, x, y + h + 0.2, z, 0, 0, 0, w + 0.2, 0.4, d + 0.2);
+    else m.add(ROOF_GEO, ROOF[s % 2], x, y + h, z, 0, 0, 0, w + 0.4, 1.3, d + 0.4);
+    for (const ox of [-w / 4, w / 4])
+      for (const fy of h > 4 ? [1.5, 4.1] : [1.5]) {
+        m.add(G.box, WIN, x + ox, y + fy, z - d / 2 - 0.03, 0, 0, 0, 0.9, 1.1, 0.05);
+        for (const os of [-1, 1]) m.add(G.box, 0x2f7a4a, x + ox + os * 0.68, y + fy, z - d / 2 - 0.05, 0, 0, 0, 0.44, 1.15, 0.05);
+      }
+  }
+  const mesh = m.mesh();
+  mesh.userData.noCam = true;
+  sc.add(mesh);
+  // Unas sombrillas en la playita
+  const beach = new Merger();
+  for (const [x, z, cc] of [[30, Z0 + 24.5, 0xd7263d], [34, Z0 + 31, 0x2b6fb0]] as [number, number, number][]) {
+    const y = H(x, z);
+    beach.add(G.cyl, 0xdddddd, x, y + 0.9, z, 0, 0, 0, 0.05, 1.9, 0.05);
+    beach.add(G.cone, cc, x, y + 1.95, z, 0, 0, 0, 1.9, 0.5, 1.9);
+  }
+  sc.add(beach.mesh());
+}
+
+/**
  * Casa de los padres de Azul junto a Sa Farola: jardín con cancela, cocina de fuera, terraza y la calle.
  * La usan la cena a escondidas y el día del eclipse.
  */
@@ -887,12 +994,14 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     sc.add(l);
   }
   sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
+  // Delante de casa, al otro lado de la calle: el valle con su calita
+  buildValley(sc, day);
   // Al fondo, bajando por la calle, el paseo y Sa Farola con su haz girando
   const farola = buildSaFarola(sc, colliders, day);
   // Alrededores: la urbanización sigue tierra adentro y a los lados, y al fondo lomas; hacia el norte, el mar
   buildSurroundings(sc, {
     keepOut: [
-      { minX: -200, maxX: 200, minZ: 10, maxZ: 17 }, // la calle
+      { minX: -400, maxX: 400, minZ: 10, maxZ: 400 }, // la calle y, delante, el valle: ahí no hay casas
       { minX: -18, maxX: 19, minZ: -10, maxZ: 17 }, // casa de Azul y vecinos
       { minX: -25, maxX: -15, minZ: -45, maxZ: 17 }, // calle que baja al mar
       { minX: -200, maxX: 200, minZ: -60, maxZ: -23 }, // Camí de sa Farola, casas de detrás y faro
@@ -905,6 +1014,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     colliders,
     water: (_x, z) => z < COAST_Z + 2,
     hole: { minX: -1e4, maxX: 1e4, minZ: -1e4, maxZ: COAST_Z + 1 },
+    fieldMaxZ: 16.8,
   });
   const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   lamp.position.copy(farola.lamp);

@@ -30,7 +30,7 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
   const s = el('div', 'screen title-screen');
   s.append(
     el('div', 'eyebrow', 'De Gas, para ti'),
-    el('h1', 'display', 'Feliz cumpleaños,<br><em>Azul</em>'),
+    el('h1', 'display', 'Para<br><em>Azul</em>'),
     sticker(STICKERS.oso, 'title-sticker'),
     el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),
   );
@@ -825,7 +825,16 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   for (const f of frags) {
     items.push({ kind: 'date', text: f.date });
     let prev: boolean | null = null;
+    let last = -1;
     for (const m of f.msgs) {
+      // Un salto de horas entre dos mensajes se marca: en un chat real no se escribe todo de seguido
+      const [h, mi] = m.t.split(':').map(Number);
+      const now = h * 60 + mi;
+      if (last >= 0 && ((now - last + 1440) % 1440) >= 30) {
+        items.push({ kind: 'date', text: m.t });
+        prev = null;
+      }
+      last = now;
       items.push({ kind: 'msg', me: m.me, t: m.t, text: m.text, first: prev !== m.me });
       prev = m.me;
     }

@@ -238,6 +238,8 @@ export interface PersonLook {
   stripes?: [number, number];
   /** Pantalón corto (en la multitud): piernas al aire por debajo de medio muslo. */
   shorts?: boolean;
+  /** Sin ropa (la piscina): piel lisa en todo el cuerpo, sin costuras ni pliegues de la ropa del modelo. */
+  nude?: boolean;
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
   /** Pelo rizado con volumen arriba (Gas), sobre el pelo corto. */

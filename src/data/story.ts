@@ -15,8 +15,8 @@ export interface LevelInfo {
 
 export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏' },
-  { id: 2, name: 'La piscinita', place: 'Sa Caleta, la noche siguiente', emoji: '🌙' },
-  { id: 3, name: 'La ruta de las zamburiñas', place: 'Atocha → San Vicente de la Barquera → Logroño', emoji: '🚗' },
+  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 27 de agosto de 2025', emoji: '🌙' },
+  { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗' },
   { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸' },
   { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️' },
   { id: 6, name: 'Sant Joan', place: 'Ciutadella, junio de 2026', emoji: '🐎' },
@@ -96,6 +96,18 @@ export const SANTJOAN = {
   notExact: 'Con esta foto no sabrá dónde estás. Que salga el obelisco 📷',
   comingHint: 'Gas viene hacia ti',
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
+  /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul con dos amigas. */
+  toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
+  beHint: 'Ve con Gas a Sa Plaça d’es Bè',
+  beGo: 'Toca el pecho de los caballos cuando se pongan de manos',
+  beCount: (n: number, of: number) => `🐎 ${n}/${of}`,
+  beDone: [
+    { who: 'Margaux', text: 'Mis amigas se vienen a dormir a casa. ¿Te vienes?' },
+    { who: 'Gas', text: 'Sí. Vamos.' },
+  ] as Line[],
+  home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los cuatro, muertos de sueño.' }] as Line[],
+  homeHint: 'Entra en casa con Gas y con tus amigas',
+  sleepBtn: '😴 A dormir',
   after: [{ who: 'Narrador', text: 'Dos días después.' }] as Line[],
   hints: {
     pomada: '¡Avellanes! 🌰',
@@ -117,6 +129,27 @@ export const ROAD = {
     { who: 'Narrador', text: 'Da lluvia. Así que coche: el tuyo. Y conduces tú.' },
     { who: 'Narrador', text: 'Por el camino, un juego: parar a comer en el primer restaurante que empiece por M.' },
   ] as Line[],
+  /** Una vaca en mitad de la carretera: se para, se la saluda y se le pregunta el camino. */
+  cowHint: '🐄 ¡Una vaca! Frena',
+  cowBtn: '🐄 Saludar a la vaca',
+  cowMissed: '🛑 ¡Frena, frena, que es una vaca!',
+  cows: [
+    [
+      { who: 'Margaux', text: 'Hola, vaca. ¿Hacia dónde vamos?' },
+      { who: 'Vaca', text: 'Muuu.' },
+      { who: 'Marc', text: 'Dice que recto.' },
+    ],
+    [
+      { who: 'Margaux', text: 'Otra. Hola. ¿Vamos bien para San Vicente?' },
+      { who: 'Vaca', text: 'Muuuuu.' },
+      { who: 'Marc', text: 'Eso es un sí. Se le ve segura.' },
+    ],
+    [
+      { who: 'Margaux', text: 'Perdona, ¿Logroño?' },
+      { who: 'Vaca', text: '…Muu.' },
+      { who: 'Marc', text: 'Dice que por ahí hay fiesta.' },
+    ],
+  ] as Line[][],
   notM: (n: string) => `«${n}»… no empieza por M 😅`,
   missedM: '¡Eh, que ese empieza por M! Frena 🛑',
   marcial: [
@@ -134,20 +167,23 @@ export const ROAD = {
     { who: 'Narrador', text: 'San Vicente de la Barquera.' },
     { who: 'Marc', text: 'Nos han habilitado aparcamiento especial. Y aparcacoches. Somos VIP.' },
   ] as Line[],
-  zambDone: [
-    { who: 'Marc', text: 'No habrá mejor zamburiña en el mundo que la de San Vicente.' },
-  ] as Line[],
-  arriveLogrono: [
-    { who: 'Narrador', text: 'La última noche iba a ser cenita de camping: estrellas, cartas y el camping gas.' },
+  /** La noche del camping, entre Marcial y San Vicente. */
+  camp: [
+    { who: 'Narrador', text: 'Esa noche iba a ser cenita de camping: estrellas, cartas y el camping gas.' },
     { who: 'Narrador', text: 'A él se le olvidó precisamente el gas.' },
-    { who: 'Narrador', text: '3 de noviembre. Él ya va en el primer tren a Barcelona.' },
   ] as Line[],
+  campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
   terrace: [
     { who: 'Narrador', text: 'La terraza de El Ancla.' },
   ] as Line[],
-  terraceDone: [
+  /** Lo que piensa ella cuando la prueba, a cámara lenta (como él con sus ojos en Ferreries). */
+  zambEpic: [{ who: 'Margaux', text: '(Madre mía… qué zamburiña.)' }] as Line[],
+  zambDone: [
+    { who: 'Marc', text: 'No habrá mejor zamburiña en el mundo que la de San Vicente.' },
     { who: 'Margaux', text: 'Déjalo.' },
   ] as Line[],
+  arriveLogrono: [{ who: 'Narrador', text: 'Logroño. Calle Laurel. Vais de fiesta.' }] as Line[],
+  logronoEnd: [{ who: 'Narrador', text: '3 de noviembre. Él ya va en el primer tren a Barcelona.' }] as Line[],
   hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!', 'Marc: «Como negocias, eh»'],
   smoke: ['Marc: «¿Otra vez?» 🚭', 'Marc: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Marc: «Te lo requiso. Por tu bien.» 🚭'],
   turbo: '¡Gasolina de 98 octanos! ⛽ Turbo',
@@ -165,9 +201,9 @@ export const CONCERT = {
   ] as Line[],
   airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
   burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],
-  landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria. Él ha llegado antes.' }] as Line[],
+  landed: [{ who: 'Narrador', text: 'Gran Canaria. Él ha llegado antes y te espera en el aeropuerto. A partir de aquí, juntos a todas partes.' }] as Line[],
   stadium: [
-    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
+    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Habéis venido juntos y Fito está a punto de salir.' },
     { who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas. Ahora juegas con él.' },
   ] as Line[],
   filmIntro: [{ who: 'Narrador', text: 'Grábaselo: mantén a Fito dentro del recuadro aunque la gente salte delante.' }] as Line[],
@@ -190,9 +226,18 @@ export const CONCERT = {
 
 // Capítulo 2: los chats de esa noche van tal cual en src/data/chats.ts (imperi, pins, cesped, meGustas).
 export const NIGHT = {
-  intro: [{ who: 'Narrador', text: 'Ciutadella. 26 de agosto de 2025. Tú estás en el Imperi. Él se va mañana.' }] as Line[],
+  intro: [{ who: 'Narrador', text: 'Ciutadella. 27 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
-  swimDone: [{ who: 'Narrador', text: 'Al césped. Esa oscuridad tenebre.' }] as Line[],
+  /** Después de hacer el amor en la hamaca: lo que se dijeron esa noche. */
+  love: [{ who: 'Narrador', text: 'Solo el césped sabe qué pasó.' }] as Line[],
+  talk: [
+    { who: 'Marc', text: 'Yo me voy a quedar sobre todo con tu chiste inicial del Uber. Ha sido un buen comienzo.' },
+    { who: 'Marc', text: 'Es broma. Con tus ojazos.' },
+    { who: 'Margaux', text: 'Estaba nerviosa. Y los tuyos también son bonitos.' },
+    { who: 'Margaux', text: 'Qué pena no poder verlos bien esta noche.' },
+    { who: 'Marc', text: 'Esa oscuridad tenebre ha tenido su parte buena también.' },
+    { who: 'Margaux', text: 'Tuvo su porqué.' },
+  ] as Line[],
   lie: [{ who: 'Narrador', text: 'Toca las estrellas, empezando por la que parpadea.' }] as Line[],
   sneakHint: 'Silencio full: despacio y por las losas, que la grava cruje',
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
@@ -283,7 +328,7 @@ export const CROSSWORD = {
 export const FINAL_LETTER = {
   title: 'Feliz cumpleaños, Azul',
   paragraphs: [
-    'El 25 de agosto de 2025, en Ferreries, me puse a hablar con Carme para poder presentarme a ti. Al día siguiente me iba, y aun así acabaste subiendo a un coche azul cerca de Pins, en una piscina en silencio y en un césped que es el único que sabe lo que pasó.',
+    'El 25 de agosto de 2025, en Ferreries, me puse a hablar con Carme para poder presentarme a ti. A los dos días me iba, y aun así acabaste subiendo a un coche azul cerca de Pins, en una piscina en silencio y en un césped que es el único que sabe lo que pasó.',
     'Después vino la lluvia que nos quitó la moto, la Cafetería Marcial, las zamburiñas de San Vicente y un gas de camping que se quedó en casa y me dio nombre. Vino Fito en Gran Canaria, la Costa Brava en moto y Sant Joan. Vino una carbonara a escondidas y un 23:49 en el que me escribiste que me querías. Y vino un eclipse desde la roca de Es Castellar, con las gafas puestas.',
     'El 1 de octubre me escribiste: «Desde que te conozco no hubo un dia donde no he pensado en ti. Y cada vez que te vas hasta el dia que te vuelvo a ver no pasa ni un dia sin que te eche de menos». Yo te dije que las mías serían más cortas pero querían decir lo mismo, y tú me dijiste «Me vale». Hoy van un poco más largas: yo igual, cada día.',
     'Un día me escribiste «Quiero que seas mi casa». Yo también lo quiero, cada día con más ganas.',
@@ -349,6 +394,7 @@ export const ECLIPSE = {
   kayakHint: 'Rema: toca 🛶 sin parar hasta Sa Caleta',
   ferryWarn: '⛴️ ¡¡Un ferry!!',
   kayakEnd: [
+    { who: 'Gas', text: 'Tu padre tenía razón.' },
     { who: 'Narrador', text: 'Vale. Ese plan nunca pasó: al final no hubo kayak.' },
     { who: 'Narrador', text: 'Y menos mal. Así empieza el día de verdad.' },
   ] as Line[],

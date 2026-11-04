@@ -10,16 +10,20 @@ import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } fro
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
-import { cinema, cineTitle } from '../core/cinema';
+import { Laurel } from './laurel';
+import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
+import { cinema, cineTitle, headOf, rel } from '../core/cinema';
 import { Surf } from '../core/surfaces';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 
-// Capítulo 2 · La ruta de las zamburiñas.
-// Carretera Madrid → San Vicente de la Barquera (recoger fotos, esquivar) → plancha de zamburiñas
-// → carretera entre viñedos → Logroño.
+// Capítulo 3 · La ruta de las zamburiñas, en el orden en que pasó:
+// Madrid → Cafetería Marcial → la noche del camping sin gas → San Vicente de la Barquera (la plancha y
+// la zamburiña en El Ancla, a cámara lenta) → carretera entre viñedos → Logroño, de fiesta.
+// Por el camino, además de fotos, gasolina y tabaco, alguna vaca en mitad de la carretera: hay que parar,
+// saludarla y preguntarle hacia dónde vamos.
 
-type Phase = 'intro' | 'drive1' | 'marcial' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
+type Phase = 'intro' | 'drive1' | 'marcial' | 'camp' | 'cow' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
 type Region = 'madrid' | 'meseta' | 'cantabria' | 'rioja';
 
 const LANES = [-2.6, 0, 2.6];
@@ -43,6 +47,12 @@ const EATERIES: { name: string; z: number; m?: boolean }[] = [
   { name: 'Cafetería Marcial', z: 770, m: true },
 ];
 const MARCIAL_Z = 770;
+/** Donde paráis a hacer noche: entre Marcial y San Vicente. */
+const CAMP_Z = 985;
+/** Las vacas de la carretera. */
+const COW_Z = [1110, 1345, LEG1 + 40 + 340];
+const COW_NEAR = 60;
+const COW_BRAKE = 21; // a esta distancia se frena sí o sí (frenando, para unos metros antes)
 
 function canvasTex(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 256, h = 256) {
   const c = document.createElement('canvas');
@@ -149,6 +159,13 @@ export class Level2 implements Level {
   private terrace: Terrace | null = null;
   /** La última noche: el camping sin gas (escena de cine). */
   private camp: Camp | null = null;
+  private campDone = false;
+  /** Logroño, de fiesta. */
+  private laurel: Laurel | null = null;
+  private cowIdx = 0;
+  private roadCow: RoadCow | null = null;
+  private cowLeaving = false;
+  private cowFrom: Phase = 'drive1';
   private eating = false;
   private busy = false;
   private hud: Hud;
@@ -375,7 +392,8 @@ export class Level2 implements Level {
   }
 
   get threeScene() {
-    if (this.camp && this.phase === 'logrono') return this.camp.scene;
+    if (this.camp && this.phase === 'camp') return this.camp.scene;
+    if (this.laurel && this.phase === 'logrono') return this.laurel.scene;
     return this.terrace && this.phase === 'terrace' ? this.terrace.scene : this.scene;
   }
 
@@ -452,25 +470,16 @@ export class Level2 implements Level {
       .add(G.box, 0x6b4428, 0, 4.8, 1.3, 0, 0, -0.95, 0.3, 7, 0.1)
       .build();
     const hill = new Merger().add(G.rock2, 0x4f8f3e, 0, -2, 0, 0, 0, 0, 34, 16, 28).add(G.bush, 0x3a6e30, 6, 5, 4, 0, 0, 0, 10, 5, 9).add(G.bush, 0x3a6e30, -8, 3, -5, 0, 1, 0, 8, 4, 8).build();
-    const cow = new Merger()
-      .add(G.box, 0xf4f1ea, 0, 1.1, 0, 0, 0, 0, 0.9, 0.9, 1.8)
-      .add(G.box, 0x2a2420, 0.2, 1.25, 0.3, 0, 0, 0, 0.92, 0.5, 0.6)
-      .add(G.box, 0xf4f1ea, 0, 1.4, 1.05, 0, 0, 0, 0.5, 0.5, 0.6)
-      .add(G.box, 0xe9a3a3, 0, 1.25, 1.36, 0, 0, 0, 0.4, 0.25, 0.1)
-      .add(G.cyl, 0x2a2420, -0.3, 0.35, 0.6, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0x2a2420, 0.3, 0.35, 0.6, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0xf4f1ea, -0.3, 0.35, -0.6, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0xf4f1ea, 0.3, 0.35, -0.6, 0, 0, 0, 0.18, 0.7, 0.18)
-      .build();
     // Viñedo riojano en vaso: cepas bajas y retorcidas, en hileras, sobre tierra arcillosa rojiza
     const vines = new Merger();
     for (let i = 0; i < 5; i++) {
-      vines.add(G.box, 0x8a5a3a, i * 2.4, 0.03, 0, 0, 0, 0, 0.9, 0.06, 10); // caballón de tierra
+      const vx = (i - 2) * 2.4; // centrado: si no, las hileras del lado izquierdo acababan en plena carretera
+      vines.add(G.box, 0x8a5a3a, vx, 0.03, 0, 0, 0, 0, 0.9, 0.06, 10); // caballón de tierra
       for (let j = 0; j < 7; j++) {
         const z = -4.5 + j * 1.5;
-        vines.add(G.cyl, 0x4a3426, i * 2.4, 0.3, z, 0.15 * ((j % 3) - 1), 0, 0.12, 0.12, 0.6, 0.12);
-        vines.add(G.bush, j % 2 ? 0x5a7f2e : 0x4f7428, i * 2.4, 0.8, z, 0, j, 0, 1.0, 0.65, 1.0);
-        if (j % 2) vines.add(G.box, 0x3a2050, i * 2.4 + 0.35, 0.55, z, 0, 0, 0, 0.16, 0.22, 0.16); // racimo
+        vines.add(G.cyl, 0x4a3426, vx, 0.3, z, 0.15 * ((j % 3) - 1), 0, 0.12, 0.12, 0.6, 0.12);
+        vines.add(G.bush, j % 2 ? 0x5a7f2e : 0x4f7428, vx, 0.8, z, 0, j, 0, 1.0, 0.65, 1.0);
+        if (j % 2) vines.add(G.box, 0x3a2050, vx + 0.35, 0.55, z, 0, 0, 0, 0.16, 0.22, 0.16); // racimo
       }
     }
     const vineGeo = vines.build();
@@ -492,16 +501,18 @@ export class Level2 implements Level {
     this.scatters = [
       new Scatter(building, 20, 14, ['madrid'], [14, 34], true, [0.85, 1.25]),
       new Scatter(brick, 14, 18, ['madrid'], [14, 44], true, [0.85, 1.2]),
-      new Scatter(pineGeo, 18, 12, ['madrid', 'meseta'], [8, 40], true, [0.7, 1.3]),
+      // (las distancias, contando lo que abulta cada cosa: nada de matas ni copas sobre el asfalto, que llega a x = 4,5)
+      new Scatter(pineGeo, 18, 12, ['madrid', 'meseta'], [10, 40], true, [0.7, 1.3]),
       new Scatter(hay, 20, 9, ['meseta'], [8, 50], true, [0.8, 1.2]),
       new Scatter(mill, 6, 45, ['meseta'], [25, 60], true, [1, 1.2]),
       new Scatter(bull, 1, 260, ['meseta'], [22, 24], false, [1, 1], false),
       new Scatter(hill, 10, 30, ['cantabria'], [40, 90], false, [0.7, 1.4]),
       new Scatter(peak, 6, 70, ['cantabria'], [-150, -210], false, [0.9, 1.5], false),
-      new Scatter(oakGeo, 22, 9, ['cantabria'], [8, 35], true, [0.8, 1.3]),
-      new Scatter(cow, 10, 16, ['cantabria'], [-9, -30], false, [1, 1]),
-      new Scatter(vineGeo, 24, 10, ['rioja'], [8, 30], true, [1, 1], false),
-      new Scatter(vergeGeo, 40, 5, ['madrid', 'meseta', 'cantabria', 'rioja'], [6.5, 12], true, [0.7, 1.3]),
+      new Scatter(oakGeo, 22, 9, ['cantabria'], [10, 35], true, [0.8, 1.3]),
+      new Scatter(cowGeometry('frisona'), 8, 20, ['cantabria'], [-12, -32], false, [1, 1]),
+      new Scatter(cowGeometry('tudanca'), 5, 32, ['cantabria'], [-13, -34], false, [1, 1]),
+      new Scatter(vineGeo, 24, 10, ['rioja'], [12, 32], true, [1, 1], false),
+      new Scatter(vergeGeo, 40, 5, ['madrid', 'meseta', 'cantabria', 'rioja'], [9, 14], true, [0.7, 1.3]),
     ];
     // Las montañas lejanas no llevan niebla (si no, desaparecen): ya son de un gris azulado de lejanía
     this.scatters[7].mesh.material = toon({ vertexColors: true, fog: false });
@@ -568,21 +579,12 @@ export class Level2 implements Level {
       .add(G.cyl, 0x1a1a1a, -0.8, 0.8, -0.6, 0, 0, Math.PI / 2, 1.6, 0.5, 1.6)
       .add(G.cyl, 0x1a1a1a, 0.8, 0.8, -0.6, 0, 0, Math.PI / 2, 1.6, 0.5, 1.6)
       .build();
-    const cow = new Merger()
-      .add(G.box, 0xf4f1ea, 0, 1.1, 0, 0, Math.PI / 2, 0, 0.9, 0.9, 1.8)
-      .add(G.box, 0x2a2420, 0.3, 1.25, 0.2, 0, Math.PI / 2, 0, 0.92, 0.5, 0.6)
-      .add(G.box, 0xf4f1ea, 1.05, 1.4, 0, 0, Math.PI / 2, 0, 0.5, 0.5, 0.6)
-      .add(G.cyl, 0x2a2420, -0.6, 0.35, 0.3, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0x2a2420, 0.6, 0.35, 0.3, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0xf4f1ea, -0.6, 0.35, -0.3, 0, 0, 0, 0.18, 0.7, 0.18)
-      .add(G.cyl, 0xf4f1ea, 0.6, 0.35, -0.3, 0, 0, 0, 0.18, 0.7, 0.18)
-      .build();
     const barrel = new Merger().add(G.cyl, 0x8a5a36, 0, 0.6, 0, 0, 0, 0, 1, 1.2, 1).add(G.cyl, 0x333333, 0, 0.3, 0, 0, 0, 0, 1.03, 0.08, 1.03).add(G.cyl, 0x333333, 0, 0.9, 0, 0, 0, 0, 1.03, 0.08, 1.03).build();
     // speed > 0: va en nuestro sentido, más lento que nosotros
     return {
       madrid: [{ geo: cone, speed: 0 }, { geo: otherCar(0x2f4f86, 'sedan'), speed: 10 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }, { geo: otherCar(0x9a9ea6, 'hatch'), speed: 12 }],
       meseta: [{ geo: otherCar(0x1d1f24, 'suv'), speed: 11 }, { geo: tractor, speed: 5 }, { geo: cone, speed: 0 }, { geo: otherCar(0xc8c2b4, 'sedan'), speed: 12 }],
-      cantabria: [{ geo: cow, speed: 0 }, { geo: cow, speed: 0 }, { geo: otherCar(0x3d5a4a, 'suv'), speed: 10 }, { geo: otherCar(0xf2f2f2, 'hatch'), speed: 11 }],
+      cantabria: [{ geo: tractor, speed: 5 }, { geo: otherCar(0x3d5a4a, 'suv'), speed: 10 }, { geo: otherCar(0xf2f2f2, 'hatch'), speed: 11 }],
       rioja: [{ geo: barrel, speed: 0 }, { geo: otherCar(0x6e1a2e, 'sedan'), speed: 11 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }],
     };
   }
@@ -710,9 +712,10 @@ export class Level2 implements Level {
 
   private updateRoute() {
     let k = 0;
-    if (this.phase === 'drive1' || this.phase === 'intro' || this.phase === 'marcial') k = (this.dist / LEG1) * 0.55;
+    const leg1 = this.legStart === 0;
+    if (this.phase === 'drive1' || this.phase === 'intro' || this.phase === 'marcial' || this.phase === 'camp' || (this.phase === 'cow' && leg1)) k = (this.dist / LEG1) * 0.55;
     else if (this.phase === 'arriveSV' || this.phase === 'grill' || this.phase === 'zambDone') k = 0.55;
-    else if (this.phase === 'drive2') k = 0.55 + (this.dist / LEG2) * 0.45;
+    else if (this.phase === 'drive2' || this.phase === 'cow') k = 0.55 + (this.dist / LEG2) * 0.45;
     else k = 1;
     k = Math.max(0, Math.min(1, k));
     const pct = `${(k * 100).toFixed(1)}%`;
@@ -726,6 +729,8 @@ export class Level2 implements Level {
     this.things.forEach((t) => this.scene.remove(t.obj));
     this.things = [];
     this.nextSpawn = z + 60;
+    while (this.cowIdx < COW_Z.length && COW_Z[this.cowIdx] < z + COW_BRAKE) this.cowIdx++;
+    this.dropCow();
     for (const s of this.scatters) s.reset(z, this.regionAt);
   }
 
@@ -735,6 +740,11 @@ export class Level2 implements Level {
     const end = this.phase === 'drive1' ? LEG1 - 60 : this.legStart + LEG2 - 60;
     if (z > end) return;
     if (!this.marcialDone && Math.abs(z - MARCIAL_Z) < 25) {
+      this.nextSpawn += 30;
+      return;
+    }
+    // Nada delante de una vaca: el tramo es para frenar y saludarla
+    if (COW_Z.some((c) => Math.abs(z - c) < 48)) {
       this.nextSpawn += 30;
       return;
     }
@@ -777,8 +787,12 @@ export class Level2 implements Level {
 
   update(dt: number) {
     this.t += dt;
-    if (this.phase === 'logrono' && this.camp) {
+    if (this.phase === 'camp' && this.camp) {
       this.camp.update(dt, this.camera);
+      return;
+    }
+    if (this.phase === 'logrono' && this.laurel) {
+      this.laurel.update(dt, this.camera);
       return;
     }
     if (this.phase === 'terrace' && this.terrace) {
@@ -947,6 +961,8 @@ export class Level2 implements Level {
     if (drive && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
 
     if (this.phase === 'drive1' && !this.marcialDone) this.updateEateries(acted);
+    if (this.phase === 'drive1' && this.marcialDone && !this.campDone && this.carZ >= CAMP_Z) this.arriveCamp();
+    this.updateCows(dt, acted);
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
     this.updateRoute();
     this.updateCamera(dt);
@@ -1020,7 +1036,7 @@ export class Level2 implements Level {
     window.removeEventListener('pointerdown', this.onTap);
     this.input.enabled = true;
     this.updateHud();
-    later(() => dialogue(ROAD.zambDone, () => this.sitOnTerrace()), 600);
+    later(() => this.sitOnTerrace(), 600);
   }
 
   private startDrive2() {
@@ -1068,17 +1084,81 @@ export class Level2 implements Level {
     this.scene.add(this.logronoTown);
   }
 
+  /** La vaca que toca, en mitad de la calzada; al acercarse, frenar y saludarla. */
+  private updateCows(dt: number, acted: boolean) {
+    const rc = this.roadCow;
+    if (rc) {
+      if (this.cowLeaving) {
+        rc.root.position.x += dt * 1.7;
+        rc.update(this.t, 1);
+        if (rc.root.position.x > 11) this.dropCow();
+      } else rc.update(this.t, 0);
+    }
+    if (this.phase !== 'drive1' && this.phase !== 'drive2') return;
+    const z = COW_Z[this.cowIdx];
+    if (z === undefined || (this.phase === 'drive1' && z > LEG1)) return;
+    const d = z - this.carZ;
+    if (d > 180) return;
+    if (!this.roadCow) {
+      this.cowLeaving = false;
+      this.roadCow = makeRoadCow(this.cowIdx % 2 ? 'tudanca' : 'frisona');
+      this.roadCow.root.position.set(-1, 0, z);
+      this.roadCow.root.rotation.y = Math.PI / 2; // de través
+      this.scene.add(this.roadCow.root);
+    }
+    if (d < COW_BRAKE) {
+      toast(ROAD.cowMissed);
+      this.photos = Math.max(0, this.photos - 1);
+      audio.boo();
+      this.stopForCow();
+    } else if (d < COW_NEAR) {
+      this.hud.setAction(ROAD.cowBtn, true);
+      if (acted) this.stopForCow();
+    }
+  }
+
+  private dropCow() {
+    if (this.roadCow) this.scene.remove(this.roadCow.root);
+    this.roadCow = null;
+    this.cowLeaving = false;
+  }
+
+  private stopForCow() {
+    this.cowFrom = this.phase;
+    this.phase = 'cow';
+    this.lane = 1;
+    this.turboT = 0;
+    this.speed = Math.min(this.speed, MAX_SPEED);
+    this.hud.setAction(null);
+    this.showLaneButtons(false);
+    const lines = ROAD.cows[this.cowIdx % ROAD.cows.length];
+    this.cowIdx++;
+    later(
+      () =>
+        dialogue(lines, () => {
+          this.cowLeaving = true;
+          later(() => {
+            if (this.phase !== 'cow') return;
+            this.phase = this.cowFrom;
+            this.updateHud();
+          }, 1400);
+        }),
+      1500,
+    );
+  }
+
   /**
-   * Nace Gas: la última noche iba a ser cenita de camping entre viñas (estrellas, cartas y el camping
-   * gas) y a él se le olvidó precisamente el gas. Escena de cine: plano general de la mesa bajo las
-   * estrellas, el hornillo que no enciende, los dos, y el nombre.
+   * Nace Gas: esa noche iba a ser cenita de camping (estrellas, cartas y el camping gas) y a él se le
+   * olvidó precisamente el gas. Escena de cine: plano general de la mesa bajo las estrellas, el hornillo
+   * que no enciende, los dos, y el nombre. A la mañana siguiente, carretera otra vez.
    */
-  private arriveLogrono() {
-    this.phase = 'logrono';
+  private arriveCamp() {
+    this.campDone = true;
+    this.phase = 'camp';
     this.busy = true;
     this.updateHud();
     audio.chime(2);
-    const [night, noGas, ...after] = ROAD.arriveLogrono;
+    const [night, noGas] = ROAD.camp;
     later(() =>
       fadeFlash(() => {
         if (!this.camp) {
@@ -1087,6 +1167,7 @@ export class Level2 implements Level {
         }
         const c = this.camp;
         this.laneBtns.forEach((b) => (b.hidden = true));
+        this.route.style.display = 'none';
         audio.stopMusic();
         audio.startMusic('night');
         const mid = () => c.table.clone().setY(1.05);
@@ -1108,15 +1189,63 @@ export class Level2 implements Level {
               cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
               later(
                 () =>
-                  dialogue(after, () =>
-                    // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
-                    phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish())),
+                  dialogue(ROAD.campAfter, () =>
+                    fadeFlash(() => {
+                      cinema.stop();
+                      audio.stopMusic();
+                      audio.startMusic('road');
+                      this.route.style.display = '';
+                      this.busy = false;
+                      this.speed = 0;
+                      this.phase = 'drive1';
+                      this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+                      this.nextSpawn = this.carZ + 60;
+                      this.updateHud();
+                    }, 500),
                   ),
                 3800,
               );
             });
           }),
         900);
+      }, 500),
+    1200);
+  }
+
+  /** Logroño, de fiesta. Y al acabar, la vuelta en tren y el nombre: los chats de esos días. */
+  private arriveLogrono() {
+    this.phase = 'logrono';
+    this.busy = true;
+    this.updateHud();
+    audio.chime(2);
+    later(() =>
+      fadeFlash(() => {
+        if (!this.laurel) {
+          this.laurel = new Laurel();
+          applyShadows(this.laurel.scene);
+        }
+        const l = this.laurel;
+        this.laneBtns.forEach((b) => (b.hidden = true));
+        this.route.style.display = 'none';
+        audio.stopMusic();
+        audio.startMusic('jaleo');
+        cinema.play([
+          { dur: Infinity, move: 7, pos: new THREE.Vector3(0.6, 2.6, -15), pos2: new THREE.Vector3(0.4, 1.9, -6), look: new THREE.Vector3(0, 1.5, 4), look2: l.mid },
+          { dur: Infinity, move: 7, pos: new THREE.Vector3(-1.9, 1.5, -2.4), pos2: new THREE.Vector3(-2.3, 1.55, 1.6), look: l.mid, fov: 44, focus: l.mid },
+        ]);
+        later(() =>
+          dialogue(ROAD.arriveLogrono, () => {
+            cinema.next();
+            later(() =>
+              dialogue(ROAD.logronoEnd, () => {
+                cinema.stop();
+                audio.stopMusic();
+                // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
+                phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish()));
+              }),
+            4200);
+          }),
+        1200);
       }, 500),
     1200);
   }
@@ -1141,19 +1270,41 @@ export class Level2 implements Level {
     }, 500);
   }
 
+  /**
+   * La zamburiña, como sus ojos en Ferreries: el tiempo casi se para. Por encima del hombro de Gas,
+   * ella la coge; la zamburiña de cerca, camino de la boca; su cara mientras la prueba, con su frase;
+   * y el contraplano de él.
+   */
   private eatZamburina() {
-    if (!this.terrace) return;
+    const t = this.terrace;
+    if (!t) return;
     this.eating = true;
     this.hud.setAction(null);
-    this.terrace.eat(() => {
-      audio.fanfare();
-      dialogue(ROAD.terraceDone, () =>
-        fadeFlash(() => {
-          this.route.style.display = '';
-          this.startDrive2();
-        }, 400),
-      );
-    });
+    this.input.reset();
+    t.eat();
+    const az = () => headOf(t.azul);
+    const gz = () => headOf(t.gas);
+    const zb = () => t.bitePos();
+    cinema.play([
+      { dur: 2.2, slow: 0.34, pos: () => rel(gz(), az(), 0.85, 0.32, 0.06), pos2: () => rel(gz(), az(), 0.62, 0.26, 0.02), look: az, focus: az, at: () => audio.whoosh() },
+      { dur: 2.8, slow: 0.13, pos: () => rel(zb(), gz(), -0.46, 0.12, 0.03), pos2: () => rel(zb(), gz(), -0.27, 0.07, 0.02), look: zb, fov: 40, fov2: 28, focus: zb, at: () => audio.chime(1) },
+      { dur: Infinity, slow: 0.13, move: 3.4, pos: () => rel(az(), gz(), -1.05, 0.12, 0.0), pos2: () => rel(az(), gz(), -0.52, 0.06, -0.02), look: az, fov: 45, fov2: 32, focus: az, at: () => audio.chime(2) },
+      { dur: Infinity, slow: 0.25, move: 3, pos: () => rel(gz(), az(), -0.95, -0.2, 0.0), pos2: () => rel(gz(), az(), -0.72, -0.18, 0.0), look: gz, fov: 40, focus: gz },
+    ]);
+    later(() =>
+      dialogue(ROAD.zambEpic, () => {
+        cinema.next();
+        later(() =>
+          dialogue(ROAD.zambDone, () =>
+            fadeFlash(() => {
+              cinema.stop();
+              this.route.style.display = '';
+              this.startDrive2();
+            }, 400),
+          ),
+        1100);
+      }),
+    6600);
   }
 
   /** Restaurante de carretera con su cartel. */
@@ -1286,9 +1437,11 @@ export class Level2 implements Level {
   debug(): DebugItem[] {
     const clean = () => {
       for (const sc of this.scatters) sc.mesh.visible = true;
+      cinema.stop();
       this.route.style.display = '';
       this.eating = false;
       this.busy = false;
+      this.dropCow();
       window.removeEventListener('pointerdown', this.onTap);
       this.input.enabled = true;
     };
@@ -1311,8 +1464,23 @@ export class Level2 implements Level {
           clean();
           this.legStart = 0;
           this.marcialDone = false;
+          this.campDone = false;
+          this.cowIdx = 0;
           this.eateryTried.clear();
           this.reset(MARCIAL_Z - 120);
+          this.phase = 'drive1';
+          this.updateHud();
+        },
+      },
+      {
+        label: '1c · La noche del camping',
+        run: () => {
+          clean();
+          this.legStart = 0;
+          this.marcialDone = true;
+          this.campDone = false;
+          this.cowIdx = 0;
+          this.reset(CAMP_Z - 60);
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -1322,7 +1490,9 @@ export class Level2 implements Level {
         run: () => {
           clean();
           this.legStart = 0;
-          this.reset(980);
+          this.marcialDone = this.campDone = true;
+          this.cowIdx = 0;
+          this.reset(1000);
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -1331,6 +1501,7 @@ export class Level2 implements Level {
         label: '3 · Llegar a San Vicente',
         run: () => {
           clean();
+          this.marcialDone = this.campDone = true;
           this.reset(LEG1 - 60);
           this.legStart = 0;
           this.phase = 'drive1';
@@ -1374,5 +1545,6 @@ export class Level2 implements Level {
     disposeScene(this.scene);
     if (this.terrace) disposeScene(this.terrace.scene);
     if (this.camp) disposeScene(this.camp.scene);
+    if (this.laurel) disposeScene(this.laurel.scene);
   }
 }

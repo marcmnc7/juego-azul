@@ -828,8 +828,8 @@ function waveNormalTexture() {
  * bajan de calidad se queda en un plano PBR brillante. El plano se tumba girando la malla, así que
  * quien lo use solo debe tocar su posición.
  */
-export function makeSea(size: [number, number], color: number, sunDir: THREE.Vector3, opts: { night?: boolean; emissive?: number } = {}) {
-  const geo = new THREE.PlaneGeometry(size[0], size[1]);
+export function makeSea(size: [number, number], color: number, sunDir: THREE.Vector3, opts: { night?: boolean; emissive?: number; alpha?: number; geometry?: THREE.BufferGeometry; ripples?: boolean } = {}) {
+  const geo = opts.geometry ?? new THREE.PlaneGeometry(size[0], size[1]);
   let mesh: THREE.Mesh;
   if (quality.kind === 'standard' && quality.post) {
     const w = new Water(geo, {
@@ -837,10 +837,11 @@ export function makeSea(size: [number, number], color: number, sunDir: THREE.Vec
       textureHeight: 256,
       waterNormals: waveNormalTexture(),
       sunDirection: sunDir.clone().normalize(),
-      sunColor: opts.night ? 0x445577 : 0xfff2d8,
+      sunColor: opts.ripples ? 0x10141c : opts.night ? 0x445577 : 0xfff2d8, // (en un vaso tan pequeño, los destellos del oleaje se veían como cuadraditos)
       waterColor: color,
       distortionScale: opts.night ? 0.8 : 1.3,
       fog: true,
+      alpha: opts.alpha ?? 1,
     });
     // Agua mediterránea: el reflejo del cielo se tiñe del color del mar y nunca lo tapa del todo,
     // así el mar se ve azul y profundo aunque el cielo del horizonte sea casi blanco
@@ -852,6 +853,18 @@ export function makeSea(size: [number, number], color: number, sunDir: THREE.Vec
       vec3 deep = waterColor * ( 0.5 + 0.7 * max( 0.0, dot( surfaceNormal, eyeDirection ) ) );
       vec3 albedo = mix( ( sunColor * diffuseLight * 0.22 + deep ) * getShadowMask(), ( vec3( 0.03 ) + refl * 0.9 + reflectionSample * specularLight ), rfl );`,
     );
+    if (opts.alpha !== undefined && opts.alpha < 1) {
+      wm.transparent = true;
+      wm.depthWrite = false;
+    }
+    // Olas de verdad (piscina): la pendiente de la malla se suma a la del oleaje fino
+    if (opts.ripples) {
+      wm.vertexShader = 'varying vec3 vRip;\n' + wm.vertexShader.replace('void main() {', 'void main() {\n vRip = normal;');
+      wm.fragmentShader = 'varying vec3 vRip;\n' + wm.fragmentShader.replace(
+        'vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );',
+        'vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) + vec3( vRip.x, 0.0, -vRip.y ) * 2.6 );',
+      );
+    }
     const u = wm.uniforms;
     u.size.value = 6;
     let last = performance.now();
@@ -864,7 +877,7 @@ export function makeSea(size: [number, number], color: number, sunDir: THREE.Vec
       })(w.onBeforeRender);
     mesh = w;
   } else {
-    mesh = new THREE.Mesh(geo, toon({ color, emissive: opts.emissive ?? 0x06283a, roughness: 0.12, metalness: 0.12 }));
+    mesh = new THREE.Mesh(geo, toon({ color, emissive: opts.emissive ?? 0x06283a, roughness: 0.12, metalness: 0.12, ...(opts.alpha !== undefined && opts.alpha < 1 ? { transparent: true, opacity: opts.alpha, depthWrite: false } : {}) }));
   }
   mesh.rotation.x = -Math.PI / 2;
   mesh.userData.noCast = true;
