@@ -222,9 +222,12 @@ export class LevelSantJoan implements Level {
 
   // ---------------- Ciutadella ----------------
 
+  private blockN = 0;
   private block(m: Merger, x0: number, x1: number, z0: number, z1: number, h: number, color: number, collide = true) {
-    m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0, h, z1 - z0);
-    m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2, 0.24, z1 - z0 + 0.2);
+    // Cada bloque unos milímetros distinto (y distinto de los del Born): dos manzanas en el mismo plano parpadean
+    const e = Math.min(x1 - x0, 0.006 + (this.blockN++ % 6) * 0.012 + 0.012);
+    m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - (x1 - x0 > 0.1 ? e : 0), h, z1 - z0 - e);
+    m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
     if (collide) this.colliders.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1 });
   }
 
@@ -635,7 +638,7 @@ export class LevelSantJoan implements Level {
         const d = g.distanceTo(pp);
         if (d > 1.3) {
           // Viene hacia ella esquivando a la gente, con su arranque y su frenada
-          steerTo(this.gas.root, this.gasSteer, pp.x - ((pp.x - g.x) / d) * 1.2, pp.z - ((pp.z - g.z) / d) * 1.2, 2.2, dt, this.people);
+          steerTo(this.gas.root, this.gasSteer, pp.x - ((pp.x - g.x) / d) * 1.2, pp.z - ((pp.z - g.z) / d) * 1.2, 2.2, dt, this.people, 3.5, 0.32, undefined, this.colliders);
           animatePerson(this.gas, dt, 'walk');
           if (Math.random() < dt * 1.2) this.fx.burst(this.v1.copy(g).setY(2.4), '👋', 1, 0.4, 0.6);
         } else this.meet();

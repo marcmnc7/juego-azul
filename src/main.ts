@@ -169,6 +169,9 @@ juice.fx = post;
 audio.onCue = (c) => juice.cue(c);
 let cine = 0;
 function draw(scene: THREE.Scene, dt = 1 / 60) {
+  // El postproceso borra por su cuenta y deja autoClear apagado. Sin él hay que volver a encenderlo: si
+  // no, cada fotograma se pintaba encima del anterior (fantasmas y cosas que asomaban a través de otras)
+  renderer.autoClear = !quality.post;
   if (!quality.post) {
     renderer.render(scene, camera);
     return;
@@ -548,19 +551,19 @@ let keepAlive = false;
 let lastPump = 0;
 const pump = new MessageChannel();
 pump.port1.onmessage = () => {
-  if (!keepAlive || !document.hidden) return;
+  if (!keepAlive) return;
   const now = performance.now();
-  if (now - lastPump >= 16) {
+  // Con la página oculta (aunque diga «visible») requestAnimationFrame no llega: se mueve desde aquí
+  if (now - lastPump >= 16 && now - lastFrame > 60) {
     lastPump = now;
     frame();
   }
   pump.port2.postMessage(0);
 };
-document.addEventListener('visibilitychange', () => {
-  if (keepAlive && document.hidden) pump.port2.postMessage(0);
-});
 
+let lastFrame = 0;
 function frame() {
+  lastFrame = performance.now();
   const raw = Math.min(clock.getDelta(), 0.1) + debt;
   const dt = Math.min(raw, Math.max(smoothDt * 1.6, 1 / 120), 1 / 12);
   debt = Math.min(0.1, raw - dt);
@@ -627,8 +630,9 @@ function frame() {
     lastAdjust = now;
     if (avg > 24 && ratio > 1) ratio = Math.max(1, ratio - 0.25);
     else if (avg > 26 && post.aoEnabled) post.aoEnabled = false; // primero fuera la oclusión ambiental
-    else if (avg > 28 && quality.post) quality.post = false; // luego el resto del postproceso
-    else if (avg > 30 && quality.shadows) dropShadows();
+    // Mejor 30 fps con el estilo pintado que 40 sin él: solo se quita si de verdad no llega
+    else if (avg > 40 && quality.post) quality.post = false;
+    else if (avg > 46 && quality.shadows) dropShadows();
     else if (avg < 15 && ratio < maxRatio) ratio = Math.min(maxRatio, ratio + 0.25);
     if (renderer.getPixelRatio() !== ratio) {
       renderer.setPixelRatio(ratio);

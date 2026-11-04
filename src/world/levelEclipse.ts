@@ -1,5 +1,6 @@
 import { Surf } from '../core/surfaces';
 import * as THREE from 'three';
+import { Trail } from '../core/follow';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
@@ -113,7 +114,7 @@ export class LevelEclipse implements Level {
   private walker!: Walker;
   private gas!: Person;
   private others: { p: Person; mode: 'idle' | 'talk' | 'wave' }[] = [];
-  private followers: { p: Person | Dog; lead: () => THREE.Vector3; gap: number; speed: number }[] = [];
+  private followers: { p: Person | Dog; lead: () => THREE.Vector3; gap: number; speed: number; trail?: Trail }[] = [];
   private walkers: Person[] = [];
 
   // Kayak
@@ -224,9 +225,15 @@ export class LevelEclipse implements Level {
     return { top: 0x3f86d8, mid: 0x8ec4ee, bottom: 0xd9ecf7, clouds: { count: 8, tint: 0xffffff }, physical: { sunDir: new THREE.Vector3(0.4, 0.9, 0.6) } };
   }
 
+  /** Sentados en la roca: rodillas arriba, pies apoyados y las manos en la piedra, un poco por detrás. */
   private sitPose(p: Person) {
-    p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2;
-    p.kneeL.rotation.x = p.kneeR.rotation.x = 0.1;
+    p.legL.rotation.set(-2.05, 0, -0.14);
+    p.legR.rotation.set(-2.05, 0, 0.14);
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.2;
+    p.footL.rotation.x = p.footR.rotation.x = 0.85;
+    p.armL.rotation.set(0.38, 0, -0.2);
+    p.armR.rotation.set(0.38, 0, 0.2);
+    p.elbowL.rotation.x = p.elbowR.rotation.x = -0.08;
     p.body.position.y = 0;
   }
 
@@ -296,7 +303,7 @@ export class LevelEclipse implements Level {
     this.car.root.rotation.y = -Math.PI / 2;
     this.car.root.position.set(40, 0, STREET_Z + 0.6);
     sc.add(this.car.root);
-    this.carBox = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+    this.carBox = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, low: true };
     this.colliders.push(this.carBox);
     this.rig = new CarRig(this.car);
     this.carT = 0;
@@ -740,7 +747,8 @@ export class LevelEclipse implements Level {
   /** Los dos sentados frente a frente en la roca, cada uno con sus cartas en la mano. */
   private setupCards() {
     // (frente a frente y un poco abiertos hacia tierra: la cámara les ve la cara con el mar detrás)
-    const seats: [Person, number, number][] = [[this.player, -0.6, 1.85], [this.gas, 0.6, -1.85]];
+    // (con sitio para las rodillas: a 60 cm las piernas de los dos se metían unas en otras)
+    const seats: [Person, number, number][] = [[this.player, -0.8, 1.85], [this.gas, 0.8, -1.85]];
     for (const [p, x, ry] of seats) {
       p.root.position.x = x;
       p.root.position.z = 0.1;
@@ -827,10 +835,6 @@ export class LevelEclipse implements Level {
       p.armL.rotation.set(-0.5, 0, -0.15);
       p.elbowL.rotation.x = -0.9;
       p.head.rotation.x = -0.25;
-      // Rodillas dobladas (con las piernas estiradas se metían en las del otro)
-      p.legL.rotation.set(-1.15, 0, -0.32);
-      p.legR.rotation.set(-1.15, 0, 0.32);
-      p.kneeL.rotation.x = p.kneeR.rotation.x = 1.95;
     }
     this.llCheerT -= dt;
     for (const f of this.flying) {
@@ -927,17 +931,9 @@ export class LevelEclipse implements Level {
 
   private moveFollowers(dt: number) {
     for (const f of this.followers) {
-      const root = f.p.root;
       const lead = f.lead();
-      const dx = lead.x - root.position.x, dz = lead.z - root.position.z;
-      const d = Math.hypot(dx, dz);
-      const moving = d > f.gap;
-      if (moving) {
-        const step = Math.min(d - f.gap, f.speed * dt * Math.min(1, (d - f.gap) * 1.5 + 0.3));
-        root.position.x += (dx / d) * step;
-        root.position.z += (dz / d) * step;
-      }
-      if (d > 0.05) root.rotation.y = Math.atan2(dx, dz);
+      // Van por donde ha pasado quien guía y chocan con las paredes como cualquiera: Joy entra por la puerta, no por el muro
+      const moving = (f.trail ??= new Trail()).step(f.p.root, lead, f.gap, f.speed, dt, this.colliders, 'body' in f.p ? 0.26 : 0.2);
       if ('body' in f.p) animatePerson(f.p, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
       else {
         const k = moving ? Math.sin(this.t * 14) * 0.6 : 0;
@@ -1102,7 +1098,9 @@ export class LevelEclipse implements Level {
       beacon.at(null);
     }
 
-    if (free || this.phase === 'walk') this.walker.camera(this.camera, dt, this.colliders, 6, 3.4);
+    // (en el patio de Azul, por debajo del toldo y de la buganvilla)
+    const pz = this.player.root.position;
+    if (free || this.phase === 'walk') this.walker.camera(this.camera, dt, this.colliders, 6, pz.z < 10.4 && pz.z > -0.5 && Math.abs(pz.x) < 5.4 ? 2.3 : 3.4);
     else {
       this.camera.position.lerp(this.v1.set(pp.x - 2, 3.4, pp.z + 6), Math.min(1, dt * 2));
       this.camLook.lerp(new THREE.Vector3(pp.x, 1.3, pp.z - 1), Math.min(1, dt * 3));

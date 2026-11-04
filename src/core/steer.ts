@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Circle } from './walker';
+import type { Box2 } from '../world/ferreries';
+import { physFor } from './phys';
 
 // Pasos de los personajes no jugadores: tienen masa (arrancan y frenan poco a poco), giran el
 // cuerpo con una velocidad máxima en vez de rotar al instante, frenan al llegar y esquivan a los
@@ -28,6 +30,7 @@ export function steerTo(
   accel = 3.5,
   radius = 0.32,
   self?: Circle,
+  walls?: readonly Box2[],
 ) {
   const r = root.position;
   let vx = st.vx ?? 0;
@@ -62,8 +65,16 @@ export function steerTo(
     vx += (ddx / dl) * step;
     vz += (ddz / dl) * step;
   }
-  r.x += vx * dt;
-  r.z += vz * dt;
+  // Con paredes: resbala en ellas como el personaje del jugador, sin cruzarlas
+  const phys = walls ? physFor(walls as Box2[]) : null;
+  if (phys) {
+    const m = phys.move(st, { x: r.x, y: 0, z: r.z }, vx * dt, vz * dt, radius);
+    r.x += m.x;
+    r.z += m.z;
+  } else {
+    r.x += vx * dt;
+    r.z += vz * dt;
+  }
   // Nunca se queda dentro de otro
   for (const c of avoid) {
     if (c === self) continue;

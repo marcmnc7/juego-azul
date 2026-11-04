@@ -58,7 +58,9 @@ class Beacon {
     const w = THREE.MathUtils.clamp(cam.position.distanceTo(this.group.position) * 0.04, 1, 3.5);
     this.pillar.scale.set(w, 1, w);
     const pulse = 0.85 + Math.sin(this.t * 3) * 0.15;
-    (this.pillar.material as THREE.MeshBasicMaterial).opacity = this.shown * pulse;
+    // Si la cámara queda al lado de la columna, se desvanece: de cerca era una pared naranja que tapaba media pantalla
+    const dc = Math.hypot(cam.position.x - this.group.position.x, cam.position.z - this.group.position.z);
+    (this.pillar.material as THREE.MeshBasicMaterial).opacity = this.shown * pulse * THREE.MathUtils.smoothstep(dc, 3, 9);
     const k = (this.t * 0.6) % 1;
     this.ring.scale.setScalar(1 + k * 1.6);
     (this.ring.material as THREE.MeshBasicMaterial).opacity = this.shown * (1 - k) * 0.8;

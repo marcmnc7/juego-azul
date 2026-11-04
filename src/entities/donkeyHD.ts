@@ -210,9 +210,10 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   rider.root.position.set(0, back + 0.11 - rider.rig!.hipsHeight, -0.05);
   inner.add(rider.root);
   rider.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
-  rider.legL.rotation.set(-1.25, 0, -0.38);
-  rider.legR.rotation.set(-1.25, 0, 0.38);
-  rider.kneeL.rotation.x = rider.kneeR.rotation.x = 1.45;
+  // A horcajadas de verdad: las piernas por fuera de la barriga (antes se le metían dentro)
+  rider.legL.rotation.set(-1.12, 0, -0.78);
+  rider.legR.rotation.set(-1.12, 0, 0.78);
+  rider.kneeL.rotation.x = rider.kneeR.rotation.x = 1.3;
   rider.armL.rotation.set(-0.45, 0, -0.1);
   rider.armR.rotation.set(-0.45, 0, 0.1);
   rider.elbowL.rotation.x = rider.elbowR.rotation.x = -0.9;

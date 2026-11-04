@@ -221,10 +221,10 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   m.add(G.box, 0xd9d0bd, 0, 0.0, -17, 0, 0, 0, 9, 0.04, 4);
   // Muro lateral del patio (derecha mirando desde la calle, -x): de él sale el pasillo hasta la piscina
   m.add(G.box, WHITE, 4.6, 0.65, -17, 0, 0, 0, 0.25, 1.3, 4);
-  colliders.push({ minX: 4.45, maxX: 4.75, minZ: -19, maxZ: -15 });
+  colliders.push({ minX: 4.45, maxX: 4.75, minZ: -19, maxZ: -15, low: true });
   m.add(G.box, 0xd9d0bd, -5.5, 0.0, -17, 0, 0, 0, 1.9, 0.04, 4);
   m.add(G.box, WHITE, CORRIDOR.wallX, 1.0, -17, 0, 0, 0, 0.25, 2.0, 4);
-  colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -19.3, maxZ: -15 });
+  colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -19.3, maxZ: -15, low: true });
   // Muro a la calle: pilar · corredera · pilar · piedra · pilar · puerta · pilar (buzón) · muro
   const pillar = (x: number) => {
     m.add(G.box, WHITE, x, 0.8, S.wallZ, 0, 0, 0, 0.6, 1.6, 0.6);
@@ -261,10 +261,10 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   }
   sc.add(gate.group);
   if (open) {
-    colliders.push({ minX: S.gate.maxX, maxX: 0.85, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
-    colliders.push({ minX: 3.95, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
-  } else colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
-  colliders.push({ minX: CORRIDOR.wallX - 0.2, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32 });
+    colliders.push({ minX: S.gate.maxX, maxX: 0.85, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32, low: true });
+    colliders.push({ minX: 3.95, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32, low: true });
+  } else colliders.push({ minX: S.gate.maxX, maxX: 4.7, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32, low: true });
+  colliders.push({ minX: CORRIDOR.wallX - 0.2, maxX: S.gate.minX, minZ: S.wallZ - 0.32, maxZ: S.wallZ + 0.32, low: true });
 
   // Paño de piedra seca: textura sacada de la piedra real del Camí de sa Farola
   m.add(G.box, 0xbfae92, -0.8, 0.62, S.wallZ - 0.1, 0, 0, 0, 2.0, 1.15, 0.14);
@@ -308,7 +308,7 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
     m.add(G.box, WHITE, x, 0.65, S.wallZ, 0, 0, 0, 9, 1.3, 0.3);
     window_(m, x - 1.5, 1.6, -15, 1.4, 1.1, 0xc9a77c, true);
     window_(m, x + 2, 4.4, -15, 0.9, 1.1, 0xc9a77c, false);
-    colliders.push({ minX: x - 4.5, maxX: x + 4.5, minZ: S.wallZ - 0.3, maxZ: S.wallZ + 0.3 });
+    colliders.push({ minX: x - 4.5, maxX: x + 4.5, minZ: S.wallZ - 0.3, maxZ: S.wallZ + 0.3, low: true });
   }
 
   // Resto de la urbanización

@@ -240,8 +240,9 @@ export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
  * cuya parte de arriba está a `seatTop` metros. La pose de sentado dobla las piernas pero no baja el
  * cuerpo: sin esto la cadera se quedaba a la altura de estar de pie y parecían flotar sobre la silla.
  */
-export function seatedRootY(p: { root: THREE.Object3D; rig?: { hipsHeight: number } }, seatTop: number) {
-  return p.rig ? seatTop + 0.07 - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
+export function seatedRootY(p: { root: THREE.Object3D; rig?: { hipsHeight: number; kind?: string } }, seatTop: number) {
+  // (ella, con los pantalones anchos, un poco más arriba: la tela se metía por debajo del asiento)
+  return p.rig ? seatTop + (p.rig.kind === 'woman' ? 0.1 : 0.07) - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
 }
 
 /**

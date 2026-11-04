@@ -371,7 +371,8 @@ export class Walker implements AirState {
     const sx = -Math.sin(this.yaw);
     const sz = -Math.cos(this.yaw);
     const phys = physFor(walls);
-    let d = 1.2;
+    const minD = Math.min(1.7, dist * 0.45);
+    let d = minD;
     const baseY = p.y - this.hop; // la cámara no sube y baja con cada salto
     if (phys) {
       // Esfera lanzada desde la cabeza hacia donde iría la cámara: se para antes del primer muro
@@ -379,13 +380,28 @@ export class Walker implements AirState {
       const to = { x: p.x + sx * dist, y: baseY + h, z: p.z + sz * dist };
       const L = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
       const dir = { x: (to.x - from.x) / L, y: (to.y - from.y) / L, z: (to.z - from.z) / L };
-      d = Math.max(1.2, (phys.camCast(from, dir, L) / L) * dist - 0.15);
+      d = Math.max(minD, (phys.camCast(from, dir, L) / L) * dist - 0.15);
+      // Con una pared justo detrás, la cámara gira poco a poco hacia donde haya sitio en vez de quedarse
+      // pegada a la nuca (a mano manda quien juega)
+      if (d < dist * 0.62 && this.manualCam <= 0 && dt > 0) {
+        let best = d, side = 0;
+        for (const da of [0.5, -0.5, 1, -1]) {
+          const ax = p.x - Math.sin(this.yaw + da) * dist - from.x, az = p.z - Math.cos(this.yaw + da) * dist - from.z, ay = to.y - from.y;
+          const LL = Math.hypot(ax, ay, az);
+          const f = (phys.camCast(from, { x: ax / LL, y: ay / LL, z: az / LL }, LL) / LL) * dist;
+          if (f > best + 0.8) {
+            best = f;
+            side = da;
+          }
+        }
+        if (side) this.yaw += Math.sign(side) * Math.min(Math.abs(side), dt * 0.9);
+      }
     } else {
       for (; d < dist; d += 0.25) {
         const x = p.x + sx * d;
         const z = p.z + sz * d;
         // Edificios y también muros largos y finos (antes la cámara los atravesaba)
-        if (walls.some((c) => (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
+        if (walls.some((c) => !c.low && (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
       }
     }
     if (this.camD < 0 || !this.camInit) this.camD = d;
@@ -393,8 +409,8 @@ export class Walker implements AirState {
     d = this.camD;
     const run = Math.min(1, this.currentSpeed / this.speed);
     // Alturas relativas a los pies (en el agua, en una explanada o en una escalera la cámara sigue igual);
-    // si una pared la acerca, sube solo un poco para no acabar mirando desde arriba
-    this.camPos.set(p.x + sx * d, baseY + h + (dist - d) * 0.15, p.z + sz * d);
+    // si una pared la acerca, sube: mirar por encima de su hombro en vez de pegarse a su nuca
+    this.camPos.set(p.x + sx * d, baseY + h + (dist - d) * 0.32, p.z + sz * d);
     // Al saltar, la mirada sube solo un poco: la cámara acompaña sin dar botes
     // La mirada se adelanta un poco hacia donde vas (se ve lo que viene) y baja un pelín al aterrizar
     const v = this.velocity;
@@ -424,7 +440,7 @@ export class Walker implements AirState {
       if (L > 0.5) {
         const free = phys.camCast(from, { x: ex / L, y: ey / L, z: ez / L }, L);
         if (free < L - 0.05) {
-          const k2 = Math.max(0.6, free - 0.1) / L;
+          const k2 = Math.max(1.1, free - 0.1) / L;
           cp.set(from.x + ex * k2, from.y + ey * k2, from.z + ez * k2);
         }
       }

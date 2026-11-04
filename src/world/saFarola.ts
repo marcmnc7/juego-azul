@@ -60,7 +60,7 @@ function villa(m: Merger, x: number, z: number, faceX: 1 | -1, colliders: Box2[]
   const gx = x + faceX * (d / 2 + 3.2);
   for (const [z0, z1] of [[z - w / 2 - 1, z - 0.8], [z + 0.8, z + w / 2 + 1]]) {
     m.add(G.box, WHITE, gx, 0.6, (z0 + z1) / 2, 0, 0, 0, 0.3, 1.2, z1 - z0);
-    colliders.push({ minX: gx - 0.2, maxX: gx + 0.2, minZ: z0, maxZ: z1 });
+    colliders.push({ minX: gx - 0.2, maxX: gx + 0.2, minZ: z0, maxZ: z1, low: true });
   }
   for (let i = 0; i < 8; i++) m.add(G.bush, i % 3 ? 0xc2307a : 0x2f6b3a, gx, 1.3 + Math.sin(i + seed) * 0.15, z - w / 2 + i * 0.6, 0, 0, 0, 0.45, 0.5, 0.6);
   colliders.push({ minX: Math.min(x - d / 2, gx) - 0.1, maxX: Math.max(x + d / 2, gx) + 0.1, minZ: z - w / 2 - 1, maxZ: z + w / 2 + 1 });
@@ -96,7 +96,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
   // Pretil bajo de marès sobre las rocas
   m.add(G.box, 0xc9b48f, 13, 0.25, COAST_Z + 1.0, 0, 0, 0, 74, 0.5, 0.45);
   m.add(G.box, 0xb8a37e, 13, 0.52, COAST_Z + 1.0, 0, 0, 0, 74, 0.06, 0.5);
-  colliders.push({ minX: -21.5, maxX: 50, minZ: COAST_Z + 0.7, maxZ: COAST_Z + 1.3 });
+  colliders.push({ minX: -21.5, maxX: 50, minZ: COAST_Z + 0.7, maxZ: COAST_Z + 1.3, low: true });
   // Matorral seco en el arcén y alguna señal
   for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0x7d8a52 : 0x8f9a5e, -12 + i * 5.1 + Math.sin(i) * 1.2, 0.35, COAST_Z + 1.9, 0, i, 0, 1.2, 0.7, 0.8);
   for (const x of [-14, 22]) {
@@ -147,7 +147,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
     m.add(G.rbox, c, x, 0.7, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.7, 0.9, 3.9);
     m.add(G.rbox, 0x9fb8c8, x - 0.2, 1.35, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.5, 0.5, 2.1);
     for (const dx of [-1.3, 1.3]) for (const dz of [-0.85, 0.85]) m.add(G.cyl, 0x1e1e22, x + dx, 0.32, LAND_Z - 1.2 + dz, Math.PI / 2, 0, 0, 0.64, 0.2, 0.64);
-    colliders.push({ minX: x - 2, maxX: x + 2, minZ: LAND_Z - 2.1, maxZ: LAND_Z - 0.3 });
+    colliders.push({ minX: x - 2, maxX: x + 2, minZ: LAND_Z - 2.1, maxZ: LAND_Z - 0.3, low: true });
   }
   // Postes de madera con el cable a lo largo del camino, y un par de farolas
   const lampPos: number[] = [];
@@ -169,7 +169,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
 
   // La placita del faro: adoquín gris, acera de hormigón impreso rojizo, bancos de madera y hierro,
   // el árbol grande con su alcorque, el panel informativo, la papelera y el muro blanco con seto
-  m.add(G.box, 0xa9a39a, -29, -0.01, COAST_Z + 5, 0, 0, 0, 16, 0.1, 9);
+  m.add(G.box, 0xa9a39a, -29, -0.004, COAST_Z + 5, 0, 0, 0, 16, 0.1, 9);
   m.add(G.box, 0xc4977e, -29, 0.04, COAST_Z + 9.8, 0, 0, 0, 16, 0.1, 1.6);
   m.add(G.box, 0xe0d6c4, -29, 0.12, COAST_Z + 9.0, 0, 0, 0, 16, 0.16, 0.2); // bordillo
   for (const [x, z, ry] of [[-34, COAST_Z + 2.4, 0], [-30.5, COAST_Z + 2.0, 0.1], [-24.5, COAST_Z + 2.3, -0.1]] as [number, number, number][]) {
@@ -188,7 +188,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
   m.add(G.cyl, 0x2b2f36, -26.4, 0.45, COAST_Z + 1.7, 0, 0, 0, 0.45, 0.9, 0.45); // papelera
   // Muro bajo de piedra seca hacia el agua, en la plaza
   m.add(G.box, 0xbfae92, -29, 0.35, COAST_Z + 0.9, 0, 0, 0, 16, 0.7, 0.5);
-  colliders.push({ minX: -37, maxX: -30.5, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2 });
+  colliders.push({ minX: -37, maxX: -30.5, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2, low: true });
   // Casita blanca con tejado de teja pintada de blanco, seto delante y muro encalado
   m.add(G.box, WHITE, -24, 1.7, COAST_Z + 14, 0, 0, 0, 9, 3.4, 5);
   m.add(ROOF_GEO, 0xeeebe4, -24, 3.4, COAST_Z + 14, 0, 0, 0, 9.4, 1.5, 5.4);

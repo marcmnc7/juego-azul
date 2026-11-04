@@ -84,12 +84,15 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   g.position.copy(origin);
   const ox = origin.x;
   const oz = origin.z;
-  const col = (minX: number, maxX: number, minZ: number, maxZ: number) => colliders.push({ minX: minX + ox, maxX: maxX + ox, minZ: minZ + oz, maxZ: maxZ + oz });
+  const col = (minX: number, maxX: number, minZ: number, maxZ: number, low = false) => colliders.push({ minX: minX + ox, maxX: maxX + ox, minZ: minZ + oz, maxZ: maxZ + oz, low });
   const m = new Merger();
 
+  let blockN = 0;
   const block = (x0: number, x1: number, z0: number, z1: number, h: number, color: number) => {
-    m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0, h, z1 - z0);
-    m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2, 0.24, z1 - z0 + 0.2);
+    // Cada bloque unos milímetros distinto: dos manzanas en el mismo plano parpadean
+    const e = (blockN++ % 6) * 0.012 + 0.006;
+    m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - e, h, z1 - z0 - e);
+    m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
     col(x0, x1, z0, z1);
   };
   /** Ventanas con persianas verdes menorquinas y balcones. along: fachada a lo largo de x (si no, de z). */
@@ -181,7 +184,8 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(G.cyl, 0x1e1e1e, fx, R + 2, fz, 0, 0, 0, 0.12, 4, 0.12);
     m.add(G.box, 0xf4e6c0, fx, R + 4.2, fz, 0, Math.PI / 4, 0, 0.45, 0.6, 0.45);
   }
-  col(-3.2, 3.2, -3.2, 3.2);
+  // (la cámara pasa por encima de la verja y la peana; si no, se pegaba a Azul al andar junto al obelisco)
+  col(-3.2, 3.2, -3.2, 3.2, true);
 
   // --- Oeste, al fondo a la derecha: el Ajuntament (antiguo alcázar): almenas, ojivas y torre ---
   const W = BORN.minX;
@@ -340,7 +344,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
       car.root.rotation.y = ry;
       g.add(car.root);
       const along = Math.abs(Math.sin(ry)) > 0.5;
-      col(x - (along ? 2 : 0.95), x + (along ? 2 : 0.95), z - (along ? 0.95 : 2), z + (along ? 0.95 : 2));
+      col(x - (along ? 2 : 0.95), x + (along ? 2 : 0.95), z - (along ? 0.95 : 2), z + (along ? 0.95 : 2), true);
     }
   }
 

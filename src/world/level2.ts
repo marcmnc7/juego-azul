@@ -965,6 +965,8 @@ export class Level2 implements Level {
 
   private startGrill() {
     this.phase = 'grill';
+    // Las matas y piedras de la cuneta se quedan en la carretera: aquí salían debajo de la plancha
+    for (const sc of this.scatters) sc.mesh.visible = false;
     const g = this.grill.position;
     this.camera.position.set(g.x + 0.3, 6.2, g.z - 3.2);
     this.served = 0;
@@ -1022,6 +1024,7 @@ export class Level2 implements Level {
   }
 
   private startDrive2() {
+    for (const sc of this.scatters) sc.mesh.visible = true;
     this.legStart = LEG1 + 40;
     this.reset(this.legStart);
     this.buildLogrono(this.legStart + LEG2 + 60);
@@ -1282,6 +1285,7 @@ export class Level2 implements Level {
 
   debug(): DebugItem[] {
     const clean = () => {
+      for (const sc of this.scatters) sc.mesh.visible = true;
       this.route.style.display = '';
       this.eating = false;
       this.busy = false;

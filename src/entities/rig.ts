@@ -215,8 +215,12 @@ function strideSpeed(root: THREE.Object3D, clip: THREE.AnimationClip, scale: num
 
 async function loadImageData(url: string, w: number, h: number) {
   const img = new Image();
-  img.src = url;
-  await img.decode();
+  // onload y no decode(): decode() puede no resolverse nunca con la página en segundo plano
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error('imagen ' + url));
+    img.src = url;
+  });
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -552,6 +556,8 @@ export interface Rig {
   force?: Partial<Record<Group, number>>;
   /** Altura de la cadera en reposo, en metros (sin la escala del personaje). */
   hipsHeight: number;
+  /** Inclinación de cintura para arriba (ver leanTorso). */
+  torso: THREE.Euler;
 }
 
 const people = new Set<Person>();
@@ -697,7 +703,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
   const rig: Rig = {
     kind, model, mixer, act, w, mode: 'idle', snap: new Map(), snapBodyY: 0,
     gw: { body: 0, head: 0, armL: 0, armR: 0, legL: 0, legR: 0 },
-    bones: B, map, hipsY: B.get('Hips')!.position.y, last: new THREE.Vector3(NaN, 0, 0), speed: 0,
+    bones: B, map, hipsY: B.get('Hips')!.position.y, last: new THREE.Vector3(NaN, 0, 0), speed: 0, torso: new THREE.Euler(0, 0, 0, 'YXZ'),
     hipsHeight: B.get('Hips')!.getWorldPosition(new THREE.Vector3()).y / scale,
   };
   const p: Person = {
@@ -1283,6 +1289,11 @@ export function boneAnchor(p: Person, bone: string) {
   return a;
 }
 
+const TORSO: [string, number][] = [['Spine', 0.4], ['Spine1', 0.3], ['Spine2', 0.3]];
+const _torsoE = new THREE.Euler(0, 0, 0, 'YXZ');
+const _torsoQ = new THREE.Quaternion();
+const _torsoW = new THREE.Quaternion();
+
 const JOINTS = (p: Person) => [p.body, p.head, p.armL, p.armR, p.elbowL, p.elbowR, p.legL, p.legR, p.kneeL, p.kneeR, p.footL, p.footR];
 
 /** Lo llama animatePerson al terminar: así se sabe qué ha tocado después el nivel a mano. */
@@ -1374,24 +1385,64 @@ function updateOne(p: Person, dt: number) {
     if (r.gw[gk] < 0.002) r.gw[gk] = 0;
     if (r.gw[gk] > 0) any = true;
   }
-  if (!any) return;
+  const t = r.torso;
+  const lean = t.x !== 0 || t.y !== 0 || t.z !== 0;
+  if (!any && !lean) return;
   p.root.updateWorldMatrix(true, true);
   p.root.getWorldQuaternion(_rootQ);
   const rootInv = _rootQ.clone().invert();
-  for (const [j, bn, g] of r.map) {
-    const wgt = r.gw[g];
-    if (!wgt) continue;
-    const b = r.bones.get(bn);
-    const down = D.down.get(bn);
-    if (!b || !down) continue;
-    // Rotación de la articulación respecto al personaje × pose de reposo (brazos caídos) del hueso
-    j.getWorldQuaternion(_pq).premultiply(rootInv);
-    _target.copy(_rootQ).multiply(_pq).multiply(down);
-    b.parent!.getWorldQuaternion(_parent);
-    _local.copy(_parent.invert()).multiply(_target);
-    b.quaternion.slerp(_local, wgt);
-    b.updateWorldMatrix(false, true);
+  if (any)
+    for (const [j, bn, g] of r.map) {
+      const wgt = r.gw[g];
+      if (!wgt) continue;
+      const b = r.bones.get(bn);
+      const down = D.down.get(bn);
+      if (!b || !down) continue;
+      // Rotación de la articulación respecto al personaje × pose de reposo (brazos caídos) del hueso
+      j.getWorldQuaternion(_pq).premultiply(rootInv);
+      _target.copy(_rootQ).multiply(_pq).multiply(down);
+      b.parent!.getWorldQuaternion(_parent);
+      _local.copy(_parent.invert()).multiply(_target);
+      b.quaternion.slerp(_local, wgt);
+      b.updateWorldMatrix(false, true);
+    }
+  if (lean) {
+    // De cintura para arriba: la columna reparte el giro y caderas y piernas no se enteran
+    for (const [bn, w] of TORSO) {
+      const b = r.bones.get(bn);
+      if (!b) continue;
+      _torsoE.set(t.x * w, t.y * w, t.z * w, 'YXZ');
+      _torsoQ.setFromEuler(_torsoE);
+      // Giro en los ejes del personaje, pasado a mundo y aplicado encima de la pose del hueso
+      _torsoW.copy(_rootQ).multiply(_torsoQ).multiply(rootInv);
+      b.getWorldQuaternion(_target).premultiply(_torsoW);
+      b.parent!.getWorldQuaternion(_parent);
+      b.quaternion.copy(_parent.invert()).multiply(_target);
+      b.updateWorldMatrix(false, true);
+    }
   }
+}
+
+/** Pone un hueso en su pose de reposo respecto al personaje (p. ej. el pie plano, tras un IK de la pierna). */
+export function boneLevel(p: Person, bone: string, pitch = 0) {
+  const r = p.rig!;
+  const b = r.bones.get(bone);
+  const down = data[r.kind]!.down.get(bone);
+  if (!b || !down) return;
+  p.root.getWorldQuaternion(_rootQ);
+  _target.copy(_rootQ).multiply(_torsoQ.setFromEuler(_torsoE.set(pitch, 0, 0, 'YXZ'))).multiply(down);
+  b.parent!.getWorldQuaternion(_parent);
+  b.quaternion.copy(_parent.invert()).multiply(_target);
+  b.updateWorldMatrix(false, true);
+}
+
+/**
+ * Inclina a alguien solo de cintura para arriba (x adelante, y girar, z de lado; ejes del personaje):
+ * caderas y piernas se quedan como están. Sin esqueleto, se inclina el muñeco entero.
+ */
+export function leanTorso(p: Person, x: number, y: number, z: number) {
+  if (p.rig) p.rig.torso.set(x, y, z);
+  else p.body.rotation.set(x, y, z);
 }
 
 /** Una vez por fotograma, después de que el nivel haya movido a todos y antes de dibujar. */

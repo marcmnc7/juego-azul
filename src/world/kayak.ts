@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, Merger, type Person } from '../entities/models';
-import { rigPost } from '../entities/rig';
+import { leanTorso, rigPost } from '../entities/rig';
 import { twoBone } from '../entities/embrace';
 import { canvasTex } from './deco';
 
@@ -196,9 +196,8 @@ export function buildKayak(front: Person, back: Person): Kayak {
         const hip = s.p.rig ? s.p.root.position.y + s.p.rig.hipsHeight : 0.05;
         s.paddle.position.set(Math.sin(f) * 0.05, hip + 0.36, s.z + 0.36 + Math.cos(f) * 0.04);
         s.paddle.quaternion.setFromEuler(_e.set(0, yaw, rollA, 'YXZ'));
-        s.p.body.rotation.y = yaw * 0.55;
-        s.p.body.rotation.x = 0.12 + Math.abs(Math.sin(f)) * 0.06;
-        s.p.body.rotation.z = -rollA * 0.15;
+        // El tronco acompaña la palada; caderas y piernas quedan quietas dentro del kayak
+        leanTorso(s.p, 0.12 + Math.abs(Math.sin(f)) * 0.06, yaw * 0.55, -rollA * 0.15);
         // Si no hay esqueleto, el remo va pegado a las manos de mentira
         if (!s.hands) {
           s.p.armL.rotation.set(-1.15 + yaw * 0.5, 0, 0.2 + rollA * 0.4);

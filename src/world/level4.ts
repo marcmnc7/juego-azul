@@ -40,7 +40,11 @@ const LIE_Y = 0.14; // «Muy pequeñita ella», pero algo más de lo que parecí
 const WATER_Y = -0.22;
 // Nadando, el agua por los hombros (con -1,12 la cadera quedaba por encima del agua y parecían flotar de pie)
 const SWIM_Y = -1.4;
-const TOWELS = new THREE.Vector3(-1.6, 0, 11.4);
+const TOWELS = new THREE.Vector3(-1.6, 0, 11.6);
+/** Largo de la toalla: cabe él (1,85 m) de la cabeza a los pies. */
+const TOWEL_LEN = 2.1;
+/** Tumbado, la raíz (a los pies) queda en este z y la cabeza hacia la piscina, sobre la toalla. */
+const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.1;
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
 // de la carretera, así el coche azul usa el mismo carril en los dos sitios
@@ -135,7 +139,7 @@ export class Level4 implements Level {
   // Coche y viaje
   private car = makeCar(0x1f3a6b, { luggage: false, joy: false });
   private rig: CarRig | null = null;
-  private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95 };
+  private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95, low: true };
   private driveT = 0;
   private driveTalkDone = false;
   private camLook = new THREE.Vector3();
@@ -349,7 +353,7 @@ export class Level4 implements Level {
     );
     water.position.set(cx, WATER_Y, cz);
     sc.add(water);
-    this.colliders.push({ minX: POOL.minX - 0.1, maxX: POOL.maxX + 0.1, minZ: POOL.minZ - 0.1, maxZ: POOL.maxZ + 0.1 });
+    this.colliders.push({ minX: POOL.minX - 0.1, maxX: POOL.maxX + 0.1, minZ: POOL.minZ - 0.1, maxZ: POOL.maxZ + 0.1, low: true });
     this.buildPoolPhysics();
 
     // Pasillo lateral de baldosas: de la calle a la piscina sin entrar en casa
@@ -357,14 +361,15 @@ export class Level4 implements Level {
     for (let z = -14.5; z < 14.5; z += 1.2) m.add(G.box, 0xb9ad96, (CORRIDOR.wallX - 4.45) / 2, 0.022, z, 0, 0, 0, 1.95, 0.01, 0.04);
     // Muro del pasillo con apliques bajos
     m.add(G.box, 0xf4efe2, CORRIDOR.wallX, 1.0, -0.25, 0, 0, 0, 0.25, 2.0, 29.5);
-    this.colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -15, maxZ: 14.6 });
+    this.colliders.push({ minX: CORRIDOR.wallX - 0.15, maxX: CORRIDOR.wallX + 0.15, minZ: -15, maxZ: 14.6, low: true });
     for (const z of [-11, -5, 1]) m.add(G.box, 0xffd9a0, CORRIDOR.wallX + 0.15, 1.6, z, 0, 0, 0, 0.06, 0.18, 0.3);
 
     // La casa: adosado de tejado plano. Cuerpo delantero (2 plantas) y trasero más alto.
     m.add(G.box, WALL, 0, 3.2, -4.5, 0, 0, 0, 9, 6.4, 9);
     m.add(G.box, 0xe9dcc2, 0, 6.55, -4.5, 0, 0, 0, 9.2, 0.3, 9.2); // pretil
-    m.add(G.box, 0xe4d6bb, 0, 3.6, -12, 0, 0, 0, 9, 7.2, 6);
-    m.add(G.box, 0x3a3030, 0, 7.3, -9.2, 0, 0, 0, 9, 0.5, 0.6); // franja oscura de la terraza de arriba
+    // (por detrás de la fachada amarilla de la calle, no en su mismo plano: se pisaban y parpadeaban a cuadros)
+    m.add(G.box, 0xe4d6bb, 0, 3.6, -11.93, 0, 0, 0, 9, 7.2, 5.86);
+    m.add(G.box, 0x3a3030, 0, 7.3, -9.17, 0, 0, 0, 8.96, 0.5, 0.6); // franja oscura de la terraza de arriba
     m.add(G.box, 0xd8cab0, 0, 7.35, -12, 0, 0, 0, 9.2, 0.3, 6.2);
     this.colliders.push({ minX: -4.5, maxX: 4.5, minZ: -15, maxZ: 0 });
     // Placas solares en el tejado (dos grupos, como en la foto)
@@ -434,12 +439,12 @@ export class Level4 implements Level {
       this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.85, maxZ: z + 0.85 });
     }
     // Toallas en el césped para mirar las estrellas
-    m.add(G.box, 0xe2547a, TOWELS.x - 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, 1.9);
-    m.add(G.box, 0x5aa9e6, TOWELS.x + 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, 1.9);
+    m.add(G.box, 0xe2547a, TOWELS.x - 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, TOWEL_LEN);
+    m.add(G.box, 0x5aa9e6, TOWELS.x + 0.45, 0.03, TOWELS.z, 0, 0, 0, 0.8, 0.02, TOWEL_LEN);
 
     // Muros del jardín y setos
     m.add(G.box, 0xf4efe2, 4.6, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
-    this.colliders.push({ minX: 4.47, maxX: 4.73, minZ: 0, maxZ: 14.5 });
+    this.colliders.push({ minX: 4.47, maxX: 4.73, minZ: 0, maxZ: 14.5, low: true });
     m.add(G.box, 0xf4efe2, (CORRIDOR.wallX + 4.6) / 2, 0.9, 14.6, 0, 0, 0, 4.6 - CORRIDOR.wallX + 0.2, 1.8, 0.25);
     m.add(G.box, 0x2f5f2a, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4);
     for (const [x, z] of [[-5.5, 13.6], [-3.8, 1.8], [3.9, 4.8]]) {
@@ -600,8 +605,10 @@ export class Level4 implements Level {
       this.walker.speed = swimming ? 3.4 : 5.0;
       this.walker.traction = swimming ? 0.45 : 1;
       this.solids.length = 0;
-      if (swimming) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
-      else this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
+      if (this.phase === 'toTowels') {
+        // Tumbado ocupa de los pies a la cabeza: no se le puede pasar por encima
+        for (const t of [0.25, 0.8, 1.35]) this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z - t, r: 0.32 });
+      } else this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
       const bounds = swimming
         ? { minX: POOL.minX + 0.4, maxX: POOL.maxX - 0.4, minZ: POOL.minZ + 0.4, maxZ: POOL.maxZ - 0.4 }
         : this.phase === 'intro' || this.phase === 'atBar'
@@ -674,12 +681,16 @@ export class Level4 implements Level {
       this.camLook.lerp(this.v2.set(c.x + 3, 1, c.z), Math.min(1, dt * 4));
       this.camera.lookAt(this.camLook);
     } else {
-      // En el pasillo estrecho, cámara alta y cerca para no tapar con las paredes
-      const inCorridor = pp.x < -4.4 && pp.x > CORRIDOR.wallX && pp.z < 8;
-      // Nadando, plano alto sobre la piscina y sin el bloque invisible que impide entrar andando en ella:
-      // con él, la cámara chocaba al momento y acababa en su nuca
+      // En el pasillo estrecho, la cámara se pone en su eje: detrás de Azul, sin atravesar la casa ni
+      // ver solo tejados desde arriba
+      const inCorridor = pp.x < -4.4 && pp.x > CORRIDOR.wallX && pp.z > -15 && pp.z < 8;
+      if (inCorridor) {
+        const axis = Math.abs(Math.atan2(Math.sin(this.walker.yaw), Math.cos(this.walker.yaw))) < Math.PI / 2 ? 0 : Math.PI;
+        this.walker.yaw += Math.atan2(Math.sin(axis - this.walker.yaw), Math.cos(axis - this.walker.yaw)) * Math.min(1, dt * 4);
+      }
+      // Nadando, plano alto y abierto: se ve la piscina entera y no solo su nuca
       const swimCam = swimming || this.phase === 'hug';
-      this.walker.camera(this.camera, dt, swimCam ? this.phys.walls : this.colliders, swimCam ? 4.6 : inCorridor ? 4.2 : 6.5, swimCam ? 5.4 : inCorridor ? 8 : 3.6);
+      this.walker.camera(this.camera, dt, this.colliders, swimCam ? 5.6 : 6.5, swimCam ? 5.4 : 3.6);
     }
     this.sun.follow(this.phase === 'drive' ? this.car.root.position : pp);
     this.sky.update(this.camera, dt);
@@ -1131,7 +1142,7 @@ export class Level4 implements Level {
           this.phase = 'toTowels';
           this.player.root.position.set(0.6, 0, 4.2);
           this.player.body.rotation.x = 0;
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.gas.body.rotation.x = 0;
           this.walker.yaw = this.walker.facing = Math.atan2(TOWELS.x - 0.6, TOWELS.z - 4.2);
@@ -1150,7 +1161,7 @@ export class Level4 implements Level {
     this.input.reset();
     fadeFlash(() => {
       this.phase = 'stars';
-      this.player.root.position.set(TOWELS.x - 0.45, LIE_Y, TOWELS.z);
+      this.player.root.position.set(TOWELS.x - 0.45, LIE_Y, LIE_FEET_Z);
       this.player.root.rotation.set(-Math.PI / 2, 0, 0);
       animatePerson(this.player, 0.016, 'idle');
       this.camera.position.copy(this.starCamPos);
@@ -1228,7 +1239,8 @@ export class Level4 implements Level {
     if (this.phase === 'ending') {
       this.endT += dt;
       if (Math.random() < dt * 1.5) this.launchShootingStar();
-      if (Math.random() < dt * 3) this.fx.burst(this.v1.copy(TOWELS).setY(0.8), '❤️', 1, 1, 0.6);
+      // (lejos de la cámara, que está en las toallas: de cerca tapaban la pantalla entera)
+      if (Math.random() < dt * 3) this.fx.burst(this.v1.copy(this.starCamLook).sub(this.starCamPos).setLength(11).add(this.starCamPos), '❤️', 1, 1, 0.6);
     }
     // Azul y Gas tumbados respiran
     for (const p of [this.player, this.gas]) p.body.position.y = Math.sin(this.t * 1.5) * 0.01;
@@ -1321,7 +1333,7 @@ export class Level4 implements Level {
           reset();
           this.phase = 'toTowels';
           this.player.root.position.set(TOWELS.x + 1.2, 0, TOWELS.z - 0.6);
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.updateHud();
         },
@@ -1330,7 +1342,7 @@ export class Level4 implements Level {
         label: '4 · Unir estrellas',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.nextStar = 0;
           this.lieDown();
@@ -1340,7 +1352,7 @@ export class Level4 implements Level {
         label: '5 · Final',
         run: () => {
           reset();
-          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, TOWELS.z);
+          this.gas.root.position.set(TOWELS.x + 0.45, LIE_Y, LIE_FEET_Z);
           this.gas.root.rotation.set(-Math.PI / 2, 0, 0);
           this.lieDown();
           later(() => {

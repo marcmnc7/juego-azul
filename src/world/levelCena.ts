@@ -341,7 +341,8 @@ export class LevelCena implements Level {
       this.phase = 'toTable';
       this.busy = false;
       this.minutes = 21 * 60 + 40;
-      this.gasWalk = [new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.2)];
+      // Rodea la mesa por detrás (en línea recta la cruzaba por el medio)
+      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(TABLE.x + 1.65, 0, 3.9), new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.2)];
       this.updateHud();
     }, 1800);
   }
@@ -371,7 +372,8 @@ export class LevelCena implements Level {
     this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
     // Ella también se levanta: de pie junto a su silla (si no, se quedaba a la altura de sentada)
     this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
-    this.gasWalk = [GATE.clone().setZ(8.8), GATE.clone().setZ(11.5), new THREE.Vector3(2.4, 0, STREET_Z - 1.6)];
+    // Primero por fuera de la mesa y de la pérgola, y luego a la cancela
+    this.gasWalk = [new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.4), GATE.clone().setZ(8.8), GATE.clone().setZ(11.5), new THREE.Vector3(2.4, 0, STREET_Z - 1.6)];
     later(() => {
       if (this.phase !== 'leaving') return;
       fadeFlash(() => this.ending(), 500);
@@ -568,13 +570,16 @@ export class LevelCena implements Level {
     }
 
     // Cámara
-    if (free) this.walker.camera(this.camera, dt, this.colliders, 6, 3.4);
+    // Dentro del patio, por debajo del toldo y de la buganvilla: a más altura la cámara se metía entre las flores
+    if (free) this.walker.camera(this.camera, dt, this.colliders, 6, pp.z < 10.4 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
     else {
       const [pos, look] =
         this.phase === 'cook'
-          ? [this.v1.set(STOVE.x + 3.0, 2.7, STOVE.z + 2.4), new THREE.Vector3(STOVE.x + 0.2, 1.1, STOVE.z - 0.6)]
+          ? // Por delante de la encimera, bajo el toldo y sin la buganvilla del porche en primer plano
+            [this.v1.set(STOVE.x + 1.9, 2.35, STOVE.z + 3.5), new THREE.Vector3(STOVE.x + 0.1, 1.05, STOVE.z - 0.6)]
           : this.phase === 'dinner'
-            ? [this.v1.set(TABLE.x - 0.2, 2.2, TABLE.z + 3.4), new THREE.Vector3(TABLE.x, 0.9, TABLE.z)]
+            ? // Entre los dos pies de la pérgola, que quedan a los lados y no delante de ellos
+              [this.v1.set(TABLE.x + 0.5, 2.15, TABLE.z + 3.7), new THREE.Vector3(TABLE.x, 0.9, TABLE.z)]
             : this.phase === 'leaving' || this.phase === 'done'
               ? [this.v1.set(-1, 3.2, 6), new THREE.Vector3(1, 1, STREET_Z)]
               : this.phase === 'intro'
@@ -659,7 +664,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.box, 0x9a8a68, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
   // Planta baja
   m.add(G.box, WHITE, 0, 1.55, -4, 0, 0, 0, 10, 3.1, 8);
-  m.add(G.box, 0xe9e4d8, 0, 3.15, -3.9, 0, 0, 0, 10.2, 0.14, 8.2); // forjado
+  m.add(G.box, 0xe9e4d8, 0, 3.15, -3.92, 0, 0, 0, 10.2, 0.14, 8.24); // forjado
   // Primer piso más estrecho, con el cuerpo en esquina que vuela sobre el toldo
   m.add(G.box, WHITE, 1.4, 4.6, -4.6, 0, 0, 0, 7.2, 2.9, 6.8);
   m.add(G.box, WHITE, -1.6, 4.65, -0.4, 0, 0, 0, 4.6, 2.6, 2.2); // cuerpo saliente
@@ -667,8 +672,8 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // Ventanales con persianas enrollables beis a media altura y barandilla de acero
   for (const [x, z, w, ry] of [[-2.4, 0.72, 1.9, 0], [-0.4, 0.72, 1.6, 0], [-3.92, -0.4, 1.4, Math.PI / 2]] as [number, number, number, number][]) {
     m.add(G.box, 0x2a3138, x, 4.4, z, 0, ry, 0, w, 1.7, 0.05);
-    m.add(G.box, 0xcbb894, x, 4.85, z + (ry ? 0 : 0.02), 0, ry, 0, w - 0.1, 0.85, 0.05);
-    for (let k = 0; k < 6; k++) m.add(G.box, 0xb8a37e, x, 4.5 + k * 0.14, z + (ry ? 0 : 0.03), 0, ry, 0, w - 0.1, 0.02, 0.05);
+    m.add(G.box, 0xcbb894, x - (ry ? 0.02 : 0), 4.85, z + (ry ? 0 : 0.02), 0, ry, 0, w - 0.1, 0.85, 0.05);
+    for (let k = 0; k < 6; k++) m.add(G.box, 0xb8a37e, x - (ry ? 0.03 : 0), 4.5 + k * 0.14, z + (ry ? 0 : 0.03), 0, ry, 0, w - 0.1, 0.02, 0.05);
   }
   m.add(G.box, 0xc8ccd0, -1.6, 4.25, 0.95, 0, 0, 0, 4.7, 0.05, 0.05);
   m.add(G.box, 0xc8ccd0, -1.6, 3.95, 0.95, 0, 0, 0, 4.7, 0.04, 0.04);
@@ -716,18 +721,18 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   }
   m.add(G.box, 0x2c5a40, 3.2, 2.7, 6.4, 0, 0, 0, 3.3, 0.08, 0.08);
   m.add(G.box, 0x2c5a40, 4.8, 2.7, 3.2, 0, 0, 0, 0.08, 0.08, 13);
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 190; i++) {
     // Sobre el porche (pegada a la fachada) y por encima de la pérgola de la derecha, siempre alta
-    // para no tapar la cámara al cocinar ni al cenar
+    // para no tapar la cámara al cocinar ni al cenar. Muchas matas pequeñas: de cerca, flores y hojas, no bolas
     const onPergola = i % 3 !== 0;
     const x = onPergola ? 1.6 + ((i * 0.37) % 1) * 3.4 : -0.6 + ((i * 0.53) % 1) * 2.2;
     const z = onPergola ? 0.9 + ((i * 0.61) % 1) * 5.6 : 0.5 + ((i * 0.29) % 1) * 0.6;
-    const y = onPergola ? 2.95 + Math.sin(i * 3.1) * 0.15 : 2.2 + ((i * 0.71) % 1) * 1.0;
-    const c = i % 5 === 0 ? 0x3a6a32 : i % 2 ? 0xd2245a : 0xe33a6e;
-    m.add(G.bush, c, x, y, z, 0, i, 0, 0.6 + (i % 3) * 0.15, 0.4, 0.55 + (i % 2) * 0.2);
+    const y = onPergola ? 2.92 + Math.sin(i * 3.1) * 0.13 : 2.2 + ((i * 0.71) % 1) * 1.0;
+    const c = i % 4 === 0 ? 0x3a6a32 : i % 2 ? 0xc72a5c : 0xdb4a78;
+    m.add(G.bush, c, x, y, z, 0, i, 0, 0.3 + (i % 3) * 0.09, 0.2 + (i % 2) * 0.05, 0.28 + (i % 2) * 0.12);
   }
-  for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0xd2245a : 0xe33a6e, 4.85, 1.0 + (i % 7) * 0.32, 1.2 + Math.floor(i / 7) * 4.2 + (i % 3) * 0.5, 0, i, 0, 0.35, 0.5, 0.6); // trepando por la pérgola
-  for (let i = 0; i < 8; i++) m.add(G.bush, i % 2 ? 0xd2245a : 0xe33a6e, -0.8 + (i % 4) * 0.35, 1.7 - Math.floor(i / 4) * 0.6, 0.9 + (i % 3) * 0.1, 0, i, 0, 0.5, 0.6, 0.4); // cayendo sobre el porche
+  for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0xc72a5c : 0xdb4a78, 4.85, 1.0 + (i % 7) * 0.32, 1.2 + Math.floor(i / 7) * 4.2 + (i % 3) * 0.5, 0, i, 0, 0.22, 0.26, 0.22); // trepando por la pérgola
+  for (let i = 0; i < 8; i++) m.add(G.bush, i % 2 ? 0xc72a5c : 0xdb4a78, -0.8 + (i % 4) * 0.35, 1.7 - Math.floor(i / 4) * 0.6, 0.9 + (i % 3) * 0.1, 0, i, 0, 0.28, 0.3, 0.26); // cayendo sobre el porche
   // Limonero y ficus a la izquierda del patio, contenedor verde, moto blanca y una maceta de barro
   const tree = (x: number, z: number, h: number, c: number, fruit?: number) => {
     m.add(G.cyl, 0x6b5a46, x, h * 0.3, z, 0.05, 0, 0.04, 0.18, h * 0.6, 0.18);
@@ -753,7 +758,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // Muro bajo encalado con pilares gordos, la cancela de acebuche (abierta a ratos) y adelfas detrás
   for (const [x0, x1] of [[-5.2, -1.0], [1.0, 5.2]]) {
     m.add(G.box, WHITE, (x0 + x1) / 2, 0.5, 10.3, 0, 0, 0, x1 - x0, 1.0, 0.3);
-    colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5 });
+    colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5, low: true });
   }
   for (const x of [-1.1, 1.1]) {
     m.add(G.box, WHITE, x, 0.7, 10.3, 0, 0, 0, 0.6, 1.4, 0.6);
@@ -788,7 +793,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.35 + Math.sin(i) * 0.1, 9.9, 0, i, 0, 0.7, 0.9, 0.6);
   for (const sx of [-5.2, 5.2]) {
     m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
-    colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5 });
+    colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5, low: true });
   }
   // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
   m.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
@@ -798,7 +803,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.cyl, 0x444444, STOVE.x + 1.6, 0.76, STOVE.z - 1.1, 0, 0, 0, 0.12, 0.12, 0.12);
   m.add(G.box, 0x8a6a44, STOVE.x, 1.9, STOVE.z - 1.35, 0, 0, 0, 2.4, 0.06, 0.35);
   for (let i = 0; i < 4; i++) m.add(G.cyl, [0xd8b04a, 0x2f6b3a, 0xc23030, 0xf4efe2][i], STOVE.x - 0.9 + i * 0.6, 2.08, STOVE.z - 1.35, 0, 0, 0, 0.18, 0.3, 0.18);
-  colliders.push({ minX: STOVE.x - 1.4, maxX: STOVE.x + 1.9, minZ: STOVE.z - 1.5, maxZ: STOVE.z - 0.6 });
+  colliders.push({ minX: STOVE.x - 1.4, maxX: STOVE.x + 1.9, minZ: STOVE.z - 1.5, maxZ: STOVE.z - 0.6, low: true });
   // Sartén y olla sobre el fuego
   const pan = new THREE.Group();
   const pm = new Merger();

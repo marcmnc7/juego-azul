@@ -27,7 +27,7 @@ const QUERY_BIG = groups(0xffff, G_BIG);
 
 /** Los muros no tienen altura en Box2: se extienden de -60 a 60 m, para cualquier nivel o piso. */
 const HALF_H = 60;
-const bigBox = (b: Box2) => b.maxX - b.minX > 3 || b.maxZ - b.minZ > 3;
+const bigBox = (b: Box2) => !b.low && (b.maxX - b.minX > 3 || b.maxZ - b.minZ > 3);
 
 interface Entry { c: RAPIER.Collider; minX: number; maxX: number; minZ: number; maxZ: number }
 

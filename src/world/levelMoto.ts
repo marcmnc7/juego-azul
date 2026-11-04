@@ -7,7 +7,8 @@ import { MOTO } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makeMoto, makeCar, makePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
-import { boneAnchor } from '../entities/rig';
+import { boneAnchor, boneLevel, leanTorso, rigPost } from '../entities/rig';
+import { twoBone } from '../entities/embrace';
 import { makeHelmet } from '../entities/helmet';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
@@ -133,6 +134,11 @@ export class LevelMoto implements Level {
       // abrazada a la cintura de Gas, y casco blanco pegado a la cabeza
       a.rig.force = { body: 1, legL: 1, legR: 1, armL: 1, armR: 1 };
       a.root.position.set(0, 0.96 - a.rig.hipsHeight, -0.86); // cadera 7 cm sobre el asiento (a 0,86 se hundía en él)
+      // Pies en las estriberas de atrás: sin esto la pierna colgaba y el escape se le metía por la pantorrilla
+      a.legL.rotation.set(-1.6, 0, -0.48);
+      a.legR.rotation.set(-1.6, 0, 0.48);
+      a.kneeL.rotation.x = a.kneeR.rotation.x = 2.09;
+      a.footL.rotation.x = a.footR.rotation.x = -0.77;
       a.armL.rotation.set(-1.2, 0, 0.55);
       a.armR.rotation.set(-1.2, 0, -0.55);
       a.elbowL.rotation.x = a.elbowR.rotation.x = -0.55;
@@ -142,6 +148,7 @@ export class LevelMoto implements Level {
       helmet.position.set(0, 0.12, -0.02);
       helmet.scale.set(1.22, 1.22, 1.36);
       boneAnchor(a, 'Head').add(helmet);
+      this.hugGas();
     } else {
       const helmet = makeHelmet({ color: 0xf4f4f4, stripe: 0x3a8fd8 });
       helmet.position.set(0, 0.3, -0.02);
@@ -247,10 +254,13 @@ export class LevelMoto implements Level {
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let i = 4; i < SAMPLES - 6; i += 2) {
       const r = ring(i);
-      const yaw = Math.atan2(-r.rz, r.rx) + Math.PI / 2;
-      // Quitamiedos del lado del mar
-      if (i % 4 === 0) m.add(G.box, 0x8c8c92, r.x + r.rx * 4.6, 0.35, r.z + r.rz * 4.6, 0, yaw, 0, 0.08, 0.7, 0.08);
-      m.add(G.box, 0xc8c8cc, r.x + r.rx * 4.6, 0.6, r.z + r.rz * 4.6, 0, yaw, 0, 0.05, 0.22, 2.0);
+      // A lo largo de la carretera (antes los quitamiedos y los bancales salían de través)
+      const yaw = Math.atan2(r.rz, -r.rx);
+      // Quitamiedos del lado del mar: un tramo seguido hasta la muestra siguiente, con su poste
+      const r2 = ring(i + 2);
+      const ax = r.x + r.rx * 4.6, az = r.z + r.rz * 4.6, bx = r2.x + r2.rx * 4.6, bz = r2.z + r2.rz * 4.6;
+      m.add(G.box, 0x8c8c92, ax, 0.35, az, 0, yaw, 0, 0.08, 0.7, 0.08);
+      m.add(G.box, 0xc8c8cc, (ax + bx) / 2, 0.6, (az + bz) / 2, 0, Math.atan2(bx - ax, bz - az), 0, 0.05, 0.22, Math.hypot(bx - ax, bz - az) + 0.04);
       const wild = i / SAMPLES > 0.45; // pasado Roses, el Cap de Creus: pizarra, matorral y bancales
       // Bancales de piedra seca en la ladera (las «feixes» abandonadas del Cap de Creus)
       if (i % 6 === 0) {
@@ -281,7 +291,7 @@ export class LevelMoto implements Level {
         m.add(G.bush, wild ? 0x6f7a4a : 0x86934a, r.x + r.rx * d, 0.6, r.z + r.rz * d, 0, rnd() * 3, 0, 1.6, 0.9, 1.6);
       }
       // El acantilado: roca viva desde el borde de la carretera hasta el agua
-      for (const [d0, y0, k] of [[6.2, -0.9, 1], [8.5, -2.2, 1.3]] as const) {
+      for (const [d0, y0, k] of [[7.3, -1.3, 1], [9.5, -2.6, 1.3]] as const) {
         const s = (0.85 + rnd() * 0.5) * k;
         m.add(G.crag, wild ? (rnd() < 0.5 ? 0x5f5a54 : 0x6f6a62) : rnd() < 0.5 ? 0x8a7560 : 0x7a6a58, r.x + r.rx * (d0 + rnd()), y0, r.z + r.rz * (d0 + rnd()), rnd() * 0.4, rnd() * 3, 0, 5.2 * s, 3.4 * s, 4.4 * s);
       }
@@ -453,7 +463,8 @@ export class LevelMoto implements Level {
     if (this.wobbleT > 0) this.wobbleT -= dt;
     const wob = this.wobbleT > 0 ? Math.sin(this.t * 22) * 0.06 * this.wobbleT : 0;
     this.moto.root.rotation.z = this.lean + wob;
-    this.azul.body.rotation.z = this.azulLean - this.lean * 0.3;
+    // Se inclina de cintura para arriba: la cadera sigue en el asiento y las piernas no se mueven
+    leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);
     for (const w of this.moto.wheels) w.rotation.x += (this.speed * dt) / 0.33;
 
     // Miradores: foto
@@ -625,6 +636,41 @@ export class LevelMoto implements Level {
       o.rider.armR.rotation.set(THREE.MathUtils.lerp(-1.25, -0.45, o.k), 0, THREE.MathUtils.lerp(0.3, 0.75, o.k));
       o.rider.elbowR.rotation.x = THREE.MathUtils.lerp(-0.25, -0.05, o.k);
     }
+  }
+
+  /** Sus manos no se mueven de la cintura de Gas aunque ella se incline en las curvas. */
+  private hugGas() {
+    const a = this.azul;
+    const r = a.rig!;
+    a.root.updateWorldMatrix(true, true);
+    const onLeft = a.root.worldToLocal(r.bones.get('LeftHand')!.getWorldPosition(new THREE.Vector3())).x > 0;
+    const B = (n: string) => r.bones.get(n)!;
+    const t = new THREE.Vector3();
+    const pole = new THREE.Vector3();
+    const post = () => {
+      if (!a.root.parent) return;
+      const root = this.moto.root;
+      root.updateWorldMatrix(true, false);
+      for (const sx of [1, -1]) {
+        const left = sx > 0 ? onLeft : !onLeft;
+        const side = left ? 'Left' : 'Right';
+        // El brazo que saluda suelta a Gas (es el de armR: el lado -x)
+        const w = sx < 0 ? 1 - this.azulWaveK : 1;
+        if (w <= 0.01) continue;
+        root.localToWorld(t.set(sx * 0.17, 1.17, -0.5));
+        root.localToWorld(pole.set(sx * 0.62, 0.98, -0.72));
+        twoBone(B(side + 'Arm'), B(side + 'ForeArm'), B(side + 'Hand'), t, pole, w);
+      }
+      // Pies en las estriberas de atrás, con la rodilla hacia fuera (por los lados de Gas)
+      for (const sx of [1, -1]) {
+        const side = (sx > 0 ? onLeft : !onLeft) ? 'Left' : 'Right';
+        root.localToWorld(t.set(sx * 0.22, 0.6, -0.71));
+        root.localToWorld(pole.set(sx * 0.62, 1.05, -0.2));
+        twoBone(B(side + 'UpLeg'), B(side + 'Leg'), B(side + 'Foot'), t, pole, 1);
+        boneLevel(a, side + 'Foot', 0.1);
+      }
+    };
+    rigPost.add(post);
   }
 
   // ---------- Carretera cortada ----------

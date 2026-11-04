@@ -262,11 +262,12 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
   add(box, darkMetal, 0, 0.66, 0.39, -0.2, 0, 0, 0.36, 0.3, 0.05);
   for (let k = 0; k < 6; k++) add(box, alu, 0, 0.54 + k * 0.045, 0.415 - k * 0.009, -0.2, 0, 0, 0.32, 0.01, 0.012);
   // Escape: colectores por debajo y silencioso alto en el lado derecho
-  const header = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.04, 0.6, 0.3), new THREE.Vector3(0.06, 0.34, 0.36), new THREE.Vector3(0.1, 0.24, 0.1), new THREE.Vector3(0.16, 0.3, -0.3), new THREE.Vector3(0.2, 0.42, -0.55)]), 24, 0.03, 8);
+  const header = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.04, 0.6, 0.3), new THREE.Vector3(0.06, 0.34, 0.36), new THREE.Vector3(0.1, 0.24, 0.1), new THREE.Vector3(0.17, 0.27, -0.3), new THREE.Vector3(0.24, 0.29, -0.54)]), 24, 0.03, 8);
   add(header, chrome, 0, 0, 0);
   add(header, chrome, -0.08, 0, 0);
-  add(cyl, alu, 0.21, 0.47, -0.72, Math.PI / 2 - 0.22, 0, 0, 0.14, 0.42, 0.14);
-  add(cyl, darkMetal, 0.21, 0.52, -0.95, Math.PI / 2 - 0.22, 0, 0, 0.1, 0.04, 0.1);
+  // (por debajo de la estribera del paquete: a la altura de antes se le metía por la pierna)
+  add(cyl, alu, 0.26, 0.31, -0.72, Math.PI / 2 - 0.16, 0, 0, 0.14, 0.42, 0.14);
+  add(cyl, darkMetal, 0.26, 0.345, -0.94, Math.PI / 2 - 0.16, 0, 0, 0.1, 0.04, 0.1);
   // Cadena y piñones
   for (const y of [0.45, 0.39]) tube([0.15, y, -0.08], [0.15, y - 0.05 + (y > 0.42 ? 0.03 : -0.03), -0.78], 0.009, darkMetal);
   add(cyl, darkMetal, 0.15, 0.42, -0.08, 0, 0, Math.PI / 2, 0.08, 0.02, 0.08);

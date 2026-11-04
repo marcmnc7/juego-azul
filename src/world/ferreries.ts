@@ -16,6 +16,8 @@ export interface Box2 {
   maxX: number;
   minZ: number;
   maxZ: number;
+  /** Muro bajo, piscina, seto…: nadie lo atraviesa, pero la cámara pasa por encima sin acercarse. */
+  low?: boolean;
 }
 
 export interface Crowd {

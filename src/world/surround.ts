@@ -113,7 +113,8 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
         const wall = WALLS[Math.floor(r() * WALLS.length)];
         const ry = r() < 0.5 ? 0 : Math.PI / 2;
         m.add(G.box, wall, px, y0 + h / 2, pz, 0, ry, 0, w, h, d);
-        if (o.town || r() < 0.65) m.add(ROOF_GEO, ROOFS[Math.floor(r() * ROOFS.length)], px, y0 + h, pz, 0, ry, 0, w + 0.6, 1.6, d + 0.6);
+        // (cada tejado con su propia pendiente: dos vecinos que se solapan no quedan en el mismo plano)
+        if (o.town || r() < 0.65) m.add(ROOF_GEO, ROOFS[Math.floor(r() * ROOFS.length)], px, y0 + h, pz, 0, ry, 0, w + 0.6, 1.6 + (Math.abs(Math.round(px * 3 + pz * 7)) % 5) * 0.06, d + 0.6);
         else {
           // Azotea con pretil
           m.add(G.box, wall, px, y0 + h + 0.3, pz, 0, ry, 0, w + 0.2, 0.6, d + 0.2);
