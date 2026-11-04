@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, Merger, makePerson, type Person } from '../entities/models';
+import { G, Merger, makePerson, palmCrown, type Person } from '../entities/models';
 import { toon, glowTexture, makeSea } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
@@ -71,10 +71,7 @@ function villa(m: Merger, x: number, z: number, faceX: 1 | -1, colliders: Box2[]
   const tx = x + faceX * (d / 2 + 1.6);
   const tz = z + (seed % 2 ? w / 3 : -w / 3);
   m.add(G.cyl, 0x6b5a40, tx, 2.5, tz, 0.05, 0, 0.05, 0.3, 5, 0.3);
-  for (let k = 0; k < 7; k++) {
-    const a = (k / 7) * Math.PI * 2;
-    m.add(G.box, 0x4f7a3a, tx + Math.cos(a) * 1.0, 4.9, tz + Math.sin(a) * 1.0, Math.sin(a) * 0.5, -a, Math.cos(a) * 0.5, 2.2, 0.08, 0.5);
-  }
+  palmCrown(m, tx, 5, tz, 2.3, 12);
 }
 
 export interface SaFarola {
@@ -119,11 +116,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   const palm = (x: number, z: number, h: number) => {
     // Palmera datilera: tronco grueso escamado y copa densa de hojas arqueadas
     for (let k = 0; k < 5; k++) m.add(G.cyl, k % 2 ? 0x7a6448 : 0x6b5a40, x, (k + 0.5) * (h / 5), z, 0, 0, 0, 0.75 - k * 0.04, h / 5, 0.75 - k * 0.04);
-    for (let k = 0; k < 14; k++) {
-      const a = (k / 14) * Math.PI * 2;
-      const up = k % 2 ? 0.25 : -0.35;
-      m.add(G.box, k % 3 ? 0x4f7a3a : 0x5f8a44, x + Math.cos(a) * 1.7, h + 0.2 + up, z + Math.sin(a) * 1.7, 0, -a, up - 0.15, 3.6, 0.06, 0.7);
-    }
+    palmCrown(m, x, h + 0.1, z, 3.3, 18);
   };
   for (const [x, z, h] of [[-12, LAND_Z + 3, 6], [8, LAND_Z + 2.5, 7], [27, LAND_Z + 3.5, 5.5], [41, LAND_Z + 2.8, 6.5]] as [number, number, number][]) palm(x, z, h);
   for (const [x, z] of [[-4, LAND_Z + 7], [17, LAND_Z + 6], [35, LAND_Z + 7]] as [number, number][]) {

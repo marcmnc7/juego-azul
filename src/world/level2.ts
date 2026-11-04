@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
-import { G, Merger, makeCar, makeScallop, vertexMat, CarRig } from '../entities/models';
+import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, CarRig } from '../entities/models';
+import { hdSurfaces } from '../core/gfx';
+import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, addOutline, applyShadows, makeSea } from '../core/gfx';
 import { Particles } from '../entities/fx';
@@ -36,7 +38,7 @@ const NEED_ZAMB = 8;
 const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; top: number }> = {
   madrid: { ground: 0xb9a27a, fog: 0xf3d9b0, sky: 0x9cc9ec, top: 0x3f7fd0 },
   meseta: { ground: 0xd9b75e, fog: 0xf4e1b0, sky: 0x8fc3ef, top: 0x2f72cc },
-  cantabria: { ground: 0x5f9e4c, fog: 0xcfe3e8, sky: 0x9fc6e0, top: 0x5a8fc0 },
+  cantabria: { ground: 0x5b8843, fog: 0xcfe3e8, sky: 0x9fc6e0, top: 0x5a8fc0 },
   rioja: { ground: 0xa8704a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
 };
 const TURBO = 1.45;
@@ -109,7 +111,7 @@ class Scatter {
     private scaleRange: [number, number] = [1, 1],
     private yawRandom = true,
   ) {
-    this.mesh = new THREE.InstancedMesh(geo, vertexMat(), count);
+    this.mesh = new THREE.InstancedMesh(geo, mergedMat(geo), count);
     this.mesh.frustumCulled = false;
     for (let i = 0; i < count; i++) this.z.push(-40 + i * spacing);
   }
@@ -153,6 +155,13 @@ interface Thing {
   z: number;
   speed: number; // los coches del carril se mueven
   alive: boolean;
+}
+
+/** Una mata grande de hierba para la carretera (se repite por instancias). */
+function tuftClump(colors: number[]) {
+  const m = new Merger();
+  grassTufts(m, -1.6, 1.6, -1.6, 1.6, 14, colors, colors[0] % 97);
+  return m.build();
 }
 
 export class Level2 implements Level {
@@ -514,6 +523,10 @@ export class Level2 implements Level {
       new Scatter(cowGeometry('tudanca'), 5, 32, ['cantabria'], [-13, -34], false, [1, 1]),
       new Scatter(vineGeo, 24, 10, ['rioja'], [12, 32], true, [1, 1], false),
       new Scatter(vergeGeo, 40, 5, ['madrid', 'meseta', 'cantabria', 'rioja'], [9, 14], true, [0.7, 1.3]),
+      // Hierba en la cuneta y el campo: seca hasta la meseta, verde en Cantabria
+      new Scatter(tuftClump([0xb7a05c, 0xa8924f, 0xc4ae6a]), 70, 2.6, ['madrid', 'meseta'], [5.4, 24], true, [0.8, 1.5]),
+      new Scatter(tuftClump([0x64923f, 0x568a3a, 0x77a04a]), 90, 2.2, ['cantabria'], [5.4, 26], true, [0.8, 1.6]),
+      new Scatter(tuftClump([0x8d8f4a, 0x7c7f42]), 40, 3.4, ['rioja'], [5.4, 11], true, [0.7, 1.2]),
     ];
     // Las montañas lejanas no llevan niebla (si no, desaparecen): ya son de un gris azulado de lejanía
     this.scatters[7].mesh.material = toon({ vertexColors: true, fog: false });
@@ -621,19 +634,24 @@ export class Level2 implements Level {
     // La plancha de El Ancla: suelo de losas, la fachada de piedra con soportales detrás, el toldo
     // de rayas azules y blancas, la barra y unas mesas
     m.add(G.box, 0xbdb4a4, -9, 0.05, -22, 0, 0, 0, 22, 0.1, 16);
-    m.add(G.box, 0xb8ad97, -9, 5, -12.5, 0, 0, 0, 22, 10, 3);
+    const hd = hdSurfaces.value ? new TownHD() : null;
+    if (hd) {
+      hd.wall(-20, 2, -14, -11, 10, 0xd4c8b0);
+      hd.facade(-20, 2, -14, -1, 3, true, false);
+    } else m.add(G.box, 0xb8ad97, -9, 5, -12.5, 0, 0, 0, 22, 10, 3);
     for (let x = -18; x <= 0; x += 4.5) {
       m.add(G.box, 0x2a2420, x + 2.25, 1.6, -13.98, 0, 0, 0, 3, 3.2, 0.1);
       m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 14, 1, false, 0, Math.PI), 0x2a2420, x + 2.25, 3.2, -13.95, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
     }
     for (let k = 0; k < 11; k++) m.add(G.box, k % 2 ? 0xf4f4f0 : 0x1f5fbf, -18.9 + k * 1.8 + 0.9, 4.6, -15.2, -0.45, 0, 0, 1.8, 0.06, 3); // toldo
-    for (let k = 0; k < 4; k++) m.add(G.box, 0x6b4a2e, -16 + k * 4.5, 6.6, -14.2, 0, 0, 0, 2.6, 1.2, 0.8); // balcones de madera
+    if (!hd) for (let k = 0; k < 4; k++) m.add(G.box, 0x6b4a2e, -16 + k * 4.5, 6.6, -14.2, 0, 0, 0, 2.6, 1.2, 0.8); // balcones de madera
     m.add(G.box, 0x6b4a2e, -3, 0.55, -19, 0, 0, 0, 0.8, 1.1, 5); // barra
     for (const [x, z] of [[-17, -24], [-14, -27], [-3, -26]]) {
       m.add(G.box, 0x8a6a44, x, 0.75, z, 0, 0, 0, 1.4, 0.06, 1.0);
       for (const sx of [-1, 1]) m.add(G.rbox, 0x1f5fbf, x + sx * 0.95, 0.45, z, 0, 0, 0, 0.45, 0.9, 0.45);
     }
     g.add(m.mesh());
+    hd?.finish(g);
     return g;
   }
 

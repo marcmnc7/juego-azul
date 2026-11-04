@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Surf } from '../core/surfaces';
 import { buildSurroundings, collidersBox } from './surround';
 import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
@@ -472,7 +473,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
   hdb?.finish(group);
   // Arena en la plaza, donde saltan los ases
-  const sand = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), toon({ color: 0xe2c48e }));
+  const sand = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), toon({ color: 0xe2c48e, surf: Surf.Sand }));
   sand.scale.set(8, 1, 6.8);
   sand.position.set(0, 0.015, 14);
   sand.userData.noCast = true;

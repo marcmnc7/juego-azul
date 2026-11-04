@@ -7,7 +7,7 @@ import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { CarRig, G, Merger, makePerson, makeCar, animatePerson, Person, type PersonLook } from '../entities/models';
+import { CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
 import { Door } from './door';
 import { buildSurroundings } from './surround';
@@ -516,10 +516,10 @@ export class Level4 implements Level {
     }
     // Palmera junto a la casa del vecino
     for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -8.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
-    for (let k = 0; k < 7; k++) {
-      const a = (k / 7) * Math.PI * 2;
-      m.add(G.box, 0x2f5f2a, -8.4 + Math.cos(a) * 1.4, 7, 2.6 + Math.sin(a) * 1.4, 0, -a, 0.45, 2.8, 0.1, 0.7);
-    }
+    palmCrown(m, -8.1, 7.1, 2.6, 2.8, 15);
+    // Hierba de verdad en el césped: matas sueltas, menos en la hamaca
+    grassTufts(m, -4.4, 4.4, 10.55, 14.1, 260, [0x47803c, 0x3f7236, 0x568a42], 5, (x, z) => Math.abs(x - TOWELS.x) < 1.05 && Math.abs(z - TOWELS.z) < 1.3);
+    grassTufts(m, -4.4, -4.5 + 0.1, 1.6, 10.5, 30, [0x47803c, 0x3f7236], 6);
     sc.add(m.mesh());
 
     // Guirnalda de bombillas sobre la terraza y luciérnagas en el jardín

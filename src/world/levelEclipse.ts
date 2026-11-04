@@ -394,7 +394,13 @@ export class LevelEclipse implements Level {
     m.add(G.box, 0x7a6a58, -0.6, 0.92, -D + 0.35, 0, 0, 0, 6.5, 0.06, 0.75);
     m.add(G.box, 0xbfc4c8, -2.2, 0.94, -D + 0.35, 0, 0, 0, 0.8, 0.04, 0.5);
     m.add(G.box, 0x2a2a2e, 1.2, 0.96, -D + 0.35, 0, 0, 0, 0.8, 0.03, 0.55);
-    for (let i = 0; i < 4; i++) m.add(G.box, 0x5f8f6a, -3.2 + i * 1.3, 1.9, -D + 0.2, 0, 0, 0, 1.2, 0.8, 0.35);
+    for (let i = 0; i < 4; i++) {
+      const cx = -3.2 + i * 1.3;
+      m.add(G.box, 0x5f8f6a, cx, 1.9, -D + 0.2, 0, 0, 0, 1.2, 0.8, 0.35);
+      // Dos puertas con su junta y su tirador
+      m.add(G.box, 0x37503c, cx, 1.9, -D + 0.378, 0, 0, 0, 0.012, 0.76, 0.006);
+      for (const s of [-1, 1]) m.add(G.box, 0xc8ccd0, cx + s * 0.07, 1.68, -D + 0.385, 0, 0, 0, 0.02, 0.12, 0.012);
+    }
     m.add(G.rbox, 0xeeeeee, 3.6, 0.95, -D + 0.45, 0, 0, 0, 0.8, 1.9, 0.7);
     this.colliders.push({ minX: -3.9, maxX: 4.1, minZ: -D, maxZ: -D + 0.8 });
     // Ventana con persianas verdes y la luz entrando
@@ -468,7 +474,17 @@ export class LevelEclipse implements Level {
     sea.position.y = -1.6;
     sc.add(sea);
     const m = new Merger();
-    m.add(G.sphere, 0xc9a36a, 0, -1.6, 0, 0, 0, 0, 16, 3.2, 12);
+    m.add(G.sphere, 0xc9a36b, 0, -1.6, 0, 0, 0, 0, 16, 3.2, 12);
+    // Piedras y grietas sueltas por encima: la roca no es una bola lisa
+    for (let i = 0; i < 26; i++) {
+      const a = i * 2.399, r = 1.6 + (i % 7) * 0.85;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r * 0.74 - 0.4;
+      const e = Math.hypot(x / 8, z / 6);
+      if (e > 0.97) continue;
+      const y = -1.6 + 1.6 * Math.sqrt(1 - e * e);
+      const s = 0.14 + (i % 5) * 0.09;
+      m.add(i % 2 ? G.rock : G.crag, i % 3 ? 0xb8925c : 0xa58150, x, y - 0.02, z, 0, i, 0, s * 1.6, s * 0.7, s * 1.3);
+    }
     m.add(G.rock2, 0xb8925c, -7, -1.2, -4, 0, 0.5, 0, 10, 3.6, 9);
     m.add(G.rock, 0xd1ad74, 6, -1.4, -3, 0, 1, 0, 9, 3.2, 8);
     for (let i = 0; i < 9; i++) m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xc9a36a : 0xb48a54, -14 + i * 3.6, -1.5, 5 + Math.sin(i * 2.3) * 2, i, i * 0.7, 0, 3 + (i % 3), 1.4, 2.6);

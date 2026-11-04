@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, Merger } from '../entities/models';
+import { G, Merger, palmCrown } from '../entities/models';
 import { glowTexture } from '../core/gfx';
 import { ROOF_GEO, rand, type Box2 } from './ferreries';
 
@@ -85,10 +85,7 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
       // Palmera
       const h = 5 + r() * 3;
       m.add(G.cyl, 0x6b5a40, x, y0 + h / 2, z, 0, 0, 0.04, 0.4, h, 0.4);
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * Math.PI * 2;
-        m.add(G.box, 0x2f6a34, x + Math.cos(a) * 1.3, y0 + h + 0.1, z + Math.sin(a) * 1.3, 0, -a, 0.5, 2.7, 0.08, 0.6);
-      }
+      palmCrown(m, x, y0 + h, z, 2.5, 11);
     } else {
       // Acebuche
       m.add(G.cyl, 0x5a4a38, x, y0 + 0.9, z, 0, 0, 0.1, 0.3, 1.8, 0.3);

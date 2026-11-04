@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Surf } from '../core/surfaces';
 import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
@@ -665,7 +666,7 @@ function buildValley(sc: THREE.Scene, day: boolean) {
     const land = THREE.MathUtils.lerp(y, closed, head) + n(x, z) * ss(z, Z0 + 1, Z0 + 6) * (y < WATER + 0.6 ? 0.2 : 1);
     return THREE.MathUtils.lerp(land, -13, ss(-x, 86, 104)); // pasada la punta del faro, mar abierto
   };
-  const geo = new THREE.PlaneGeometry(X, Z, 130, 70).rotateX(-Math.PI / 2);
+  const geo = new THREE.PlaneGeometry(X, Z, 150, 140).rotateX(-Math.PI / 2);
   geo.translate(0, 0, Z0 + Z / 2);
   const P = geo.attributes.position as THREE.BufferAttribute;
   const col = new Float32Array(P.count * 3);
@@ -678,14 +679,25 @@ function buildValley(sc: THREE.Scene, day: boolean) {
     const v = 0.5 + 0.5 * Math.sin(x * 0.31 + z * 0.47) * Math.sin(x * 0.11 - z * 0.19);
     c.copy(SCRUB).lerp(SCRUB2, v);
     const shore = y - WATER;
-    if (shore < 2.4) c.lerp(ROCK, ss(2.4 - shore, 0, 1.6));
+    if (shore < 2.4) c.lerp(ROCK, ss(2.4 - shore + n(x * 3, z * 3) * 0.5, 0, 1.6));
     if (shore < 1.5 && x > 10 && x < 44) c.lerp(SAND, ss(1.5 - shore, 0, 0.7)); // la playita
     if (shore < -0.4) c.copy(DEEP);
     col.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.computeVertexNormals();
-  const ground = new THREE.Mesh(geo, toon({ vertexColors: true, roughness: 1 }));
+  // Cada triángulo con su material, según por dónde pasa
+  const terr = geo.toNonIndexed();
+  const TP = terr.attributes.position as THREE.BufferAttribute;
+  const surf = new Float32Array(TP.count);
+  for (let i = 0; i < TP.count; i += 3) {
+    const y = (TP.getY(i) + TP.getY(i + 1) + TP.getY(i + 2)) / 3 - WATER;
+    const x = TP.getX(i);
+    const v = y < 1.3 && x > 10 && x < 44 ? Surf.Sand : y < 1.5 ? Surf.Stone : Surf.Grass;
+    surf.fill(v, i, i + 3);
+  }
+  terr.setAttribute('surf', new THREE.BufferAttribute(surf, 1));
+  const ground = new THREE.Mesh(terr, toon({ vertexColors: true, roughness: 1 }));
   ground.userData.noCast = true;
   sc.add(ground);
   // El agua de la cala
@@ -728,7 +740,7 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   for (let i = 0; i < 60; i++) {
     const x = -84 + i * 1.7 + Math.sin(i) * 2;
     if (x > 16) break;
-    for (const zz of [Z0 + 14 + Math.sin(i * 2.3) * 1.4, Z0 + 43 + Math.sin(i * 1.7) * 1.4])
+    for (const zz of [Z0 + 14 + Math.sin(i * 2.3) * 1.4, Z0 + 12.2 + Math.sin(i * 1.3) * 1.2, Z0 + 43 + Math.sin(i * 1.7) * 1.4, Z0 + 45 + Math.sin(i * 2.9) * 1.2])
       m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, x, WATER + 0.25, zz, 0, i, 0, 2.2 + (i % 3), 1 + (i % 2) * 0.5, 2 + (i % 3));
   }
   // Barcas fondeadas
@@ -853,8 +865,9 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     const c = i % 4 === 0 ? 0x3a6a32 : i % 2 ? 0xc72a5c : 0xdb4a78;
     m.add(G.bush, c, x, y, z, 0, i, 0, 0.3 + (i % 3) * 0.09, 0.2 + (i % 2) * 0.05, 0.28 + (i % 2) * 0.12);
   }
-  for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0xc72a5c : 0xdb4a78, 4.85, 1.0 + (i % 7) * 0.32, 1.2 + Math.floor(i / 7) * 4.2 + (i % 3) * 0.5, 0, i, 0, 0.22, 0.26, 0.22); // trepando por la pérgola
-  for (let i = 0; i < 8; i++) m.add(G.bush, i % 2 ? 0xc72a5c : 0xdb4a78, -0.8 + (i % 4) * 0.35, 1.7 - Math.floor(i / 4) * 0.6, 0.9 + (i % 3) * 0.1, 0, i, 0, 0.28, 0.3, 0.26); // cayendo sobre el porche
+  // Trepando por los postes de la pérgola: pegada a ellos, de abajo arriba
+  for (const [px, pz] of [[1.6, 6.4], [4.8, 6.4], [4.8, 9.7]] as [number, number][])
+    for (let i = 0; i < 12; i++) m.add(G.bush, i % 3 === 0 ? 0x3a6a32 : i % 2 ? 0xc72a5c : 0xdb4a78, px + Math.cos(i * 2.4) * 0.09, 0.5 + i * 0.2, pz + Math.sin(i * 2.4) * 0.09, 0, i, 0, 0.26, 0.26, 0.26);
   // Limonero y ficus a la izquierda del patio, contenedor verde, moto blanca y una maceta de barro
   const tree = (x: number, z: number, h: number, c: number, fruit?: number) => {
     m.add(G.cyl, 0x6b5a46, x, h * 0.3, z, 0.05, 0, 0.04, 0.18, h * 0.6, 0.18);
@@ -1008,7 +1021,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     l.scale.setScalar(1.2);
     sc.add(l);
   }
-  sc.add(new THREE.Mesh(m.build(), toon({ vertexColors: true })));
+  sc.add(m.mesh());
   // Delante de casa, al otro lado de la calle: el valle con su calita
   buildValley(sc, day);
   // Al fondo, bajando por la calle, el paseo y Sa Farola con su haz girando

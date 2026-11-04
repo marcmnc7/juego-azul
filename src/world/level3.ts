@@ -7,7 +7,7 @@ import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
-import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate, Fireworks } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
@@ -688,7 +688,7 @@ export class Level3 implements Level {
     const sc = this.scene;
     const A = AIR;
     const cx = (A.minX + A.maxX) / 2;
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX + 2, A.maxZ - A.minZ + 6).rotateX(-Math.PI / 2), toon({ color: 0xe9ecef, roughness: 0.25, metalness: 0.05 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX + 2, A.maxZ - A.minZ + 6).rotateX(-Math.PI / 2), toon({ color: 0xe9ecef, roughness: 0.25, metalness: 0.05, surf: Surf.Paving }));
     floor.position.set(cx, 0.01, (A.minZ + A.maxZ) / 2);
     floor.userData.noCast = true;
     sc.add(floor);
@@ -1061,10 +1061,7 @@ export class Level3 implements Level {
     // Palmeras
     const palm = (x: number, z: number, h: number) => {
       for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, x + Math.sin(i * 0.3) * 0.4, (i + 0.5) * (h / 6), z, 0, 0, 0.05, 0.5 - i * 0.03, h / 6, 0.5 - i * 0.03);
-      for (let k = 0; k < 7; k++) {
-        const a = (k / 7) * Math.PI * 2;
-        m.add(G.box, 0x2f6b3a, x + Math.cos(a) * 1.6, h - 0.2, z + Math.sin(a) * 1.6, 0, -a, 0.45, 3.2, 0.1, 0.8);
-      }
+      palmCrown(m, x + Math.sin(1.5) * 0.4, h, z, 3.1, 15);
       this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
     };
     for (const [x, z, h] of [[-21, -16, 8], [21, -4, 9], [-21, 6, 9], [21, 8, 7.5], [-20, 22, 8.5], [20, 22, 9], [-28, 30, 10], [28, 30, 10]]) palm(x, z, h);

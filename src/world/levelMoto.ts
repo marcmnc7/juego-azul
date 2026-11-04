@@ -223,7 +223,7 @@ export class LevelMoto implements Level {
       const h = ROAD_W / 2;
       const q = (r: typeof cur, o: number) => [r.x + r.rx * o, 0.05, r.z + r.rz * o];
       const dash = Math.floor(i / 3) % 2 === 0;
-      for (const [o0, o1, colr] of [[-h, -0.12, 0x34343a], [-0.12, 0.12, dash ? 0xf0ead8 : 0x34343a], [0.12, h, 0x34343a]] as [number, number, number][]) {
+      for (const [o0, o1, colr] of [[-h, -0.12, 0x55555a], [-0.12, 0.12, dash ? 0xf0ead8 : 0x55555a], [0.12, h, 0x55555a]] as [number, number, number][]) {
         const a = q(prev, o0), b = q(prev, o1), cc = q(cur, o1), d = q(cur, o0);
         road.push(...a, ...d, ...b, ...b, ...d, ...cc);
         c.set(colr);

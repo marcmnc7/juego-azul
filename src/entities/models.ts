@@ -8,7 +8,7 @@ import { RigCrowd, crowdReady } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
 import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
-import { surfaceFor } from '../core/surfaces';
+import { surfaceFor, Surf } from '../core/surfaces';
 
 // Personajes y decorado hechos con primitivas low-poly y sombreado "cel":
 // no hay que descargar modelos y el juego entero cabe en un único archivo.
@@ -29,9 +29,22 @@ export function vertexMat() {
   return vMat;
 }
 
-/** Junta muchas piezas de colores en una sola geometría (1 draw call). */
+/** Setos: cajas verdes que sí son plantas. */
+const HEDGES = new Set([0x2f5f2a, 0x3d6e34, 0x2f5a2c, 0x2f6b3a]);
+let leafMat: THREE.MeshStandardMaterial | null = null;
+/** Follaje: el mismo material con las hojas recortadas y por las dos caras (es un dibujado aparte). */
+export function foliageMat() {
+  return (leafMat ??= toon({ vertexColors: true, side: THREE.DoubleSide, leafy: true }));
+}
+/** El material (o los dos, si lleva follaje) de una geometría hecha con Merger.build(). */
+export function mergedMat(g: THREE.BufferGeometry): THREE.Material | THREE.Material[] {
+  return g.groups.length ? [vertexMat(), foliageMat()] : vertexMat();
+}
+
+/** Junta muchas piezas de colores en una sola geometría (1 draw call; 2 si hay copas de árbol). */
 export class Merger {
   private parts: THREE.BufferGeometry[] = [];
+  private leafParts: THREE.BufferGeometry[] = [];
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private e = new THREE.Euler();
@@ -58,25 +71,51 @@ export class Merger {
       cols[i * 3 + 2] = this.c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(this.textured ? surfaceFor(color) : 0), 1));
+    // Cada forma pide su material: las rocas, piedra (no ladrillo aunque sean color marès); las matas, hojas
+    const base = surfaceFor(color);
+    let sf = base;
+    const big = Math.max(sx, sy, sz);
+    const green = base === Surf.Foliage || base === Surf.Grass;
+    const crown = big <= 11 && (geo === G.bush || ((geo === G.sphere || geo === G.ball) && base === Surf.Foliage && big <= 7));
+    if (this.textured) {
+      if (geo === G.rock || geo === G.rock2 || geo === G.crag) sf = green ? Surf.Grass : Surf.Stone;
+      else if (crown) sf = Surf.Foliage;
+      else if (geo === G.rbox && sf !== Surf.Wood && sf < Surf.Metal) sf = Surf.None; // muebles y objetos, no paredes
+      else if (base === Surf.Foliage && !HEDGES.has(color)) sf = big > 7 ? Surf.Grass : Surf.None; // lo verde que no es planta: armarios, lonas…
+    }
+    // (sin textura de pared, los vehículos y objetos también tienen cristal y metal de verdad)
+    g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(this.textured || sf >= Surf.Metal ? sf : 0), 1));
     // Las piezas finas o pequeñas (postes, barandillas, flores) no frenan la cámara: ver camWorld
     g.computeBoundingBox();
     g.boundingBox!.getSize(this.v);
     const mid = this.v.x + this.v.y + this.v.z - Math.max(this.v.x, this.v.y, this.v.z) - Math.min(this.v.x, this.v.y, this.v.z);
-    if (mid < 0.5) this.thin.push(this.count, n);
-    this.count += n;
-    this.parts.push(g);
+    g.userData.thinPart = mid < 0.5;
+    // Las copas (matas y bolas verdes) van aparte: son las que llevan las hojas recortadas
+    if (this.textured && crown) this.leafParts.push(g);
+    else this.parts.push(g);
     return this;
   }
 
   get empty() {
-    return this.parts.length === 0;
+    return this.parts.length === 0 && this.leafParts.length === 0;
   }
 
   build() {
-    const g = mergeGeometries(this.parts)!;
-    this.parts.forEach((p) => p.dispose());
+    const solid = this.parts.reduce((a, p) => a + p.attributes.position.count, 0);
+    const all = [...this.parts, ...this.leafParts];
+    for (const p of all) {
+      const n = p.attributes.position.count;
+      if (p.userData.thinPart) this.thin.push(this.count, n);
+      this.count += n;
+    }
+    const g = mergeGeometries(all)!;
+    if (this.leafParts.length) {
+      g.addGroup(0, solid, 0);
+      g.addGroup(solid, this.count - solid, 1);
+    }
+    all.forEach((p) => p.dispose());
     this.parts = [];
+    this.leafParts = [];
     g.computeBoundingSphere();
     g.userData.thin = this.thin;
     g.userData.parts = true;
@@ -86,7 +125,8 @@ export class Merger {
   }
 
   mesh() {
-    return new THREE.Mesh(this.build(), vertexMat());
+    const g = this.build();
+    return new THREE.Mesh(g, mergedMat(g));
   }
 }
 
@@ -147,6 +187,51 @@ function rockGeo(seed: number, rough = 0.35, detail = 2, kind: 'rock' | 'bush' =
   return g;
 }
 
+/** Penca de palmera, de 1 m: nervio que sube y se dobla, con foliolos en dientes a los dos lados y por las dos caras. */
+function frondGeo() {
+  const S = 13;
+  const pos: number[] = [], nor: number[] = [];
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), N = new THREE.Vector3(), E = new THREE.Vector3();
+  const pt = (t: number): [number, number, number] => [t, 0.46 * Math.sin(t * 2.3) * (1 - t * 0.25) - 0.66 * t * t * t, 0];
+  for (let i = 0; i < S; i++) {
+    const t0 = i / S, t1 = (i + 1) / S;
+    const p0 = pt(t0), p1 = pt(t1);
+    const w = 0.19 * Math.pow(Math.sin(Math.PI * Math.min(0.98, t0 * 0.96 + 0.03)), 0.55);
+    for (const s of [-1, 1]) {
+      A.set(...p0);
+      B.set(...p1);
+      C.set((p0[0] + p1[0]) / 2 + 0.05, p1[1] - w * 0.42, s * w);
+      N.subVectors(B, A).cross(E.subVectors(C, A)).normalize();
+      if (N.y < 0) N.negate();
+      pos.push(A.x, A.y, A.z, B.x, B.y, B.z, C.x, C.y, C.z, C.x, C.y, C.z, B.x, B.y, B.z, A.x, A.y, A.z);
+      for (let k = 0; k < 6; k++) nor.push(N.x, N.y, N.z); // por las dos caras, con la misma luz: se ven desde abajo
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+
+/** Mata de hierba, de 1 m de alto: unas cuantas hojas finas que se abren desde el suelo. */
+function tuftGeo() {
+  const pos: number[] = [], nor: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.399;
+    const cx = Math.cos(a), sz = Math.sin(a);
+    const r = 0.25 + (i % 3) * 0.17, h = 0.72 + (i % 4) * 0.1, w = 0.09;
+    const bx = cx * 0.06, bz = sz * 0.06;
+    const ax = -sz * w, az = cx * w;
+    const tip = [cx * r, h, sz * r];
+    pos.push(bx - ax, 0, bz - az, bx + ax, 0, bz + az, tip[0], tip[1], tip[2], tip[0], tip[1], tip[2], bx + ax, 0, bz + az, bx - ax, 0, bz - az);
+    for (let k = 0; k < 6; k++) nor.push(cx * 0.35, 0.93, sz * 0.35);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+
 export const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
   rbox: roundedBox(),
@@ -160,6 +245,8 @@ export const G = {
   rock: rockGeo(1, 0.4, 3),
   rock2: rockGeo(2, 0.5, 3),
   bush: rockGeo(3, 0.32, 2, 'bush'),
+  frond: frondGeo(),
+  tuft: tuftGeo(),
   /** Roca de menos polígonos, para acantilados hechos de cientos de piezas. */
   crag: rockGeo(4, 0.55, 2),
 };
@@ -1244,6 +1331,28 @@ export function makeScallop() {
   fm.userData.noCast = true;
   g.add(fm);
   return { root: g, meat };
+}
+
+const FRONDS = [0x3f6e34, 0x4a7a3a, 0x37642e, 0x587f3c];
+/** Copa de palmera: pencas arqueadas alrededor de (x, y, z). R: largo de cada penca. */
+export function palmCrown(m: Merger, x: number, y: number, z: number, R = 2.6, n = 15) {
+  for (let k = 0; k < n; k++) {
+    const a = k * 2.399963;
+    const r = R * (0.82 + ((k * 7) % 5) * 0.09);
+    m.add(G.frond, FRONDS[k % FRONDS.length], x, y, z, 0, a, ((k % 3) - 1) * 0.24 + (k < n / 3 ? 0.3 : 0), r, r, r);
+  }
+}
+
+/** Hierba suelta en un rectángulo; skip: dónde no poner (la piscina, la hamaca…). */
+export function grassTufts(m: Merger, x0: number, x1: number, z0: number, z1: number, n: number, colors: number[], seed = 3, skip?: (x: number, z: number) => boolean, y = 0) {
+  let s = seed * 7919 + 13;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < n; i++) {
+    const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0);
+    const h = 0.14 + rnd() * 0.16, w = 0.2 + rnd() * 0.22, c = colors[Math.floor(rnd() * colors.length)], ry = rnd() * 6;
+    if (skip?.(x, z)) continue;
+    m.add(G.tuft, c, x, y, z, 0, ry, 0, w, h, w);
+  }
 }
 
 /**

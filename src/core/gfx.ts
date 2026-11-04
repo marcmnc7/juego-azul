@@ -37,8 +37,8 @@ const hdColorUniform = { get value() { return hdSurfaces.value ? hdSurfaceTextur
 const hdNormalUniform = { get value() { return hdSurfaces.value ? hdNormalTexture() : surfaceTexture(); } };
 
 /** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
-export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf }) {
-  const { surf, ...params } = allParams;
+export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf; leafy?: boolean }) {
+  const { surf, leafy, ...params } = allParams;
   if (quality.kind !== 'standard') {
     const { roughness, metalness: _m, envMapIntensity: _e, ...rest } = params;
     void _m, void _e;
@@ -56,6 +56,7 @@ export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: 
   }
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
   m.userData.surf = surf ?? 0;
+  m.userData.leafy = !!leafy;
   addGrain(m);
   return m;
 }
@@ -67,6 +68,7 @@ export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: 
 export function addGrain(m: THREE.Material, amount = 0.14) {
   m.onBeforeCompile = (sh) => {
     if (!quality.grain) return;
+    const leafy = !!m.userData.leafy;
     sh.uniforms.surfTex = { value: surfaceTexture() };
     sh.uniforms.surfScale = { value: SURF_SCALE.map((v) => 1 / v) };
     sh.uniforms.surfStrength = { value: SURF_STRENGTH };
@@ -127,8 +129,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         float gN = gNoise(vGrainPos * 0.6) * 0.6 + gNoise(vGrainPos * 4.0) * 0.3 + gNoise(vGrainPos * 19.0) * 0.1;
         diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
         // Textura de la superficie (encalado, teja, marès…) proyectada desde los tres ejes del mundo
-        int sIdx = int(max(vSurf, uSurf) + 0.5);
-        vec3 bw = pow(abs(vGrainN), vec3(4.0));
+        int sFull = int(max(vSurf, uSurf) + 0.5);
+        // Metal (16) y cristal (17) no llevan foto: los hace su brillo
+        int sIdx = sFull > 15 ? 0 : sFull;
+        // (en una arista muy viva, la normal interpolada casi se anula: sin esto salían líneas blancas)
+        float gnL = length(vGrainN);
+        vec3 gnU = gnL > 1e-3 ? vGrainN / gnL : vec3(0.0, 1.0, 0.0);
+        vec3 bw = pow(abs(gnU), vec3(4.0));
         bw /= (bw.x + bw.y + bw.z + 1e-4);
         vec3 sp = vGrainPos * surfScale[sIdx];
         float sl = float(sIdx);
@@ -136,14 +143,14 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         if (hdOn) {
           // Foto en color (Sponza) proyectada en los tres ejes, normalizada a su color medio para
           // respetar el color elegido de cada pared
-          // Estilo pintado: la foto se lee muy borrosa (queda la mancha, no el detalle) y pesa menos
-          float pb = uPaintG * 3.0;
+          // (el estilo pintado apenas la suaviza: el detalle de la foto es lo que hace real una pared)
+          float pb = uPaintG * 0.35;
           vec3 sdc = texture(hdTex, vec3(sp.zy, sl), pb).rgb * bw.x
                    + texture(hdTex, vec3(sp.xz, sl), pb).rgb * bw.y
                    + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl), pb).rgb * bw.z;
           vec2 mpc = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
           vec3 smc = texture(hdTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mpc * 0.23 + 0.37, sl)).rgb;
-          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx] * (1.0 - uPaintG * 0.35));
+          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx] * (1.0 - uPaintG * 0.05));
         } else if (sIdx > 0) {
           float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
                    + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
@@ -154,6 +161,22 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
           float sm = texture(surfTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mp * 0.23 + 0.37, sl)).r;
           diffuseColor.rgb *= mix(1.0, (sd * 0.65 + sm * 0.35) / surfMean[sIdx], surfStrength[sIdx]);
         }
+        ${
+          leafy
+            ? `// Hojas de verdad: la copa es una cáscara recortada con la silueta de cada hoja; por los huecos
+        // se ve la cara interior, en sombra. En el borde hay más huecos, y de lejos, ninguno
+        if (hdOn && sIdx == 7) {
+          float la = texture(hdTex, vec3(sp.zy, sl)).a * bw.x + texture(hdTex, vec3(sp.xz, sl)).a * bw.y + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
+          float dV = length(vViewPosition);
+          float nv = abs(dot(normalize(vNormal), normalize(vViewPosition)));
+          float cut = mix(0.74, 0.34, smoothstep(0.08, 0.75, nv)) * (1.0 - smoothstep(24.0, 75.0, dV));
+          if (la < cut) discard;
+          if (!gl_FrontFacing) diffuseColor.rgb *= 0.4;
+        }`
+            : ''
+        }
+        // Cristal: refleja el cielo como un espejo oscuro
+        if (sFull == 17) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.58, 0.68), 0.55);
         // Suciedad y humedad al pie de las paredes, y desgaste en las aristas altas: lo que hace que
         // un muro encalado parezca de verdad y no una caja
         float gWall = 1.0 - abs(vGrainN.y);
@@ -178,8 +201,17 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
           float rS = texture(hdNrm, vec3(sp.zy, sl)).a * bw.x
                    + texture(hdNrm, vec3(sp.xz, sl)).a * bw.y
                    + texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
-          roughnessFactor = clamp(roughnessFactor * mix(1.0, rS / hdRoughMean[sIdx], 0.8), 0.04, 1.0);
-        }`,
+          // (con un mínimo: piedra y tierra no dan destellos blancos)
+          roughnessFactor = clamp(roughnessFactor * mix(1.0, rS / hdRoughMean[sIdx], 0.8), roughnessFactor < 0.35 ? 0.2 : 0.55, 1.0);
+        }
+        if (sFull == 16) roughnessFactor = 0.34 + (gN - 0.5) * 0.22;
+        if (sFull == 17) roughnessFactor = 0.07;`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+        if (sFull == 16) metalnessFactor = 0.88;
+        if (sFull == 17) metalnessFactor = 0.72;`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -187,7 +219,7 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
         if (hdOn) {
           // Relieve triplanar (mezcla "whiteout"): juntas, grietas y teja con volumen de verdad
           vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
-          float ns = hdNormal[sIdx] * (1.0 - uPaintG * 0.8);
+          float ns = hdNormal[sIdx] * (1.0 - uPaintG * 0.1);
           vec3 tx = texture(hdNrm, vec3(sp.zy, sl)).xyz * 2.0 - 1.0;
           vec3 ty = texture(hdNrm, vec3(sp.xz, sl)).xyz * 2.0 - 1.0;
           vec3 tz = texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).xyz * 2.0 - 1.0;
@@ -195,12 +227,13 @@ export function addGrain(m: THREE.Material, amount = 0.14) {
           tx = vec3(tx.xy + nW.zy, abs(tx.z) * nW.x);
           ty = vec3(ty.xy + nW.xz, abs(ty.z) * nW.y);
           tz = vec3(tz.xy + nW.xy, abs(tz.z) * nW.z);
-          vec3 nb = normalize(tx.zyx * bw.x + ty.xzy * bw.y + tz.xyz * bw.z);
-          normal = normalize((viewMatrix * vec4(nb, 0.0)).xyz);
+          vec3 nb = tx.zyx * bw.x + ty.xzy * bw.y + tz.xyz * bw.z;
+          // (si sale nula o inválida, se queda la normal de la malla: es lo que brillaba como grietas blancas)
+          if (dot(nb, nb) > 1e-6) normal = normalize((viewMatrix * vec4(normalize(nb), 0.0)).xyz);
         }`,
       );
   };
-  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) : 'plain');
+  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) + (m.userData.leafy ? 'L' : '') : 'plain');
 }
 
 /**

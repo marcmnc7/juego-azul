@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { Sky, Sun, glowTexture, toon } from '../core/gfx';
+import { Sky, Sun, glowTexture, toon, hdSurfaces } from '../core/gfx';
+import { TownHD } from './hd/townHD';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
@@ -36,26 +37,34 @@ export class Laurel {
     const m = new Merger();
     const L = 44;
     const W = 3.4; // media anchura de la calle
+    const hd = hdSurfaces.value ? new TownHD() : null;
+    if (hd) hd.b.box(hd.M.slabs, [0, -0.06, 0], [W * 2, 0.1, L * 2], { tile: 3 });
     m.add(G.box, 0x6b6660, 0, -0.05, 0, 0, 0, 0, W * 2, 0.1, L * 2);
     for (const s of [-1, 1]) {
       let i = 0;
       for (let z = -L + 4; z < L; z += 8, i++) {
         const h = 8 + ((i * 3) % 4);
         const c = WALLS[(i + (s > 0 ? 2 : 0)) % WALLS.length];
-        m.add(G.box, c, s * (W + 3), h / 2, z, 0, 0, 0, 6, h, 7.96);
-        m.add(G.box, 0xa9573a, s * (W + 3), h + 0.15, z, 0, 0, 0, 6.3, 0.3, 8.1);
+        if (hd) hd.wall(s * (W + 3) - 3, s * (W + 3) + 3, z - 3.98, z + 3.98, h, c);
+        else {
+          m.add(G.box, c, s * (W + 3), h / 2, z, 0, 0, 0, 6, h, 7.96);
+          m.add(G.box, 0xa9573a, s * (W + 3), h + 0.15, z, 0, 0, 0, 6.3, 0.3, 8.1);
+        }
         // Barra iluminada abajo y balcones arriba
         m.add(G.box, 0x2a1d16, s * (W + 0.02), 1.5, z, 0, 0, 0, 0.06, 3, 6.6);
         m.add(G.box, 0xffc680, s * (W - 0.01), 1.35, z - 1.2, 0, 0, 0, 0.04, 2.1, 2.6);
         m.add(G.box, 0xffc680, s * (W - 0.01), 1.35, z + 1.9, 0, 0, 0, 0.04, 2.1, 1.6);
-        for (let f = 0; f * 3 + 5 < h; f++)
-          for (const o of [-2, 2]) {
-            m.add(G.box, 0x3a4250, s * (W + 0.02), 4.6 + f * 3, z + o, 0, 0, 0, 0.06, 1.6, 1.1);
-            m.add(G.box, 0x24242a, s * (W - 0.3), 3.75 + f * 3, z + o, 0, 0, 0, 0.6, 0.06, 1.5);
-          }
+        if (hd) hd.facade(z - 3.9, z + 3.9, s * W, (s > 0 ? -1 : 1) as 1 | -1, Math.floor((h - 1) / 3), false, false);
+        else
+          for (let f = 0; f * 3 + 5 < h; f++)
+            for (const o of [-2, 2]) {
+              m.add(G.box, 0x3a4250, s * (W + 0.02), 4.6 + f * 3, z + o, 0, 0, 0, 0.06, 1.6, 1.1);
+              m.add(G.box, 0x24242a, s * (W - 0.3), 3.75 + f * 3, z + o, 0, 0, 0, 0.6, 0.06, 1.5);
+            }
       }
     }
     sc.add(m.mesh());
+    hd?.finish(sc);
 
     // Rótulos de los bares
     let n = 0;

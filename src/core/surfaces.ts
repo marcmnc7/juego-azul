@@ -27,6 +27,10 @@ export enum Surf {
   Cobble = 13,
   DryStone = 14,
   Bark = 15,
+  /** Sin foto: su brillo. Hierro, acero, barandillas. */
+  Metal = 16,
+  /** Cristal de ventana: refleja el cielo. */
+  Glass = 17,
 }
 const LAYERS = 16;
 const N = 256;
@@ -494,6 +498,63 @@ function paintProcedural() {
   return (procedural = data);
 }
 
+let leavesData: Uint8ClampedArray | null = null;
+/**
+ * La capa de follaje: cientos de hojas dibujadas una a una, de la sombra hacia la luz, que empalman por
+ * los bordes. En RGB, su luz; en alfa, su silueta (lo que hay entre hojas se recorta en el shader).
+ */
+function paintLeaves() {
+  if (leavesData) return leavesData;
+  const c = document.createElement('canvas');
+  c.width = c.height = M;
+  const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  seed = 4242;
+  ctx.clearRect(0, 0, M, M);
+  const COUNT = 1500;
+  for (let i = 0; i < COUNT; i++) {
+    const k = i / COUNT; // primero las de dentro, oscuras; al final, las de fuera, al sol
+    const x = rnd() * M, y = rnd() * M, a = rnd() * Math.PI * 2, L = rr(11, 21), W = L * rr(0.3, 0.46);
+    const v = 70 + k * 150 + rr(-22, 22);
+    const r = v * rr(0.78, 0.96), g = v, b = v * rr(0.58, 0.74);
+    for (const ox of [-M, 0, M])
+      for (const oy of [-M, 0, M]) {
+        if (x + ox < -30 || x + ox > M + 30 || y + oy < -30 || y + oy > M + 30) continue;
+        ctx.save();
+        ctx.translate(x + ox, y + oy);
+        ctx.rotate(a);
+        ctx.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
+        ctx.beginPath();
+        ctx.moveTo(-L, 0);
+        ctx.quadraticCurveTo(0, -W, L, 0);
+        ctx.quadraticCurveTo(0, W, -L, 0);
+        ctx.fill();
+        // Nervio central, y media hoja algo más clara
+        ctx.strokeStyle = `rgba(${(r * 0.62) | 0},${(g * 0.62) | 0},${(b * 0.55) | 0},0.7)`;
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(-L * 0.9, 0);
+        ctx.lineTo(L * 0.9, 0);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,235,0.12)';
+        ctx.beginPath();
+        ctx.moveTo(-L, 0);
+        ctx.quadraticCurveTo(0, -W, L, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+  }
+  const d = ctx.getImageData(0, 0, M, M).data;
+  // Entre hojas, oscuro: así el borde filtrado no brilla
+  for (let i = 0; i < d.length; i += 4)
+    if (d[i + 3] < 12) {
+      d[i] = 34;
+      d[i + 1] = 46;
+      d[i + 2] = 26;
+    }
+  return (leavesData = d);
+}
+
 /** Rellena los datos de color y de relieve con lo pintado y, encima, las fotos ya cargadas. */
 function fill(col: Uint8Array, nrm: Uint8Array) {
   col.set(paintProcedural());
@@ -506,19 +567,24 @@ function fill(col: Uint8Array, nrm: Uint8Array) {
       for (let i = 0; i < S; i += 4) sum += src[i] + src[i + 1] + src[i + 2];
       if (sum / (M * M * 3 * 255) > 0.05) col.set(src, o);
     }
-    let r = 0, g = 0, b = 0;
-    for (let i = o; i < o + S; i += 4) { r += col[i]; g += col[i + 1]; b += col[i + 2]; }
-    const k = 1 / (M * M * 255);
+    const leaves = l === Surf.Foliage;
+    if (leaves) col.set(paintLeaves(), o);
+    let r = 0, g = 0, b = 0, cnt = 0;
+    for (let i = o; i < o + S; i += 4) {
+      if (leaves && col[i + 3] < 128) continue;
+      r += col[i]; g += col[i + 1]; b += col[i + 2]; cnt++;
+    }
+    const k = 1 / (Math.max(1, cnt) * 255);
     hdMeans[l * 3] = Math.max(0.05, r * k);
     hdMeans[l * 3 + 1] = Math.max(0.05, g * k);
     hdMeans[l * 3 + 2] = Math.max(0.05, b * k);
     // Relieve: el mapa de normales de la foto si lo hay; si no, sacado del propio dibujo
     const pn = hdPhoto?.normal.subarray(o, o + S);
     let pnSum = 0;
-    if (pn) for (let i = 0; i < S; i += 64) pnSum += pn[i + 2];
+    if (pn && !leaves) for (let i = 0; i < S; i += 64) pnSum += pn[i + 2];
     const pr = hdPhoto?.rough.subarray(o, o + S);
     let prSum = 0;
-    if (pr) for (let i = 0; i < S; i += 64) prSum += pr[i];
+    if (pr && !leaves) for (let i = 0; i < S; i += 64) prSum += pr[i];
     const lum = (x: number, y: number) => {
       const i = o + (((y + M) % M) * M + ((x + M) % M)) * 4;
       return (col[i] * 0.3 + col[i + 1] * 0.59 + col[i + 2] * 0.11) / 255;
@@ -665,6 +731,20 @@ setSurface(0x5f6f3c, Surf.Grass);
 setSurface(0x4c5e34, Surf.Grass);
 setSurface(0x56683a, Surf.Grass);
 setSurface(0xf4efe2, Surf.Plaster);
+// Cristal de las ventanas
+for (const c of [0x30384a, 0x2a3138, 0x2c3a46, 0x24303c, 0x3a4250, 0x1b2430, 0x2b3a48, 0x9fd3e8, 0x7a8fa6, 0x9fc4e0, 0x9fb8c8, 0x14181f, 0x1b2440]) setSurface(c, Surf.Glass);
+// Hierro y acero: farolas, barandillas, verjas, postes, encimeras
+for (const c of [0xc8ccd0, 0x9a9ea2, 0x2b2f36, 0x1e1e22, 0x1e1e1e, 0x8a93a6, 0xd0d6dc, 0x8f98a4, 0x8d9096, 0xb4b7bc, 0x9aa3ad, 0x333338, 0x777777, 0x888888, 0x9a9a9a, 0xbdbdbd, 0x22262c, 0x2c5a40, 0x4a525c, 0xb8bcc4, 0xa8a8b0, 0xbbbbbb, 0x7c7f86, 0x111111, 0x1a1a1a]) setSurface(c, Surf.Metal);
+// Flores de buganvilla y adelfa: también hojas, para que no sean bolas
+for (const c of [0xc72a5c, 0xdb4a78, 0xe0457b, 0xc2307a, 0xe0245e, 0xff5a7a, 0xd6338a]) setSurface(c, Surf.Foliage);
+// La roca de Es Castellar y los armarios pintados de la cocina
+setSurface(0xc9a36b, Surf.Stone);
+setSurface(0x5f8f6a, Surf.Wood);
+setSurface(0x6a5444, Surf.Wood); // el fondo del bar de la terraza
+// Troncos
+for (const c of [0x6b4a32, 0x6b4a30, 0x5a3e28, 0x6b5a46, 0x7a6448, 0x3f3026, 0x5a4634, 0x4a3426]) setSurface(c, Surf.Bark);
+// Lo que brilla por sí solo (ventanas encendidas, faroles) va liso
+for (const c of [0xffd9a0, 0xffc680, 0xfff3b0, 0xffd890, 0xfff6d8, 0xfff4b0, 0xf4e6c0]) setSurface(c, Surf.None);
 
 const hsl = { h: 0, s: 0, l: 0 };
 const tmp = new THREE.Color();
@@ -689,6 +769,10 @@ export function surfaceFor(color: number): Surf {
   // Grises medios: hormigón, bordillos, piedra de banco (antes quedaban lisos)
   else if (s < 0.1 && l >= 0.42 && l <= 0.72) r = Surf.Paving;
   else if (h >= 40 && h <= 70 && s > 0.2 && s < 0.6 && l > 0.3 && l < 0.6) r = Surf.Grass;
+  // Lo que quedaba liso: piedra y hormigón en gris azulado, hierro casi negro y paredes de color
+  else if (s < 0.28 && l >= 0.25 && l <= 0.72) r = Surf.Stone;
+  else if (l < 0.14 && s < 0.3) r = Surf.Metal;
+  else if (h >= 18 && h <= 62 && l > 0.5 && s < 0.95) r = Surf.Plaster;
   cache.set(color, r);
   return r;
 }

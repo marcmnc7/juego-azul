@@ -365,8 +365,8 @@ const NIGHT_CHAPTERS = [2, 4, 7];
 function paintGrade(n: number): Grade {
   const base = GRADES[n] ?? NEUTRAL;
   const night = NIGHT_CHAPTERS.includes(n);
-  if (n === 1 || n === 9) return { ...base, exposure: 1.06, saturation: 1.2, contrast: 1.02, tint: 0.12, bloom: 0.35, vignette: 0.22, paint: 0.7, ink: 0.9, paper: 0.03, lift: 0.035 };
-  return { ...base, saturation: base.saturation * 1.07, contrast: Math.min(base.contrast, 1.04), paint: night ? 0.3 : 0.7, ink: night ? 0.7 : 0.9, paper: 0.03, lift: night ? 0.025 : 0.035 };
+  if (n === 1 || n === 9) return { ...base, exposure: 1.06, saturation: 1.2, contrast: 1.02, tint: 0.12, bloom: 0.35, vignette: 0.22, paint: 0, ink: 0.3, paper: 0.012, lift: 0.025 };
+  return { ...base, saturation: base.saturation * 1.07, contrast: Math.min(base.contrast, 1.04), paint: 0, ink: night ? 0.25 : 0.3, paper: 0.012, lift: night ? 0.02 : 0.025 };
 }
 /**
  * Luz y etalonaje del capítulo. Un capítulo de noche con un rato de día (Barajas, en el de Fito) toma

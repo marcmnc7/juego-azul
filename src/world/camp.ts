@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Surf } from '../core/surfaces';
 import { audio } from '../core/audio';
 import { Sky, Sun, glowTexture, toon } from '../core/gfx';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
@@ -76,7 +77,7 @@ export class Camp {
       m.add(G.cyl, 0x3f3026, px, h / 2, pz, 0.04, 0, 0.05, 0.42, h, 0.42);
       for (let k = 0; k < 5; k++) m.add(G.bush, k % 2 ? 0x24402a : 0x2c4c30, px + Math.cos(k * 1.3) * 1.9, h + Math.sin(k * 2) * 0.5, pz + Math.sin(k * 1.3) * 1.9, 0, k, 0, 3.2, 1.5, 3.0);
     }
-    const vineMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), toon({ color: 0xffffff, roughness: 0.9 }), vines.length);
+    const vineMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 3), toon({ color: 0xffffff, roughness: 0.9, surf: Surf.Foliage, leafy: true, side: THREE.DoubleSide }), vines.length);
     vines.forEach((mx, i) => {
       vineMesh.setMatrixAt(i, mx);
       vineMesh.setColorAt(i, tint[i]);

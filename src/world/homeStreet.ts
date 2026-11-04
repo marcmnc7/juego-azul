@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, Merger } from '../entities/models';
+import { G, Merger, palmCrown } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
@@ -131,10 +131,7 @@ export function shutterTexture(color = '#1f5a45') {
 function palm(m: Merger, x: number, z: number, h: number) {
   const n = Math.round(h / 1.1);
   for (let i = 0; i < n; i++) m.add(G.cyl, 0x6b5a40, x + Math.sin(i * 0.25) * 0.25, (i + 0.5) * (h / n), z, 0, 0, 0.04, 0.42 - i * 0.02, h / n + 0.05, 0.42 - i * 0.02);
-  for (let k = 0; k < 8; k++) {
-    const a = (k / 8) * Math.PI * 2;
-    m.add(G.box, 0x2f6a34, x + Math.cos(a) * 1.3, h + 0.1, z + Math.sin(a) * 1.3, 0, -a, 0.5, 2.7, 0.08, 0.6);
-  }
+  palmCrown(m, x, h, z, 2.6, 14);
 }
 
 /** Ventana con marco blanco, luz dentro y contraventanas abiertas (o cerradas). */

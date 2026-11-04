@@ -69,7 +69,11 @@ export class Terrace {
 
     // --- Edificio de El Ancla (a la izquierda de la foto = +x) ---
     m.add(G.box, WHITE, 1.2, 6.2, FZ + 0.4, 0, 0, 0, 13, 6, 0.8); // pisos de arriba, blancos
-    m.add(G.box, 0x3a3430, 1.2, 1.6, FZ + 0.8, 0, 0, 0, 13, 3.2, 0.4); // interior en sombra
+    m.add(G.box, 0x6a5444, 1.2, 1.6, FZ + 0.8, 0, 0, 0, 13, 3.2, 0.4); // interior del bar, en penumbra cálida
+    for (const x of [6.3, 3.0, 2.2, -1.9, -4.2]) {
+      m.add(G.box, 0x7a5a3a, x, 1.85, FZ + 0.58, 0, 0, 0, 0.72, 0.03, 0.12); // estantes con botellas
+      for (let k = 0; k < 4; k++) m.add(G.cyl, [0x2f6b3a, 0x8a5a1c, 0x3a2418, 0xd8d0b8][k], x - 0.25 + k * 0.17, 2.01, FZ + 0.56, 0, 0, 0, 0.06, 0.28, 0.06);
+    }
     // Pilares de piedra de los soportales
     for (const x of [7.4, 3.9, 1.0, -2.6, -5.1]) m.add(G.box, STONE, x, 1.6, FZ + 0.1, 0, 0, 0, 0.45, 3.2, 0.45);
     m.add(G.box, STONE, 1.2, 3.25, FZ + 0.2, 0, 0, 0, 13, 0.25, 0.5);
