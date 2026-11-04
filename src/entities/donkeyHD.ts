@@ -173,6 +173,7 @@ function burro(pos: THREE.BufferAttribute, morphs: THREE.BufferAttribute[]) {
 }
 
 const lin = (hex: number) => new THREE.Color(hex);
+let riderN = 0;
 
 /** Ase con jinete; la misma interfaz que el de los muñecos (root, pivot, patas, cabeza). */
 export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false): Donkey {
@@ -198,17 +199,53 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   inner.add(mesh);
   const back = (P.backY - P.minY) * P.scale;
 
-  // Manta roja y silla
-  const cloth = new THREE.MeshStandardMaterial({ color: lin(horse ? 0xf4f1ea : 0x9b2335), roughness: 0.85 });
-  const blanket = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.05, 0.7), cloth);
-  blanket.position.set(0, back + 0.01, -0.05);
-  blanket.castShadow = true;
-  inner.add(blanket);
+  // La silla: manta que abraza el lomo, asiento de cuero con arzón y borrén, cincha y estribos
+  const tack = new THREE.Group();
+  tack.position.set(0, back, -0.05);
+  const std = (color: number, roughness: number) => new THREE.MeshStandardMaterial({ color: lin(color), roughness, side: THREE.DoubleSide });
+  const R = 0.36;
+  const padMat = std(horse ? 0x2c1216 : 0x9b2335, 0.9);
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.02, R + 0.02, 0.72, 20, 1, true, Math.PI - 1.0, 2.0).rotateX(Math.PI / 2), padMat);
+  pad.position.y = 0.012 - R;
+  const leather = std(horse ? 0x17100c : 0x6e4526, 0.5);
+  const seat = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 12), leather);
+  seat.scale.set(0.36, 0.09, 0.58);
+  seat.position.y = 0.05;
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), leather);
+  pommel.scale.set(0.2, 0.13, 0.13);
+  pommel.position.set(0, 0.1, 0.27);
+  const cantle = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), leather);
+  cantle.scale.set(0.28, 0.17, 0.1);
+  cantle.position.set(0, 0.11, -0.3);
+  const iron = new THREE.MeshStandardMaterial({ color: lin(0x8f9296), roughness: 0.35, metalness: 0.8 });
+  const dark = std(0x17100c, 0.7);
+  const girth = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.03, R + 0.03, 0.07, 22, 1, true, Math.PI - 1.5, 3.0).rotateX(Math.PI / 2), dark);
+  girth.position.set(0, 0.012 - R, 0.1);
+  tack.add(pad, seat, pommel, cantle, girth);
+  for (const sx of [-1, 1]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.42, 0.03), dark);
+    strap.position.set(sx * 0.335, -0.27, 0.08);
+    strap.rotation.z = sx * 0.1;
+    const stirrup = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 14), iron);
+    stirrup.position.set(sx * 0.36, -0.52, 0.08);
+    stirrup.rotation.y = Math.PI / 2;
+    tack.add(strap, stirrup);
+  }
+  tack.traverse((o) => (o.castShadow = true));
+  inner.add(tack);
 
-  // Jinete (caixer): frac negro, pantalón blanco, botas y bombín
-  const rider = makeRigPerson({ skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }, 1, new THREE.Object3D());
-  // La cadera unos centímetros por encima de la manta (a +0,04 quedaba a ras y se hundía en el lomo)
-  rider.root.position.set(0, back + 0.11 - rider.rig!.hipsHeight, -0.05);
+  // Jinete. En los caballos, el caixer: frac negro, pantalón blanco, botas y bombín. En los burros de
+  // Ferreries, uno del pueblo en ropa de verano y sin sombrero.
+  const R0 = riderN++;
+  const rider = makeRigPerson(
+    horse
+      ? { skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }
+      : { skin: [0xe8b894, 0xd9a27c, 0xf0c8a6, 0xc98e64][R0 % 4], shirt: [0xffffff, 0x2f6b8a, 0xd7263d, 0xe9c75a][R0 % 4], pants: [0x3b4a6b, 0xc9b48a, 0x6f8fb8, 0x2d2d3a][R0 % 4], hair: [0x2a1d14, 0x6b3f22, 0x1f1610, 0x8a6a40][R0 % 4], hairStyle: 'short', male: true, shorts: true },
+    1,
+    new THREE.Object3D(),
+  );
+  // La cadera unos centímetros por encima del asiento
+  rider.root.position.set(0, back + 0.13 - rider.rig!.hipsHeight, -0.05);
   inner.add(rider.root);
   rider.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
   // A horcajadas de verdad: las piernas por fuera de la barriga (antes se le metían dentro)
@@ -218,16 +255,18 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   rider.armL.rotation.set(-0.45, 0, -0.1);
   rider.armR.rotation.set(-0.45, 0, 0.1);
   rider.elbowL.rotation.x = rider.elbowR.rotation.x = -0.9;
-  const black = new THREE.MeshStandardMaterial({ color: lin(0x111111), roughness: 0.55 });
-  const hat = new THREE.Group();
-  const crown = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), black);
-  crown.scale.y = 1.1;
-  crown.position.y = 0.17;
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 24), black);
-  brim.position.y = 0.175;
-  hat.add(crown, brim);
-  hat.traverse((o) => (o.castShadow = true));
-  boneAnchor(rider, 'Head').add(hat);
+  if (horse) {
+    const black = new THREE.MeshStandardMaterial({ color: lin(0x111111), roughness: 0.55 });
+    const hat = new THREE.Group();
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), black);
+    crown.scale.y = 1.1;
+    crown.position.y = 0.17;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 24), black);
+    brim.position.y = 0.175;
+    hat.add(crown, brim);
+    hat.traverse((o) => (o.castShadow = true));
+    boneAnchor(rider, 'Head').add(hat);
+  }
 
   // Patas y cabeza: las mueve el nivel; aquí solo sirven para saber si anda
   const head = new THREE.Group();
@@ -256,17 +295,23 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
     speed += (v - speed) * Math.min(1, dt * 6);
     if (!horse && speed > 0.2) {
       // El burro va al paso: las patas van y vienen alrededor de la pose de parado, sin galopar
-      walk += dt * (2.2 + speed * 2.4);
+      // (a la cadencia de un burro: una zancada y media por segundo, con el lomo balanceándose y el jinete encima)
+      walk += dt * (4.2 + speed * 3.2);
       const D = P.clip.duration;
-      act.time = (P.standT + Math.sin(walk) * D * 0.11 + D) % D;
+      act.time = (P.standT + Math.sin(walk) * D * 0.12 + D) % D;
       act.timeScale = 0;
       mixer.update(0);
-      mesh.position.y = -P.minY * P.scale + Math.abs(Math.sin(walk)) * 0.025;
+      inner.position.y = Math.abs(Math.sin(walk)) * 0.035;
+      inner.rotation.z = Math.sin(walk) * 0.022;
+      inner.rotation.y = Math.sin(walk) * 0.018;
     } else if (speed > 0.2) {
       act.timeScale = THREE.MathUtils.clamp((speed / P.stride) * P.clip.duration, 0.3, 1.6);
       mixer.update(dt);
     } else {
       // Parado: vuelve poco a poco a la pose con las cuatro patas en el suelo
+      inner.position.y *= 0.9;
+      inner.rotation.z *= 0.9;
+      inner.rotation.y *= 0.9;
       let dtT = P.standT - act.time;
       const D = P.clip.duration;
       dtT -= Math.round(dtT / D) * D;

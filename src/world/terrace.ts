@@ -191,13 +191,13 @@ export class Terrace {
     sc.add(m.mesh());
 
     // Plato de zamburiñas
-    this.plate.add(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.04, 20), toon({ color: 0xffffff })));
+    this.plate.add(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.02, 28), toon({ color: 0xffffff })));
     for (let i = 0; i < 6; i++) {
       const s = makeScallop();
-      s.root.scale.setScalar(0.32);
       const a = (i / 6) * Math.PI * 2;
-      s.root.position.set(Math.cos(a) * 0.17, 0.0, Math.sin(a) * 0.17);
-      (s.meat.material as THREE.MeshLambertMaterial).color.set(0xe0a040);
+      s.root.position.set(Math.cos(a) * 0.1, 0.012, Math.sin(a) * 0.1);
+      s.root.rotation.y = -a + Math.PI / 2; // la charnela hacia el centro del plato
+      (s.meat.material as THREE.MeshStandardMaterial).color.set(0xeec691);
       this.plate.add(s.root);
     }
     this.plate.position.set(0, 0.8, 0.05);
@@ -230,7 +230,7 @@ export class Terrace {
     if (this.eatT >= 0) return;
     this.eatT = 0;
     this.bite.getWorldPosition(this.biteFrom);
-    this.shine.scale.setScalar(0.3);
+    this.shine.scale.setScalar(0.16);
     this.scene.add(this.shine);
     const a = this.azul;
     const r = a.rig;
@@ -283,7 +283,12 @@ export class Terrace {
       }
       const hand = this.azul.handR.getWorldPosition(new THREE.Vector3());
       // La coge al llegar la mano al plato y va con ella hasta la boca
-      if (this.eatT > 0.22 && this.eatT < 1.14) this.bite.position.copy(this.plate.worldToLocal(hand.clone()));
+      if (this.eatT > 0.22 && this.eatT < 1.14) {
+        // Cogida con la punta de los dedos: por delante de la mano, hacia él, no tapada por ella
+        const fx = Math.sin(this.azul.root.rotation.y), fz = Math.cos(this.azul.root.rotation.y);
+        this.bite.position.copy(this.plate.worldToLocal(hand.clone().add(new THREE.Vector3(fx * 0.075, 0.035, fz * 0.075))));
+        this.bite.rotation.set(0, 0, -0.75); // la concha, abierta hacia él: se ve lo que se come
+      }
       const sm = this.shine.material;
       sm.opacity = this.bite.visible ? THREE.MathUtils.smoothstep(this.eatT, 0.3, 0.75) * (0.42 + Math.sin(this.t * 3) * 0.08) : Math.max(0, sm.opacity - dt * 3);
       this.bite.getWorldPosition(this.shine.position);

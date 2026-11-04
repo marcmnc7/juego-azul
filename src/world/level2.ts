@@ -14,6 +14,7 @@ import { Laurel } from './laurel';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
 import { Surf } from '../core/surfaces';
+import { beacon } from '../core/beacon';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 
@@ -636,20 +637,23 @@ export class Level2 implements Level {
     return g;
   }
 
+  /** La plancha de un bar, a tamaño real: encimera de acero, plancha oscura, limón, plato y las zamburiñas. */
   private buildGrill() {
     const g = new THREE.Group();
     g.add(
       new Merger()
-        .add(G.box, 0x6b6b70, 0, 0.5, 0, 0, 0, 0, 4.2, 1, 3.2)
-        .add(G.box, 0x2a2a2e, 0, 1.02, 0, 0, 0, 0, 4, 0.06, 3)
-        .add(G.box, 0x8a5a36, 3.2, 0.5, 0, 0, 0, 0, 1.8, 1, 1.8)
-        .add(G.cyl, 0xffffff, 3.2, 1.05, 0, 0, 0, 0, 1.4, 0.06, 1.4) // plato
-        .add(G.cyl, 0xf9e04b, -1.6, 1.1, 1.2, 0, 0, Math.PI / 2, 0.3, 0.06, 0.3) // limón
+        .add(G.box, 0x8d9096, 0, 0.45, 0, 0, 0, 0, 1.6, 0.9, 0.9)
+        .add(G.box, 0xb4b7bc, 0, 0.91, 0, 0, 0, 0, 1.66, 0.03, 0.96)
+        .add(G.box, 0x24242a, -0.14, 0.93, 0, 0, 0, 0, 1.06, 0.02, 0.76)
+        .add(G.cyl, 0xffffff, 0.62, 0.935, 0, 0, 0, 0, 0.26, 0.015, 0.26) // plato
+        .add(G.sphere, 0xf0dc4a, -0.08, 0.955, 0.33, 0, 0, 0, 0.055, 0.045, 0.045) // limón
+        .add(G.cyl, 0x6a7f3a, 0.62, 0.95, -0.28, 0, 0, 0, 0.08, 0.05, 0.08) // perejil picado
         .mesh(),
     );
     for (let i = 0; i < 6; i++) {
       const s = makeScallop();
-      s.root.position.set(-1.3 + (i % 3) * 1.3, 1.05, -0.6 + Math.floor(i / 3) * 1.2);
+      s.root.position.set(-0.46 + (i % 3) * 0.32, 0.942, -0.16 + Math.floor(i / 3) * 0.34);
+      s.root.rotation.y = i * 1.1;
       g.add(s.root);
       this.scallops.push({ root: s.root, meat: s.meat, p: 0, speed: 0.18 + Math.random() * 0.1, wait: i * 0.4 });
     }
@@ -788,7 +792,9 @@ export class Level2 implements Level {
   update(dt: number) {
     this.t += dt;
     if (this.phase === 'camp' && this.camp) {
-      this.camp.update(dt, this.camera);
+      const before = this.camp.inside;
+      this.camp.update(dt, this.camera, this.busy ? null : this.input, this.hud);
+      if (this.camp.inside && !before) this.campInside();
       return;
     }
     if (this.phase === 'logrono' && this.laurel) {
@@ -889,7 +895,14 @@ export class Level2 implements Level {
     }
     for (const th of this.things) {
       if (!th.alive) continue;
-      th.z += th.speed * dt;
+      // Parados nosotros, para todo: nadie atraviesa el coche ni el pueblo
+      if (drive) th.z += th.speed * dt;
+      // El tráfico se queda antes de entrar en San Vicente y en Logroño
+      if (th.speed > 0 && (th.z > LEG1 - 45 && th.z < LEG1 + 60 || th.z > LEG1 + 40 + LEG2 - 30)) {
+        th.alive = false;
+        this.scene.remove(th.obj);
+        continue;
+      }
       th.obj.position.z = th.z;
       if (th.kind === 'photo') {
         th.obj.position.y = 1.2 + Math.sin(this.t * 4 + th.z) * 0.15;
@@ -970,6 +983,8 @@ export class Level2 implements Level {
   }
 
   private arriveSV() {
+    this.things.forEach((t) => this.scene.remove(t.obj));
+    this.things = [];
     this.phase = 'arriveSV';
     this.lane = 1;
     this.updateHud();
@@ -984,7 +999,7 @@ export class Level2 implements Level {
     // Las matas y piedras de la cuneta se quedan en la carretera: aquí salían debajo de la plancha
     for (const sc of this.scatters) sc.mesh.visible = false;
     const g = this.grill.position;
-    this.camera.position.set(g.x + 0.3, 6.2, g.z - 3.2);
+    this.camera.position.set(g.x - 0.14, 1.72, g.z - 0.72);
     this.served = 0;
     this.scallops.forEach((s, i) => {
       s.p = 0;
@@ -1020,7 +1035,6 @@ export class Level2 implements Level {
       this.served++;
       audio.pickup();
       toast(ROAD.zamb.served);
-      this.fx.burst(s.root.getWorldPosition(new THREE.Vector3()).setY(1.6), '✨', 6, 1.2);
       s.p = 0;
       s.wait = 0.6;
       s.speed = 0.18 + Math.random() * 0.12;
@@ -1158,58 +1172,74 @@ export class Level2 implements Level {
     this.busy = true;
     this.updateHud();
     audio.chime(2);
-    const [night, noGas] = ROAD.camp;
+    const [night] = ROAD.camp;
     later(() =>
       fadeFlash(() => {
         if (!this.camp) {
           this.camp = new Camp();
           applyShadows(this.camp.scene);
         }
-        const c = this.camp;
         this.laneBtns.forEach((b) => (b.hidden = true));
         this.route.style.display = 'none';
         audio.stopMusic();
         audio.startMusic('night');
-        const mid = () => c.table.clone().setY(1.05);
-        cinema.play([
-          // Plano general entre las viñas, acercándose a la mesa
-          { dur: Infinity, move: 7, pos: new THREE.Vector3(-9, 3.4, -11), pos2: new THREE.Vector3(-3.6, 1.9, -4.4), look: c.table, look2: mid() },
-          // El hornillo: clic, clic, clic… y nada
-          { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove, at: () => c.tryStove() },
-          // Los dos, frente a frente
-          { dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.5), pos2: new THREE.Vector3(0.05, 1.3, -2.0), look: mid, fov: 46, focus: mid },
-        ]);
-        later(() =>
-          dialogue([night], () => {
-            cinema.next();
-            dialogue([noGas], () => {
-              cinema.next();
-              audio.fanfare();
-              // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
-              cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-              later(
-                () =>
-                  dialogue(ROAD.campAfter, () =>
-                    fadeFlash(() => {
-                      cinema.stop();
-                      audio.stopMusic();
-                      audio.startMusic('road');
-                      this.route.style.display = '';
-                      this.busy = false;
-                      this.speed = 0;
-                      this.phase = 'drive1';
-                      this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
-                      this.nextSpawn = this.carZ + 60;
-                      this.updateHud();
-                    }, 500),
-                  ),
-                3800,
-              );
-            });
-          }),
-        900);
+        this.camp.startWalk(this.camera);
+        this.input.reset();
+        this.hud.setObjective('Entra en la cabaña de leña');
+        this.hud.setCounters('');
+        dialogue([night], () => {
+          this.busy = false;
+        });
       }, 500),
     1200);
+  }
+
+  /** Ya dentro de la cabaña: se sientan a la mesa y el hornillo no enciende. */
+  private campInside() {
+    const c = this.camp!;
+    const [, noGas] = ROAD.camp;
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    fadeFlash(() => {
+      c.sitDown();
+      this.hud.setObjective('');
+      const mid = () => c.table.clone().setY(1.05);
+      cinema.play([
+        // El hornillo: clic, clic, clic… y nada
+        { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove, at: () => c.tryStove() },
+        // Los dos, frente a frente
+        { dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid },
+      ]);
+      later(() =>
+        dialogue([noGas], () => {
+          cinema.next();
+          audio.fanfare();
+          // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
+          cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+          later(
+            () =>
+              dialogue(ROAD.campAfter, () =>
+                fadeFlash(() => {
+                  cinema.stop();
+                  audio.stopMusic();
+                  audio.startMusic('road');
+                  this.route.style.display = '';
+                  this.busy = false;
+                  this.speed = 0;
+                  this.phase = 'drive1';
+                  this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+                  this.nextSpawn = this.carZ + 60;
+                  this.updateHud();
+                }, 500),
+              ),
+            3800,
+          );
+        }),
+      900);
+    }, 500);
   }
 
   /** Logroño, de fiesta. Y al acabar, la vuelta en tren y el nombre: los chats de esos días. */
@@ -1287,7 +1317,7 @@ export class Level2 implements Level {
     const zb = () => t.bitePos();
     cinema.play([
       { dur: 2.2, slow: 0.34, pos: () => rel(gz(), az(), 0.85, 0.32, 0.06), pos2: () => rel(gz(), az(), 0.62, 0.26, 0.02), look: az, focus: az, at: () => audio.whoosh() },
-      { dur: 2.8, slow: 0.13, pos: () => rel(zb(), gz(), -0.46, 0.12, 0.03), pos2: () => rel(zb(), gz(), -0.27, 0.07, 0.02), look: zb, fov: 40, fov2: 28, focus: zb, at: () => audio.chime(1) },
+      { dur: 2.8, slow: 0.13, pos: () => rel(zb(), gz(), -0.42, 0.12, 0.2), pos2: () => rel(zb(), gz(), -0.28, 0.08, 0.14), look: zb, fov: 38, fov2: 30, focus: zb, at: () => audio.chime(1) },
       { dur: Infinity, slow: 0.13, move: 3.4, pos: () => rel(az(), gz(), -1.05, 0.12, 0.0), pos2: () => rel(az(), gz(), -0.52, 0.06, -0.02), look: az, fov: 45, fov2: 32, focus: az, at: () => audio.chime(2) },
       { dur: Infinity, slow: 0.25, move: 3, pos: () => rel(gz(), az(), -0.95, -0.2, 0.0), pos2: () => rel(gz(), az(), -0.72, -0.18, 0.0), look: gz, fov: 40, focus: gz },
     ]);
@@ -1386,8 +1416,8 @@ export class Level2 implements Level {
   }
 
   private updateGrill(dt: number) {
-    const raw = new THREE.Color(0xf3e6d3);
-    const gold = new THREE.Color(0xe0a040);
+    const raw = new THREE.Color(0xf6efe2);
+    const gold = new THREE.Color(0xe6bb80); // dorada por fuera, no amarilla
     const burnt = new THREE.Color(0x2e2018);
     for (const s of this.scallops) {
       if (s.wait > 0) {
@@ -1402,7 +1432,7 @@ export class Level2 implements Level {
       else if (s.p <= 1) c.copy(gold);
       else c.copy(gold).lerp(burnt, Math.min(1, (s.p - 1) * 4));
       // Brilla cuando está en su punto
-      s.root.scale.setScalar(s.p >= 0.62 && s.p <= 1 ? 1 + Math.sin(this.t * 12) * 0.06 : 1);
+      s.root.scale.setScalar(s.p >= 0.62 && s.p <= 1 ? 1 + Math.sin(this.t * 12) * 0.05 : 1);
       if (s.p > 1.35) {
         audio.boo();
         this.burnt++;
@@ -1416,8 +1446,8 @@ export class Level2 implements Level {
   private updateCamera(dt: number) {
     if (this.phase === 'grill' || this.phase === 'zambDone') {
       const g = this.grill.position;
-      this.camTarget.set(g.x + 0.3, 6.2, g.z - 3.2);
-      this.camLook.set(g.x + 0.3, 1, g.z);
+      this.camTarget.set(g.x - 0.14, 1.72, g.z - 0.72);
+      this.camLook.set(g.x - 0.14, 0.94, g.z + 0.02);
     } else if (this.phase === 'arriveSV' || this.phase === 'logrono') {
       this.camTarget.set(this.carX - 6, 4, this.carZ - 7);
       this.camLook.set(this.carX + 2, 2, this.carZ + 14);

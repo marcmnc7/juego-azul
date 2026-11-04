@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { hdSurfaces } from '../core/gfx';
+import { TownHD } from './hd/townHD';
 import { G, Merger, makeCar } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
 import { Surf } from '../core/surfaces';
@@ -88,15 +90,21 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   const m = new Merger();
 
   let blockN = 0;
+  // Con superficies de alta calidad, las manzanas como en Ferreries
+  const hd = hdSurfaces.value ? new TownHD() : null;
   const block = (x0: number, x1: number, z0: number, z1: number, h: number, color: number) => {
     // Cada bloque unos milímetros distinto: dos manzanas en el mismo plano parpadean
     const e = (blockN++ % 6) * 0.012 + 0.006;
-    m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - e, h, z1 - z0 - e);
-    m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
+    if (hd) hd.wall(x0, x1, z0, z1, h, color);
+    else {
+      m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - e, h, z1 - z0 - e);
+      m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
+    }
     col(x0, x1, z0, z1);
   };
   /** Ventanas con persianas verdes menorquinas y balcones. along: fachada a lo largo de x (si no, de z). */
   const facade = (a0: number, a1: number, at: number, face: 1 | -1, floors: number, alongX = true) => {
+    if (hd) return hd.facade(a0, a1, at, face, floors, alongX);
     const len = Math.abs(a1 - a0);
     const n = Math.max(1, Math.floor(len / 3));
     for (let f = 0; f < floors; f++)
@@ -186,7 +194,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   }
   // (la cámara pasa por encima de la verja y la peana; si no, se pegaba a Azul al andar junto al obelisco)
   // La verja es redonda: con una caja, Azul chocaba en las esquinas del cuadrado sin tocar nada
-  colliders.push({ minX: -3.25 + ox, maxX: 3.25 + ox, minZ: -3.25 + oz, maxZ: 3.25 + oz, low: true, round: true });
+  colliders.push({ minX: -3.14 + ox, maxX: 3.14 + ox, minZ: -3.14 + oz, maxZ: 3.14 + oz, low: true, round: true }); // la verja está a 3,1 m
 
   // --- Oeste, al fondo a la derecha: el Ajuntament (antiguo alcázar): almenas, ojivas y torre ---
   const W = BORN.minX;
@@ -349,6 +357,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     }
   }
 
+  hd?.finish(g);
   const mesh = m.mesh();
   g.add(mesh);
   // Luz de las farolas

@@ -477,7 +477,7 @@ export class Level3 implements Level {
     this.player.root.position.set(0, 0, -18);
     sc.add(this.player.root);
 
-    // Gas vuela por su cuenta y te espera en el aeropuerto; aquí ya salís juntos. Lleva su camiseta de Fito, azul y roja
+    // Gas vuela por su cuenta. Lleva su camiseta de Fito, azul y roja
     this.gas = makePerson({ ...MARC_LOOK, shirt: 0x1f4fa8 });
     shirtPrint(this.gas, fitoPrint(), 0.3);
     this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);

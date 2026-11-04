@@ -625,9 +625,7 @@ export class LevelMoto implements Level {
     const a = this.azul;
     if (a.rig) {
       const k = this.azulWaveK;
-      // El brazo del lado del otro carril: de abrazar a Gas a fuera y arriba
-      a.armR.rotation.set(THREE.MathUtils.lerp(-1.2, -0.35, k), 0, THREE.MathUtils.lerp(-0.55, 1.35, k));
-      a.elbowR.rotation.x = THREE.MathUtils.lerp(-0.55, -0.25, k) + Math.sin(this.t * 14) * 0.15 * k;
+      void k; // (el brazo lo lleva el IK de hugGas)
     }
     for (const o of this.oncoming) {
       if (!o.rider) continue;
@@ -654,12 +652,19 @@ export class LevelMoto implements Level {
       for (const sx of [1, -1]) {
         const left = sx > 0 ? onLeft : !onLeft;
         const side = left ? 'Left' : 'Right';
-        // El brazo que saluda suelta a Gas (es el de armR: el lado -x)
-        const w = sx < 0 ? 1 - this.azulWaveK : 1;
+        // Saluda con la izquierda, como los moteros: ese brazo suelta a Gas
+        const w = left ? 1 - this.azulWaveK : 1;
         if (w <= 0.01) continue;
         root.localToWorld(t.set(sx * 0.17, 1.17, -0.5));
         root.localToWorld(pole.set(sx * 0.62, 0.98, -0.72));
         twoBone(B(side + 'Arm'), B(side + 'ForeArm'), B(side + 'Hand'), t, pole, w);
+      }
+      // La mano izquierda, fuera y arriba, moviéndose: el saludo
+      if (this.azulWaveK > 0.01) {
+        const ls = onLeft ? 1 : -1;
+        root.localToWorld(t.set(ls * 0.62, 1.62 + Math.sin(this.t * 13) * 0.05, -0.42 + Math.sin(this.t * 13) * 0.07));
+        root.localToWorld(pole.set(ls * 1.0, 1.0, -0.7));
+        twoBone(B('LeftArm'), B('LeftForeArm'), B('LeftHand'), t, pole, this.azulWaveK);
       }
       // Pies en las estriberas de atrás, con la rodilla hacia fuera (por los lados de Gas)
       for (const sx of [1, -1]) {

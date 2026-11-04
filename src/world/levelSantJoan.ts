@@ -4,7 +4,8 @@ import { Trail } from '../core/follow';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
-import { Sky, Sun, Fireworks, glowTexture, toon, vibrate, applyShadows } from '../core/gfx';
+import { Sky, Sun, Fireworks, glowTexture, toon, vibrate, applyShadows, hdSurfaces } from '../core/gfx';
+import { TownHD } from './hd/townHD';
 import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
@@ -45,7 +46,7 @@ const ESPANYA = { minX: 70, maxX: 90, minZ: -12, maxZ: 12 };
 const PINS = [new THREE.Vector3(CORREUS.x + 2, 0, CORREUS.z - 1.2)]; // Correus
 const START = new THREE.Vector3(82, 0, 0); // Plaça Espanya
 /** Sa Plaça d'es Bè: la plaza donde se hacen botar los caballos. */
-const BE = new THREE.Vector3(-260, 0, 0);
+const BE = new THREE.Vector3(113, 0, 0); // pasada la Plaça Espanya, por una calle: se llega andando
 const BE_BOX: Box2 = { minX: BE.x - 15, maxX: BE.x + 15, minZ: BE.z - 11, maxZ: BE.z + 11 };
 const BE_HORSES = 3;
 const BE_R = 4.4;
@@ -149,7 +150,9 @@ export class LevelSantJoan implements Level {
   private v2 = new THREE.Vector3();
   private tmpQ = new THREE.Quaternion();
   private up = new THREE.Vector3(0, 1, 0);
-  private bounds: Box2 = { minX: BORN.minX + 0.5, maxX: ESPANYA.maxX - 0.5, minZ: BORN.minZ + 0.5, maxZ: BORN.maxZ - 0.5 };
+  private bounds: Box2 = { minX: BORN.minX + 0.5, maxX: BE_BOX.maxX - 0.5, minZ: BORN.minZ + 0.5, maxZ: BORN.maxZ - 0.5 };
+  private beIn = false;
+  private hd = hdSurfaces.value ? new TownHD() : null;
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -245,13 +248,19 @@ export class LevelSantJoan implements Level {
   private block(m: Merger, x0: number, x1: number, z0: number, z1: number, h: number, color: number, collide = true) {
     // Cada bloque unos milímetros distinto (y distinto de los del Born): dos manzanas en el mismo plano parpadean
     const e = Math.min(x1 - x0, 0.006 + (this.blockN++ % 6) * 0.012 + 0.012);
+    if (this.hd) {
+      this.hd.wall(x0, x1, z0, z1, h, color);
+      if (collide) this.colliders.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1 });
+      return;
+    }
     m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - (x1 - x0 > 0.1 ? e : 0), h, z1 - z0 - e);
     m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
     if (collide) this.colliders.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1 });
   }
 
   /** Ventanas con persianas verdes menorquinas y balcones en la cara que da a la calle. */
-  private facade(m: Merger, x0: number, x1: number, z: number, face: 1 | -1, floors: number, alongX = true) {
+  private facade(m: Merger, x0: number, x1: number, z: number, face: 1 | -1, floors: number, alongX = true, groundFloor = true) {
+    if (this.hd) return this.hd.facade(x0, x1, z, face, floors, alongX, groundFloor);
     const len = Math.abs(x1 - x0);
     const n = Math.max(1, Math.floor(len / 3));
     for (let f = 0; f < floors; f++) {
@@ -310,10 +319,13 @@ export class LevelSantJoan implements Level {
     });
     stone.wrapS = stone.wrapT = THREE.RepeatWrapping;
     stone.repeat.set(60, 20);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 90).rotateX(-Math.PI / 2), toon({ map: stone, roughness: 0.9 }));
-    ground.position.x = 35;
-    ground.userData.noCast = true;
-    sc.add(ground);
+    if (this.hd) this.hd.b.box(this.hd.M.slabs, [35, -0.06, 0], [260, 0.1, 90], { tile: 3 });
+    else {
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 90).rotateX(-Math.PI / 2), toon({ map: stone, roughness: 0.9 }));
+      ground.position.x = 35;
+      ground.userData.noCast = true;
+      sc.add(ground);
+    }
 
     // El Born (compartido con el capítulo 2): explanada alta con el obelisco y calle alrededor
     buildBorn(sc, this.colliders, new THREE.Vector3(0, 0, 0), { voltes: true });
@@ -341,7 +353,7 @@ export class LevelSantJoan implements Level {
         m.add(G.box, 0xe9d6ae, x + 1.3, 1.5, wz - side * 0.07, 0, 0, 0, 1.8, 2.3, 0.04); // luz del escaparate
         for (let j = 0; j < 4; j++) m.add(G.rbox, shopCols[(k + j) % shopCols.length], x + 0.65 + j * 0.42, 1.0 + (j % 2) * 0.55, wz - side * 0.12, 0, 0, 0, 0.3, 0.32, 0.12);
       }
-      this.facade(m, 31, STREET.maxX - 1, wallZ, (-side) as 1 | -1, 2);
+      this.facade(m, 31, STREET.maxX - 1, wallZ, (-side) as 1 | -1, 3, true, false); // abajo van los soportales
     }
     // Entre el Born y Ses Voltes, como en Ciutadella: el Carrer Major des Born y la Catedral de Menorca
     // (gótica, de marès, con el pórtico neoclásico de 1813 y el campanario). Ses Voltes empieza en la
@@ -372,7 +384,11 @@ export class LevelSantJoan implements Level {
       this.block(m, 19, 30, -22, STREET.minZ - 0.2, 10, 0xe9dcc0);
       this.facade(m, 19, 30, STREET.minZ - 0.2, 1, 3);
     }
-    this.block(m, ESPANYA.maxX, ESPANYA.maxX + 8, -14, 14, 9, SAND);
+    // Al fondo de la Plaça Espanya, la calle que lleva a Sa Plaça d'es Bè
+    this.block(m, ESPANYA.maxX, BE_BOX.minX, 3, 18, 9, SAND);
+    this.block(m, ESPANYA.maxX, BE_BOX.minX, -18, -3, 9, 0xeee3c8);
+    this.facade(m, 3, 12, ESPANYA.maxX, -1, 2, false);
+    this.facade(m, -12, -3, ESPANYA.maxX, -1, 2, false);
     this.block(m, STREET.maxX, ESPANYA.maxX, ESPANYA.maxZ, ESPANYA.maxZ + 7, 9, 0xeee3c8);
     this.block(m, STREET.maxX, ESPANYA.maxX, ESPANYA.minZ - 7, ESPANYA.minZ, 9, WHITE);
     this.block(m, STREET.maxX - 0.01, STREET.maxX + 0.01, STREET.maxZ + 0.2, ESPANYA.maxZ, 9, WHITE);
@@ -401,19 +417,15 @@ export class LevelSantJoan implements Level {
 
     // Sa Plaça d'es Bè: plaza cerrada de casas de marès con persianas verdes, y los caballos en medio
     {
-      const pz = new THREE.Mesh(new THREE.PlaneGeometry(BE_BOX.maxX - BE_BOX.minX + 2, BE_BOX.maxZ - BE_BOX.minZ + 2).rotateX(-Math.PI / 2), toon({ map: stone, roughness: 0.9 }));
-      pz.position.set(BE.x, 0.01, BE.z);
-      pz.userData.noCast = true;
-      sc.add(pz);
       const pm = new Merger();
       const { minX: x0, maxX: x1, minZ: z0, maxZ: z1 } = BE_BOX;
-      this.block(pm, x0 - 7, x0 - 0.2, z0 - 7, z1 + 7, 8, 0xe9dcc0);
       this.block(pm, x1 + 0.2, x1 + 7, z0 - 7, z1 + 7, 9, SAND);
       this.block(pm, x0, x1, z0 - 7, z0 - 0.2, 10, WHITE);
       this.block(pm, x0, x1, z1 + 0.2, z1 + 7, 8, 0xeee3c8);
-      this.facade(pm, x0, x1, z0 - 0.2, 1, 2);
+      this.facade(pm, x0, x1, z0 - 0.2, 1, 3);
       this.facade(pm, x0, x1, z1 + 0.2, -1, 2);
-      this.facade(pm, z0, z1, x0 - 0.2, 1, 2, false);
+      this.facade(pm, 3, z1, x0, 1, 2, false);
+      this.facade(pm, z0, -3, x0, 1, 2, false);
       this.facade(pm, z0, z1, x1 + 0.2, -1, 2, false);
       // Banderas de punta a punta
       const fg = new THREE.ConeGeometry(0.28, 0.6, 3).rotateZ(Math.PI);
@@ -424,7 +436,8 @@ export class LevelSantJoan implements Level {
           pm.add(fg, fc[i % fc.length], x0 + (x1 - x0) * k, 7 - Math.sin(k * Math.PI) * 1.4, BE.z + dz, 0, Math.PI / 2, 0, 1, 1, 0.15);
         }
       sc.add(pm.mesh());
-      this.sign('Sa Plaça d’es Bè', x1 + 0.1, 3.6, BE.z + 6, -Math.PI / 2, 4);
+      this.sign('Sa Plaça d’es Bè', x0 + 0.05, 3.6, 4.6, Math.PI / 2, 3.6);
+      this.sign('A Sa Plaça d’es Bè →', ESPANYA.maxX - 0.05, 3.3, 5, -Math.PI / 2, 3.2);
       const pl = new THREE.PointLight(0xffb070, 16, 24, 1.6);
       pl.position.set(BE.x, 6, BE.z);
       sc.add(pl);
@@ -460,6 +473,7 @@ export class LevelSantJoan implements Level {
       l.position.set(x, 6, z);
       sc.add(l);
     }
+    this.hd?.finish(sc);
   }
 
   /** El jaleo: gente alrededor del círculo de los caballos y algo en Ses Voltes y la Plaça Espanya. */
@@ -481,6 +495,7 @@ export class LevelSantJoan implements Level {
       const x = 32 + Math.random() * 56;
       // En Ses Voltes, por dentro de los soportales (entre columna y columna caben; dentro de una, no)
       const z = x < 70 ? (Math.random() < 0.5 ? -1 : 1) * (1.9 + Math.random() * 2.2) : -10 + Math.random() * 20;
+      if (x >= 70 && Math.abs(z) < 1.6) continue; // el paso hacia Sa Plaça d'es Bè
       if (ok(x, z)) pts.push({ x, z });
     }
     // Sa Plaça d'es Bè, llena: alrededor del corro, dejando pasillo hasta los caballos
@@ -488,7 +503,7 @@ export class LevelSantJoan implements Level {
       const x = BE_BOX.minX + 0.8 + Math.random() * (BE_BOX.maxX - BE_BOX.minX - 1.6);
       const z = BE_BOX.minZ + 0.8 + Math.random() * (BE_BOX.maxZ - BE_BOX.minZ - 1.6);
       if (Math.hypot(x - BE.x, z - BE.z) < BE_R + 2.6) continue;
-      if (x > BE.x + 8 && Math.abs(z - BE.z) < 2) continue; // por donde se entra
+      if (x < BE.x - 8 && Math.abs(z - BE.z) < 2) continue; // por donde se entra
       if (ok(x, z)) pts.push({ x, z });
     }
     LOOKS.forEach((lk, li) => {
@@ -496,7 +511,7 @@ export class LevelSantJoan implements Level {
       const people = makeCrowd(lk, mine.length);
       this.scene.add(people.group);
       // Miran hacia el centro del Born (o hacia la calle)
-      this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: p.x < -100 ? Math.atan2(BE.x - p.x, BE.z - p.z) : p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
+      this.crowds.push({ people, base: mine.map((p) => ({ ...p, ry: p.x >= BE_BOX.minX ? Math.atan2(BE.x - p.x, BE.z - p.z) : p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
     });
     this.people = pts.map((p) => ({ x: p.x, z: p.z, r: 0.33 }));
   }
@@ -652,7 +667,7 @@ export class LevelSantJoan implements Level {
   private updateHud() {
     const h = this.hud;
     h.setCounters(this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
-    if (this.phase === 'be') h.setObjective(SANTJOAN.beGo);
+    if (this.phase === 'be') h.setObjective(this.beIn ? SANTJOAN.beGo : SANTJOAN.beHint);
     else if (this.phase === 'home') h.setObjective(SANTJOAN.homeHint);
     else if (this.phase === 'hunt') h.setObjective(SANTJOAN.huntHint);
     else if (this.phase === 'exact') h.setObjective(SANTJOAN.exactHint);
@@ -665,6 +680,7 @@ export class LevelSantJoan implements Level {
     if (this.phase === 'hunt' && this.pinObj.visible) return this.pinPos;
     if (this.phase === 'coming') return this.gas.root.position;
     if (this.phase === 'exact') return this.v2.set(0, 0, 0);
+    if (this.phase === 'be' && !this.beIn) return BE;
     return null;
   }
 
@@ -718,7 +734,12 @@ export class LevelSantJoan implements Level {
           if (Math.random() < dt * 1.2) this.fx.burst(this.v1.copy(g).setY(2.4), '👋', 1, 0.4, 0.6);
         } else this.meet();
       } else if (this.phase === 'be') {
-        // Va contigo por la plaza, sin atravesar a nadie
+        // Va contigo, sin atravesar a nadie
+        if (!this.beIn && pp.x > BE_BOX.minX + 1) {
+          this.beIn = true;
+          this.updateHud();
+          audio.cheer(0.4);
+        }
         const moving = this.gasTrail.step(this.gas.root, pp, 1.6, 4.2, dt, this.colliders, 0.26);
         animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
       } else if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.gas, dt, 'idle');
@@ -860,7 +881,7 @@ export class LevelSantJoan implements Level {
         s.d.pivot.rotation.x = Math.sin(s.walk * 2) * 0.02 * g;
         s.d.head.rotation.x = Math.sin(s.walk * 2 + 0.6) * 0.07 * g;
         s.nextRear -= dt;
-        if (s.nextRear <= 0 && this.phase !== 'intro' && (!s.plaza || this.phase === 'be')) {
+        if (s.nextRear <= 0 && this.phase !== 'intro' && (!s.plaza || (this.phase === 'be' && this.beIn))) {
           s.warnT = WARN;
           if (dist < 12) audio.warn();
         }
@@ -928,26 +949,19 @@ export class LevelSantJoan implements Level {
     dialogue(SANTJOAN.meet, () => later(() => dialogue(SANTJOAN.toBe, () => this.startBe()), 700));
   }
 
-  /** A Sa Plaça d'es Bè, los dos juntos. */
+  /** A Sa Plaça d'es Bè, los dos juntos y andando: por Ses Voltes y la Plaça Espanya. */
   private startBe() {
-    fadeFlash(() => {
-      this.phase = 'be';
-      this.map.style.display = 'none';
-      this.pinObj.visible = false;
-      this.bounds = BE_BOX;
-      this.player.root.position.set(BE.x + 12, 0, BE.z);
-      this.walker.stop();
-      this.walker.yaw = this.walker.facing = -Math.PI / 2;
-      this.camera.position.set(BE.x + 18, 3.6, BE.z);
-      this.gas.root.visible = true;
-      this.gas.root.position.set(BE.x + 13.4, 0, BE.z + 0.7);
-      this.gasTrail = new Trail();
-      this.beTouched = 0;
-      this.busy = false;
-      this.input.reset();
-      this.updateHud();
-      audio.cheer(0.4);
-    }, 500);
+    this.phase = 'be';
+    this.map.style.display = 'none';
+    this.pinObj.visible = false;
+    this.gas.root.visible = true;
+    this.gasTrail = new Trail();
+    this.beTouched = 0;
+    this.beIn = false;
+    this.busy = false;
+    this.input.reset();
+    this.walker.stop();
+    this.updateHud();
   }
 
   /** De madrugada, a casa de Azul: ella, Gas y dos amigas, por la cancela hasta la puerta. A dormir. */
@@ -1088,7 +1102,7 @@ export class LevelSantJoan implements Level {
       { label: '2 · Ses Voltes', run: () => { hunt(0); tp(40, 0, -Math.PI / 2); } },
       { label: '3 · Foto exacta (Correus)', run: () => { hunt(0); this.pinObj.visible = false; this.phase = 'exact'; this.updateHud(); tp(5, -9.5, Math.PI); } },
       { label: '4 · Se encuentran', run: () => { tp(1, 4.5); this.gas.root.visible = true; this.gas.root.position.set(2, 0, 5.5); this.meet(); } },
-      { label: '5 · Sa Plaça d’es Bè', run: () => { this.busy = true; this.startBe(); } },
+      { label: '5 · Sa Plaça d’es Bè', run: () => { tp(88, 0, Math.PI / 2); this.gas.root.position.set(86.5, 0, 0.8); this.startBe(); } },
       { label: '6 · A casa de Azul', run: () => { this.busy = true; this.startHome(); } },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];

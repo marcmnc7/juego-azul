@@ -1162,16 +1162,87 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
   return { root, wheels, rider: person };
 }
 
-/** Zamburiña en su concha. Devuelve la concha y la carne (cuyo color cambia al cocinarse). */
+let scallopShell: THREE.BufferGeometry | null = null;
+/**
+ * La concha de una zamburiña de verdad (unos 9 cm): abanico con costillas desde la charnela, borde
+ * festoneado, las dos orejetas, y por dentro nacarada y rosada hacia el borde.
+ */
+function scallopShellGeo() {
+  if (scallopShell) return scallopShell;
+  const R = 0.046, N = 72, M = 12, RIBS = 19;
+  const hz = -R * 1.02; // la charnela, abajo del disco
+  const pos: number[] = [], col: number[] = [], idx: number[] = [];
+  const c = new THREE.Color();
+  const IN = new THREE.Color(0xf7efe4), MID = new THREE.Color(0xf0c2ae), EDGE = new THREE.Color(0xb9583f);
+  pos.push(0, 0, 0);
+  c.copy(IN);
+  col.push(c.r, c.g, c.b);
+  for (let j = 1; j <= M; j++) {
+    const v = j / M;
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const sx = Math.sin(a), cz = Math.cos(a);
+      // Disco casi redondo que se estrecha hacia la charnela; las costillas salen de la charnela, en abanico
+      const toHinge = Math.max(0, -cz);
+      const fan = Math.atan2(sx * R, cz * R - hz);
+      const rib = Math.cos(fan * RIBS);
+      const rr = R * v * (1 - 0.2 * Math.pow(toHinge, 5)) * (1 + 0.022 * rib * v * v);
+      pos.push(sx * rr, 0.015 * v * v + 0.0014 * rib * v, cz * rr);
+      c.copy(IN).lerp(MID, THREE.MathUtils.smoothstep(v, 0.5, 0.86)).lerp(EDGE, THREE.MathUtils.smoothstep(v, 0.86, 1));
+      c.multiplyScalar(0.93 + 0.07 * rib);
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < N; i++) idx.push(0, 1 + i, 1 + ((i + 1) % N));
+  for (let j = 0; j < M - 1; j++)
+    for (let i = 0; i < N; i++) {
+      const p = 1 + j * N + i, q = 1 + j * N + ((i + 1) % N);
+      const p2 = p + N, q2 = q + N;
+      idx.push(p, p2, q, q, p2, q2);
+    }
+  // Las dos orejetas, a los lados de la charnela
+  for (const s of [-1, 1]) {
+    const o = pos.length / 3;
+    pos.push(0, 0.006, hz + R * 0.1, s * R * 0.5, 0.01, hz + R * 0.02, s * R * 0.44, 0.012, hz + R * 0.42, 0, 0.008, hz + R * 0.42);
+    for (let k = 0; k < 4; k++) {
+      c.copy(EDGE).lerp(MID, 0.45);
+      col.push(c.r, c.g, c.b);
+    }
+    idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return (scallopShell = g);
+}
+let shellMat: THREE.Material | null = null;
+let coralMat: THREE.Material | null = null;
+
+/** Zamburiña en su concha, del tamaño real (9 cm). Devuelve la concha y la carne (cuyo color cambia al cocinarse). */
 export function makeScallop() {
   const g = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.25, 1).rotateX(Math.PI), mat(0xe9b9a0));
-  shell.position.y = 0.13;
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.05, 4, 16).rotateX(Math.PI / 2), mat(0xd98f73));
-  rim.position.y = 0.13;
-  const meat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 12), new THREE.MeshLambertMaterial({ color: 0xf3e6d3 }));
-  meat.position.y = 0.16;
-  g.add(shell, rim, meat);
+  shellMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, side: THREE.DoubleSide });
+  coralMat ??= new THREE.MeshStandardMaterial({ color: 0xe2875a, roughness: 0.5 });
+  const shell = new THREE.Mesh(scallopShellGeo(), shellMat);
+  shell.castShadow = true;
+  // La carne: el músculo blanco, redondo y jugoso, y el coral naranja abrazándolo
+  const meatGeo = new THREE.SphereGeometry(0.021, 20, 10);
+  meatGeo.scale(1, 0.5, 1);
+  const meat = new THREE.Mesh(meatGeo, new THREE.MeshStandardMaterial({ color: 0xf3e6d3, roughness: 0.38 }));
+  meat.position.set(0, 0.012, 0.003);
+  const coral = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0055, 8, 18, 2.1), coralMat);
+  coral.rotation.x = Math.PI / 2;
+  coral.rotation.z = 0.5;
+  coral.position.set(0, 0.0095, 0.003);
+  g.add(shell, meat, coral);
+  // Ajo y perejil por encima
+  const fleck = new Merger(false);
+  for (let i = 0; i < 12; i++) fleck.add(G.sphere, i % 3 ? 0x4f7a2e : 0xeadfb8, Math.cos(i * 2.4) * (0.008 + (i % 4) * 0.008), 0.0215 - (i % 4) * 0.002, 0.003 + Math.sin(i * 2.4) * (0.008 + (i % 4) * 0.008), 0, i, 0, 0.0026, 0.0012, 0.0026);
+  const fm = fleck.mesh();
+  fm.userData.noCast = true;
+  g.add(fm);
   return { root: g, meat };
 }
 

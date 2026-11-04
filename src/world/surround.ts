@@ -35,6 +35,8 @@ export interface SurroundOpts {
   hole?: Box2;
   /** Hasta aquí llega el suelo de campo (más allá, otro terreno: el valle de delante de casa de Azul). */
   fieldMaxZ?: number;
+  /** Lo mismo hacia el oeste: ahí acaba la tierra (la punta del faro). */
+  fieldMinX?: number;
 }
 
 const WALLS = [0xfbf7ee, 0xf6f0e3, 0xf3ead8, 0xf1d9a0, 0xfdfaf3];
@@ -60,6 +62,7 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
     const F = H + 130;
     const rect = (x0: number, x1: number, z0: number, z1: number) => {
       z1 = Math.min(z1, o.fieldMaxZ ?? Infinity);
+      x0 = Math.max(x0, o.fieldMinX ?? -Infinity);
       if (x1 > x0 && z1 > z0) m.add(G.box, 0x5f6f3c, (x0 + x1) / 2, y0 - 0.12, (z0 + z1) / 2, 0, 0, 0, x1 - x0, 0.1, z1 - z0);
     };
     const h = o.hole;

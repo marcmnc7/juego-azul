@@ -662,7 +662,8 @@ function buildValley(sc: THREE.Scene, day: boolean) {
     const head = ss(x, 18, 46);
     const y = bank + up;
     const closed = Math.max(y, -5.2 - 0.0 * x + Math.abs(z - (Z0 + 28)) * 0.12);
-    return THREE.MathUtils.lerp(y, closed, head) + n(x, z) * ss(z, Z0 + 1, Z0 + 6) * (y < WATER + 0.6 ? 0.2 : 1);
+    const land = THREE.MathUtils.lerp(y, closed, head) + n(x, z) * ss(z, Z0 + 1, Z0 + 6) * (y < WATER + 0.6 ? 0.2 : 1);
+    return THREE.MathUtils.lerp(land, -13, ss(-x, 86, 104)); // pasada la punta del faro, mar abierto
   };
   const geo = new THREE.PlaneGeometry(X, Z, 130, 70).rotateX(-Math.PI / 2);
   geo.translate(0, 0, Z0 + Z / 2);
@@ -688,19 +689,33 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   ground.userData.noCast = true;
   sc.add(ground);
   // El agua de la cala
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(X, 62).rotateX(-Math.PI / 2), toon({ color: day ? 0x2a93ad : 0x0d2340, emissive: day ? 0x06303c : 0x030a18, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.93 }));
+  const waterMat = toon({ color: day ? 0x2a93ad : 0x0d2340, emissive: day ? 0x06303c : 0x030a18, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.93 });
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(X, 62).rotateX(-Math.PI / 2), waterMat);
   water.position.set(0, WATER, Z0 + 28);
   water.userData.noCast = true;
   sc.add(water);
+  // Y al fondo de la calle, detrás del faro, el mar: la misma agua abierta hacia el oeste
+  for (const [x0, x1, z0, z1] of [[-520, -190, -46, 320], [-190, -86, -46, Z0 - 3], [-190, -86, Z0 + 59, 320]] as const) {
+    const w2 = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2), waterMat);
+    w2.position.set((x0 + x1) / 2, WATER, (z0 + z1) / 2);
+    w2.userData.noCast = true;
+    sc.add(w2);
+  }
 
   const m = new Merger();
   // El muro de marès de la calle, y lo que crece en la ladera
-  m.add(G.box, 0xc9b48f, 0, 0.3, Z0 + 0.15, 0, 0, 0, X, 0.6, 0.35);
+  m.add(G.box, 0xc9b48f, 53, 0.3, Z0 + 0.15, 0, 0, 0, 274, 0.6, 0.35);
+  // La punta: acantilado de marès donde se acaba la tierra, y las rocas que separan el mar de fuera
+  for (let i = 0; i < 26; i++) {
+    const z = -48 + i * 2.95;
+    m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, -87 + Math.sin(i * 1.9) * 0.8, -3.6, z, Math.sin(i) * 0.3, i, 0, 7, 8.5, 5);
+  }
+  for (let i = 0; i < 34; i++) m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, -92 - i * 5, -3.6, -47 + Math.sin(i * 2.1), 0, i, 0, 7.5, 7.6, 6);
   let k = 0;
   for (let i = 0; i < 420 && k < 110; i++) {
     const x = -170 + ((i * 37.3) % 340), z = Z0 + 2.5 + ((i * 11.7) % 110);
     const y = H(x, z);
-    if (y < WATER + 1.4) continue;
+    if (y < WATER + 1.4 || x < -84) continue;
     k++;
     if (i % 9 === 0) {
       // Pino
@@ -711,7 +726,7 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   }
   // Rocas de la orilla
   for (let i = 0; i < 60; i++) {
-    const x = -180 + i * 6.3 + Math.sin(i) * 2;
+    const x = -84 + i * 1.7 + Math.sin(i) * 2;
     if (x > 16) break;
     for (const zz of [Z0 + 14 + Math.sin(i * 2.3) * 1.4, Z0 + 43 + Math.sin(i * 1.7) * 1.4])
       m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xb09a78 : 0x9a8466, x, WATER + 0.25, zz, 0, i, 0, 2.2 + (i % 3), 1 + (i % 2) * 0.5, 2 + (i % 3));
@@ -725,7 +740,7 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   const WIN = day ? 0x30384a : 0xffd9a0;
   const ROOF = [0xb8623e, 0xc0653d, 0xf6f1e6];
   let s = 0;
-  for (let x = -170; x < 170; x += 11.5, s++) {
+  for (let x = -84; x < 170; x += 11.5, s++) {
     const z = Z0 + 66 + (s % 3) * 8 + Math.sin(s * 1.3) * 2;
     const y = H(x, z);
     const h = s % 2 ? 6 : 3.4;
@@ -767,7 +782,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // madera de acebuche entre pilares blancos y un seto de adelfas tras el muro.
   const SAND = 0xd9cfbd; // losas claras del patio
   m.add(G.box, SAND, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
-  m.add(G.box, 0xb5b0a6, 0, -0.06, STREET_Z, 0, 0, 0, 140, 0.1, 6.4); // calle de hormigón claro
+  m.add(G.box, 0xb5b0a6, -8, -0.06, STREET_Z, 0, 0, 0, 156, 0.1, 6.4); // calle de hormigón claro, hasta el faro
   m.add(G.box, 0x9a8a68, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
   // Planta baja
   m.add(G.box, WHITE, 0, 1.55, -4, 0, 0, 0, 10, 3.1, 8);
@@ -1012,9 +1027,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     night: !day,
     seed: 23,
     colliders,
-    water: (_x, z) => z < COAST_Z + 2,
+    water: (x, z) => z < COAST_Z + 2 || x < -84,
     hole: { minX: -1e4, maxX: 1e4, minZ: -1e4, maxZ: COAST_Z + 1 },
     fieldMaxZ: 16.8,
+    fieldMinX: -86,
   });
   const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   lamp.position.copy(farola.lamp);

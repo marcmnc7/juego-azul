@@ -30,7 +30,7 @@ import { beacon } from '../core/beacon';
 // van a Sa Son 69 B4 y no entran por la puerta: por el pasillo de la derecha hasta la piscina.
 // Bucle: cruzar sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden las
 // ventanas de arriba) → desnudarse, al agua y abrazarse → nadar un rato juntos → salir por la escalera
-// de la piscina → subir las escaleras al césped → en la hamaca, hacer el amor (a pixeles) → hablar un
+// de la piscina → a pie hasta la hamaca del césped → en la hamaca, hacer el amor (a pixeles) → hablar un
 // rato → unir las estrellas → el chat real de la 01:01.
 //
 // El nado es de verdad: crol con el cuerpo tumbado en el agua, brazos que entran y salen, patada,
@@ -41,11 +41,8 @@ type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug
 // Piscina (interior del vaso)
 // La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
 const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 };
-/** El césped de arriba: se sube por las escaleras desde la piscina. */
-const LAWN_Y = 0.9;
-const STAIRS = { minX: -3.6, maxX: -1.6, z0: 10.55, z1: 11.75 };
-/** Altura del suelo del jardín: abajo, las escaleras (rampa de peldaños) y el césped de arriba. */
-const gardenH = (x: number, z: number) => (z >= STAIRS.z1 ? LAWN_Y : z > STAIRS.z0 && x > STAIRS.minX - 0.3 && x < STAIRS.maxX + 0.3 ? (LAWN_Y * (z - STAIRS.z0)) / (STAIRS.z1 - STAIRS.z0) : 0);
+/** Todo el patio al mismo nivel: las únicas escaleras son las de la piscina. */
+const LAWN_Y = 0;
 /** Lo alto de la colchoneta de la hamaca. */
 const BED_Y = LAWN_Y + 0.5;
 /** Tumbados en la hamaca: la espalda sobre la colchoneta. */
@@ -127,6 +124,8 @@ export class Level4 implements Level {
   private pool!: PoolWater;
   private swimOut = false;
   private gasTrail = new Trail();
+  /** Por dónde va Marc a pie, delante de ti: del coche a la verja, por el pasillo y hasta la piscina. */
+  private gasPath: [number, number][] = [];
   private swimSt = new Map<Person, { k: number; ph: number; prev: number }>();
   /** La censura de la hamaca: un mosaico de píxeles grandes que tapa a los dos. */
   private mosaic!: THREE.Mesh;
@@ -481,22 +480,7 @@ export class Level4 implements Level {
     m.add(G.cyl, 0xdddddd, 3.6, 1.2, 0.7, 0, 0, 0, 0.08, 2.4, 0.08);
     m.add(G.cone, 0x2b4fa0, 3.6, 2.5, 0.7, 0, 0, 0, 2.4, 0.6, 2.4);
     this.colliders.push({ minX: 3.45, maxX: 3.75, minZ: 0.55, maxZ: 0.85 });
-    // El césped de arriba: muro de contención de marès, las escaleras desde la piscina y, arriba, la hamaca
     {
-      const X0 = CORRIDOR.wallX + 0.13, X1 = 4.47;
-      m.add(G.box, GRASS, (X0 + X1) / 2, LAWN_Y / 2 - 0.01, (STAIRS.z1 + 14.5) / 2, 0, 0, 0, X1 - X0, LAWN_Y, 14.5 - STAIRS.z1);
-      m.add(G.box, 0xd8c7a5, (X0 + STAIRS.minX) / 2, LAWN_Y / 2 + 0.03, STAIRS.z1 - 0.06, 0, 0, 0, STAIRS.minX - X0, LAWN_Y + 0.06, 0.12);
-      m.add(G.box, 0xd8c7a5, (STAIRS.maxX + X1) / 2, LAWN_Y / 2 + 0.03, STAIRS.z1 - 0.06, 0, 0, 0, X1 - STAIRS.maxX, LAWN_Y + 0.06, 0.12);
-      this.colliders.push({ minX: X0 - 0.1, maxX: STAIRS.minX, minZ: STAIRS.z1 - 0.13, maxZ: STAIRS.z1 + 0.05, low: true });
-      this.colliders.push({ minX: STAIRS.maxX, maxX: X1 + 0.1, minZ: STAIRS.z1 - 0.13, maxZ: STAIRS.z1 + 0.05, low: true });
-      const N = 6;
-      const dz = (STAIRS.z1 - STAIRS.z0) / N;
-      const sw = STAIRS.maxX - STAIRS.minX, scx = (STAIRS.minX + STAIRS.maxX) / 2;
-      for (let i = 0; i < N; i++) m.add(G.box, i % 2 ? 0xd8c7a5 : 0xe2d3b4, scx, ((i + 1) * LAWN_Y) / N / 2, STAIRS.z0 + (i + 0.5) * dz, 0, 0, 0, sw, ((i + 1) * LAWN_Y) / N, dz + 0.004);
-      for (const sx of [STAIRS.minX - 0.08, STAIRS.maxX + 0.08]) {
-        m.add(G.box, 0xc9b890, sx, LAWN_Y / 2 + 0.08, (STAIRS.z0 + STAIRS.z1) / 2, 0, 0, 0, 0.16, LAWN_Y + 0.16, STAIRS.z1 - STAIRS.z0);
-        this.colliders.push({ minX: sx - 0.08, maxX: sx + 0.08, minZ: STAIRS.z0, maxZ: STAIRS.z1, low: true });
-      }
       // Hamaca doble: bastidor de madera, patas, colchoneta y dos cojines (la cabeza, hacia la piscina)
       const H = TOWELS, Y = LAWN_Y;
       m.add(G.box, 0x8a6a44, H.x, Y + 0.32, H.z, 0, 0, 0, 1.75, 0.08, TOWEL_LEN + 0.1);
@@ -650,7 +634,7 @@ export class Level4 implements Level {
         h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : 'Nada un rato con Marc 💙');
         break;
       case 'toTowels':
-        h.setObjective('Sube las escaleras hasta la hamaca del césped');
+        h.setObjective('Ve hasta la hamaca del césped');
         break;
       case 'love':
         h.setObjective('💙');
@@ -673,9 +657,6 @@ export class Level4 implements Level {
     if (this.phase === 'toPool') return this.v2.set(-4.95, 0, (POOL.minZ + POOL.maxZ) / 2);
     if (this.phase === 'swim' && this.swimOut) return LADDER;
     if (this.phase === 'toTowels') {
-      const p = this.player.root.position;
-      // Primero al pie de las escaleras: por el muro no se sube
-      if (p.z < STAIRS.z1 - 0.1) return this.v2.set((STAIRS.minX + STAIRS.maxX) / 2, 0, STAIRS.z0 + 0.6);
       return TOWELS;
     }
     return null;
@@ -725,7 +706,6 @@ export class Level4 implements Level {
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
       // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
       if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
-      if (this.phase === 'toTowels') pp.y = gardenH(pp.x, pp.z) + this.walker.hop;
       this.player.root.rotation.y = this.walker.facing;
       if (swimming) this.swimPose(this.player, move, dt);
       else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
@@ -943,10 +923,10 @@ export class Level4 implements Level {
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
       this.swimPose(g, 0.6, dt);
     } else if (this.phase === 'toTowels') {
-      // Te sigue a pie: por la escalera, no por el muro
+      // Te sigue a pie
       const pp = this.player.root.position;
       const moving = this.gasTrail.step(g.root, pp, 1.5, 4.2, dt, this.colliders, 0.26);
-      g.root.position.y = gardenH(g.root.position.x, g.root.position.z);
+      g.root.position.y = 0;
       animatePerson(g, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
       if (!moving) g.root.rotation.y = Math.atan2(pp.x - g.root.position.x, pp.z - g.root.position.z);
     } else if (this.phase === 'love' || this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
@@ -956,6 +936,23 @@ export class Level4 implements Level {
       this.swimPose(g, 0, dt);
     } else if (this.phase === 'hug') {
       return;
+    } else if (this.gasPath.length) {
+      // Va delante a su paso; si te quedas atrás, te espera
+      const p = this.player.root.position;
+      const gp = g.root.position;
+      const [tx, tz] = this.gasPath[0];
+      const dx = tx - gp.x, dz = tz - gp.z, d = Math.hypot(dx, dz);
+      if (d < 0.15) this.gasPath.shift();
+      if (Math.hypot(p.x - gp.x, p.z - gp.z) > 9 || (this.busy && this.gasPath.length < 3)) {
+        animatePerson(g, dt, 'idle');
+        faceTo(g.root, Math.atan2(p.x - gp.x, p.z - gp.z), dt, 4);
+      } else if (d > 0.01) {
+        const st = Math.min(d, 2.5 * dt);
+        gp.x += (dx / d) * st;
+        gp.z += (dz / d) * st;
+        faceTo(g.root, Math.atan2(dx, dz), dt, 7);
+        animatePerson(g, dt, 'walk', 0.7);
+      }
     } else {
       animatePerson(g, dt, 'wave');
       const p = this.player.root.position;
@@ -1074,9 +1071,12 @@ export class Level4 implements Level {
     this.player.root.position.set(CAR_STOP_X - 1.2, 0, STREET.laneZ + 1.6);
     this.walker.yaw = this.walker.facing = 0;
     this.camera.position.set(this.player.root.position.x, 3.6, this.player.root.position.z - 6.5);
+    // Marc se baja por su lado, rodea el morro y va delante: abre la verja y entra por el pasillo
     this.gas.root.visible = true;
-    this.gas.root.position.set((CORRIDOR.minX + CORRIDOR.maxX) / 2, 0, -15.6);
-    this.gas.root.rotation.set(0, Math.PI, 0);
+    const gx = (STREET.gate.minX + STREET.gate.maxX) / 2;
+    const cx = (CORRIDOR.minX + CORRIDOR.maxX) / 2;
+    this.gas.root.position.set(CAR_STOP_X + 0.3, 0, STREET.laneZ - 1.15);
+    this.gasPath = [[CAR_STOP_X + 3, STREET.laneZ - 1.15], [CAR_STOP_X + 3, STREET.laneZ + 1.5], [gx, STREET.laneZ + 1.5], [gx, STREET.wallZ + 1.6], [cx, STREET.wallZ + 2.6], [cx, -15.4], [GAS_POOL.x, GAS_POOL.z]];
     this.updateHud();
     dialogue(NIGHT.arrive, () => {
       this.busy = false;
@@ -1086,7 +1086,6 @@ export class Level4 implements Level {
   /** Entra en el pasillo: Gas va delante hasta la piscina y empieza el sigilo. */
   private enterCorridor() {
     this.phase = 'toPool';
-    this.gas.root.position.copy(GAS_POOL);
     this.noise = 0;
     this.updateHud();
     toast('🤫 Silencio full');
@@ -1201,6 +1200,7 @@ export class Level4 implements Level {
     this.gas.root.visible = true;
     this.gas.root.position.copy(GAS_POOL);
     this.gas.root.rotation.set(0, Math.PI, 0);
+    this.gasPath = [];
     this.walker.stop();
     this.noise = 0;
   }

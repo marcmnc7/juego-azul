@@ -33,6 +33,10 @@ export const FERRERIES = {
     { who: 'Narrador', text: 'Pistolas de agua, purpurina y confeti por todas partes. Has subido con tus amigas. Todavía no le conoces.' },
   ] as Line[],
   tofolQuest: [
+    { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol, i avui mano jo. Benvinguda a Ferreries: darrer dia de Sant Bartomeu.' },
+    { who: 'Tòfol', text: 'Tot s’any som un poble tranquil. Avui no: pistoles d’aigua, purpurina, i ases pel mig de sa plaça amb tot es poble ballant-los devora. Aquí ningú torna sec a ca seva.' },
+    { who: 'Tòfol', text: 'I alerta, que es jaleo té sa seva màgia. Un ve a passar sa tarda, i no sap mai què se’n durà.' },
+    { who: 'Margaux', text: '¿Y qué se hace aquí?' },
     { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
     { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
     { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es got. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
@@ -169,7 +173,7 @@ export const ROAD = {
   ] as Line[],
   /** La noche del camping, entre Marcial y San Vicente. */
   camp: [
-    { who: 'Narrador', text: 'Esa noche iba a ser cenita de camping: estrellas, cartas y el camping gas.' },
+    { who: 'Narrador', text: 'Esa noche, a una cabaña de leña. Iba a ser cenita de camping: cartas y el camping gas.' },
     { who: 'Narrador', text: 'A él se le olvidó precisamente el gas.' },
   ] as Line[],
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
@@ -201,9 +205,9 @@ export const CONCERT = {
   ] as Line[],
   airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
   burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],
-  landed: [{ who: 'Narrador', text: 'Gran Canaria. Él ha llegado antes y te espera en el aeropuerto. A partir de aquí, juntos a todas partes.' }] as Line[],
+  landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria.' }] as Line[],
   stadium: [
-    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Habéis venido juntos y Fito está a punto de salir.' },
+    { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
     { who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas. Ahora juegas con él.' },
   ] as Line[],
   filmIntro: [{ who: 'Narrador', text: 'Grábaselo: mantén a Fito dentro del recuadro aunque la gente salte delante.' }] as Line[],

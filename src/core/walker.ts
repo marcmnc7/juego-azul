@@ -257,6 +257,16 @@ export class Walker implements AirState {
     // Red de seguridad (y lo único si Rapier no está): sacar de cualquier caja en la que se haya
     // quedado dentro, p. ej. al aparecer en un sitio o si el nivel mueve una caja encima.
     for (const c of boxes) {
+      if (c.round) {
+        // Redondo de verdad: si no, las esquinas de su caja te echaban hacia fuera sin tocar nada
+        const ccx = (c.minX + c.maxX) / 2, ccz = (c.minZ + c.maxZ) / 2, rr = (c.maxX - c.minX) / 2 + R;
+        const ex = p.x - ccx, ez = p.z - ccz, dd = Math.hypot(ex, ez) || 1e-3;
+        if (dd < rr) {
+          p.x = ccx + (ex / dd) * rr;
+          p.z = ccz + (ez / dd) * rr;
+        }
+        continue;
+      }
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
       const ex = p.x - cx;

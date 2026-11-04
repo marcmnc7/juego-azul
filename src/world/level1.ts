@@ -491,7 +491,7 @@ export class Level1 implements Level {
           s.rearT = REAR;
         }
       } else {
-        const spd = s.mode === 'circle' ? 0.22 : 1.1; // al paso
+        const spd = s.mode === 'circle' ? 0.36 : 1.75; // al paso, pero a paso de burro de verdad (1,8 m/s)
         if (s.mode === 'circle') {
           s.angle += dt * spd;
           const c = this.world.plazaCenter;
@@ -503,7 +503,7 @@ export class Level1 implements Level {
           r.position.z = 0;
           r.rotation.y = (s.dir * Math.PI) / 2;
         }
-        s.walkPhase += dt * 4.5;
+        s.walkPhase += dt * 9.5;
         const w = Math.sin(s.walkPhase) * 0.5;
         s.d.legs[0].rotation.x = w;
         s.d.legs[3].rotation.x = w;
@@ -1155,6 +1155,7 @@ export class Level1 implements Level {
     this.camera.lookAt(mid.x, 1.45, mid.z);
   }
 
+  /** El beso, como la mirada: el mundo casi se para, se acercan de perfil, se tocan y estalla todo. */
   private startKiss() {
     this.stage = 'kissing';
     this.kissT = 0;
@@ -1162,22 +1163,35 @@ export class Level1 implements Level {
     this.input.reset();
     this.hud.setAction(null);
     audio.stopMusic();
+    const az = () => headOf(this.player);
+    const mc = () => headOf(this.marc);
+    const mid = () => az().lerp(mc(), 0.5);
+    const sky = () => mid().add(this.v2.set(0, 0.9, 0));
+    cinema.play([
+      // De perfil, de lejos a cerca: se acercan a cámara lenta
+      { dur: 2.8, slow: 0.42, pos: () => rel(mid(), az(), 0, 1.9, -0.2), pos2: () => rel(mid(), az(), 0, 1.15, -0.06), look: mid, fov: 42, focus: mid, at: () => audio.whoosh() },
+      // Las dos caras: el momento en que se tocan, con el tiempo casi parado
+      { dur: 3.6, slow: 0.14, pos: () => rel(mid(), az(), 0.14, 0.98, -0.03), pos2: () => rel(mid(), az(), -0.08, 0.8, 0), look: mid, fov: 34, fov2: 30, focus: mid, at: () => audio.chime(2) },
+      // Y se abre el plano por el otro lado, con la plaza y los fuegos detrás
+      {
+        dur: 3.4, slow: 0.55, pos: () => rel(mid(), az(), 0, -1.5, -0.5), pos2: () => rel(mid(), az(), 0, -5.2, 0.9), look: mid, look2: sky, fov: 46, fov2: 58,
+        at: () => {
+          audio.fanfare();
+          vibrate([60, 40, 120]);
+          for (let i = 0; i < 4; i++) this.fireworks.burst(this.v2.set(-14 + i * 9, 22 + Math.random() * 5, 38));
+        },
+      },
+    ]);
   }
 
   /** El beso: se acercan, ella le rodea el cuello, él la coge de la cintura; corazones y fuegos artificiales. */
   private updateKiss(dt: number) {
     this.kissT += dt;
     this.kiss ??= embrace(this.player, this.marc, 'kiss');
-    this.kiss.k = Math.min(1, this.kissT / 1.3);
+    this.kiss.k = Math.min(1, this.kissT / 1.35);
     for (const p of [this.player, this.marc]) p.eyes.scale.y = this.kissT > 1 ? 0.15 : 1; // ojos cerrados
-    if (this.kissT > 1.2 && this.kissT - dt <= 1.2) {
-      const mid = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5).setY(2.5);
-      this.fx.burst(mid, '❤️', 14, 3, 1.2);
-      this.fx.burst(mid, '💋', 3, 1, 0.8);
-      vibrate([60, 40, 120]);
-      for (let i = 0; i < 3; i++) this.fireworks.burst(this.v2.set(-12 + i * 12, 22 + Math.random() * 5, 38));
-    }
-    if (this.kissT > 3.8) {
+    if (!cinema.active || this.kissT > 4.2) {
+      cinema.stop();
       for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;
       this.busy = false;
       this.stage = 'ending';

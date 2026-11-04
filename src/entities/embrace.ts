@@ -113,6 +113,11 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
   const sides = new Map([her, him].map((p) => [p, sideNames(p)]));
   const base = new Map([her, him].map((p) => [p, p.rig!.model.position.z]));
   let push = 0;
+  let trim = 0; // lo que aún falta para que las bocas se toquen, medido en la pose final del fotograma anterior
+  const lipsOf = (p: Person, out: THREE.Vector3) => {
+    boneFrame(p, 'Head', _fr);
+    return bone(p, 'Head').getWorldPosition(out).addScaledVector(_d.copy(Z).applyQuaternion(_fr), 0.105).addScaledVector(_d.set(0, 1, 0).applyQuaternion(_fr), 0.045);
+  };
   const tick = (dt: number) => {
     if (e.to !== undefined) {
       e.k = e.k < e.to ? Math.min(e.to, e.k + dt * 1.4) : Math.max(e.to, e.k - dt * 1.8);
@@ -133,7 +138,7 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
 
     // 2. Acercarse: cada modelo avanza dentro de su raíz la mitad de lo que falta
     const probe = kind === 'kiss' ? 'Head' : 'Spine2';
-    const gap = kind === 'kiss' ? 0.17 : 0.27;
+    const gap = kind === 'kiss' ? 0.17 - trim : 0.27;
     const hp = wpos(her, probe, _a), mp = wpos(him, probe, _b);
     // Separación medida hacia donde mira ella (con signo: si se pasan, sale negativa y retroceden)
     const fwd = _c.set(0, 0, 1).applyQuaternion(her.root.getWorldQuaternion(_q));
@@ -150,7 +155,7 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
     for (const [p, o] of [[her, him], [him, her]] as const) {
       const head = bone(p, 'Head');
       const target = wpos(o, kind === 'kiss' ? 'Head' : 'Neck', new THREE.Vector3());
-      if (kind === 'kiss') target.y += 0.09;
+      if (kind === 'kiss') target.y += 0.045;
       else {
         // Por encima del hombro del otro (su lado derecho, -x) y un poco por detrás
         boneFrame(o, 'Spine2', _fr);
@@ -165,6 +170,13 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
       boneFrame(p, 'Head', _fr);
       aim.setFromUnitVectors(_d.copy(Z).applyQuaternion(_fr), to).premultiply(tilt);
       rotateWorld(head, aim, k);
+    }
+
+    if (kind === 'kiss' && e.k > 0.8) {
+      const a = lipsOf(her, new THREE.Vector3()), b = lipsOf(him, new THREE.Vector3());
+      const ff = _c.set(0, 0, 1).applyQuaternion(her.root.getWorldQuaternion(_q));
+      const res = (b.x - a.x) * ff.x + (b.z - a.z) * ff.z - 0.004;
+      trim = THREE.MathUtils.clamp(trim + res * Math.min(1, dt * 6), -0.15, 0.3);
     }
 
     // 4. Manos: IK hasta el cuerpo del otro

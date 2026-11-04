@@ -15,7 +15,7 @@ import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } fro
 import { princesaGame, lostMoto, type LoveLetterStage } from '../ui/minis';
 import { cardCanvas } from '../ui/cards';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
-import { FAROLA_WALK, COAST_Z, buildSaFarola } from './saFarola';
+import { FAROLA_WALK, COAST_Z, LIGHTHOUSE_SEA, buildSaFarola } from './saFarola';
 import { buildKayak as kayakBoat, buildFerry, type Kayak } from './kayak';
 import { Door } from './door';
 import { stage } from '../core/stage';
@@ -87,7 +87,7 @@ const ERIC_LOOK: PersonLook = { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8
 // Los padres de Gas: él y ella, de unos cincuenta, como los de Azul (sin moños)
 const MARC_DAD: PersonLook = { skin: 0xe2b08c, shirt: 0x6b8fb5, pants: 0x4a4a52, hair: 0x7d7672, hairStyle: 'short', male: true };
 const MARC_MOM: PersonLook = { skin: 0xeec4a2, shirt: 0xc85a6a, pants: 0x2d2d3a, hair: 0x5a3a26, hairStyle: 'straight' };
-const WALK_BOUNDS: Box2 = { minX: -60, maxX: 40, minZ: COAST_Z - 4, maxZ: 15.5 };
+const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: COAST_Z - 4, maxZ: 15.5 };
 const HOME_BOUNDS: Box2 = { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 };
 /** Cocina de casa de Gas: los padres, junto a la encimera. */
 const KITCHEN_PARENTS = new THREE.Vector3(0, 0, -1.6);
@@ -244,7 +244,7 @@ export class LevelEclipse implements Level {
   private buildKayak() {
     const sc = this.newScene(this.daySky(), 0xcfe6f4, 0xfff4e0, 2.2, new THREE.Vector3(0.4, 1, 0.6));
     // La costa de verdad: el Camí de sa Farola, las rocas de marès y el faro, vistos desde el agua
-    const sf = buildSaFarola(sc, this.colliders, true);
+    const sf = buildSaFarola(sc, this.colliders, true, LIGHTHOUSE_SEA);
     for (const w of sf.walkers) w.root.parent?.remove(w.root);
     // Desde el agua se ve la costa baja de marès: una franja de rocas comidas por el mar
     const shore = new Merger();

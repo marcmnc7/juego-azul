@@ -15,9 +15,12 @@ import { canvasTex } from './deco';
 // - Al otro lado de la bocana, el Castell de Sant Nicolau (torre octogonal) y algún llaüt navegando.
 
 export const COAST_Z = -46;
-export const LIGHTHOUSE = new THREE.Vector3(-33, 0, -52.5);
-/** Punto del paseo junto al faro: el final del paseo con Joy y Eric. */
-export const FAROLA_WALK = new THREE.Vector3(-26, 0, -42);
+/** El faro está al final de la calle de Azul: saliendo de casa a la derecha, al fondo. */
+export const LIGHTHOUSE = new THREE.Vector3(-79, 0, 13.5);
+/** Desde el mar (el kayak) se ve en la punta, sobre las rocas. */
+export const LIGHTHOUSE_SEA = new THREE.Vector3(-33, 0, -52.5);
+/** Al final de la calle, delante del faro: el final del paseo con Joy y Eric. */
+export const FAROLA_WALK = new THREE.Vector3(-69, 0, 13.5);
 
 const WHITE = 0xf6f1e6;
 const SHUTTER = 0x2f7a4a;
@@ -81,7 +84,7 @@ export interface SaFarola {
 }
 
 /** Construye la calle, el paseo y el faro. day: colores de día (el eclipse) o de noche (la cena). */
-export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean): SaFarola {
+export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, faro = LIGHTHOUSE): SaFarola {
   const m = new Merger();
   // Como en Street View: la calle de la casa baja hasta el Camí de sa Farola, que va pegado al mar
   // (asfalto gastado, arcén de tierra y un pretil bajo de marès sobre las rocas) con casas detrás de
@@ -206,7 +209,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean):
   for (let i = 0; i < 6; i++) m.add(G.cyl, 0x3a7a9a, -50 + i * 15, -0.05, COAST_Z - 5 - (i % 2) * 2, 0, 0, 0, 1.2 + (i % 2), 0.02, 0.9);
 
   // El faro: casa del farero blanca, torre con franjas, dos galerías y linterna, y el muro contra el mar
-  const L = LIGHTHOUSE;
+  const L = faro;
   m.add(G.rock, 0xbf9a62, L.x, -0.8, L.z, 0, 0.4, 0, 14, 3.2, 11);
   m.add(G.box, 0xa8a49a, L.x, 1.2, L.z - 4.6, 0, 0, 0, 12, 2.6, 0.8); // muro de hormigón
   m.add(G.box, WHITE, L.x - 2.5, 2.3, L.z + 0.5, 0, 0, 0, 6.5, 3.6, 5.5); // casa del farero
