@@ -1162,7 +1162,8 @@ export class LevelEclipse implements Level {
     this.rig?.update(dt, this.carSpeed, 0, 1.2);
     this.hud.setAction(null);
     // Cámara alta desde la calle, mirando hacia casa
-    const pos = this.v1.set(c.position.x * 0.6 + 1, 11, Math.min(c.position.z - 9, -26));
+    // Sobre la calle: desde más atrás, medio plano eran los tejados de enfrente
+    const pos = this.v1.set(c.position.x * 0.6 + 1, 11, Math.min(c.position.z - 7, -24.6));
     this.camera.position.lerp(pos, Math.min(1, dt * 2));
     this.camLook.lerp(new THREE.Vector3(c.position.x * 0.8 + 0.5, 0, c.position.z + 1), Math.min(1, dt * 3));
     this.camera.lookAt(this.camLook);

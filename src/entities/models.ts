@@ -36,6 +36,9 @@ export class Merger {
   private q = new THREE.Quaternion();
   private e = new THREE.Euler();
   private c = new THREE.Color();
+  private v = new THREE.Vector3();
+  private count = 0;
+  private thin: number[] = [];
 
   /** textured: el decorado lleva texturas de superficie según su color; los personajes y vehículos no. */
   constructor(private textured = true) {}
@@ -56,6 +59,12 @@ export class Merger {
     }
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(this.textured ? surfaceFor(color) : 0), 1));
+    // Las piezas finas o pequeñas (postes, barandillas, flores) no frenan la cámara: ver camWorld
+    g.computeBoundingBox();
+    g.boundingBox!.getSize(this.v);
+    const mid = this.v.x + this.v.y + this.v.z - Math.max(this.v.x, this.v.y, this.v.z) - Math.min(this.v.x, this.v.y, this.v.z);
+    if (mid < 0.5) this.thin.push(this.count, n);
+    this.count += n;
     this.parts.push(g);
     return this;
   }
@@ -69,6 +78,10 @@ export class Merger {
     this.parts.forEach((p) => p.dispose());
     this.parts = [];
     g.computeBoundingSphere();
+    g.userData.thin = this.thin;
+    g.userData.parts = true;
+    this.thin = [];
+    this.count = 0;
     return g;
   }
 
@@ -344,6 +357,7 @@ function eyesInto(m: Merger, look: PersonLook, oy = 0) {
 export function makePerson(look: PersonLook, scale = 1, outline = true): Person {
   if (hdSurfaces.value && rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const body = new THREE.Group();
   root.add(body);
   const shoes = look.shoes ?? 0x3a2a20;
@@ -858,6 +872,7 @@ export interface Donkey {
 export function makeDonkey(coat = 0x7d6b5d): Donkey {
   if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const pivot = new THREE.Group();
   pivot.position.z = -0.75; // eje en las patas traseras
   root.add(pivot);
@@ -916,6 +931,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
 export function makeHorse(coat = 0x0e0c0b): Donkey {
   if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const pivot = new THREE.Group();
   pivot.position.z = -0.85; // eje en las patas traseras: así se pone de manos (el «bot»)
   root.add(pivot);
@@ -997,6 +1013,7 @@ export interface Dog {
 export function makeDog(): Dog {
   if (hdSurfaces.value && rigReady() && vehiclesReady()) return makeDogHD(blobShadow(0.9));
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const black = 0x1d1b1f;
   const b = new Merger(false);
   b.add(G.capsule, black, 0, 0.5, 0, Math.PI / 2, 0, 0, 0.36, 0.38, 0.34);
@@ -1037,6 +1054,7 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
   }
   const { luggage = true, joy: withJoy = true } = opts;
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const body = new THREE.Group();
   root.add(body);
   const m = new Merger(false);
@@ -1099,6 +1117,7 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
     return mo;
   }
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const m = new Merger(false);
   // Chasis, depósito, asiento, colín y horquilla
   m.add(G.rbox, color, 0, 0.72, 0.15, 0, 0, 0, 0.36, 0.3, 0.75); // depósito

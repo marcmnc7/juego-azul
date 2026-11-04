@@ -1,5 +1,6 @@
 import { audio, type Bed } from './core/audio';
 import * as THREE from 'three';
+import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
 import { requestJump, releaseJump, walkerActiveAt, lastBounds } from './core/walker';
@@ -504,7 +505,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input, stage,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */
@@ -576,6 +577,7 @@ function frame() {
     const gdt = juice.scaleDt(dt) * cinema.timeScale;
     dust.attach(sc);
     beacon.attach(sc);
+    camWorld.attach(sc);
     if (mission) mission.update(gdt);
     else level!.update(gdt);
     dust.update(gdt);

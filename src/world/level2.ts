@@ -620,7 +620,7 @@ export class Level2 implements Level {
     m.add(G.box, 0xbdb4a4, -9, 0.05, -22, 0, 0, 0, 22, 0.1, 16);
     m.add(G.box, 0xb8ad97, -9, 5, -12.5, 0, 0, 0, 22, 10, 3);
     for (let x = -18; x <= 0; x += 4.5) {
-      m.add(G.box, 0x2a2420, x + 2.25, 1.6, -13.95, 0, 0, 0, 3, 3.2, 0.1);
+      m.add(G.box, 0x2a2420, x + 2.25, 1.6, -13.98, 0, 0, 0, 3, 3.2, 0.1);
       m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 14, 1, false, 0, Math.PI), 0x2a2420, x + 2.25, 3.2, -13.95, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
     }
     for (let k = 0; k < 11; k++) m.add(G.box, k % 2 ? 0xf4f4f0 : 0x1f5fbf, -18.9 + k * 1.8 + 0.9, 4.6, -15.2, -0.45, 0, 0, 1.8, 0.06, 3); // toldo

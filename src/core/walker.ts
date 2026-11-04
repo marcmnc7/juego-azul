@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Box2 } from '../world/ferreries';
 import { physFor } from './phys';
+import { camWorld } from './camWorld';
 import { airOf, type AirState } from './air';
 import { dust } from './dust';
 
@@ -404,17 +405,42 @@ export class Walker implements AirState {
         if (walls.some((c) => !c.low && (c.maxX - c.minX > 3 || c.maxZ - c.minZ > 3) && x > c.minX - 0.4 && x < c.maxX + 0.4 && z > c.minZ - 0.4 && z < c.maxZ + 0.4)) break;
       }
     }
+    // Y además contra lo que de verdad se ve (balcones, toldos, arcos, copas): tres rayos, en medio y a los lados
+    {
+      const from = { x: p.x, y: baseY + 1.5, z: p.z };
+      const ty = baseY + h + (dist - d) * 0.32;
+      const ex = sx * d, ey = ty - from.y, ez = sz * d;
+      const L = Math.hypot(ex, ey, ez) || 1;
+      const nx = -sz * 0.22, nz = sx * 0.22;
+      const dx = ex / L, dy = ey / L, dz = ez / L;
+      const hit = Math.min(
+        camWorld.cast(from.x, from.y, from.z, dx, dy, dz, L, walls),
+        camWorld.cast(from.x + nx, from.y, from.z + nz, dx, dy, dz, L, walls),
+        camWorld.cast(from.x - nx, from.y, from.z - nz, dx, dy, dz, L, walls),
+      );
+      if (hit < L) d = Math.max(0.9, d * Math.max(0, hit - 0.3) / L);
+    }
     if (this.camD < 0 || !this.camInit) this.camD = d;
     else this.camD += (d - this.camD) * Math.min(1, dt * (d < this.camD ? 14 : 2.2));
     d = this.camD;
     const run = Math.min(1, this.currentSpeed / this.speed);
     // Alturas relativas a los pies (en el agua, en una explanada o en una escalera la cámara sigue igual);
     // si una pared la acerca, sube: mirar por encima de su hombro en vez de pegarse a su nuca
-    this.camPos.set(p.x + sx * d, baseY + h + (dist - d) * 0.32, p.z + sz * d);
+    let rise = (dist - d) * 0.32;
+    // Pero nunca hasta meterse en lo que tenga encima (el arco de los soportales, un toldo)
+    if (rise > 0.05) {
+      const ry = baseY + h + rise - (baseY + 1.5), rl = Math.hypot(d, ry) || 1;
+      const free = camWorld.cast(p.x, baseY + 1.5, p.z, (sx * d) / rl, ry / rl, (sz * d) / rl, rl, walls);
+      if (free < rl) rise = 0;
+    }
+    this.camPos.set(p.x + sx * d, baseY + h + rise, p.z + sz * d);
     // Al saltar, la mirada sube solo un poco: la cámara acompaña sin dar botes
     // La mirada se adelanta un poco hacia donde vas (se ve lo que viene) y baja un pelín al aterrizar
     const v = this.velocity;
-    this.camLook.set(p.x - sx * 1.5 + v.x * 0.16, baseY + 1.3 + this.hop * 0.35 - this.land * 0.12, p.z - sz * 1.5 + v.z * 0.16);
+    // De cerca (una pared detrás) mira más hacia ella: que se la vea entera y no solo la coronilla
+    const far = THREE.MathUtils.clamp(d / 4.5, 0.05, 1);
+    const ahead = 1.5 * far;
+    this.camLook.set(p.x - sx * ahead + v.x * 0.16, baseY + 1.3 - (1 - far) * 0.55 + this.hop * 0.35 - this.land * 0.12, p.z - sz * ahead + v.z * 0.16);
     if (!this.camInit || cam.position.distanceToSquared(this.camPos) > 400) {
       // Primera vez o teletransporte: sin muelle
       this.camInit = true;
@@ -442,6 +468,18 @@ export class Walker implements AirState {
         if (free < L - 0.05) {
           const k2 = Math.max(1.1, free - 0.1) / L;
           cp.set(from.x + ex * k2, from.y + ey * k2, from.z + ez * k2);
+        }
+      }
+    }
+    {
+      const fy = baseY + 1.5;
+      const ex = cp.x - p.x, ey = cp.y - fy, ez = cp.z - p.z;
+      const L = Math.hypot(ex, ey, ez);
+      if (L > 0.5) {
+        const free = camWorld.cast(p.x, fy, p.z, ex / L, ey / L, ez / L, L, walls);
+        if (free < L - 0.05) {
+          const k2 = Math.max(0.9, free - 0.25) / L;
+          cp.set(p.x + ex * k2, fy + ey * k2, p.z + ez * k2);
         }
       }
     }

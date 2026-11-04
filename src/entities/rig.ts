@@ -580,6 +580,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
   const kind: Kind = look.male || look.beard ? 'man' : 'woman';
   const D = data[kind]!;
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const model = SkeletonUtils.clone(D.gltf.scene);
   model.scale.setScalar(D.scale);
   model.position.y = -D.minY * D.scale;

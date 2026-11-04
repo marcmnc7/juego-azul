@@ -81,6 +81,7 @@ function profile(pts: [number, number][], width: number, bevel: number) {
  */
 export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonLook; gas?: PersonLook } = {}) {
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const body = new THREE.Group();
   root.add(body);
   const add = (g: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, parent: THREE.Object3D = body) => {
@@ -172,6 +173,7 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
  */
 export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts = { color, stripe: 0xf2f2ee }, collect?: Map<THREE.Material, THREE.BufferGeometry[]>) {
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const frame = new THREE.Group();
   root.add(frame);
   const body = paint(color);
@@ -388,6 +390,7 @@ export function motoFleet(spots: { x: number; z: number; ry: number; color: numb
 export function makeDogHD(shadow: THREE.Object3D): Dog {
   const src = fox!;
   const root = new THREE.Group();
+  root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const model = SkeletonUtils.clone(src.scene);
   const box = new THREE.Box3().setFromObject(src.scene);
   const s = 0.72 / (box.max.y - box.min.y);

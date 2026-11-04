@@ -35,6 +35,7 @@ export class Door {
   private readonly center = new THREE.Vector3();
 
   constructor(readonly o: DoorOpts) {
+    this.group.userData.noCam = true; // se mueve: la cámara no choca con ella
     this.group.position.copy(o.hinge);
     this.group.rotation.y = o.ry;
     this.group.add(this.leaf);
