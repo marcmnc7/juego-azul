@@ -535,12 +535,12 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
 
   // Placas de calle
   const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu') }));
-  sign1.position.set(-41, 3.2, -4.86);
+  sign1.position.set(-41, 2.78, -4.86); // (por debajo de la cornisa)
   const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església") }));
   sign2.position.set(-11.86, 3.0, 14.6);
   sign2.rotation.y = Math.PI / 2;
   const sign3 = sign2.clone();
-  sign3.position.set(-13.5, 3.2, 4.86);
+  sign3.position.set(-11.2, 2.78, 4.86); // (donde no le cuelga una bandera delante)
   sign3.rotation.y = Math.PI;
   group.add(sign1, sign2, sign3);
 

@@ -742,6 +742,7 @@ setSurface(0xc9a36b, Surf.Stone);
 setSurface(0x5f8f6a, Surf.Wood);
 setSurface(0x6a5444, Surf.Wood); // el fondo del bar de la terraza
 setSurface(0x5e4a38, Surf.Sand); // tierra del camping
+setSurface(0x6f7a48, Surf.Grass); // los solares detrás de la calle de Azul
 setSurface(0x8a7a68, Surf.Sand); // su claro de grava
 // Troncos
 for (const c of [0x6b4a32, 0x6b4a30, 0x5a3e28, 0x6b5a46, 0x7a6448, 0x3f3026, 0x5a4634, 0x4a3426]) setSurface(c, Surf.Bark);

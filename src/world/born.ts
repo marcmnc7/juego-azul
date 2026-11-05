@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { hdSurfaces } from '../core/gfx';
 import { TownHD } from './hd/townHD';
-import { G, Merger, makeCar } from '../entities/models';
+import { G, Merger, araucaria, makeCar, streetLamp } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
 import { Surf } from '../core/surfaces';
 import { canvasTex } from './deco';
@@ -219,7 +219,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(G.box, 0x2a2a2a, W + 0.4, 5.3, z, 0, 0, 0, 0.6, 0.08, 1.3);
   }
   for (let z = BORN.minZ + 0.6; z <= 0; z += 1.1) m.add(G.box, 0x3a2a20, W + 0.06, 9.6, z, 0, 0, 0, 0.06, 1.3, 0.6); // galería alta
-  sign(g, 'AJUNTAMENT', W + 0.12, 7.2, -6.5, Math.PI / 2, 5);
+  sign(g, 'AJUNTAMENT', W + 0.24, 7.2, -6.5, Math.PI / 2, 5); // (por delante de la torre, no dentro)
 
   // --- Oeste, al fondo a la izquierda: el Bar Imperi (fachada amarilla, puerta verde, rótulo cursivo) ---
   const B = IMPERI;
@@ -275,7 +275,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   sign(g, 'Teatre des Born', -12, 6.6, N - 0.8, Math.PI, 3.4);
   block(-6, 6, N, N + 8, 10, 0xf1d9a0);
   facade(-6, 6, N, -1, 2);
-  sign(g, 'CORREUS', 0, 3.6, N - 0.1, Math.PI, 3.6, '#f6c700', '#1f3f8f');
+  sign(g, 'CORREUS', 0, 3.12, N - 0.1, Math.PI, 3.6, '#f6c700', '#1f3f8f'); // (debajo de los balcones, no cruzado por ellos)
   m.add(G.box, 0xf6c700, 3.2, 1.0, N - 0.25, 0, 0, 0, 0.5, 0.9, 0.4); // buzón amarillo
   col(2.9, 3.5, N - 0.5, N);
   block(6, 18, N, N + 8, 9, SAND);
@@ -290,7 +290,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(G.box, 0xf2ead6, x + 1.1, 10.2, S + 0.2, 0, 0, 0, 0.3, 2.6, 0.3); // logia
   }
   m.add(new THREE.ConeGeometry(1, 1, 3), 0xe9dcbc, -11, 13.7, S + 0.2, Math.PI / 2, 0, 0, 6, 0.4, 2.4);
-  sign(g, 'Palau Torre-Saura', -11, 4, S + 0.1, 0, 3.6);
+  sign(g, 'Palau Torre-Saura', -11, 3.12, S + 0.1, 0, 3.6);
   // Casino: fachada señorial clara con pilastras, balcón corrido y ventanales
   block(-4, 12, S - 9, S, 11, 0xefe4cc);
   for (let x = -3.4; x <= 11.4; x += 2.1) m.add(G.box, 0xf8f2e2, x, 5.5, S + 0.1, 0, 0, 0, 0.4, 11, 0.2);
@@ -301,14 +301,15 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   }
   m.add(G.box, 0x2a2a2a, 4, 5.25, S + 0.55, 0, 0, 0, 15.6, 0.08, 1.0); // balcón corrido
   m.add(G.box, 0x2a2a2a, 4, 5.75, S + 1.02, 0, 0, 0, 15.6, 0.9, 0.04);
-  sign(g, 'Es Casino Nou', 4, 9.4, S + 0.12, 0, 4.2);
+  sign(g, 'Es Casino Nou', 4, 9.4, S + 0.24, 0, 4.2); // (por delante de las pilastras)
   block(12, 18, S - 9, S, 9, 0xeee3c8);
   facade(12, 18, S, 1, 2);
 
   // --- Esquinas y este: las manzanas a los lados de Ses Voltes ---
   for (const [x0, x1, z0, z1] of [[W - 9, W, N, N + 8], [W - 9, W, S - 9, S], [18, 30, N, N + 8], [18, 30, S - 9, S]]) block(x0, x1, z0, z1, 10, SAND);
   block(18, 30, S, -4.6, 10, 0xeee3c8);
-  block(18, 30, 4.6, N, 10, SAND);
+  // (en Sant Joan, detrás de esta esquina está la plaza de la Catedral: un bloque aquí la tapaba entera)
+  block(18, opts.voltes ? 19 : 30, 4.6, N, 10, SAND);
   facade(S, -4.6, 18, -1, 2, false);
   facade(4.6, N, 18, -1, 2, false);
   sign(g, 'Plaça des Born', 17.9, 3, -7, -Math.PI / 2, 3.2);
@@ -316,21 +317,17 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     // La calle de Ses Voltes, cerrada a los pocos metros por una casa
     block(30, 38, -6, 6, 10, WHITE);
     facade(-4.6, 4.6, 30, -1, 2, false);
-    sign(g, 'Ses Voltes', 18.4, 4.4, 0, -Math.PI / 2, 3);
+    sign(g, 'Ses Voltes', 29.92, 2.7, 0, -Math.PI / 2, 3); // (en la casa del fondo: antes flotaba en mitad de la calle)
   }
 
   // --- Farolas fernandinas, ficus, araucaria y palmeras en la explanada ---
   const lamps: [number, number][] = [];
   for (const [x, z] of [[-11.3, -8.3], [-11.3, 8.3], [11.3, -8.3], [11.3, 8.3], [0, 8.4], [0, -8.4], [-11.3, 0], [11.3, 0]]) {
-    m.add(G.cyl, 0x1e1e1e, x, R + 0.3, z, 0, 0, 0, 0.4, 0.6, 0.4);
-    m.add(G.cyl, 0x1e1e1e, x, R + 2.1, z, 0, 0, 0, 0.14, 3.6, 0.14);
-    m.add(G.box, 0xf4e6c0, x, R + 4.2, z, 0, Math.PI / 4, 0, 0.42, 0.6, 0.42);
-    m.add(G.cone, 0x1e1e1e, x, R + 4.65, z, 0, Math.PI / 4, 0, 0.7, 0.35, 0.7);
+    streetLamp(m, x, R, z);
     col(x - 0.25, x + 0.25, z - 0.25, z + 0.25);
     lamps.push([x, z]);
   }
-  m.add(G.cyl, 0x6b4a32, 8.5, R + 8, -6, 0, 0, 0, 0.4, 16, 0.4); // araucaria
-  for (let k = 0; k < 11; k++) m.add(G.cone, 0x2c5a30, 8.5, R + 5 + k * 1.2, -6, 0, k * 0.5, 0, 4.2 - k * 0.36, 0.45, 4.2 - k * 0.36);
+  araucaria(m, 8.5, R, -6, 16, 4.2);
   col(8.1, 8.9, -6.4, -5.6);
   for (const [x, z] of [[-8.5, 6.2], [8.5, 6.2], [-8.5, -6.2]]) {
     m.add(G.cyl, 0x7a6a56, x, R + 1.8, z, 0, 0, 0, 0.5, 3.6, 0.5);

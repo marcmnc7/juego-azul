@@ -12,6 +12,7 @@ import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } fro
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
+import { makeCameraPickup, makeFuelPickup, makeTobaccoPickup } from '../entities/pickups';
 import { Laurel } from './laurel';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
@@ -84,10 +85,17 @@ function makeSign(lines: string[], bg = '#1f5fbf') {
   }, 512, 256);
   const g = new THREE.Group();
   const board = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), new THREE.MeshBasicMaterial({ map: tex }));
-  board.position.y = 4;
+  board.position.set(0, 4, -0.03);
   board.rotation.y = Math.PI;
   g.add(board);
-  g.add(new Merger().add(G.cyl, 0x888888, -2, 2, 0.05, 0, 0, 0, 0.15, 4, 0.15).add(G.cyl, 0x888888, 2, 2, 0.05, 0, 0, 0, 0.15, 4, 0.15).mesh());
+  // Los postes, detrás del panel (asomaban por delante, cruzando el texto), y su trasera de chapa
+  g.add(
+    new Merger()
+      .add(G.box, 0x9aa3ad, 0, 4, 0.03, 0, 0, 0, 5.02, 2.52, 0.05)
+      .add(G.cyl, 0x888888, -2, 2.6, 0.13, 0, 0, 0, 0.15, 5.2, 0.15)
+      .add(G.cyl, 0x888888, 2, 2.6, 0.13, 0, 0, 0, 0.15, 5.2, 0.15)
+      .mesh(),
+  );
   return g;
 }
 
@@ -220,8 +228,6 @@ export class Level2 implements Level {
   private baseFov = 60;
   private route: HTMLElement;
   private routeCar: HTMLElement;
-  private turboTex: THREE.Texture;
-  private smokeTex: THREE.Texture;
   private swipeX: number | null = null;
   private onDown = (e: PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, .dialogue')) return;
@@ -240,7 +246,6 @@ export class Level2 implements Level {
   private served = 0;
   private laneBtns: HTMLElement[] = [];
   private prevAx = 0;
-  private photoTex: THREE.Texture;
   private obstacleGeos: Record<Region, { geo: THREE.BufferGeometry; speed: number }[]>;
   private marcialDone = false;
   private eateryTried = new Set<string>();
@@ -323,21 +328,6 @@ export class Level2 implements Level {
 
     this.buildScatters();
     this.obstacleGeos = this.buildObstacles();
-    this.photoTex = canvasTex((ctx) => {
-      ctx.font = '200px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('📸', 128, 140);
-    });
-    const emojiTex = (e: string) =>
-      canvasTex((ctx) => {
-        ctx.font = '200px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(e, 128, 140);
-      });
-    this.turboTex = emojiTex('⛽');
-    this.smokeTex = emojiTex('🚬');
 
     sc.add(this.car.root);
     this.fx = new Particles(sc);
@@ -786,8 +776,7 @@ export class Level2 implements Level {
     }
     const np = Math.random() < 0.5 ? 2 : 1;
     for (let k = 0; k < np; k++) {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.photoTex, transparent: true }));
-      s.scale.setScalar(1.4);
+      const s = makeCameraPickup();
       const pz = z + (k ? 6 : 0);
       s.position.set(LANES[lanes[1 + (k % 2)]], 1.2, pz);
       this.scene.add(s);
@@ -797,8 +786,7 @@ export class Level2 implements Level {
     const extra = Math.random();
     if (extra < 0.16 || extra > 0.9) {
       const turbo = extra < 0.16;
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: turbo ? this.turboTex : this.smokeTex, transparent: true }));
-      s.scale.setScalar(turbo ? 1.6 : 1.3);
+      const s = turbo ? makeFuelPickup() : makeTobaccoPickup();
       const lane = obstacle ? lanes[1 + Math.floor(Math.random() * 2)] : lanes[0];
       const pz = z + 13;
       s.position.set(LANES[lane], 1.2, pz);
@@ -925,6 +913,7 @@ export class Level2 implements Level {
       th.obj.position.z = th.z;
       if (th.kind === 'photo') {
         th.obj.position.y = 1.2 + Math.sin(this.t * 4 + th.z) * 0.15;
+        th.obj.rotation.y += dt * 2.2;
       }
       const dz = Math.abs(th.z - this.carZ);
       const dx = Math.abs(LANES[th.lane] - this.carX);

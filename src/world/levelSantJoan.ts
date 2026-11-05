@@ -16,7 +16,7 @@ import { horsePrint, shirtPrint } from '../entities/print';
 import { buildAzulHouse, STREET_Z, DOOR } from './levelCena';
 import type { Door } from './door';
 import { CHATS } from '../data/chats';
-import { canvasTex } from './deco';
+import { canvasTex, mergedPlanes } from './deco';
 import type { Box2 } from './ferreries';
 import { buildSurroundings, collidersBox } from './surround';
 import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
@@ -42,6 +42,12 @@ type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'be' | 'home' | 'e
 // Plano (metros): el Born en el origen; hacia el este, el Carrer Major des Born con la Catedral, Ses Voltes
 // y, al final, la Plaça Nova y la Plaça Espanya
 const STREET = { minX: 18, maxX: 70, minZ: -4.4, maxZ: 4.4 };
+const SHOP_KINDS = [
+  { name: 'Avarques', bg: '#7a3a22', wood: 0x4a2c1a },
+  { name: 'Sobrassada', bg: '#7a1f1f', wood: 0x3a2a20 },
+  { name: 'Moda', bg: '#1f3a5a', wood: 0x1f3a2a },
+  { name: 'Joieria', bg: '#2a2a3a', wood: 0x2a2424 },
+];
 const ESPANYA = { minX: 70, maxX: 90, minZ: -12, maxZ: 12 };
 const PINS = [new THREE.Vector3(CORREUS.x + 2, 0, CORREUS.z - 1.2)]; // Correus
 const START = new THREE.Vector3(82, 0, 0); // Plaça Espanya
@@ -259,6 +265,57 @@ export class LevelSantJoan implements Level {
   }
 
   /** Ventanas con persianas verdes menorquinas y balcones en la cara que da a la calle. */
+  /** Una tienda bajo los soportales: marco, zócalo, puerta, rótulo, estantes y su género, según el oficio. */
+  private shopFront(m: Merger, x: number, wz: number, side: number, k: number, signs: Map<string, { w: number; h: number; x: number; y: number; z: number; ry: number }[]>) {
+    const kind = SHOP_KINDS[k % SHOP_KINDS.length];
+    const z = (d: number) => wz - side * d; // d metros hacia la calle
+    const wood = kind.wood;
+    m.add(G.box, 0x241a14, x, 1.45, wz, 0, 0, 0, 2.1, 2.9, 0.12); // hueco oscuro
+    m.add(G.box, 0xefdcb4, x, 1.48, z(0.07), 0, 0, 0, 1.92, 2.0, 0.02); // el fondo iluminado
+    for (const s of [-1, 1]) m.add(G.box, wood, x + s * 1.0, 1.45, z(0.1), 0, 0, 0, 0.12, 2.9, 0.1);
+    m.add(G.box, wood, x, 2.74, z(0.1), 0, 0, 0, 2.1, 0.32, 0.1);
+    m.add(G.box, wood, x, 0.27, z(0.1), 0, 0, 0, 2.1, 0.54, 0.1);
+    // Puerta de madera con cristal arriba, a un lado
+    const dx = k % 2 ? -0.62 : 0.62;
+    m.add(G.box, wood, x + dx, 1.24, z(0.11), 0, 0, 0, 0.72, 2.2, 0.06);
+    m.add(G.box, 0x9fc4e0, x + dx, 1.72, z(0.145), 0, 0, 0, 0.5, 0.92, 0.015);
+    m.add(G.sphere, 0xc8ccd0, x + dx - 0.27 * Math.sign(dx), 1.08, z(0.16), 0, 0, 0, 0.05, 0.05, 0.05);
+    // El escaparate: del lado contrario a la puerta
+    const wx = x - dx * 0.56, W = 1.1;
+    m.add(G.box, wood, wx, 1.48, z(0.11), 0, 0, 0, 0.03, 1.9, 0.03);
+    for (const y of [1.02, 1.56]) m.add(G.box, 0x7a5a3a, wx, y, z(0.12), 0, 0, 0, W, 0.03, 0.12);
+    const row = (n: number) => Array.from({ length: n }, (_, i) => wx - W / 2 + (W * (i + 0.5)) / n);
+    if (kind.name === 'Avarques') {
+      for (const y of [0.6, 1.04, 1.58]) row(3).forEach((px, i) => {
+        const c = [0xb5482e, 0x2f6b8a, 0xd8a23a, 0x3f7a4a, 0xc23030][(i + Math.round(y * 3) + k) % 5];
+        for (const o of [-0.055, 0.055]) m.add(G.rbox, c, px + o, y + 0.035, z(0.13), 0, 0, 0, 0.09, 0.06, 0.24);
+      });
+    } else if (kind.name === 'Sobrassada') {
+      m.add(G.box, 0x7a5a3a, wx, 2.2, z(0.13), 0, 0, 0, W, 0.03, 0.03);
+      row(5).forEach((px, i) => {
+        m.add(G.box, 0xd8cfb4, px, 2.14, z(0.13), 0, 0, 0, 0.01, 0.1, 0.01);
+        m.add(G.capsule, i % 2 ? 0xa23a22 : 0x8a2e1c, px, 1.94 - (i % 2) * 0.05, z(0.13), 0, 0, 0, 0.11, 0.17, 0.11);
+      });
+      for (const y of [0.6, 1.04, 1.58]) row(4).forEach((px, i) => m.add(G.cyl, i % 2 ? 0xe2c79a : 0xd9a441, px, y + 0.1, z(0.13), 0, 0, 0, 0.14, 0.2, 0.14));
+    } else if (kind.name === 'Moda') {
+      m.add(G.box, 0x9aa3ad, wx, 2.22, z(0.13), 0, 0, 0, W, 0.02, 0.02);
+      row(4).forEach((px, i) => {
+        const c = [0xd7263d, 0xf2f2f0, 0x2a3a5a, 0xe8b23a][(i + k) % 4];
+        m.add(G.rbox, c, px, 1.86, z(0.13), 0, 0, 0, 0.22, 0.56, 0.06);
+        for (const s of [-1, 1]) m.add(G.rbox, c, px + s * 0.12, 1.98, z(0.13), 0, 0, s * 0.25, 0.06, 0.26, 0.05);
+      });
+      for (const y of [0.6, 1.04]) row(3).forEach((px, i) => m.add(G.rbox, [0xf2f2f0, 0x6b8fb0, 0xc98e64][(i + k) % 3], px, y + 0.06, z(0.13), 0, 0, 0, 0.26, 0.1, 0.18));
+    } else {
+      for (const y of [0.6, 1.04, 1.58]) row(3).forEach((px, i) => {
+        m.add(G.box, 0x241a24, px, y + 0.02, z(0.13), 0, 0, 0, 0.28, 0.03, 0.16);
+        for (let g = 0; g < 3; g++) m.add(G.sphere, i % 2 ? 0xe8c75a : 0xd9dde2, px - 0.08 + g * 0.08, y + 0.05, z(0.13), 0, 0, 0, 0.05, 0.05, 0.05);
+      });
+    }
+    let list = signs.get(kind.name);
+    if (!list) signs.set(kind.name, (list = []));
+    list.push({ w: 1.9, h: 0.27, x, y: 2.74, z: z(0.16), ry: side > 0 ? Math.PI : 0 });
+  }
+
   private facade(m: Merger, x0: number, x1: number, z: number, face: 1 | -1, floors: number, alongX = true, groundFloor = true) {
     if (this.hd) return this.hd.facade(x0, x1, z, face, floors, alongX, groundFloor);
     const len = Math.abs(x1 - x0);
@@ -334,6 +391,7 @@ export class LevelSantJoan implements Level {
     const WHITE = 0xf4f0e6;
 
     // Ses Voltes: calle de arcos blancos a los dos lados
+    const shopSigns = new Map<string, { w: number; h: number; x: number; y: number; z: number; ry: number }[]>();
     for (const side of [-1, 1] as const) {
       const wallZ = side * (STREET.maxZ + 0.2);
       this.block(m, 30, STREET.maxX, side < 0 ? wallZ - 8 : wallZ, side < 0 ? wallZ : wallZ + 8, 8, WHITE);
@@ -346,12 +404,9 @@ export class LevelSantJoan implements Level {
       }
       m.add(G.box, WHITE, (30 + STREET.maxX) / 2, 4.3, side * 3.6, 0, 0, 0, STREET.maxX - 30, 1.2, 1.9);
       // Bajo los arcos, escaparates de tiendas (avarques, sobrasada, ropa, joyerías) con su luz
-      const shopCols = [0xc23030, 0x2f6b8a, 0xd8a23a, 0x6b4a2e, 0xf4f0e6, 0x2a2a2a];
       for (let x = 31.6, k = 0; x < STREET.maxX - 2.4; x += 2.6, k++) {
         const wz = side * (STREET.maxZ + 0.15);
-        m.add(G.box, k % 3 ? 0x3a2a20 : 0x1f3a2a, x + 1.3, 1.45, wz, 0, 0, 0, 2.1, 2.9, 0.12); // marco
-        m.add(G.box, 0xe9d6ae, x + 1.3, 1.5, wz - side * 0.07, 0, 0, 0, 1.8, 2.3, 0.04); // luz del escaparate
-        for (let j = 0; j < 4; j++) m.add(G.rbox, shopCols[(k + j) % shopCols.length], x + 0.65 + j * 0.42, 1.0 + (j % 2) * 0.55, wz - side * 0.12, 0, 0, 0, 0.3, 0.32, 0.12);
+        this.shopFront(m, x + 1.3, wz, side, k + (side > 0 ? 2 : 0), shopSigns);
       }
       this.facade(m, 31, STREET.maxX - 1, wallZ, (-side) as 1 | -1, 3, true, false); // abajo van los soportales
     }
@@ -364,7 +419,10 @@ export class LevelSantJoan implements Level {
       const cz0 = STREET.maxZ + 2.2; // fachada que da a la plaza de la Catedral, junto a la calle
       this.block(m, 19, 30, cz0, cz0 + 16, 16, MARES);
       // Contrafuertes góticos a lo largo de la nave
-      for (let x = 20; x <= 29; x += 3) m.add(G.box, MARES_D, x, 7, cz0 - 0.35, 0, 0, 0, 0.9, 14, 0.7);
+      for (let x = 20; x <= 29; x += 3) {
+        m.add(G.box, MARES_D, x, 7, cz0 - 0.35, 0, 0, 0, 0.9, 14, 0.7);
+        this.colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: cz0 - 0.7, maxZ: cz0 });
+      }
       // Pórtico neoclásico: cuatro columnas, entablamento y frontón
       for (const x of [21.6, 23.6, 25.6, 27.6]) {
         m.add(G.cyl, 0xe8dcc0, x, 3.6, cz0 - 1.6, 0, 0, 0, 0.42, 7.2, 0.42);
@@ -400,20 +458,46 @@ export class LevelSantJoan implements Level {
       m.add(G.sphere, 0x2f6b3a, x, 4, z, 0, 0, 0, 3.6, 2.8, 3.6);
       this.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
     }
-    for (const [x, z, ry] of [[77, -6, 0], [83, 6, 0], [77, 6, 0], [83, -6, 0]]) {
-      m.add(G.box, 0x6b4a2e, x, 0.45, z, 0, ry, 0, 1.8, 0.1, 0.5);
-      m.add(G.box, 0x333333, x, 0.22, z, 0, ry, 0, 1.6, 0.44, 0.1);
+    for (const [x, z] of [[77, -6], [83, 6], [77, 6], [83, -6]]) {
+      // Banco: tablas de madera, respaldo y dos pies de hierro (no un cajón negro debajo)
+      for (const o of [-0.16, 0, 0.16]) m.add(G.box, 0x8a6a44, x, 0.46, z + o, 0, 0, 0, 1.8, 0.05, 0.14);
+      const bz = z > 0 ? 0.26 : -0.26;
+      for (const y of [0.68, 0.84]) m.add(G.box, 0x8a6a44, x, y, z + bz, 0, 0, 0, 1.8, 0.1, 0.04);
+      for (const sx of [-0.75, 0.75]) {
+        m.add(G.box, 0x2b2f36, x + sx, 0.22, z, 0, 0, 0, 0.06, 0.44, 0.46);
+        m.add(G.box, 0x2b2f36, x + sx, 0.66, z + bz, 0, 0, 0, 0.05, 0.5, 0.05);
+      }
       this.colliders.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.25, maxZ: z + 0.25 });
     }
+    // La barra de hierro de la que cuelga el rótulo de Ses Voltes, entre los dos soportales
+    m.add(G.box, 0x2b2f36, 31.2, 4.7, 0, 0, 0, 0, 0.07, 0.07, 5.4);
+    for (const z of [-1.2, 1.2]) m.add(G.box, 0x2b2f36, 31.2, 4.57, z, 0, 0, 0, 0.03, 0.26, 0.03);
     sc.add(m.mesh());
+    // Los rótulos de las tiendas (uno por oficio, un material por rótulo)
+    for (const [text, planes] of shopSigns) {
+      const tex = canvasTex((ctx, w, h) => {
+        ctx.fillStyle = SHOP_KINDS.find((k) => k.name === text)!.bg;
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#e8d7a8';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(5, 5, w - 10, h - 10);
+        ctx.fillStyle = '#f6ecd0';
+        ctx.font = 'bold 40px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, w / 2, h / 2 + 2);
+      }, 256, 72);
+      sc.add(mergedPlanes(planes, new THREE.MeshBasicMaterial({ map: tex })));
+    }
 
     // Rótulos de verdad
-    this.sign('Ses Voltes', 30.4, 4.4, 0, -Math.PI / 2, 3);
-    this.sign('Carrer Major des Born', 19.2, 3.4, -4.5, 0, 3.6);
-    this.sign('Catedral de Menorca', 24.6, 7.6, STREET.maxZ + 2.2 - 1.95, Math.PI, 3.6);
-    this.sign('Plaça Nova', 69.4, 3, 6.5, -Math.PI / 2, 3);
-    this.sign('Plaça Espanya', 70.6, 3, -6.5, -Math.PI / 2, 3.4);
-    this.sign('Maramao', 40, 3.6, 4.55, Math.PI, 2.6);
+    // (cada uno donde se ve: Ses Voltes colgado de su barra, nada detrás de balcones ni dentro de un muro)
+    this.sign('Ses Voltes', 31.12, 4.08, 0, -Math.PI / 2, 3);
+    this.sign('Carrer Major des Born', 19.2, 3.12, -4.5, 0, 3.6);
+    this.sign('Catedral de Menorca', 24.6, 7.6, STREET.maxZ + 2.2 - 1.95, Math.PI, 3);
+    this.sign('Plaça Nova', 70.06, 3, 6.5, Math.PI / 2, 3);
+    this.sign('Plaça Espanya', 70.06, 3, -6.5, Math.PI / 2, 3.4);
+    this.sign('Maramao', 40, 3.25, 4.47, Math.PI, 2.6);
 
     // Sa Plaça d'es Bè: plaza cerrada de casas de marès con persianas verdes, y los caballos en medio
     {
@@ -436,8 +520,8 @@ export class LevelSantJoan implements Level {
           pm.add(fg, fc[i % fc.length], x0 + (x1 - x0) * k, 7 - Math.sin(k * Math.PI) * 1.4, BE.z + dz, 0, Math.PI / 2, 0, 1, 1, 0.15);
         }
       sc.add(pm.mesh());
-      this.sign('Sa Plaça d’es Bè', x0 + 0.05, 3.6, 4.6, Math.PI / 2, 3.6);
-      this.sign('A Sa Plaça d’es Bè →', ESPANYA.maxX - 0.05, 3.3, 5, -Math.PI / 2, 3.2);
+      this.sign('Sa Plaça d’es Bè', x0 + 0.05, 3.12, 4.6, Math.PI / 2, 3.6);
+      this.sign('A Sa Plaça d’es Bè →', ESPANYA.maxX - 0.05, 3.12, 5, -Math.PI / 2, 3.2);
       const pl = new THREE.PointLight(0xffb070, 16, 24, 1.6);
       pl.position.set(BE.x, 6, BE.z);
       sc.add(pl);

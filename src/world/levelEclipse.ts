@@ -87,7 +87,7 @@ const ERIC_LOOK: PersonLook = { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8
 // Los padres de Gas: él y ella, de unos cincuenta, como los de Azul (sin moños)
 const MARC_DAD: PersonLook = { skin: 0xe2b08c, shirt: 0x6b8fb5, pants: 0x4a4a52, hair: 0x7d7672, hairStyle: 'short', male: true };
 const MARC_MOM: PersonLook = { skin: 0xeec4a2, shirt: 0xc85a6a, pants: 0x2d2d3a, hair: 0x5a3a26, hairStyle: 'straight' };
-const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: COAST_Z + 1.5, maxZ: 15.5 };
+const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: 0.6, maxZ: 15.5 }; // (la calle y el patio: los muros cierran lo demás)
 const HOME_BOUNDS: Box2 = { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 };
 /** Cocina de casa de Gas: los padres, junto a la encimera. */
 const KITCHEN_PARENTS = new THREE.Vector3(0, 0, -1.6);
@@ -421,8 +421,11 @@ export class LevelEclipse implements Level {
     m.add(G.sphere, 0xd9b45a, W - 0.15, 1.0, 0.15, 0, 0, 0, 0.06, 0.06, 0.06);
     m.add(G.cyl, 0xfbf7ee, 2.6, 2.3, -D + 0.12, Math.PI / 2, 0, 0, 0.36, 0.04, 0.36);
     m.add(G.box, 0x2a2a2e, 2.6, 2.36, -D + 0.15, 0, 0, 0, 0.02, 0.14, 0.01);
-    m.add(G.box, 0xf4f1ea, W - 0.12, 1.6, -1.6, 0, 0, 0, 0.02, 0.6, 0.42);
-    m.add(G.box, 0xc23030, W - 0.13, 1.84, -1.6, 0, 0, 0, 0.02, 0.12, 0.42);
+    // Calendario: taco blanco con su borde y sus filas de días (antes, una raya roja suelta en la pared)
+    m.add(G.box, 0x8a6a44, W - 0.105, 1.6, -1.6, 0, 0, 0, 0.012, 0.64, 0.46);
+    m.add(G.box, 0xfffdf6, W - 0.115, 1.58, -1.6, 0, 0, 0, 0.012, 0.56, 0.42);
+    m.add(G.box, 0xc23030, W - 0.125, 1.82, -1.6, 0, 0, 0, 0.012, 0.12, 0.42);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) m.add(G.box, 0x4a4a50, W - 0.124, 1.68 - r * 0.09, -1.76 + c * 0.08, 0, 0, 0, 0.004, 0.04, 0.04);
     // Lámpara colgando sobre la mesa y alfombra de esparto
     m.add(G.box, 0x333333, 0.4, 2.3, 0.9, 0, 0, 0, 0.02, 1.0, 0.02);
     m.add(G.cone, 0x2f6b46, 0.4, 1.72, 0.9, 0, 0, 0, 0.5, 0.3, 0.5);

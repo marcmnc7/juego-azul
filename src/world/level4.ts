@@ -494,7 +494,7 @@ export class Level4 implements Level {
     m.add(G.box, 0xf4efe2, 4.6, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);
     this.colliders.push({ minX: 4.47, maxX: 4.73, minZ: 0, maxZ: 14.5, low: true });
     m.add(G.box, 0xf4efe2, (CORRIDOR.wallX + 4.6) / 2, 0.9, 14.6, 0, 0, 0, 4.6 - CORRIDOR.wallX + 0.2, 1.8, 0.25);
-    m.add(G.box, 0x2f5f2a, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4);
+    m.add(G.box, 0x5f8f4e, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4); // (más claro: de noche, con la luna azul, un verde oscuro se quedaba en un muro negro)
     for (const [x, z] of [[-5.5, 10.9], [-3.8, 1.8], [3.9, 4.8]]) {
       m.add(G.cyl, 0xb5603b, x, 0.3, z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, x, 0.9, z, 0, 0, 0, 0.9, 0.9, 0.9);
@@ -546,9 +546,9 @@ export class Level4 implements Level {
     this.mosaicData = new THREE.DataTexture(new Uint8Array(W * H * 4), W, H, THREE.RGBAFormat);
     this.mosaicData.magFilter = this.mosaicData.minFilter = THREE.NearestFilter;
     this.mosaicData.colorSpace = THREE.SRGBColorSpace;
-    this.mosaic = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({ map: this.mosaicData, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    this.mosaic = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({ map: this.mosaicData, transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
     this.mosaic.visible = false;
-    this.mosaic.renderOrder = 5;
+    this.mosaic.renderOrder = 50;
     this.scene.add(this.mosaic);
     this.shuffleMosaic();
   }
@@ -1327,6 +1327,9 @@ export class Level4 implements Level {
     fadeFlash(() => {
       this.phase = 'love';
       this.layDown();
+      // La pelota, a la piscina: podía haberse quedado rodando encima de la hamaca
+      this.ball.pos.set(2.6, WATER_Y + 0.4, 8.2);
+      this.ball.vel.set(0, 0, 0);
       this.updateHud();
       this.camera.position.set(TOWELS.x + 4.4, LAWN_Y + 2.6, TOWELS.z - 3.6);
       this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z);

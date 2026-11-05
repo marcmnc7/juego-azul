@@ -30,7 +30,7 @@ export function vertexMat() {
 }
 
 /** Setos: cajas verdes que sí son plantas. */
-const HEDGES = new Set([0x2f5f2a, 0x3d6e34, 0x2f5a2c, 0x2f6b3a]);
+const HEDGES = new Set([0x2f5f2a, 0x3d6e34, 0x2f5a2c, 0x2f6b3a, 0x5f8f4e]);
 let leafMat: THREE.MeshStandardMaterial | null = null;
 /** Follaje: el mismo material con las hojas recortadas y por las dos caras (es un dibujado aparte). */
 export function foliageMat() {
@@ -103,9 +103,11 @@ export class Merger {
   build() {
     const solid = this.parts.reduce((a, p) => a + p.attributes.position.count, 0);
     const all = [...this.parts, ...this.leafParts];
+    const ranges: number[] = [];
     for (const p of all) {
       const n = p.attributes.position.count;
       if (p.userData.thinPart) this.thin.push(this.count, n);
+      ranges.push(this.count, n);
       this.count += n;
     }
     const g = mergeGeometries(all)!;
@@ -119,6 +121,7 @@ export class Merger {
     g.computeBoundingSphere();
     g.userData.thin = this.thin;
     g.userData.parts = true;
+    if (location.hash === '#test') g.userData.ranges = ranges; // (para las pruebas: qué piezas hay)
     this.thin = [];
     this.count = 0;
     return g;
@@ -1135,6 +1138,46 @@ export function makeDog(): Dog {
 }
 
 /** Coche del viaje con Azul, Gas y Joy asomada por la ventanilla. Mira hacia +Z. */
+/**
+ * Araucaria: tronco recto y pisos de ramas horizontales con su follaje, cada vez más cortas hacia la punta
+ * (y no conos aplastados uno encima de otro).
+ */
+export function araucaria(m: Merger, x: number, y0: number, z: number, h: number, R: number) {
+  m.add(G.cyl, 0x6b4a32, x, y0 + h / 2, z, 0, 0, 0, 0.42, h, 0.42);
+  const tiers = Math.max(4, Math.round((h - 4) / 1.05));
+  for (let t = 0; t < tiers; t++) {
+    const k = t / (tiers - 1);
+    const y = y0 + 3.6 + k * (h - 3.9);
+    const L = R * (1 - k * 0.84);
+    const n = t % 2 ? 5 : 6;
+    for (let b = 0; b < n; b++) {
+      const a = (b / n) * Math.PI * 2 + t * 0.55;
+      const cx = Math.cos(a), sz = Math.sin(a);
+      m.add(G.box, 0x5a3e28, x + (cx * L) / 2, y, z + (sz * L) / 2, 0, -a, 0, L, 0.07, 0.07);
+      m.add(G.bush, b % 2 ? 0x2c5a30 : 0x356a38, x + cx * L * 0.6, y - 0.08 - L * 0.03, z + sz * L * 0.6, 0, -a, 0, L * 0.98, 0.42, Math.max(0.34, L * 0.3));
+    }
+  }
+  m.add(G.bush, 0x356a38, x, y0 + h + 0.1, z, 0, 0, 0, 0.5, 0.9, 0.5);
+}
+
+/** Farola fernandina: base con anillo, fuste, farol de seis caras con sus nervios, sombrero y remate. */
+export function streetLamp(m: Merger, x: number, y0: number, z: number) {
+  const iron = 0x1e1e1e;
+  m.add(G.cyl, iron, x, y0 + 0.3, z, 0, 0, 0, 0.4, 0.6, 0.4);
+  m.add(G.cyl, iron, x, y0 + 0.66, z, 0, 0, 0, 0.5, 0.1, 0.5);
+  m.add(G.cyl, iron, x, y0 + 2.2, z, 0, 0, 0, 0.14, 3.2, 0.14);
+  m.add(G.cyl, iron, x, y0 + 3.82, z, 0, 0, 0, 0.3, 0.08, 0.3);
+  m.add(LAMP_GLASS, 0xf4e6c0, x, y0 + 4.18, z, 0, 0, 0, 1, 1, 1);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    m.add(G.box, iron, x + Math.cos(a) * 0.215, y0 + 4.18, z + Math.sin(a) * 0.215, 0, -a, -Math.atan2(0.08, 0.62), 0.025, 0.64, 0.025);
+  }
+  m.add(LAMP_CAP, iron, x, y0 + 4.63, z, 0, 0, 0, 1, 1, 1);
+  m.add(G.sphere, iron, x, y0 + 4.85, z, 0, 0, 0, 0.09, 0.14, 0.09);
+}
+const LAMP_GLASS = new THREE.CylinderGeometry(0.25, 0.17, 0.62, 6);
+const LAMP_CAP = new THREE.ConeGeometry(0.34, 0.3, 6);
+
 export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook; passenger?: PersonLook } = {}) {
   if (hdSurfaces.value && rigReady() && vehiclesReady()) {
     const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver, azul: opts.passenger });

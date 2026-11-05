@@ -230,6 +230,13 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
     const a = (i / 8) * Math.PI * 2;
     m.add(G.box, 0xd4b47c, 70 + Math.cos(a) * 3.6, 4, -58 + Math.sin(a) * 3.6, 0, -a + Math.PI / 2, 0, 3, 8, 0.8);
   }
+  m.add(G.cyl, 0xcaa970, 70, 4, -58, 0, 0, 0, 7.4, 8, 7.4);
+  m.add(G.cyl, 0xb99a62, 70, 8.15, -58, 0, 0, 0, 8.3, 0.3, 8.3); // cornisa
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    m.add(G.box, 0xd4b47c, 70 + Math.cos(a) * 3.95, 8.7, -58 + Math.sin(a) * 3.95, 0, -a + Math.PI / 2, 0, 0.8, 0.8, 0.4); // almenas
+  }
+  m.add(G.box, 0x4a3a2a, 70, 2.2, -58 + 3.72, 0, 0, 0, 1.2, 2.2, 0.1); // puerta
   m.add(G.rock2, 0xbf9a62, 70, -0.6, -58, 0, 0, 0, 14, 3, 10);
   // Llaüts navegando
   for (const [x, z] of [[-10, -80], [25, -95], [-55, -110]] as [number, number][]) {

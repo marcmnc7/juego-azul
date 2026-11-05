@@ -134,6 +134,8 @@ function patch(sh: THREE.WebGLProgramParametersWithUniforms, rim: boolean, blur:
  */
 export function paintScene(scene: THREE.Object3D) {
   scene.traverse((o) => {
+    // Un sprite no escribe profundidad: si no, la tinta le dibuja el recuadro de su cartel alrededor
+    if ((o as THREE.Sprite).isSprite) (o as THREE.Sprite).material.depthWrite = false;
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];

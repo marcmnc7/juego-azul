@@ -1,14 +1,140 @@
 import * as THREE from 'three';
 
 // Partículas sencillas (corazones, tréboles, chispas) con un pool fijo de sprites.
+function heart(c: CanvasRenderingContext2D, x: number, y: number, r: number, fill: string) {
+  c.fillStyle = fill;
+  c.beginPath();
+  c.moveTo(x, y + r * 0.9);
+  c.bezierCurveTo(x - r * 1.5, y - r * 0.1, x - r * 0.75, y - r * 1.1, x, y - r * 0.35);
+  c.bezierCurveTo(x + r * 0.75, y - r * 1.1, x + r * 1.5, y - r * 0.1, x, y + r * 0.9);
+  c.fill();
+}
+
+function star(c: CanvasRenderingContext2D, x: number, y: number, R: number, r: number, n: number, fill: string, rot = 0) {
+  c.fillStyle = fill;
+  c.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i / (n * 2)) * Math.PI * 2, q = i % 2 ? r : R;
+    c.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q);
+  }
+  c.closePath();
+  c.fill();
+}
+
+/** Dibujos propios para las partículas: los emojis cambian de un móvil a otro y se ven pegados en el 3D. */
+const PAINT: Record<string, (c: CanvasRenderingContext2D) => void> = {
+  '❤️': (c) => {
+    heart(c, 64, 62, 42, '#e8294f');
+    c.fillStyle = 'rgba(255,255,255,.45)';
+    c.beginPath();
+    c.ellipse(44, 44, 10, 6, -0.7, 0, 7);
+    c.fill();
+  },
+  '✨': (c) => {
+    const g = c.createRadialGradient(64, 64, 0, 64, 64, 60);
+    g.addColorStop(0, 'rgba(255,240,170,.8)');
+    g.addColorStop(1, 'rgba(255,240,170,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 128, 128);
+    star(c, 64, 64, 56, 7, 4, '#fff6c8');
+  },
+  '🍀': (c) => {
+    c.strokeStyle = '#2c7a34';
+    c.lineWidth = 7;
+    c.beginPath();
+    c.moveTo(64, 66);
+    c.quadraticCurveTo(70, 96, 84, 112);
+    c.stroke();
+    for (const [dx, dy, a] of [[0, -22, 0], [24, 0, Math.PI / 2], [0, 22, Math.PI], [-24, 0, -Math.PI / 2]] as const) {
+      c.save();
+      c.translate(64 + dx, 62 + dy);
+      c.rotate(a);
+      heart(c, 0, 0, 22, '#3fa648');
+      c.restore();
+    }
+  },
+  '🍋': (c) => {
+    c.fillStyle = '#f4d43a';
+    c.beginPath();
+    c.ellipse(64, 66, 44, 32, -0.35, 0, 7);
+    c.fill();
+    c.beginPath();
+    c.ellipse(108, 50, 10, 7, -0.35, 0, 7);
+    c.fill();
+    c.fillStyle = 'rgba(255,255,255,.5)';
+    c.beginPath();
+    c.ellipse(50, 54, 14, 7, -0.35, 0, 7);
+    c.fill();
+  },
+  '💥': (c) => {
+    star(c, 64, 64, 60, 26, 9, '#ff8a1e', 0.2);
+    star(c, 64, 64, 36, 16, 9, '#ffe066', 0.5);
+  },
+  '💨': (c) => {
+    c.fillStyle = 'rgba(240,244,248,.9)';
+    for (const [x, y, r] of [[40, 70, 24], [70, 58, 30], [96, 74, 20]] as const) {
+      c.beginPath();
+      c.arc(x, y, r, 0, 7);
+      c.fill();
+    }
+  },
+  '⚡': (c) => {
+    c.fillStyle = '#ffd92e';
+    c.beginPath();
+    for (const [x, y] of [[74, 6], [28, 72], [60, 72], [46, 122], [100, 50], [66, 50]] as const) c.lineTo(x, y);
+    c.closePath();
+    c.fill();
+  },
+  '📍': (c) => {
+    c.fillStyle = '#e0303e';
+    c.beginPath();
+    c.arc(64, 46, 34, Math.PI * 0.85, Math.PI * 0.15);
+    c.lineTo(64, 120);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#fff';
+    c.beginPath();
+    c.arc(64, 46, 13, 0, 7);
+    c.fill();
+  },
+  '🧳': (c) => {
+    c.fillStyle = '#8a5a34';
+    c.fillRect(26, 44, 76, 66);
+    c.fillStyle = '#5e3c20';
+    c.fillRect(26, 62, 76, 6);
+    c.fillRect(26, 88, 76, 6);
+    c.strokeStyle = '#3a2a20';
+    c.lineWidth = 8;
+    c.strokeRect(50, 24, 28, 20);
+  },
+  '🎵': (c) => {
+    c.fillStyle = '#ff5fa8';
+    c.beginPath();
+    c.ellipse(46, 98, 20, 15, -0.3, 0, 7);
+    c.fill();
+    c.fillRect(60, 22, 8, 76);
+    c.beginPath();
+    c.moveTo(68, 22);
+    c.quadraticCurveTo(100, 34, 92, 66);
+    c.quadraticCurveTo(88, 46, 68, 44);
+    c.fill();
+  },
+};
+PAINT['🎶'] = PAINT['🎵'];
+PAINT['📸'] = PAINT['📷'] = PAINT['✨'];
+
 function emojiTexture(ch: string) {
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = 128;
   const ctx = c.getContext('2d')!;
-  ctx.font = '52px serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(ch, 32, 36);
+  const paint = PAINT[ch];
+  if (paint) paint(ctx);
+  else {
+    ctx.font = '104px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ch, 64, 72);
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;

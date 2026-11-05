@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
-import { rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, noTails, womanPartsTexture, type Kind } from './rig';
+import { stripFormal, rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, noTails, womanPartsTexture, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
 import womanLodUrl from '../assets/chars/woman_lod.glb';
 import manLodUrl from '../assets/chars/man_lod.glb';
@@ -35,6 +35,7 @@ let baking: Promise<void> | null = null;
 
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
   const K = rigKind(kind);
+  if (kind === 'man') stripFormal(lod);
   const model = lod;
   model.scale.setScalar(K.scale);
   model.position.y = -K.minY * K.scale;
@@ -267,7 +268,7 @@ function vatify(mat: THREE.Material, part: VatPart) {
 // (en el shader), así sigue siendo una sola llamada de dibujo por pieza.
 
 const NEUTRAL = 0x9a9a9a;
-const HAIRS = [0x2b1d14, 0x3b2618, 0x5a3b22, 0x7a5434, 0x161210, 0x161210, 0xb08a52, 0xd8bb7e, 0x8a3b1e];
+const HAIRS = [0x2b1d14, 0x3b2618, 0x5a3b22, 0x7a5434, 0x2a1c14, 0x33231a, 0xb08a52, 0xd8bb7e, 0x8a3b1e];
 // De fiesta en verano: mucho blanco (en el jaleo se va de blanco) y colores vivos
 const TOPS = [0xf6f3ec, 0xf6f3ec, 0xf6f3ec, 0xffffff, 0xe94f4f, 0x2f6fb5, 0x3fa37a, 0xf2c14e, 0xf08cae, 0x1d1d22, 0x7a5cc4, 0x9fd3e6, 0xf28f3b];
 const BOTTOMS = [0x4b6a92, 0x4b6a92, 0x8aa6c8, 0x1f1f24, 0xeeeae0, 0xb8a27a, 0x5d6b3a, 0x2d3a5a];

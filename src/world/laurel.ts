@@ -52,8 +52,24 @@ export class Laurel {
         }
         // Barra iluminada abajo y balcones arriba
         m.add(G.box, 0x2a1d16, s * (W + 0.02), 1.5, z, 0, 0, 0, 0.06, 3, 6.6);
-        m.add(G.box, 0xffc680, s * (W - 0.01), 1.35, z - 1.2, 0, 0, 0, 0.04, 2.1, 2.6);
-        m.add(G.box, 0xffc680, s * (W - 0.01), 1.35, z + 1.9, 0, 0, 0, 0.04, 2.1, 1.6);
+        // Las cristaleras del bar: la luz de dentro, carpintería oscura, estantes de botellas y jamones colgados
+        const inX = s * (W - 0.01), fx = s * (W - 0.05);
+        for (const [cz, len] of [[z - 1.2, 2.6], [z + 1.9, 1.6]] as const) {
+          m.add(G.box, 0xffc680, inX, 1.35, cz, 0, 0, 0, 0.04, 2.1, len);
+          for (const y of [1.15, 1.72]) {
+            m.add(G.box, 0x4a2c1a, fx, y, cz, 0, 0, 0, 0.03, 0.04, len - 0.1);
+            const nb = Math.floor(len / 0.17);
+            for (let b = 0; b < nb; b++) {
+              const bz = cz - len / 2 + 0.12 + b * 0.17;
+              const hb = 0.22 + ((b * 7 + i) % 3) * 0.04;
+              m.add(G.cyl, [0x2f5a3a, 0x6b2a2a, 0x3a2a18, 0x8a6a2a][(b + i) % 4], fx, y + 0.02 + hb / 2, bz, 0, 0, 0, 0.06, hb, 0.06);
+            }
+          }
+          for (let h = 0; h < Math.floor(len / 0.5); h++) m.add(G.capsule, 0x7a3a22, fx, 2.12, cz - len / 2 + 0.28 + h * 0.5, 0, 0, 0, 0.11, 0.14, 0.11);
+          m.add(G.box, 0x3a2418, fx - s * 0.03, 0.46, cz, 0, 0, 0, 0.06, 0.92, len); // zócalo de madera
+          m.add(G.box, 0x241a14, fx - s * 0.03, 1.35, cz, 0, 0, 0, 0.04, 2.1, 0.05); // parteluz
+          m.add(G.box, 0x241a14, fx - s * 0.03, 2.38, cz, 0, 0, 0, 0.05, 0.06, len);
+        }
         if (hd) hd.facade(z - 3.9, z + 3.9, s * W, (s > 0 ? -1 : 1) as 1 | -1, Math.floor((h - 1) / 3), false, false);
         else
           for (let f = 0; f * 3 + 5 < h; f++)

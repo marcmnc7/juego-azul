@@ -137,6 +137,8 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
 
   // Ruedas: cada una en un soporte propio, para que girar x las haga rodar hacia delante
   const wheels: THREE.Object3D[] = [];
+  // Aleación mate, no espejo: el cromo puro reflejaba el cielo y de noche las llantas salían azules
+  const alloy = new THREE.MeshStandardMaterial({ color: 0x8d9096, metalness: 0.35, roughness: 0.55 });
   const tire = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 28).rotateZ(Math.PI / 2);
   const rim = new THREE.CylinderGeometry(0.21, 0.21, 0.23, 20).rotateZ(Math.PI / 2);
   const spoke = new THREE.BoxGeometry(0.235, 0.36, 0.05);
@@ -144,7 +146,7 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
     const holder = new THREE.Group();
     holder.position.set(x, 0.32, z);
     add(tire, rubber, 0, 0, 0, 1, 1, 1, holder);
-    add(rim, chrome, 0, 0, 0, 1, 1, 1, holder);
+    add(rim, alloy, 0, 0, 0, 1, 1, 1, holder);
     for (let k = 0; k < 5; k++) add(spoke, plastic, 0, 0, 0, 1, 1, 1, holder).rotation.x = (k * Math.PI) / 5;
     root.add(holder);
     wheels.push(holder);

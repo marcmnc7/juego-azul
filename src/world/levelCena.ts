@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { canvasTex } from './deco';
 import { Surf } from '../core/surfaces';
 import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
@@ -7,7 +8,7 @@ import { Walker } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { CENA } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
+import { araucaria, G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { buildSaFarola, COAST_Z } from './saFarola';
@@ -702,7 +703,8 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   ground.userData.noCast = true;
   sc.add(ground);
   // El agua de la cala
-  const waterMat = toon({ color: day ? 0x2a93ad : 0x0d2340, emissive: day ? 0x06303c : 0x030a18, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.93 });
+  // (de noche, casi mate: con el brillo de día, la luna dejaba una raya blanca quemada en el agua)
+  const waterMat = toon({ color: day ? 0x2a93ad : 0x0d2340, emissive: day ? 0x06303c : 0x030a18, roughness: day ? 0.12 : 0.55, metalness: day ? 0.25 : 0, transparent: true, opacity: 0.93 });
   const water = new THREE.Mesh(new THREE.PlaneGeometry(X, 62).rotateX(-Math.PI / 2), waterMat);
   water.position.set(0, WATER, Z0 + 28);
   water.userData.noCast = true;
@@ -796,7 +798,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   const SAND = 0xd9cfbd; // losas claras del patio
   m.add(G.box, SAND, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
   m.add(G.box, 0xb5b0a6, -8, -0.06, STREET_Z, 0, 0, 0, 156, 0.1, 6.4); // calle de hormigón claro, hasta el faro
-  m.add(G.box, 0x9a8a68, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
+  m.add(G.box, 0x6f7a48, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
   // Planta baja
   m.add(G.box, WHITE, 0, 1.55, -4, 0, 0, 0, 10, 3.1, 8);
   m.add(G.box, 0xe9e4d8, 0, 3.15, -3.92, 0, 0, 0, 10.2, 0.14, 8.24); // forjado
@@ -885,13 +887,26 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   colliders.push({ minX: -5.05, maxX: -2.85, minZ: 8.5, maxZ: 10.2 }, { minX: -5.05, maxX: -4, minZ: 7.95, maxZ: 8.6 });
   m.add(G.cyl, 0x222222, -3.45, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
   m.add(G.cyl, 0x222222, -2.95, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
-  // Escúter blanco con baúl
-  m.add(G.cyl, 0x1e1e22, -2.7, 0.25, 7.3, 0, 0, Math.PI / 2, 0.5, 0.12, 0.5);
-  m.add(G.cyl, 0x1e1e22, -2.7, 0.25, 6.0, 0, 0, Math.PI / 2, 0.5, 0.12, 0.5);
-  m.add(G.rbox, 0xf4f4f2, -2.7, 0.6, 6.8, 0, 0, 0, 0.45, 0.6, 1.3);
-  m.add(G.rbox, 0xf4f4f2, -2.7, 0.95, 6.1, 0.3, 0, 0, 0.42, 0.9, 0.3);
-  m.add(G.box, 0x2a2a2e, -2.7, 0.95, 7.0, 0, 0, 0, 0.36, 0.1, 0.6);
-  m.add(G.rbox, 0x2a2a2e, -2.7, 1.2, 7.5, 0, 0, 0, 0.42, 0.34, 0.42);
+  // Escúter blanco con baúl: ruedas con buje, plataforma, escudo, guardabarros, trasera redonda, asiento y manillar
+  const SC = -2.7, W_ = 0xf4f4f2;
+  for (const z of [6.12, 7.28]) {
+    m.add(G.cyl, 0x1e1e22, SC, 0.19, z, 0, 0, Math.PI / 2, 0.38, 0.1, 0.38);
+    m.add(G.cyl, 0xc8ccd0, SC, 0.19, z, 0, 0, Math.PI / 2, 0.18, 0.11, 0.18);
+  }
+  m.add(G.rbox, W_, SC, 0.3, 6.66, 0, 0, 0, 0.34, 0.07, 0.72); // plataforma
+  m.add(G.rbox, W_, SC, 0.66, 6.3, -0.22, 0, 0, 0.42, 0.74, 0.07); // escudo
+  m.add(G.sphere, W_, SC, 0.32, 6.12, 0, 0, 0, 0.2, 0.2, 0.46); // guardabarros
+  m.add(G.ball, W_, SC, 0.52, 7.08, 0, 0, 0, 0.44, 0.56, 0.86); // trasera
+  m.add(G.box, 0xc23030, SC, 0.58, 7.5, 0, 0, 0, 0.16, 0.05, 0.02); // piloto
+  m.add(G.rbox, 0x2a2a2e, SC, 0.82, 6.98, 0, 0, 0, 0.3, 0.09, 0.62); // asiento
+  m.add(G.cyl, 0x8d9096, SC, 1.0, 6.2, -0.22, 0, 0, 0.05, 0.24, 0.05); // dirección
+  m.add(G.cyl, 0x2a2a2e, SC, 1.12, 6.18, 0, 0, Math.PI / 2, 0.035, 0.58, 0.035); // manillar
+  m.add(G.ball, 0xfff3b0, SC, 1.1, 6.1, 0, 0, 0, 0.12, 0.12, 0.1); // faro
+  for (const s2 of [-1, 1]) {
+    m.add(G.cyl, 0x8d9096, SC + s2 * 0.2, 1.2, 6.2, 0, 0, s2 * -0.3, 0.012, 0.18, 0.012); // retrovisor
+    m.add(G.cyl, 0x2a2a2e, SC + s2 * 0.23, 1.29, 6.2, Math.PI / 2, 0, 0, 0.09, 0.015, 0.09);
+  }
+  m.add(G.rbox, 0x2a2a2e, SC, 1.06, 7.4, 0, 0, 0, 0.38, 0.28, 0.34); // baúl
   colliders.push({ minX: -3.0, maxX: -2.4, minZ: 5.7, maxZ: 7.7 });
   m.add(G.cyl, 0xb5603b, 1.3, 0.25, 2.4, 0, 0, 0, 0.45, 0.5, 0.45);
   m.add(G.bush, 0x4f8a3a, 1.3, 0.75, 2.4, 0, 0, 0, 0.6, 0.6, 0.6);
@@ -1012,8 +1027,27 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   pine(15, 2, 10);
   pine(-20, -4, 9);
   // Araucaria (pino de Norfolk): tronco recto y pisos de ramas horizontales
-  m.add(G.cyl, 0x6b4a32, 8.4, 7, -7, 0, 0, 0, 0.35, 14, 0.35);
-  for (let k = 0; k < 9; k++) m.add(G.cone, 0x2c5a30, 8.4, 4 + k * 1.25, -7, 0, k * 0.5, 0, 3.6 - k * 0.35, 0.5, 3.6 - k * 0.35);
+  araucaria(m, 8.4, 0, -7, 14, 3.6);
+  // La calle tiene sus muros de pared seca hasta el faro: de aquí no se sale a los descampados de detrás
+  const dryWall = (x0: number, x1: number) => {
+    m.add(G.box, 0xbfae92, (x0 + x1) / 2, 0.55, 10.35, 0, 0, 0, x1 - x0, 1.1, 0.45);
+    m.add(G.box, 0xd9cfbd, (x0 + x1) / 2, 1.13, 10.35, 0, 0, 0, x1 - x0, 0.06, 0.5);
+    for (let x = x0 + 9; x < x1 - 1; x += 9) {
+      m.add(G.box, WHITE, x, 0.7, 10.35, 0, 0, 0, 0.55, 1.4, 0.55);
+      m.add(G.box, 0xefeae0, x, 1.45, 10.35, 0, 0, 0, 0.66, 0.1, 0.66);
+    }
+    colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.6, low: true });
+  };
+  dryWall(-75.5, -16.8);
+  dryWall(16.8, 60);
+  // Los callejones de un metro a los dos lados de la casa de Azul
+  for (const [x0, x1] of [[-6.2, -5.2], [5.2, 6.2]]) {
+    m.add(G.box, WHITE, (x0 + x1) / 2, 0.55, 10.3, 0, 0, 0, x1 - x0, 1.1, 0.3);
+    colliders.push({ minX: x0, maxX: x1, minZ: 10.1, maxZ: 10.5, low: true });
+  }
+  // Y en la boca de la calle que baja al mar, una cancela (la de Sa Farola es privada)
+  for (const x of [-22.8, -21.6, -20.4, -19.2, -18]) m.add(G.box, 0x2b2f36, x, 1.5, 10.35, 0, 0, 0, 0.05, 0.75, 0.05);
+  m.add(G.box, 0x2b2f36, -20.4, 1.86, 10.35, 0, 0, 0, 6.2, 0.05, 0.05);
   // Postes de madera con el cable
   for (const x of [-16, 7, 30]) {
     m.add(G.cyl, 0x8a7a60, x, 4.5, STREET_Z - 3.0, 0, 0, 0, 0.24, 9, 0.24);
@@ -1059,10 +1093,21 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   lamp.scale.setScalar(5);
   lamp.visible = !day;
   sc.add(lamp);
+  // El haz: fuerte junto a la linterna y se va deshaciendo (antes, un cono macizo gris colgado del cielo)
+  const beamFade = canvasTex((ctx, w, h) => {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.25, '#6a6a6a');
+    g.addColorStop(0.7, '#141414');
+    g.addColorStop(1, '#000000');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }, 8, 128);
   const beam = new THREE.Mesh(
-    new THREE.ConeGeometry(4, 60, 16, 1, true).translate(0, -30, 0).rotateZ(Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    new THREE.ConeGeometry(2.6, 46, 20, 1, true).translate(0, -23, 0).rotateZ(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: beamFade, color: 0xfff1b0, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }),
   );
+  beam.visible = !day;
   beam.position.copy(farola.lamp);
   sc.add(beam);
   return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door };

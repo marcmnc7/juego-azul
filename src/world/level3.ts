@@ -73,7 +73,8 @@ const FILM_SECS = 15;
 const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
 /** Hasta dónde se anda en la terminal: a un cuerpo de las cristaleras y hasta el muro del fondo. */
 const AIR_WALK = { minX: AIR.minX + 0.32, maxX: AIR.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: AIR.maxZ };
-const BURGERS: [number, number][] = [[302.6, -14], [289.4, 0], [302.6, 14]];
+// (entre pilar y pilar: con un pilar delante, de «PRENSA» se leía «PR SA»)
+const BURGERS: [number, number][] = [[302.6, -4.75], [289.4, 2.75], [302.6, 17.75]];
 // Una sola cola delante de los baños, hacia el recinto
 const Q_Z = -13.25;
 const WC_BROKEN = [0, 4, 5];
@@ -722,10 +723,11 @@ export class Level3 implements Level {
       }
     }
     // Bancos de espera
-    for (const z of [-20, -12, 12, 20]) {
+    for (const z of [-27.25, -19.75, -12.25, 10.25, 25.25]) {
       for (const x of [A.minX + 0.6, A.maxX - 0.6]) {
-        m.add(G.box, 0x2b2f36, x, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
-        m.add(G.box, 0x2b2f36, x + (x < cx ? -0.25 : 0.25), 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
+        m.add(G.box, 0x4a5a6c, x, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
+        m.add(G.box, 0x4a5a6c, x + (x < cx ? -0.25 : 0.25), 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
+        for (const dz of [-1.2, 1.2]) m.add(G.box, 0x9aa3ad, x, 0.2, z + dz, 0, 0, 0, 0.5, 0.4, 0.06);
         this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 1.5, maxZ: z + 1.5 });
       }
     }

@@ -96,7 +96,7 @@ export class Terrace {
     m.add(G.box, 0xfafafa, -1.6, 4.0, FZ - 0.25, 0, 0, 0, 2.6, 0.55, 0.45); // aire acondicionado
     // La ropa tendida (sábanas blancas) arriba a la izquierda
     m.add(G.box, 0x777777, 5.4, 7.6, FZ - 0.5, 0, 0, 0, 4, 0.02, 0.02);
-    for (const [x, h] of [[6.8, 1.9], [5.9, 2.2], [5.1, 1.6], [4.4, 1.1]] as const) m.add(G.box, 0xf2f2f6, x, 7.6 - h / 2, FZ - 0.52, 0, 0, 0.03, 0.75, h, 0.03);
+    for (const [x, h] of [[6.8, 1.75], [5.9, 1.85], [5.1, 1.65], [4.4, 1.75]] as const) m.add(G.box, 0xf2f2f6, x, 7.6 - h / 2, FZ - 0.52, 0, 0, 0.03, 0.75, h, 0.03);
 
     // Toldos de rayas azules y blancas con su faldón
     const stripes = canvasTex((ctx, w, h) => {

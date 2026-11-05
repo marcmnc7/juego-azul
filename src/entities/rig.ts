@@ -266,9 +266,57 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
 }
 
 /** Carga los modelos y prepara las animaciones (una vez). */
+/**
+ * El modelo de hombre viene de esmoquin: la pajarita y el pañuelo del bolsillo son piezas sueltas de la
+ * chaqueta. Se quitan de la malla, en todos: nadie va con pajarita a unas fiestas ni a un concierto.
+ */
+export function stripFormal(scene: THREE.Object3D) {
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !/Outfit_Top/.test(m.name) || !m.geometry.index) return;
+    const g = m.geometry, pos = g.attributes.position, idx = g.index!, N = pos.count;
+    const p = new Int32Array(N).map((_, i) => i);
+    const find = (i: number) => {
+      while (p[i] !== i) i = p[i] = p[p[i]];
+      return i;
+    };
+    for (let i = 0; i < idx.count; i += 3) {
+      const a = find(idx.getX(i));
+      p[find(idx.getX(i + 1))] = a;
+      p[find(idx.getX(i + 2))] = a;
+    }
+    const seen = new Map<string, number>();
+    for (let i = 0; i < N; i++) {
+      const key = `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+      const j = seen.get(key);
+      if (j === undefined) seen.set(key, i);
+      else p[find(i)] = find(j);
+    }
+    const box = new Map<number, THREE.Box3>();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < N; i++) {
+      const r = find(i);
+      let b = box.get(r);
+      if (!b) box.set(r, (b = new THREE.Box3()));
+      b.expandByPoint(v.fromBufferAttribute(pos, i));
+    }
+    const drop = new Set<number>();
+    for (const [r, b] of box) {
+      const bow = b.min.y > 1.47 && b.max.y < 1.6 && Math.abs(b.min.x) < 0.08 && Math.abs(b.max.x) < 0.08 && b.min.z > 0.03;
+      const pocket = (b.max.x < -0.08 || b.min.x > 0.08) && b.min.y > 1.33 && b.max.y < 1.5 && b.min.z > 0.03;
+      if (bow || pocket) drop.add(r);
+    }
+    if (!drop.size) return;
+    const keep: number[] = [];
+    for (let i = 0; i < idx.count; i += 3) if (!drop.has(find(idx.getX(i)))) keep.push(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+    g.setIndex(keep);
+  });
+}
+
 export function preloadRig() {
   loading ??= (async () => {
     const [woman, man, anims] = await Promise.all([loadGLB(womanUrl), loadGLB(manUrl), loadGLB(animsUrl)]);
+    stripFormal(man.scene);
     parts = await loadImageData(womanPartsUrl, 512, 512);
     const samba = woman.animations.find((c) => c.name === 'SambaDance')!;
     // El baile de Michelle, respecto a su propia T
@@ -414,7 +462,9 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
   }
   if (kind === 'woman') {
     if (mat.map) mat.map = womanTexture(mat.map, look);
-    mat.roughness = 0.75;
+    // (mate: con brillo, el pelo oscuro de una sola pieza parecía de globos de látex negro)
+    mat.roughness = 0.9;
+    mat.envMapIntensity = 0.55;
     if (look.nude) mat.normalMap = null;
     return true;
   }
