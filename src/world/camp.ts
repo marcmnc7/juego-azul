@@ -56,7 +56,7 @@ export class Camp {
     const m = new Merger();
     // Tierra, el claro de grava y matorral bajo alrededor, menos donde está la mesa
     m.add(G.box, 0x5e4a38, 0, -0.05, 0, 0, 0, 0, 160, 0.1, 160);
-    m.add(G.cyl, 0x8a7a66, 0, -0.03, 0, 0, 0, 0, 7, 0.06, 7);
+    m.add(G.cyl, 0x8a7a68, 0, -0.03, 0, 0, 0, 0, 7, 0.06, 7);
     // El matorral, instanciado y de pocos polígonos (es mucho: con esferas normales la escena iba a tirones)
     const vines: THREE.Matrix4[] = [];
     const tint: THREE.Color[] = [];
@@ -91,6 +91,7 @@ export class Camp {
     for (const sx of [-1, 1]) {
       m.add(G.box, 0x2f5f8a, sx * 0.85, 0.42, 0, 0, 0, 0, 0.45, 0.04, 0.45);
       m.add(G.box, 0x2f5f8a, sx * 1.07, 0.7, 0, 0, 0, sx * 0.15, 0.04, 0.55, 0.45);
+      this.colliders.push({ minX: Math.min(sx * 0.6, sx * 1.12), maxX: Math.max(sx * 0.6, sx * 1.12), minZ: -0.26, maxZ: 0.26 });
       for (const sz of [-1, 1]) m.add(G.box, 0x777777, sx * 0.85, 0.21, sz * 0.2, 0, 0, sx * sz * 0.35, 0.02, 0.48, 0.02);
     }
     // Las cartas: un mazo y la partida a medias

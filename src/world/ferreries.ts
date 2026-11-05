@@ -444,6 +444,11 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     }
   }
 
+  for (let x = -11.5; x <= -7.4; x += 1.5) {
+    m.add(G.box, 0x3a6ab0, x, 0.6, 25.5, 0, 0, 0, 1.4, 0.9, 0.1);
+    m.add(G.box, 0xffffff, x, 0.6, 25.5, 0, 0, 0, 1.4, 0.2, 0.12);
+  }
+
   // Bares
   bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs, hdb);
   bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs, hdb);

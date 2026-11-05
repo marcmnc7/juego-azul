@@ -89,7 +89,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   // Al final, la placita del faro: adoquín, bancos, un árbol grande, el panel, la casita blanca de
   // tejado de teja blanca y el faro.
   const ROAD_Z = COAST_Z + 5.5;
-  m.add(G.box, 0x4a4a50, -20, -0.03, -14, 0, 0, 0, 6, 0.1, 54); // calle que baja al mar
+  m.add(G.box, 0x4a4a50, -20, -0.03, -15.3, 0, 0, 0, 6, 0.1, 51.4); // calle que baja al mar (hasta la acera de la calle de Azul)
   m.add(G.box, 0x4a4a50, 13, -0.02, ROAD_Z, 0, 0, 0, 74, 0.1, 6); // Camí de sa Farola
   for (let x = -22; x < 50; x += 3) m.add(G.box, 0xe8e4da, x, 0.035, ROAD_Z, 0, 0, 0, 1.6, 0.01, 0.12); // línea discontinua
   m.add(G.box, 0xc9b48a, 13, -0.01, COAST_Z + 1.85, 0, 0, 0, 74, 0.1, 1.3); // arcén de tierra
@@ -101,6 +101,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   for (let i = 0; i < 14; i++) m.add(G.bush, i % 2 ? 0x7d8a52 : 0x8f9a5e, -12 + i * 5.1 + Math.sin(i) * 1.2, 0.35, COAST_Z + 1.9, 0, i, 0, 1.2, 0.7, 0.8);
   for (const x of [-14, 22]) {
     m.add(G.cyl, 0x9a9ea2, x, 1.2, COAST_Z + 2.2, 0, 0, 0, 0.07, 2.4, 0.07);
+    colliders.push({ minX: x - 0.06, maxX: x + 0.06, minZ: COAST_Z + 2.14, maxZ: COAST_Z + 2.26 });
     m.add(G.cone, 0xf4f4f2, x, 2.5, COAST_Z + 2.2, 0, 0, 0, 0.9, 0.8, 0.1);
   }
   // Lado de tierra: muros de piedra seca con pilares blancos y cancelas, adelfas, palmeras y pinos
@@ -121,6 +122,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   for (const [x, z, h] of [[-12, LAND_Z + 3, 6], [8, LAND_Z + 2.5, 7], [27, LAND_Z + 3.5, 5.5], [41, LAND_Z + 2.8, 6.5]] as [number, number, number][]) palm(x, z, h);
   for (const [x, z] of [[-4, LAND_Z + 7], [17, LAND_Z + 6], [35, LAND_Z + 7]] as [number, number][]) {
     m.add(G.cyl, 0x6b4a32, x, 4, z, 0.1, 0, 0.06, 0.45, 8, 0.45);
+    colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3, round: true });
     for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x2f5a2c : 0x3a6a34, x + Math.cos(k) * 2.4, 8.4 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 2.4, 0, k, 0, 3.6, 1.7, 3.2);
   }
   // Chalets blancos detrás de los muros (y los de la calle que baja)
@@ -130,6 +132,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   for (let x = 2; x < 50; x += 12) {
     const h = seed % 2 ? 5.6 : 3.2;
     m.add(G.box, WHITE, x, h / 2, LAND_Z + 9, 0, 0, 0, 8, h, 7);
+    colliders.push({ minX: x - 4.05, maxX: x + 4.05, minZ: LAND_Z + 5.45, maxZ: LAND_Z + 12.55 });
     if (seed % 3) m.add(ROOF_GEO, 0xb8623e, x, h, LAND_Z + 9, 0, 0, 0, 8.4, 1.4, 7.4);
     else m.add(G.box, WHITE, x, h + 0.25, LAND_Z + 9, 0, 0, 0, 8.2, 0.5, 7.2);
     for (const wx of [-2, 2]) {
@@ -149,6 +152,7 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   const lampPos: number[] = [];
   for (let x = -10; x <= 46; x += 14) {
     m.add(G.cyl, 0x8a7a60, x, 4.2, LAND_Z - 0.7, 0, 0, 0, 0.22, 8.4, 0.22);
+    colliders.push({ minX: x - 0.13, maxX: x + 0.13, minZ: LAND_Z - 0.83, maxZ: LAND_Z - 0.57, round: true });
     m.add(G.box, 0x6a5a48, x, 8.1, LAND_Z - 0.7, 0, 0, 0, 0.1, 0.1, 0.9);
     m.add(G.box, 0x2b2f36, x + 0.6, 6.0, LAND_Z - 1.2, 0, 0, -0.3, 0.06, 1.0, 0.06);
     m.add(G.sphere, 0xf4f0e0, x + 0.8, 5.5, LAND_Z - 1.4, 0, 0, 0, 0.3, 0.2, 0.3);
@@ -181,10 +185,14 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   colliders.push({ minX: -28.2, maxX: -26.8, minZ: COAST_Z + 3.9, maxZ: COAST_Z + 5.3 });
   m.add(G.box, 0x6b5a46, -32.5, 0.6, COAST_Z + 1.6, 0, 0, 0, 0.08, 1.2, 0.08); // panel
   m.add(G.box, 0xd8cfb4, -32.5, 1.2, COAST_Z + 1.6, -0.5, 0, 0, 1.0, 0.04, 0.7);
+  colliders.push({ minX: -33.05, maxX: -31.95, minZ: COAST_Z + 1.3, maxZ: COAST_Z + 1.9 });
   m.add(G.cyl, 0x2b2f36, -26.4, 0.45, COAST_Z + 1.7, 0, 0, 0, 0.45, 0.9, 0.45); // papelera
+  colliders.push({ minX: -26.65, maxX: -26.15, minZ: COAST_Z + 1.45, maxZ: COAST_Z + 1.95, round: true });
   // Muro bajo de piedra seca hacia el agua, en la plaza
   m.add(G.box, 0xbfae92, -29, 0.35, COAST_Z + 0.9, 0, 0, 0, 16, 0.7, 0.5);
-  colliders.push({ minX: -37, maxX: -30.5, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2, low: true });
+  // …y el mismo muro sigue hasta el faro: si no, por ahí se salía andando encima del mar
+  m.add(G.box, 0xbfae92, -63.5, 0.35, COAST_Z + 0.9, 0, 0, 0, 53, 0.7, 0.5);
+  colliders.push({ minX: -90, maxX: -21.4, minZ: COAST_Z + 0.6, maxZ: COAST_Z + 1.2, low: true });
   // Casita blanca con tejado de teja pintada de blanco, seto delante y muro encalado
   m.add(G.box, WHITE, -24, 1.7, COAST_Z + 14, 0, 0, 0, 9, 3.4, 5);
   m.add(ROOF_GEO, 0xeeebe4, -24, 3.4, COAST_Z + 14, 0, 0, 0, 9.4, 1.5, 5.4);
@@ -231,8 +239,8 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   sc.add(m.mesh());
 
   // El mar
-  const sea = day ? makeSea([600, 300], 0x0f5a7a, new THREE.Vector3(0.4, 1, 0.6)) : makeSea([600, 300], 0x0a1630, new THREE.Vector3(-0.3, 0.4, -1), { night: true, emissive: 0x050a1c });
-  sea.position.set(0, -0.4, COAST_Z - 155);
+  const sea = day ? makeSea([600, 312], 0x0f5a7a, new THREE.Vector3(0.4, 1, 0.6)) : makeSea([600, 312], 0x0a1630, new THREE.Vector3(-0.3, 0.4, -1), { night: true, emissive: 0x050a1c });
+  sea.position.set(0, -0.4, COAST_Z + 1 - 156);
   sc.add(sea);
 
   // Gente paseando (de día)

@@ -33,7 +33,8 @@ export function bornHeight(x: number, z: number) {
   const t = BORN_TOP;
   const d = Math.max(t.minX - x, x - t.maxX, t.minZ - z, z - t.maxZ);
   // Bordillo: rampa corta de 0,2 m para que al subir no haya un salto seco
-  return d <= -0.1 ? BORN_RISE : d >= 0.1 ? 0 : BORN_RISE * (0.1 - d) / 0.2;
+  // (acaba donde acaba el bordillo que se ve, 15 cm más allá de la explanada: si no, los pies se hundían en él)
+  return d <= 0.05 ? BORN_RISE : d >= 0.25 ? 0 : BORN_RISE * (0.25 - d) / 0.2;
 }
 
 const SAND = 0xe6d2a8;

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
-import { requestJump, releaseJump, walkerActiveAt, lastBounds } from './core/walker';
+import { requestJump, releaseJump, walkerActiveAt, lastBounds, edgePush, edgePushAt } from './core/walker';
 import { dust } from './core/dust';
 import { beacon } from './core/beacon';
 import { physLists } from './core/phys';
@@ -35,7 +35,7 @@ import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver } from './ui/ui';
+import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast } from './ui/ui';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -563,6 +563,7 @@ pump.port1.onmessage = () => {
 };
 
 let lastFrame = 0;
+let edgeHintAt = 0;
 function frame() {
   lastFrame = performance.now();
   const raw = Math.min(clock.getDelta(), 0.1) + debt;
@@ -599,6 +600,11 @@ function frame() {
     juice.apply(camera, dt, cine * 0.1);
     const showJump = performance.now() - walkerActiveAt < 250 && !talking;
     if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
+    // Empujando contra el final del mapa, donde no se ve nada que lo impida: mejor decirlo
+    if (!talking && edgePush > 0.45 && performance.now() - edgePushAt < 200 && performance.now() > edgeHintAt) {
+      edgeHintAt = performance.now() + 9000;
+      toast(beacon.want > 0 ? 'Por aquí no hay paso: sigue la luz' : 'Por aquí no hay paso');
+    }
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
     const camQ = TEST ? ((window as unknown as { __cam?: string }).__cam ?? new URLSearchParams(location.search).get('cam')) : null;
     if (camQ) {

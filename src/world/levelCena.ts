@@ -275,7 +275,8 @@ export class LevelCena implements Level {
     this.player.root.position.set(STOVE.x + 0.2, 0, STOVE.z - 0.1);
     this.player.root.rotation.y = Math.PI;
     this.walker.facing = Math.PI;
-    this.gasWalk = [new THREE.Vector3(STOVE.x - 1.7, 0, STOVE.z + 0.5)];
+    // (por el mismo camino de siempre: si aún venía de la cancela, en línea recta cruzaba la moto)
+    this.gasWalk = [new THREE.Vector3(-1.3, 0, 4.2), new THREE.Vector3(STOVE.x - 1.7, 0, STOVE.z + 0.5)];
     this.updateHud();
     const run = () => {
       const scores: number[] = [];
@@ -842,7 +843,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // Toldo verde sobre armazón metálico, a la izquierda
   m.add(G.box, 0x2c6a48, -3.0, 3.0, 1.6, -0.32, 0, 0, 4.2, 0.05, 3.3);
   m.add(G.box, 0x2c6a48, -3.0, 2.48, 3.2, 0, 0, 0, 4.2, 0.28, 0.03);
-  for (const x of [-5.0, -1.0]) m.add(G.box, 0x2c6a48, x, 2.0, 3.2, 0, 0, 0, 0.05, 4.0, 0.05);
+  for (const x of [-5.0, -1.0]) {
+    m.add(G.box, 0x2c6a48, x, 2.0, 3.2, 0, 0, 0, 0.05, 4.0, 0.05);
+    colliders.push({ minX: x - 0.06, maxX: x + 0.06, minZ: 3.14, maxZ: 3.26 });
+  }
   const lit = new Merger();
   // Lo que se ve por la puerta abierta: la luz de dentro (de día, la penumbra de la casa)
   lit.add(G.box, day ? 0x4a4036 : 0xffcf8a, 0, 1.05, 0.012, 0, 0, 0, 1.0, 2.1, 0.02);
@@ -878,6 +882,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   tree(-4.3, 5.6, 3.6, 0x4f8a3a, 0xe8d24a);
   m.add(G.bush, 0x3f7a34, -4.5, 0.6, 8.4, 0, 0, 0, 1.1, 1.1, 1.0); // arbusto junto al muro
   m.add(G.rbox, 0x2f6b3a, -3.2, 0.55, 8.9, 0, 0.1, 0, 0.6, 1.1, 0.7); // contenedor
+  colliders.push({ minX: -5.05, maxX: -2.85, minZ: 8.5, maxZ: 10.2 }, { minX: -5.05, maxX: -4, minZ: 7.95, maxZ: 8.6 });
   m.add(G.cyl, 0x222222, -3.45, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
   m.add(G.cyl, 0x222222, -2.95, 0.12, 9.2, 0, 0, Math.PI / 2, 0.24, 0.06, 0.24);
   // Escúter blanco con baúl
@@ -890,6 +895,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   colliders.push({ minX: -3.0, maxX: -2.4, minZ: 5.7, maxZ: 7.7 });
   m.add(G.cyl, 0xb5603b, 1.3, 0.25, 2.4, 0, 0, 0, 0.45, 0.5, 0.45);
   m.add(G.bush, 0x4f8a3a, 1.3, 0.75, 2.4, 0, 0, 0, 0.6, 0.6, 0.6);
+  colliders.push({ minX: 1.02, maxX: 1.58, minZ: 2.12, maxZ: 2.68, round: true });
   // Muro bajo encalado con pilares gordos, la cancela de acebuche (abierta a ratos) y adelfas detrás
   for (const [x0, x1] of [[-5.2, -1.0], [1.0, 5.2]]) {
     m.add(G.box, WHITE, (x0 + x1) / 2, 0.5, 10.3, 0, 0, 0, x1 - x0, 1.0, 0.3);
@@ -999,6 +1005,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   colliders.push({ minX: 6.2, maxX: 16.8, minZ: -8, maxZ: 10.6 });
   const pine = (x: number, z: number, h: number) => {
     m.add(G.cyl, 0x6b4a32, x, h / 2, z, 0.08, 0, 0.06, 0.45, h, 0.45);
+    colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3, round: true });
     for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x2f5a2c : 0x3a6a34, x + Math.cos(k) * 2.2, h + Math.sin(k * 2) * 0.6, z + Math.sin(k) * 2.2, 0, k, 0, 3.4, 1.6, 3.0);
   };
   pine(10, 6, 9);
@@ -1010,12 +1017,14 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // Postes de madera con el cable
   for (const x of [-16, 7, 30]) {
     m.add(G.cyl, 0x8a7a60, x, 4.5, STREET_Z - 3.0, 0, 0, 0, 0.24, 9, 0.24);
+    colliders.push({ minX: x - 0.14, maxX: x + 0.14, minZ: STREET_Z - 3.14, maxZ: STREET_Z - 2.86, round: true });
     m.add(G.box, 0x6a5a48, x, 8.6, STREET_Z - 3.0, 0, 0, 0, 0.1, 0.1, 1.0);
   }
   m.add(G.box, 0x1e1e22, 7, 8.5, STREET_Z - 3.0, 0, 0, 0, 46, 0.03, 0.03);
   m.add(G.box, 0x1e1e22, 2.2, 7.4, 2.0, -0.28, -0.35, 0, 0.03, 0.03, 13); // el cable que baja a la casa
   for (const x of [-26, 20]) {
     m.add(G.cyl, 0x333338, x, 2, STREET_Z - 3.2, 0, 0, 0, 0.12, 4, 0.12);
+    colliders.push({ minX: x - 0.08, maxX: x + 0.08, minZ: STREET_Z - 3.28, maxZ: STREET_Z - 3.12, round: true });
     const l = new THREE.Sprite(bulbs);
     l.position.set(x, 4.1, STREET_Z - 3.2);
     l.scale.setScalar(1.2);

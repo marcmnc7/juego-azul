@@ -403,7 +403,8 @@ export class Level2 implements Level {
 
   get threeScene() {
     if (this.camp && this.phase === 'camp') return this.camp.scene;
-    if (this.laurel && this.phase === 'logrono') return this.laurel.scene;
+    // (al acabar, detrás del regalo sigue la Calle Laurel: la carretera asomaba con la cámara de la fiesta)
+    if (this.laurel && (this.phase === 'logrono' || this.phase === 'done')) return this.laurel.scene;
     return this.terrace && this.phase === 'terrace' ? this.terrace.scene : this.scene;
   }
 
@@ -815,7 +816,7 @@ export class Level2 implements Level {
       if (this.camp.inside && !before) this.campInside();
       return;
     }
-    if (this.phase === 'logrono' && this.laurel) {
+    if ((this.phase === 'logrono' || this.phase === 'done') && this.laurel) {
       this.laurel.update(dt, this.camera);
       return;
     }

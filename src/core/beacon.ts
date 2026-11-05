@@ -9,7 +9,7 @@ class Beacon {
   private pillar: THREE.Mesh;
   private ring: THREE.Mesh;
   private target = new THREE.Vector3();
-  private want = 0;
+  want = 0;
   private shown = 0;
   private t = 0;
 

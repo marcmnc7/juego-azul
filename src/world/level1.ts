@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { camWorld } from '../core/camWorld';
 import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
@@ -148,6 +149,7 @@ export class Level1 implements Level {
   private marker: THREE.Group;
   private hud: Hud;
   private stage: Stage = 'intro';
+  private kissLight: THREE.PointLight | null = null;
   private pomadaCount = 0;
   private luckCount = 0;
   private perfects = 0;
@@ -1167,14 +1169,36 @@ export class Level1 implements Level {
     const mc = () => headOf(this.marc);
     const mid = () => az().lerp(mc(), 0.5);
     const sky = () => mid().add(this.v2.set(0, 0.9, 0));
+    // El eje de los dos, fijado al empezar: con las cabezas juntándose, el que une las cabezas giraba
+    // y la cámara acababa detrás de su pelo justo en el momento del beso
+    const axis = this.player.root.position.clone().sub(this.marc.root.position).setY(0).normalize();
+    const azSide = () => mid().add(axis);
+    // De los dos lados, el que tenga sitio: sin una pared detrás de la cámara ni alguien de la multitud delante
+    const room = (sg: number) => {
+      const m0 = mid();
+      const to = rel(m0, azSide(), 0, 2 * sg, 0).sub(m0).normalize();
+      if (camWorld.cast(m0.x, m0.y, m0.z, to.x, to.y, to.z, 2.1, this.world.colliders) < 2.1) return 0;
+      let best = 9;
+      for (const d of [1.9, 1.4, 1]) {
+        const q = rel(m0, azSide(), 0, d * sg, 0);
+        for (const c of this.solids) best = Math.min(best, Math.hypot(c.x - q.x, c.z - q.z));
+      }
+      return best;
+    };
+    const sd = room(1) >= room(-1) ? 1 : -1;
+    // Una luz cálida de cara, del lado de la cámara: si no, en contraluz su piel se quedaba gris
+    const m1 = mid();
+    this.kissLight = new THREE.PointLight(0xffe0c0, 2.6, 3.2, 1.4);
+    this.kissLight.position.copy(rel(m1, azSide(), 0, 0.85 * sd, 0.2));
+    this.scene.add(this.kissLight);
     cinema.play([
       // De perfil, de lejos a cerca: se acercan a cámara lenta
-      { dur: 2.8, slow: 0.42, pos: () => rel(mid(), az(), 0, 1.9, -0.2), pos2: () => rel(mid(), az(), 0, 1.15, -0.06), look: mid, fov: 42, focus: mid, at: () => audio.whoosh() },
+      { dur: 2.8, slow: 0.42, pos: () => rel(mid(), azSide(), 0, 1.9 * sd, -0.2), pos2: () => rel(mid(), azSide(), 0, 1.15 * sd, -0.06), look: mid, fov: 42, focus: mid, at: () => audio.whoosh() },
       // Las dos caras: el momento en que se tocan, con el tiempo casi parado
-      { dur: 3.6, slow: 0.14, pos: () => rel(mid(), az(), 0.14, 0.98, -0.03), pos2: () => rel(mid(), az(), -0.08, 0.8, 0), look: mid, fov: 34, fov2: 30, focus: mid, at: () => audio.chime(2) },
+      { dur: 3.6, slow: 0.14, pos: () => rel(mid(), azSide(), 0.14, 0.98 * sd, -0.03), pos2: () => rel(mid(), azSide(), -0.08, 0.8 * sd, 0), look: mid, fov: 34, fov2: 30, focus: mid, at: () => audio.chime(2) },
       // Y se abre el plano por el otro lado, con la plaza y los fuegos detrás
       {
-        dur: 3.4, slow: 0.55, pos: () => rel(mid(), az(), 0, -1.5, -0.5), pos2: () => rel(mid(), az(), 0, -5.2, 0.9), look: mid, look2: sky, fov: 46, fov2: 58,
+        dur: 3.4, slow: 0.55, pos: () => rel(mid(), azSide(), 0, -1.5 * sd, -0.5), pos2: () => rel(mid(), azSide(), 0, -5.2 * sd, 0.9), look: mid, look2: sky, fov: 46, fov2: 58,
         at: () => {
           audio.fanfare();
           vibrate([60, 40, 120]);
@@ -1192,6 +1216,8 @@ export class Level1 implements Level {
     for (const p of [this.player, this.marc]) p.eyes.scale.y = this.kissT > 1 ? 0.15 : 1; // ojos cerrados
     if (!cinema.active || this.kissT > 4.2) {
       cinema.stop();
+      if (this.kissLight) this.scene.remove(this.kissLight);
+      this.kissLight = null;
       for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;
       this.busy = false;
       this.stage = 'ending';

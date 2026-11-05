@@ -71,6 +71,8 @@ const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
 const FILM_SECS = 15;
 // Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona)
 const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
+/** Hasta dónde se anda en la terminal: a un cuerpo de las cristaleras y hasta el muro del fondo. */
+const AIR_WALK = { minX: AIR.minX + 0.32, maxX: AIR.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: AIR.maxZ };
 const BURGERS: [number, number][] = [[302.6, -14], [289.4, 0], [302.6, 14]];
 // Una sola cola delante de los baños, hacia el recinto
 const Q_Z = -13.25;
@@ -700,6 +702,11 @@ export class Level3 implements Level {
     }
     for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 2.2) m.add(G.box, 0xd9b26a, cx, 6.6 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.12, 0.8);
     m.add(G.box, 0xd8dde3, cx, 3, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    this.colliders.push(
+      { minX: A.minX - 0.4, maxX: A.minX - 0.02, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },
+      { minX: A.maxX + 0.02, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },
+      { minX: A.minX - 0.4, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.minZ - 3.04 },
+    );
     // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
     this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.maxZ + 3.1, maxZ: A.maxZ + 7 });
     this.buildGate(m, cx);
@@ -1050,13 +1057,29 @@ export class Level3 implements Level {
     // Valla delante del escenario
     m.add(G.box, 0x777780, 0, 0.6, 28.6, 0, 0, 0, 30, 1.2, 0.2);
     this.colliders.push({ minX: -15, maxX: 15, minZ: 28.4, maxZ: 40 });
+    // Valla del recinto: el campo se acaba aquí (antes, una pared invisible)
+    const rail = (x0: number, z0: number, x1: number, z1: number) => {
+      const len = Math.hypot(x1 - x0, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
+      for (const y of [0.35, 1.05]) m.add(G.box, 0x9a9a9a, cx, y, cz, 0, 0, 0, alongX ? len : 0.05, 0.05, alongX ? 0.05 : len);
+      for (let k = 0; k <= Math.round(len / 2.2); k++) {
+        const u = k / Math.max(1, Math.round(len / 2.2));
+        m.add(G.box, 0x9a9a9a, x0 + (x1 - x0) * u, 0.55, z0 + (z1 - z0) * u, 0, 0, 0, 0.06, 1.1, 0.06);
+      }
+    };
+    rail(-22.45, -22.45, 22.45, -22.45);
+    rail(-22.45, -22.45, -22.45, 27.95);
+    rail(22.45, -22.45, 22.45, 27.95);
+    rail(-22.45, 27.95, -15, 27.95);
+    rail(15, 27.95, 22.45, 27.95);
 
     // Barra
     m.add(G.box, 0x8a5a36, BAR_POS.x, 0.6, BAR_POS.z, 0, 0, 0, 1, 1.2, 8);
     m.add(G.box, 0xd9c7a5, BAR_POS.x, 1.23, BAR_POS.z, 0, 0, 0, 1.3, 0.06, 8.2);
     m.add(G.box, 0x3a2a20, BAR_POS.x - 2.6, 1.6, BAR_POS.z, 0, 0, 0, 0.4, 3.2, 8);
     for (let i = 0; i < 8; i++) m.add(G.cyl, i % 2 ? 0xf4c95d : 0x2f7d4a, BAR_POS.x - 2.2, 1.5 + (i % 2) * 0.8, BAR_POS.z - 3 + i * 0.8, 0, 0, 0, 0.15, 0.5, 0.15);
-    this.colliders.push({ minX: BAR_POS.x - 0.5, maxX: BAR_POS.x + 0.5, minZ: BAR_POS.z - 4, maxZ: BAR_POS.z + 4, low: true });
+    // Laterales de la barra: detrás solo está el camarero (y la pared de botellas ya no se atraviesa)
+    for (const s of [-1, 1]) m.add(G.box, 0x6b4a30, BAR_POS.x - 1.15, 0.6, BAR_POS.z + s * 4, 0, 0, 0, 2.5, 1.2, 0.12);
+    this.colliders.push({ minX: BAR_POS.x - 2.85, maxX: BAR_POS.x + 0.5, minZ: BAR_POS.z - 4.06, maxZ: BAR_POS.z + 4.06, low: true });
 
     // Palmeras
     const palm = (x: number, z: number, h: number) => {
@@ -1394,6 +1417,7 @@ export class Level3 implements Level {
     this.colliders.push({ minX: WC_X - 0.65, maxX: WC_X + 0.65, minZ: WC_Z[0] - 0.7, maxZ: WC_Z[WC_Z.length - 1] + 0.7 });
     // Foco que ilumina la zona de baños
     m.add(G.cyl, 0x3a3a44, WC_X + 1.5, 3, WC_Z[2] + 0.75, 0, 0, 0, 0.12, 6, 0.12);
+    this.colliders.push({ minX: WC_X + 1.42, maxX: WC_X + 1.58, minZ: WC_Z[2] + 0.67, maxZ: WC_Z[2] + 0.83, round: true });
     m.add(G.box, 0x3a3a44, WC_X + 1.2, 6, WC_Z[2] + 0.75, 0, 0, 0.5, 0.6, 0.3, 0.9);
     const flood = new THREE.PointLight(0xdfe8ff, 22, 16, 1.6);
     flood.position.set(WC_X - 1, 5.6, WC_Z[2] + 0.75);
@@ -1991,7 +2015,7 @@ export class Level3 implements Level {
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
     this.walker.canJump = walking;
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR : this.bounds, this.player === this.gas ? this.allPeople : []);
+    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.player.root.position.x > 100 ? AIR_WALK : this.bounds, this.player === this.gas ? this.allPeople : []);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);
     this.stepQueue(dt);

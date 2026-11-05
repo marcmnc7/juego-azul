@@ -107,7 +107,7 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
           // Solar con árboles
           tree(px, pz, Math.floor(r() * 3));
           tree(px + 3, pz - 2, 0);
-          o.colliders?.push({ minX: px - 0.5, maxX: px + 0.5, minZ: pz - 0.5, maxZ: pz + 0.5 }, { minX: px + 2.5, maxX: px + 3.5, minZ: pz - 2.5, maxZ: pz - 1.5 });
+          o.colliders?.push({ minX: px - 0.28, maxX: px + 0.28, minZ: pz - 0.28, maxZ: pz + 0.28, round: true }, { minX: px + 2.72, maxX: px + 3.28, minZ: pz - 2.28, maxZ: pz - 1.72, round: true });
           continue;
         }
         const w = o.town ? cell - 0.4 : 6.5 + r() * 2.5;

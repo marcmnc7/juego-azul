@@ -43,6 +43,11 @@ const FALL_GRAVITY = 1.55; // ×gravedad cayendo
 // Acelerón: con el joystick a fondo y recto un rato, se corre algo más (y se nota en la cámara)
 const SPRINT_AFTER = 1.0; // segundos a fondo antes de acelerar
 const SPRINT = 1.24;
+/** La cámara nunca se acerca a la cabeza más que esto (si no cabe, sube en vez de atravesar la pared). */
+const CAM_NEAR = 0.9;
+/** Aire que la cámara deja a su alrededor, y hacia dónde lo mira. */
+const CAM_ROOM = 0.26;
+const CAM_SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 let jumpQueued = false;
 let jumpAt = 0;
@@ -61,6 +66,9 @@ export function releaseJump() {
 export let walkerActiveAt = -1e9;
 /** Solo para el modo prueba: los últimos límites del área jugable. */
 export let lastBounds: Box2 | null = null;
+/** Segundos empujando contra el límite del mapa sin nada visible delante, y cuándo fue la última vez. */
+export let edgePush = 0;
+export let edgePushAt = -1e9;
 
 export class Walker implements AirState {
   facing = 0;
@@ -93,6 +101,8 @@ export class Walker implements AirState {
   /** Persona contra la que se ha chocado (el círculo), si alguna. */
   bumped: Circle | null = null;
   private bumpCd = 0;
+  private wedged = 0;
+  private squeezeT = 0;
   private manualCam = 0;
   private velocity = new THREE.Vector3();
   private prevSpeed = 0;
@@ -292,12 +302,16 @@ export class Walker implements AirState {
     this.bump = 0;
     this.bumped = null;
     this.bumpCd = Math.max(0, this.bumpCd - dt);
+    this.squeezeT = Math.max(0, this.squeezeT - dt);
+    let touching = 0;
     for (const c of circles) {
       const ex = p.x - c.x;
       const ez = p.z - c.z;
       const rr = c.r + R;
       const d2 = ex * ex + ez * ez;
       if (d2 < rr * rr) {
+        touching++;
+        if (this.squeezeT > 0) continue;
         const d = Math.sqrt(d2) || 1e-3;
         const nx = ex / d;
         const nz = ez / d;
@@ -313,8 +327,16 @@ export class Walker implements AirState {
         }
       }
     }
+    const ox = p.x, oz = p.z;
     p.x = Math.max(b.minX, Math.min(b.maxX, p.x));
     p.z = Math.max(b.minZ, Math.min(b.maxZ, p.z));
+    if (mag > 0.4 && (ox !== p.x || oz !== p.z)) {
+      const ex = Math.sign(ox - p.x), ez = Math.sign(oz - p.z), el = Math.hypot(ex, ez);
+      if (camWorld.cast(p.x, p.y + 1, p.z, ex / el, 0, ez / el, 1.2, boxes) >= 1.2) {
+        edgePush = performance.now() - edgePushAt < 300 ? edgePush + dt : dt;
+        edgePushAt = performance.now();
+      }
+    }
 
     // Lo que de verdad se ha movido manda: contra una pared la velocidad se pierde
     const realX = (p.x - sx) / dt;
@@ -324,6 +346,14 @@ export class Walker implements AirState {
 
     const moved = Math.hypot(p.x - sx, p.z - sz);
     this.walk += moved / STRIDE;
+    // Encajada entre dos o más personas sin poder avanzar: se pasa apretándose entre ellas, nunca atrapada
+    if (touching >= 2 && mag > 0.4 && moved < this.speed * mag * dt * 0.15) {
+      this.wedged += dt;
+      if (this.wedged > 0.9) {
+        this.wedged = 0;
+        this.squeezeT = 0.7;
+      }
+    } else this.wedged = Math.max(0, this.wedged - dt);
 
     // Inclinación: hacia delante al acelerar (y un poco siempre al correr), hacia dentro en las curvas
     const now = this.currentSpeed;
@@ -369,6 +399,22 @@ export class Walker implements AirState {
     }
     this.land = Math.max(0, this.land - dt * 4.5);
     p.y = this.baseY + this.hop;
+  }
+
+  /**
+   * Pone la cámara a `safe` metros de la cabeza en esa dirección. Si eso la dejaría pegada a la cabeza
+   * (una pared justo detrás) no atraviesa la pared para guardar la distancia: se queda de este lado y
+   * sube hasta verla desde arriba, sin meterse en lo que haya encima.
+   */
+  private clampCam(cp: THREE.Vector3, from: { x: number; y: number; z: number }, dx: number, dy: number, dz: number, safe: number, walls: Box2[]) {
+    const s = Math.max(0, safe);
+    if (s >= CAM_NEAR) {
+      cp.set(from.x + dx * s, from.y + dy * s, from.z + dz * s);
+      return;
+    }
+    const up = Math.sqrt(CAM_NEAR * CAM_NEAR - s * s);
+    const roof = camWorld.cast(from.x, from.y, from.z, 0, 1, 0, up + 0.3, walls);
+    cp.set(from.x + dx * s, from.y + Math.max(dy * s, Math.max(0.05, Math.min(up, roof - 0.3))), from.z + dz * s);
   }
 
   camera(cam: THREE.Camera, dt: number, walls: Box2[], dist = 7, h = 3.6) {
@@ -475,10 +521,7 @@ export class Walker implements AirState {
       const L = Math.hypot(ex, ey, ez);
       if (L > 0.5) {
         const free = phys.camCast(from, { x: ex / L, y: ey / L, z: ez / L }, L);
-        if (free < L - 0.05) {
-          const k2 = Math.max(1.1, free - 0.1) / L;
-          cp.set(from.x + ex * k2, from.y + ey * k2, from.z + ez * k2);
-        }
+        if (free < L - 0.05) this.clampCam(cp, from, ex / L, ey / L, ez / L, free - 0.1, walls);
       }
     }
     {
@@ -487,12 +530,19 @@ export class Walker implements AirState {
       const L = Math.hypot(ex, ey, ez);
       if (L > 0.5) {
         const free = camWorld.cast(p.x, fy, p.z, ex / L, ey / L, ez / L, L, walls);
-        if (free < L - 0.05) {
-          const k2 = Math.max(0.9, free - 0.25) / L;
-          cp.set(p.x + ex * k2, fy + ey * k2, p.z + ez * k2);
-        }
+        if (free < L - 0.05) this.clampCam(cp, { x: p.x, y: fy, z: p.z }, ex / L, ey / L, ez / L, free - 0.25, walls);
       }
     }
+    // Que no roce nada: una pared que pasa de lado a menos de un palmo se vería por dentro
+    for (const [ax, az] of CAM_SIDES) {
+      const t = camWorld.cast(cp.x, cp.y, cp.z, ax, 0, az, CAM_ROOM, walls);
+      if (t < CAM_ROOM) {
+        cp.x -= ax * (CAM_ROOM - t);
+        cp.z -= az * (CAM_ROOM - t);
+      }
+    }
+    const over = camWorld.cast(cp.x, cp.y, cp.z, 0, 1, 0, CAM_ROOM, walls);
+    if (over < CAM_ROOM) cp.y -= CAM_ROOM - over;
     // Un leve balanceo con los pasos al correr
     const bob = Math.abs(Math.sin(this.walk)) * 0.04 * run;
     cam.lookAt(look.x, look.y + bob, look.z);

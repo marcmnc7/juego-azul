@@ -51,14 +51,14 @@ const WATER_Y = -0.22;
 // Nadando, el agua por los hombros (con -1,12 la cadera quedaba por encima del agua y parecían flotar de pie)
 const SWIM_Y = -1.4;
 /** La hamaca doble, en el césped de arriba. */
-const TOWELS = new THREE.Vector3(1.0, LAWN_Y, 13.05);
+const TOWELS = new THREE.Vector3(1.0, LAWN_Y, 12.75); // (con su pie a 15 cm del seto: antes se metía dentro)
 /** Largo de la hamaca: cabe él (1,85 m) de la cabeza a los pies. */
 const TOWEL_LEN = 2.2;
 /** Tumbado, la raíz (a los pies) queda en este z y la cabeza hacia la piscina, sobre la colchoneta. */
 const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.12;
 /** La escalera para salir de la piscina, en su lado oeste. */
 const LADDER = new THREE.Vector3(POOL.minX + 0.12, 0, 7.2);
-const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 14.1 };
+const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 13.62 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
 // de la carretera, así el coche azul usa el mismo carril en los dos sitios
 const BORN_O = new THREE.Vector3(-600, 0, STREET.laneZ - BORN_SOUTH_LANE);
@@ -498,6 +498,7 @@ export class Level4 implements Level {
     for (const [x, z] of [[-5.5, 10.9], [-3.8, 1.8], [3.9, 4.8]]) {
       m.add(G.cyl, 0xb5603b, x, 0.3, z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, x, 0.9, z, 0, 0, 0, 0.9, 0.9, 0.9);
+      this.colliders.push({ minX: x - 0.42, maxX: x + 0.42, minZ: z - 0.42, maxZ: z + 0.42, round: true });
     }
 
     // Vecinos: casas de teja y sus piscinas
@@ -713,7 +714,8 @@ export class Level4 implements Level {
 
     this.updateGas(dt);
     if (this.phase === 'atBar') this.updatePickup(dt);
-    if (this.phase === 'arrive' && !this.busy && pp.x < CORRIDOR.maxX + 0.1 && pp.z > -15.2) this.enterCorridor();
+    // (en cuanto se llega a donde marcaba la columna de luz: si no, se quedaba una parada delante del pasillo sin que pasara nada)
+    if (this.phase === 'arrive' && !this.busy && pp.x < CORRIDOR.maxX + 0.1 && pp.z > -15.7) this.enterCorridor();
     if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
     this.updatePoolPhysics(dt);
 

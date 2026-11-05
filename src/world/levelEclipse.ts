@@ -87,7 +87,7 @@ const ERIC_LOOK: PersonLook = { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8
 // Los padres de Gas: él y ella, de unos cincuenta, como los de Azul (sin moños)
 const MARC_DAD: PersonLook = { skin: 0xe2b08c, shirt: 0x6b8fb5, pants: 0x4a4a52, hair: 0x7d7672, hairStyle: 'short', male: true };
 const MARC_MOM: PersonLook = { skin: 0xeec4a2, shirt: 0xc85a6a, pants: 0x2d2d3a, hair: 0x5a3a26, hairStyle: 'straight' };
-const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: COAST_Z - 4, maxZ: 15.5 };
+const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: COAST_Z + 1.5, maxZ: 15.5 };
 const HOME_BOUNDS: Box2 = { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 };
 /** Cocina de casa de Gas: los padres, junto a la encimera. */
 const KITCHEN_PARENTS = new THREE.Vector3(0, 0, -1.6);
@@ -430,6 +430,7 @@ export class LevelEclipse implements Level {
     // Maceta con potos en una esquina
     m.add(G.cyl, 0xb5603b, W - 0.5, 0.25, 2.2, 0, 0, 0, 0.5, 0.5, 0.5);
     m.add(G.sphere, 0x3e7a3a, W - 0.5, 0.75, 2.2, 0, 0, 0, 0.7, 0.6, 0.7);
+    this.colliders.push({ minX: W - 0.82, maxX: W - 0.18, minZ: 1.88, maxZ: 2.52, round: true });
     // Mesa de madera con hule, sillas, frutero y una ensaimada
     m.add(G.box, 0x8a6a44, 0.4, 0.74, 0.9, 0, 0, 0, 1.8, 0.06, 1.0);
     for (const [x, z] of [[-0.4, 0.5], [1.2, 0.5], [-0.4, 1.3], [1.2, 1.3]]) m.add(G.box, 0x6b4a2e, x, 0.37, z, 0, 0, 0, 0.07, 0.74, 0.07);
@@ -604,6 +605,11 @@ export class LevelEclipse implements Level {
     this.phase = 'arrive';
     this.busy = true;
     this.carT = 0;
+    // La cámara empieza ya en la calle: venía del mar y cruzaba volando media urbanización
+    const pp = this.player.root.position;
+    this.camera.position.set(pp.x - 2, 3.4, pp.z + 6);
+    this.camLook.set(pp.x, 1.3, pp.z - 1);
+    this.camera.lookAt(this.camLook);
     this.updateHud();
   }
 
