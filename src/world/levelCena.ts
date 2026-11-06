@@ -7,8 +7,9 @@ import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { CENA } from '../data/story';
+import { makeHelmet } from '../entities/helmet';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { araucaria, G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
+import { araucaria, CarRig, G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { buildSaFarola, COAST_Z } from './saFarola';
@@ -27,7 +28,7 @@ import { Door } from './door';
 // cocinar la carbonara en la cocina de fuera (guanciale, pasta y crema, sin nata) → Gas pone nota →
 // cenar en la terraza → 22:50, Gas se va en su moto → 23:39, el WhatsApp real de esa noche.
 
-type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'leaving' | 'done';
+type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'alarm' | 'leaving' | 'done';
 
 export const STREET_Z = 13.5;
 export const GATE = new THREE.Vector3(0, 0, 10.2);
@@ -38,6 +39,8 @@ const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
 const PARENT_CAR_X = -4.5;
 const GAS_CAR_X = 24;
 const GARDEN: Box2 = { minX: -5, maxX: 5, minZ: 0.6, maxZ: 9.7 };
+/** Cuánto tardan los faros en pasar por delante de casa. */
+const ALARM_SECS = 12;
 
 export const DAD_LOOK: PersonLook = { skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true };
 export const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'straight', skirt: true };
@@ -85,6 +88,11 @@ export class LevelCena implements Level {
   private doors: Door[] = [];
   private doorWho: THREE.Vector3[] = [];
   private gasWalk: THREE.Vector3[] = [];
+  private alarmT = 0;
+  private alarmItems: { key: 'plates' | 'pan' | 'helmet'; at: THREE.Vector3; obj: THREE.Object3D; ring: THREE.Mesh }[] = [];
+  private neighbor: ReturnType<typeof makeCar> | null = null;
+  private neighborRig: CarRig | null = null;
+  private tidied = 0;
   private scares = 0;
   private grade = 0;
   private tries = 0;
@@ -366,8 +374,122 @@ export class LevelCena implements Level {
       this.updateHud();
       toast('🕙 22:50');
       audio.warn();
-      later(() => this.gasLeaves(), 1200);
+      later(() => this.startAlarm(), 1200);
     });
+  }
+
+  /**
+   * Unos faros en la calle y una sola idea: tus padres. Se quita de en medio lo que os delataría (los platos, la
+   * sartén y el casco de Gas) antes de que el coche llegue a la puerta. Luego pasa de largo: era el vecino.
+   * (Tus padres no volvieron hasta la 1.30: esto solo es el susto.)
+   */
+  private startAlarm() {
+    this.phase = 'alarm';
+    this.busy = true;
+    this.alarmT = ALARM_SECS;
+    this.tidied = 0;
+    // De pie, cada uno a un lado de la mesa
+    this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
+    this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
+    this.walker.stop();
+    this.walker.facing = this.walker.yaw = Math.PI;
+    const sc = this.scene;
+    // Los platos, en la mesa
+    const plates = new Merger(false);
+    for (const dx of [-0.34, 0.34]) {
+      plates.add(new THREE.CylinderGeometry(0.13, 0.1, 0.02, 20), 0xfbf7ee, dx, 0, 0);
+      plates.add(new THREE.CylinderGeometry(0.09, 0.09, 0.016, 16), 0xe8c978, dx, 0.014, 0);
+      plates.add(G.box, 0xc8ccd0, dx + 0.17, 0, 0.02, 0, 0, 0, 0.012, 0.006, 0.17);
+    }
+    const pm = plates.mesh();
+    pm.position.set(TABLE.x, 0.8, TABLE.z);
+    sc.add(pm);
+    // El casco de Gas, encima de un murete del patio
+    const helmet = makeHelmet({ color: 0xb02a2a, stripe: 0xf2f2ee });
+    helmet.position.set(-3.6, 0.72, 7.9);
+    helmet.rotation.set(0.1, 0.8, 0);
+    sc.add(helmet);
+    const ringGeo = new THREE.RingGeometry(0.42, 0.56, 28).rotateX(-Math.PI / 2);
+    const ring = (x: number, z: number) => {
+      const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      m.position.set(x, 0.04, z);
+      m.userData.noCast = true;
+      sc.add(m);
+      return m;
+    };
+    this.alarmItems = [
+      { key: 'plates', at: TABLE.clone(), obj: pm, ring: ring(TABLE.x, TABLE.z - 1.2) },
+      { key: 'pan', at: STOVE.clone(), obj: this.pan, ring: ring(STOVE.x, STOVE.z) },
+      { key: 'helmet', at: new THREE.Vector3(-3.6, 0, 7.9), obj: helmet, ring: ring(-3.6, 7.9) },
+    ];
+    // El coche que llega por la calle, muy despacio, con los faros encendidos
+    if (!this.neighbor) {
+      this.neighbor = makeCar(0x2c3a4a, { luggage: false, joy: false, empty: true });
+      this.neighbor.root.rotation.y = -Math.PI / 2;
+      const glow = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff0c8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      for (const s of [-0.62, 0.62]) {
+        const g = new THREE.Sprite(glow);
+        g.position.set(s, 0.74, 2.3);
+        g.scale.setScalar(1.5);
+        this.neighbor.root.add(g);
+      }
+      const beam = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xffe9b8, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+      beam.position.set(0, 0.06, 6);
+      beam.userData.noCast = true;
+      this.neighbor.root.add(beam);
+      sc.add(this.neighbor.root);
+      this.neighborRig = new CarRig(this.neighbor);
+    }
+    this.neighbor.root.position.set(62, 0, STREET_Z + 0.6);
+    audio.warn();
+    vibrate([60, 40, 60]);
+    this.updateHud();
+    dialogue(CENA.alarm, () => {
+      this.busy = false;
+      toast(CENA.alarmHint);
+    });
+  }
+
+  private endAlarm() {
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    for (const it of this.alarmItems) it.ring.removeFromParent();
+    const late = this.tidied < 3;
+    if (late) this.scares++;
+    dialogue(late ? CENA.falseAlarmLate : CENA.falseAlarm, () => this.gasLeaves());
+  }
+
+  private updateAlarm(dt: number) {
+    const c = this.neighbor!;
+    const before = Math.ceil(this.alarmT);
+    if (!this.busy) this.alarmT = Math.max(0, this.alarmT - dt);
+    if (Math.ceil(this.alarmT) !== before) this.updateHud();
+    // El coche llega a la altura de la cancela justo cuando se acaba el tiempo, y sigue
+    const prev = c.root.position.x;
+    c.root.position.x = 62 * (this.alarmT / ALARM_SECS) + (this.alarmT <= 0 ? c.root.position.x : 0);
+    this.neighborRig?.update(dt, dt > 0 ? Math.abs(prev - c.root.position.x) / dt : 0, 0, 1.2);
+    if (this.busy) return;
+    const pp = this.player.root.position;
+    for (const it of this.alarmItems) {
+      if (!it.ring.parent) continue;
+      (it.ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.abs(Math.sin(this.t * 5)) * 0.4;
+      const reach = it.key === 'plates' ? 2.1 : 1.5;
+      if (Math.hypot(pp.x - it.at.x, pp.z - it.at.z) < reach) {
+        it.ring.removeFromParent();
+        if (it.key === 'pan') this.steam.forEach((s) => (s.visible = false));
+        it.obj.visible = false;
+        this.tidied++;
+        toast(CENA.alarmItems[it.key]);
+        audio.pickup();
+        vibrate(25);
+        this.updateHud();
+      }
+    }
+    if (this.tidied >= 3 || this.alarmT <= 0) this.endAlarm();
   }
 
   private gasLeaves() {
@@ -518,7 +640,10 @@ export class LevelCena implements Level {
     }
 
     const pp = this.player.root.position;
-    const free = !this.busy && (this.phase === 'toKitchen' || this.phase === 'toTable');
+    const free = !this.busy && (this.phase === 'toKitchen' || this.phase === 'toTable' || this.phase === 'alarm');
+    if (this.phase === 'alarm') this.updateAlarm(dt);
+    // Mientras hay susto, corre: el coche no espera
+    this.walker.speed = this.phase === 'alarm' ? 5.8 : 5.2;
     this.walker.turn(this.input.consumeCam());
     if (free) {
       const move = this.walker.move(dt, this.input.axes(), this.colliders, GARDEN, [{ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 }]);
@@ -558,7 +683,8 @@ export class LevelCena implements Level {
     if (this.input.consumeAction() && action && (!this.busy || this.phase === 'wait')) action();
     if (this.phase === 'wait' && this.busy) this.hud.setAction(null);
 
-    const tgt = this.phase === 'toKitchen' ? STOVE : this.phase === 'toTable' ? TABLE : null;
+    const pending = this.phase === 'alarm' ? this.alarmItems.filter((i) => i.ring.parent).sort((a, b) => pp.distanceTo(a.at) - pp.distanceTo(b.at))[0] : null;
+    const tgt = this.phase === 'toKitchen' ? STOVE : this.phase === 'toTable' ? TABLE : (pending?.at ?? null);
     this.marker.visible = !!tgt && free;
     if (tgt) {
       this.marker.position.set(tgt.x, 2.5 + Math.sin(this.t * 3) * 0.15, tgt.z);

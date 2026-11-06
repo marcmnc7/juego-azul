@@ -6,6 +6,7 @@ import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
+import { KEEPSAKES, keepsakesFor, QUIZ, TEASERS, type Keepsake } from '../data/extras';
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
@@ -99,7 +100,11 @@ export function mapScreen(save: SaveData, opts: MapOptions) {
           ? `🔒 Se abre el ${day.getDate()} de ${MONTHS[day.getMonth()]}`
           : '🔒 Termina el anterior';
     if (done.has(lv.id)) card.classList.add('done');
-    card.append(el('div', 'num', String(lv.id).padStart(2, '0')), el('div', 'emoji', lv.emoji), el('div', 'name', lv.name), el('div', 'place', lv.place), el('div', 'state', state));
+    // Del siguiente que toca, una pista
+    const nextUp = !unlocked && (i === 0 || done.has(LEVELS[i - 1].id));
+    const kp = keepsakesFor(lv.id);
+    const foundHere = kp.filter((k) => save.found?.includes(k.id)).length;
+    card.append(el('div', 'num', String(lv.id).padStart(2, '0')), el('div', 'emoji', lv.emoji), el('div', 'name', lv.name), el('div', 'place', nextUp && TEASERS[lv.id] ? TEASERS[lv.id] : lv.place), el('div', 'state', done.has(lv.id) && kp.length ? `${state} · 🔎 ${foundHere}/${kp.length}` : state));
     if (unlocked) card.onclick = () => opts.onPlay(lv.id);
     list.append(card);
   });
@@ -419,9 +424,22 @@ export function album(save: SaveData, test: boolean, onClose: () => void) {
       grid.append(f);
     }
   });
+  o.append(grid);
+  // Los que estaban escondidos por los escenarios
+  const found = KEEPSAKES.filter((k) => save.found?.includes(k.id));
+  o.append(el('h2', 'album-sub', `Recuerdos escondidos (${found.length}/${KEEPSAKES.length})`));
+  const hidden = el('div', 'polaroid-table');
+  KEEPSAKES.forEach((k, i) => {
+    if (save.found?.includes(k.id)) hidden.append(polaroid({ level: k.chapter, src: k.src, chat: k.chat, caption: k.caption, sticker: k.sticker }, TILTS[i % TILTS.length]));
+    else {
+      const f = el('figure', 'polaroid locked', `<div class="ph">?</div><figcaption>Capítulo ${k.chapter}</figcaption>`);
+      f.style.setProperty('--tilt', `${TILTS[i % TILTS.length]}deg`);
+      hidden.append(f);
+    }
+  });
   const b = el('button', 'big-btn', 'Volver');
   b.onclick = onClose;
-  o.append(grid, b);
+  o.append(hidden, b);
   root.append(o);
 }
 
@@ -481,6 +499,25 @@ export function chapterResult(n: number, result: LevelResult, onClose: () => voi
   root.append(o);
   audio.fanfare();
   cssConfetti(o, 40);
+}
+
+/** Al acabar un capítulo, lo que viene: cuándo se abre el siguiente y una pista. */
+export function teaserCard(next: number, onClose: () => void) {
+  const lv = LEVELS[next - 1];
+  const hint = TEASERS[next];
+  if (!lv || !hint) return onClose();
+  clearScreens();
+  const day = openDay(next - 1);
+  const now = new Date();
+  const left = Math.ceil((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+  const when = left <= 0 ? 'Ya lo puedes abrir' : left === 1 ? 'Mañana' : `El ${day.getDate()} de ${MONTHS[day.getMonth()]}`;
+  const o = el('div', 'screen memories-screen teaser-screen');
+  o.append(el('div', 'eyebrow', `${when} · Capítulo ${next}`), el('div', 'teaser-emoji', lv.emoji), el('p', 'teaser-hint', hint));
+  const b = el('button', 'big-btn', 'Hasta entonces');
+  b.onclick = onClose;
+  o.append(b);
+  root.append(o);
+  audio.chime(1);
 }
 
 /** Regalo: primero una caja que tiembla, al tocarla se abre con confeti y aparece el vale. */
@@ -574,6 +611,52 @@ export function toast(text: string) {
   const t = el('div', 'toast', text);
   root.append(t);
   setTimeout(() => t.remove(), 1900);
+}
+
+let barkEnd = 0;
+let barkRaf = 0;
+/** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
+export function bark(who: string, text: string) {
+  root.querySelectorAll('.bark').forEach((n) => n.remove());
+  cancelAnimationFrame(barkRaf);
+  const wa = text.startsWith('(WhatsApp) ');
+  const body = wa ? text.slice(11) : text;
+  const t = el('div', 'bark ' + whoClass(who) + (wa ? ' wa' : ''));
+  t.append(el('b', '', wa ? `📱 ${who}` : who), el('span', '', body));
+  root.append(t);
+  barkEnd = performance.now() + 2100 + Math.min(2400, body.length * 55);
+  const place = () => {
+    if (!t.isConnected) return;
+    const left = barkEnd - performance.now();
+    if (left <= 0) return void t.remove();
+    t.style.opacity = String(Math.min(1, left / 300));
+    const at = wa ? null : speakerAt(who);
+    const W = window.innerWidth;
+    if (at && at.y > 90) {
+      const w = t.offsetWidth, h = t.offsetHeight;
+      t.style.left = `${Math.min(Math.max(at.x - w / 2, 10), W - w - 10)}px`;
+      t.style.top = `${Math.max(at.y - h - 14, 72)}px`;
+      t.classList.add('anchored');
+    } else {
+      t.style.left = `${(W - t.offsetWidth) / 2}px`;
+      t.style.top = 'calc(env(safe-area-inset-top) + 76px)';
+      t.classList.remove('anchored');
+    }
+    barkRaf = requestAnimationFrame(place);
+  };
+  place();
+  // (la pestaña oculta no pinta: que no se quede para siempre)
+  setTimeout(() => t.remove(), 5000);
+}
+
+/** Has encontrado un recuerdo: la polaroid cae arriba unos segundos y se va al álbum. El juego sigue. */
+export function keepsakePop(k: Keepsake, found: number, total: number) {
+  root.querySelectorAll('.kp-pop').forEach((n) => n.remove());
+  const o = el('div', 'kp-pop');
+  o.append(el('div', 'kp-title', `🔎 Recuerdo escondido ${found}/${total}`), polaroid({ level: k.chapter, src: k.src, chat: k.chat, caption: k.caption, sticker: k.sticker }, -3));
+  root.append(o);
+  setTimeout(() => o.classList.add('out'), 5200);
+  setTimeout(() => o.remove(), 5700);
 }
 
 let cancelDialogue: (() => void) | null = null;
@@ -806,7 +889,11 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
  * WhatsApp en pantalla: uno o varios fragmentos literales del chat, mensaje a mensaje.
  * Tocar enseña el siguiente al momento; «Saltar» los enseña todos.
  */
+/** Cuántas de sus respuestas ha acertado a la primera en este capítulo. */
+export const quizScore = { right: 0, total: 0 };
+
 export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
+  const asked = new Set<number>();
   const frags = Array.isArray(input) ? input : [input];
   const o = el('div', 'phone-overlay');
   const ph = el('div', 'phone');
@@ -842,6 +929,8 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   let i = 0;
   let timer = 0;
   let typing: HTMLElement | null = null;
+  /** La pregunta que está en pantalla: hasta contestarla, el chat no avanza. */
+  let asking: HTMLElement | null = null;
   const done = () => i >= items.length;
   const scroll = () => (chat.scrollTop = chat.scrollHeight);
   const show = (it: Item) => {
@@ -851,11 +940,51 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
       chat.append(b);
     }
   };
+  /** Antes de un mensaje suyo señalado: qué contestó. El mensaje real no cambia, y hasta acertar no sale. */
+  const ask = (it: Item & { kind: 'msg' }) => {
+    clearTimeout(timer);
+    const fake = QUIZ[it.text];
+    const opts = [...fake, it.text].sort(() => Math.random() - 0.5);
+    const q = el('div', 'quiz');
+    q.append(el('div', 'quiz-q', '¿Qué le contestaste?'));
+    let missed = false;
+    quizScore.total++;
+    for (const t of opts) {
+      const b = el('button', 'quiz-opt', t);
+      b.onpointerdown = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (t === it.text) {
+          if (!missed) quizScore.right++;
+          audio.pickup();
+          q.remove();
+          asking = null;
+          scroll();
+          step();
+        } else {
+          missed = true;
+          b.classList.add('wrong');
+          b.disabled = true;
+          audio.boo();
+          vibrate(30);
+        }
+      };
+      q.append(b);
+    }
+    asking = q;
+    ph.append(q);
+    scroll();
+  };
   const step = () => {
     clearTimeout(timer);
     typing?.remove();
     typing = null;
     if (done()) return finish();
+    const up = items[i];
+    if (up.kind === 'msg' && up.me && QUIZ[up.text] && !asked.has(i)) {
+      asked.add(i);
+      return ask(up);
+    }
     show(items[i++]);
     audio.pop();
     scroll();
@@ -872,6 +1001,8 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   const finish = () => {
     clearTimeout(timer);
     typing?.remove();
+    asking?.remove();
+    asking = null;
     hint.textContent = 'Toca para continuar ▸';
     hint.classList.add('ready');
     skip.hidden = true;
@@ -884,6 +1015,7 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   };
   o.onpointerdown = (e) => {
     e.stopPropagation();
+    if (asking) return; // primero, contestar
     if (!done()) return step();
     if (!hint.classList.contains('ready')) return;
     clearTimeout(timer);

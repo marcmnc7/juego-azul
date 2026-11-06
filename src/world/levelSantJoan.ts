@@ -20,6 +20,7 @@ import { canvasTex, mergedPlanes } from './deco';
 import type { Box2 } from './ferreries';
 import { makeTaxi, TaxiRide } from './camiFarola';
 import { limpPose } from '../entities/limp';
+import { LimpPair } from '../entities/limpPair';
 import { rigPost } from '../entities/rig';
 import { twoBone } from '../entities/embrace';
 import { CarRig } from '../entities/models';
@@ -40,7 +41,7 @@ const LA_NOCHE = {
 // entre la gente y los caballos que se ponen de manos (tocarles el pecho da suerte). En Correus, Gas lleva
 // media hora dando vueltas: «Dime exacto pls». Le mandas una foto exacta, con el obelisco, y te encuentra.
 // Se abrazan (sin bailes), y van juntos a Sa Plaça d'es Bè a hacer botar caballos. El día acaba en casa
-// de Azul: a dormir, los dos y un par de amigas de ella.
+// de Azul: a dormir, los dos.
 // Todos los chats son trozos literales.
 
 type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
@@ -91,6 +92,8 @@ interface Horse {
   rearT: number;
   /** El empujón que le dan al pecho: sube más y da un bote. */
   boostT?: number;
+  /** Se ha desbocado: viene corriendo por la calle. */
+  charge?: boolean;
   nextRear: number;
   walk: number;
   /** Velocidad con signo (calle) o angular (Born): cambia poco a poco, un caballo pesa 500 kg. */
@@ -134,12 +137,13 @@ export class LevelSantJoan implements Level {
   private fx: Particles;
   private fireworks = new Fireworks();
   private gasTrail = new Trail();
+  /** De noche, él apoyado en ella. */
+  private pair: LimpPair | null = null;
   private beTouched = 0;
   /** El final del día, en casa de Azul. */
   private home: { scene: THREE.Scene; sky: Sky; sun: Sun; colliders: Box2[]; doors: Door[]; pals: { p: Person; trail: Trail; lead: () => THREE.Vector3; gap: number }[]; who: THREE.Vector3[]; marker: THREE.Object3D; taxi: ReturnType<typeof makeTaxi>; rig: CarRig; taxiT: number; outT: number; homeLine?: boolean } | null = null;
   private ride: TaxiRide | null = null;
-  /** Las dos amigas, esperando junto al taxi. */
-  private nightPals: Person[] = [];
+  private chargeDone = false;
   private pushT = 0;
   private pushHorse: Horse | null = null;
   private pushGas = false;
@@ -883,16 +887,30 @@ export class LevelSantJoan implements Level {
       });
       c.people.commit();
     }
-    const rearNear = this.updateHorses(dt);
+    // Al entrar en Ses Voltes, el caballo que tiene delante se desboca
+    if (!this.chargeDone && this.phase === 'hunt' && !this.busy && pp.x < 66 && pp.x > 34) {
+      const front = this.horses.filter((h) => h.street && h.angle < pp.x - 16 && h.rearT <= 0 && h.warnT <= 0).sort((a, b) => b.angle - a.angle)[0];
+      if (front) {
+        this.chargeDone = true;
+        front.charge = true;
+        front.alert.visible = false;
+        toast(SANTJOAN.charge);
+        audio.warn();
+        audio.cheer(0.5);
+        vibrate([60, 40, 60]);
+        this.walker.shake(0.3);
+      }
+    }
+    const rearNear = this.phase === 'taxi' ? null : this.updateHorses(dt);
 
     // Azul
     const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'be' || this.phase === 'taxi');
     this.walker.turn(this.input.consumeCam());
     this.walker.canJump = walking && this.phase !== 'taxi';
-    if (this.phase === 'taxi') {
-      // A su paso: si se queda atrás, ella le espera
+    if (this.phase === 'taxi' && this.pair) {
+      // Tira de él, a tirones; si se queda atrás, le espera
       const lag = Math.hypot(this.gas.root.position.x - pp.x, this.gas.root.position.z - pp.z);
-      this.walker.speed = lag > 3.2 ? 0.9 : 1.9;
+      this.walker.speed = lag > 2.2 ? 0.7 : this.pair.speed();
     }
     const pushing = this.pushT > 0;
     const mag = this.walker.move(dt, walking && !pushing ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
@@ -904,13 +922,6 @@ export class LevelSantJoan implements Level {
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'idle');
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');
     else animatePerson(this.player, dt, !pushing && mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
-
-    // Las amigas, junto al taxi, haciendo señas hasta que llegáis
-    for (const [i, f] of this.nightPals.entries()) {
-      const near = Math.hypot(pp.x - f.root.position.x, pp.z - f.root.position.z) < 6;
-      animatePerson(f, dt, near ? 'talk' : i ? 'idle' : 'wave');
-      f.root.rotation.y = Math.atan2(pp.x - f.root.position.x, pp.z - f.root.position.z);
-    }
 
     // Gas
     if (this.gas.root.visible) {
@@ -936,12 +947,10 @@ export class LevelSantJoan implements Level {
           animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
         }
       } else if (this.phase === 'taxi') {
-        // Cojísimo: al apoyar el pie malo casi no avanza
-        const ph = this.gas.auto?.ph ?? 0;
-        const limit = 1.05 + 1.25 * Math.max(0, Math.sin(ph));
-        const moving = this.gasTrail.step(this.gas.root, pp, 1.25, 1.7, dt, this.colliders, 0.26, limit);
+        // Cojísimo, y apoyado en ella
+        const moving = this.pair!.step(dt, this.walker.facing, this.colliders);
         animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.3);
-        limpPose(this.gas, moving);
+        this.pair!.pose();
       } else if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.gas, dt, 'idle');
       else animatePerson(this.gas, dt, 'talk');
     }
@@ -1072,9 +1081,24 @@ export class LevelSantJoan implements Level {
         } else if (s.street) {
           // Frena antes del final de la calle, da la vuelta despacio y vuelve a arrancar
           if ((s.angle > 66 && s.street.dir > 0) || (s.angle < 24 && s.street.dir < 0)) s.street.dir *= -1;
-          s.v = (s.v ?? s.street.dir * 1.6) + THREE.MathUtils.clamp(s.street.dir * 1.6 - (s.v ?? 0), -1.2 * dt, 1.2 * dt);
+          if (s.charge) {
+            // Desbocado: va hacia ella por el centro de la calle, a galope, y se tuerce un poco si puede
+            s.street.dir = pp.x > s.angle ? 1 : -1;
+            s.v = (s.v ?? 0) + THREE.MathUtils.clamp(s.street.dir * 8.5 - (s.v ?? 0), -16 * dt, 16 * dt);
+            r.position.z += THREE.MathUtils.clamp(THREE.MathUtils.clamp(pp.z, -1.3, 1.3) - r.position.z, -dt * 1.6, dt * 1.6);
+            s.nextRear = 4;
+            // Te ha pasado (o se acaba la calle): se le pasa y vuelve a su paso
+            if (Math.abs(pp.x - s.angle) < 0.8 || s.angle > 68 || s.angle < 22) {
+              s.charge = false;
+              s.v = s.street.dir * 1.6;
+              if (this.invuln <= 0) toast(SANTJOAN.chargeOk);
+            }
+          } else {
+            s.v = (s.v ?? s.street.dir * 1.6) + THREE.MathUtils.clamp(s.street.dir * 1.6 - (s.v ?? 0), -1.2 * dt, 1.2 * dt);
+            r.position.z += (0 - r.position.z) * Math.min(1, dt * 0.8);
+          }
           s.angle += s.v * dt;
-          r.position.set(s.angle, 0, 0);
+          r.position.x = s.angle;
           const face = s.v > 0.05 ? Math.PI / 2 : s.v < -0.05 ? -Math.PI / 2 : r.rotation.y;
           r.rotation.y += Math.atan2(Math.sin(face - r.rotation.y), Math.cos(face - r.rotation.y)) * Math.min(1, dt * 2.5);
           sp = Math.abs(s.v);
@@ -1272,7 +1296,7 @@ export class LevelSantJoan implements Level {
     }
   }
 
-  /** Ya de noche, a coger un taxi: Gas va cojísimo y sus dos amigas esperan junto al coche. */
+  /** Ya de noche, a coger un taxi: Gas va cojísimo. */
   private startTaxi() {
     fadeFlash(() => {
       this.goNight();
@@ -1284,19 +1308,14 @@ export class LevelSantJoan implements Level {
       sc.add(taxi.root);
       new CarRig(taxi).update(0.016, 0);
       this.colliders.push({ minX: TAXI.x - 2.25, maxX: TAXI.x + 2.25, minZ: TAXI.z - 1, maxZ: TAXI.z + 1, low: true });
-      const f1 = makePerson({ skin: 0xf3d2b6, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x7a4a26, hairStyle: 'long', shorts: true });
-      const f2 = makePerson({ skin: 0xe2b08c, shirt: 0xffffff, pants: 0x6f8fb8, hair: 0x2b1d14, hairStyle: 'pony', shorts: true });
-      f1.root.position.set(TAXI.x - 1.3, 0, TAXI.z - 1.6);
-      f2.root.position.set(TAXI.x - 2.1, 0, TAXI.z - 2.2);
-      sc.add(f1.root, f2.root);
-      this.nightPals = [f1, f2];
       this.phase = 'taxi';
       this.busy = true;
-      this.gasTrail = new Trail();
       const pp = this.player.root.position;
-      this.gas.root.position.set(pp.x + 1.1, 0, pp.z + 0.7);
+      this.gas.root.position.y = pp.y;
       this.walker.stop();
-      this.walker.speed = 1.9;
+      this.walker.speed = 1.5;
+      this.pair = new LimpPair(this.player, this.gas);
+      this.pair.start(this.walker.facing);
       this.input.reset();
       this.updateHud();
       audio.stopMusic();
@@ -1307,7 +1326,7 @@ export class LevelSantJoan implements Level {
     }, 800);
   }
 
-  /** Suben al taxi: hablan un segundo con las amigas y arranca. */
+  /** Suben al taxi: le dicen adónde van y arranca. */
   private boardTaxi() {
     this.busy = true;
     this.input.reset();
@@ -1319,6 +1338,7 @@ export class LevelSantJoan implements Level {
       audio.pop();
       fadeFlash(() => {
         // Del todo fuera de la plaza: los que quedan se van a la escena de casa
+        this.pair?.stop();
         this.walker.speed = 5.2;
         this.ride = new TaxiRide();
         this.phase = 'ride';
@@ -1332,7 +1352,7 @@ export class LevelSantJoan implements Level {
     });
   }
 
-  /** De madrugada, a casa de Azul: ella, Gas y dos amigas, por la cancela hasta la puerta. A dormir. */
+  /** De madrugada, a casa de Azul: ella y Gas, por la cancela hasta la puerta. A dormir. */
   private startHome() {
     fadeFlash(() => {
       cinema.stop();
@@ -1371,25 +1391,12 @@ export class LevelSantJoan implements Level {
       head.position.set(0, 0.85, 2);
       head.target.position.set(0, 0, 14);
       taxi.root.add(head, head.target);
-      const f1 = makePerson({ skin: 0xf3d2b6, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x7a4a26, hairStyle: 'long', shorts: true });
-      const f2 = makePerson({ skin: 0xe2b08c, shirt: 0xffffff, pants: 0x6f8fb8, hair: 0x2b1d14, hairStyle: 'pony', shorts: true });
-      for (const f of [f1, f2]) {
-        f.root.position.set(1.5, -0.45, STREET_Z);
-        f.root.visible = false;
-      }
-      sc.add(f1.root, f2.root);
       const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({ color: 0xffd23f, fog: false }));
       marker.position.set(DOOR.x, 2.6, DOOR.z + 0.7);
       sc.add(marker);
-      const gr = this.gas.root.position;
-      const f1r = f1.root.position;
       this.home = {
         scene: sc, sky, sun, colliders, doors: [place.gate, place.door], who: [], marker, taxi, rig: new CarRig(taxi), taxiT: 0, outT: -1,
-        pals: [
-          { p: this.gas, trail: new Trail(), lead: () => pp, gap: 1.5 },
-          { p: f1, trail: new Trail(), lead: () => gr, gap: 1.4 },
-          { p: f2, trail: new Trail(), lead: () => f1r, gap: 1.3 },
-        ],
+        pals: [],
       };
       applyShadows(sc);
       this.camera.position.set(14, 2.6, STREET_Z + 6);
@@ -1418,22 +1425,23 @@ export class LevelSantJoan implements Level {
     } else if (h.outT >= 0) {
       h.outT += dt;
       const ss = THREE.MathUtils.smoothstep;
-      const who: [Person, number, number][] = [[this.player, 0, 0.3], [h.pals[1].p, 0.7, -0.75], [this.gas, 1.5, -0.25], [h.pals[2].p, 2.3, -1.2]];
+      const who: [Person, number, number][] = [[this.player, 0, 0.3], [this.gas, 1.1, -0.45]];
       for (const [p, t0, ox] of who) {
         const k = h.outT - t0;
         if (k < 0) continue;
         const r = p.root;
         r.visible = true;
         const kk = Math.min(1, k / 0.95);
-        r.position.set(c.x + ox, THREE.MathUtils.lerp(-0.45, 0, ss(kk, 0, 0.55)), THREE.MathUtils.lerp(c.z - 0.2, c.z - 1.8 - (p === h.pals[2].p ? 0.75 : 0), ss(kk, 0, 1)));
+        r.position.set(c.x + ox, THREE.MathUtils.lerp(-0.45, 0, ss(kk, 0, 0.55)), THREE.MathUtils.lerp(c.z - 0.2, c.z - 1.8, ss(kk, 0, 1)));
         r.rotation.y = Math.PI;
         animatePerson(p, dt, k < 0.95 ? 'walk' : 'idle', 0.6);
         if (p === this.gas && k >= 0.95) limpPose(p, false);
       }
-      if (h.outT > 3.4) {
+      if (h.outT > 2.4) {
         h.outT = -1;
         this.walker.facing = this.walker.yaw = Math.PI;
-        for (const f of h.pals) f.trail.reset();
+        this.pair = new LimpPair(this.player, this.gas);
+        this.pair.start(Math.PI);
       }
     } else {
       // Se va por donde iba
@@ -1460,17 +1468,19 @@ export class LevelSantJoan implements Level {
     h.who.length = 0;
     h.who.push(pp);
     if (h.outT < 0 && h.taxiT > 4.2) {
+      if (this.pair) {
+        const lag = Math.hypot(this.gas.root.position.x - pp.x, this.gas.root.position.z - pp.z);
+        this.walker.speed = lag > 2.2 ? 0.7 : this.pair.speed();
+      }
       const mag = this.walker.move(dt, free ? this.input.axes() : { x: 0, y: 0 }, h.colliders, { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 });
       this.player.root.rotation.y = this.walker.facing;
       animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
-      for (const f of h.pals) {
-        const lame = f.p === this.gas;
-        const limit = lame ? 1.4 + 1.3 * Math.max(0, Math.sin(this.gas.auto?.ph ?? 0)) : Infinity;
-        const moving = f.trail.step(f.p.root, f.lead(), f.gap, lame ? 2 : 3.2, dt, h.colliders, 0.26, limit);
-        animatePerson(f.p, dt, moving ? 'walk' : 'idle', lame ? 0.32 : moving ? Math.max(0.35, f.trail.pace) : 0);
-        if (lame) limpPose(f.p, moving);
-        h.who.push(f.p.root.position);
+      if (this.pair) {
+        const moving = this.pair.step(dt, this.walker.facing, h.colliders);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.32);
+        this.pair.pose();
       }
+      h.who.push(this.gas.root.position);
     }
     for (const d of h.doors) d.update(dt, h.who, this.camera.position);
     const near = Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 2;
@@ -1498,6 +1508,7 @@ export class LevelSantJoan implements Level {
   }
 
   private finish() {
+    this.pair?.stop();
     this.phase = 'ending';
     this.busy = true;
     this.map.style.display = 'none';

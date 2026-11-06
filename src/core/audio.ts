@@ -2,6 +2,10 @@
 // La melodía de cada canción se armoniza sola (un acorde por compás), con colchón de cuerdas, bajo,
 // batería completa y una sala con reverb y eco: suena a banda sonora y no a maquinita.
 import type { Cue } from './juice';
+import { bytes } from './assets';
+
+/** A qué volumen van las canciones, por debajo de los sonidos del juego. */
+const TRACK_VOL = 0.78;
 
 type Note = [number | null, number]; // [semitonos desde La4 o null = silencio, duración en corcheas]
 
@@ -171,6 +175,12 @@ export class Audio {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     window.setInterval(() => this.schedule(), 50);
+    // Una canción que se pidió antes del primer toque
+    const want = this.trackWant;
+    if (want) {
+      this.trackWant = null;
+      this.playTrack(want);
+    }
   }
 
   /** Tras una llamada o bloquear el móvil, iOS deja el audio suspendido: se reanuda con el siguiente toque. */
@@ -188,8 +198,137 @@ export class Audio {
     if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.6, this.ctx.currentTime, 0.05);
   }
 
+  // ---------- Las canciones de verdad ----------
+  // Se descodifican enteras con Web Audio: el contexto ya está desbloqueado por el primer toque, así que en iOS
+  // pueden arrancar en cualquier momento. Mientras suena una, la música sintetizada del capítulo no suena.
+  private track: { src: AudioBufferSourceNode; gain: GainNode; buf: AudioBuffer; at: number } | null = null;
+  private trackWant: string | null = null;
+  private trackToken = 0;
+  private trackOn = false;
+
+  /** Suena esta canción en bucle (fundiendo la anterior). Si ya está sonando, sigue por donde iba. */
+  playTrack(url: string) {
+    if (this.trackWant === url) return;
+    this.trackWant = url;
+    this.trackOn = true;
+    this.playing = false;
+    if (!this.ctx) return; // arranca al desbloquear el audio
+    const tok = ++this.trackToken;
+    this.fadeTrack();
+    void bytes(url)
+      .then((b) => this.ctx!.decodeAudioData(b))
+      .then((buf) => {
+        if (tok !== this.trackToken || !this.ctx) return;
+        const ctx = this.ctx;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(TRACK_VOL, ctx.currentTime + 1.4);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.connect(gain).connect(this.master);
+        const at = ctx.currentTime + 0.03;
+        src.start(at);
+        this.track = { src, gain, buf, at };
+      })
+      .catch((e) => {
+        console.warn('[audio] no se pudo cargar la canción', e);
+        if (tok === this.trackToken) this.trackOn = false;
+      });
+  }
+
+  /** Funde la canción que suena y vuelve a dejar sonar la música del capítulo. */
+  stopTrack() {
+    this.trackToken++;
+    this.trackWant = null;
+    this.trackOn = false;
+    this.fadeTrack();
+  }
+
+  private fadeTrack() {
+    const t = this.track;
+    if (!t || !this.ctx) return;
+    this.track = null;
+    const now = this.ctx.currentTime;
+    t.gain.gain.cancelScheduledValues(now);
+    t.gain.gain.setValueAtTime(t.gain.gain.value, now);
+    t.gain.gain.linearRampToValueAtTime(0, now + 1.2);
+    t.src.stop(now + 1.3);
+  }
+
+  /**
+   * Los golpes de la canción en los próximos `secs` segundos, para jugar encima de ella: en qué momento del reloj de
+   * audio caen y en qué carril (0 graves, 1 medios, 2 agudos). Null si aún no está sonando ninguna.
+   */
+  trackHits(secs: number, from = 2.2) {
+    const tr = this.track;
+    if (!tr || !this.ctx) return null;
+    const { buf, at } = tr;
+    const sr = buf.sampleRate;
+    const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+    const hop = 512;
+    const start = Math.floor(((this.ctx.currentTime - at + from) * sr) % buf.length);
+    const frames = Math.floor((secs * sr) / hop);
+    const fl = 1 - Math.exp((-2 * Math.PI * 220) / sr), fh = 1 - Math.exp((-2 * Math.PI * 2400) / sr);
+    let lo = 0, hi = 0;
+    const e = [new Float32Array(frames), new Float32Array(frames), new Float32Array(frames)];
+    for (let f = 0; f < frames; f++) {
+      let a = 0, b = 0, c = 0;
+      for (let i = 0; i < hop; i++) {
+        const k = (start + f * hop + i) % buf.length;
+        const s = (L[k] + R[k]) * 0.5;
+        lo += (s - lo) * fl;
+        hi += (s - hi) * fh;
+        a += lo * lo;
+        b += (hi - lo) * (hi - lo);
+        c += (s - hi) * (s - hi);
+      }
+      e[0][f] = Math.log1p(a * 200);
+      e[1][f] = Math.log1p(b * 200);
+      e[2][f] = Math.log1p(c * 600);
+    }
+    const flux = new Float32Array(frames);
+    const best = new Uint8Array(frames);
+    for (let f = 1; f < frames; f++) {
+      let top = 0;
+      for (let b = 0; b < 3; b++) {
+        const d = Math.max(0, e[b][f] - e[b][f - 1]);
+        flux[f] += d;
+        if (d > top) {
+          top = d;
+          best[f] = b;
+        }
+      }
+    }
+    const span = Math.round((0.7 * sr) / hop);
+    const find = (mul: number, gap: number) => {
+      const out: { t: number; lane: number }[] = [];
+      let lastT = -9;
+      for (let f = 2; f < frames - 2; f++) {
+        if (flux[f] < flux[f - 1] || flux[f] < flux[f + 1]) continue;
+        let sum = 0, n = 0;
+        for (let k = Math.max(0, f - span); k < Math.min(frames, f + span); k++) (sum += flux[k]), n++;
+        if (flux[f] < (sum / n) * mul + 0.02) continue;
+        const t = (f * hop) / sr;
+        if (t - lastT < gap) continue;
+        lastT = t;
+        // (casi todo golpe de canción cae en graves: que no se queden siempre en el mismo carril)
+        const c = out.length;
+        const lane = c >= 2 && out[c - 1].lane === best[f] && out[c - 2].lane === best[f] ? (best[f] + 1 + (f % 2)) % 3 : best[f];
+        out.push({ t: this.ctx!.currentTime + from + t, lane });
+      }
+      return out;
+    };
+    // Que se pueda jugar: ni más de dos y pico por segundo, ni casi nada
+    for (const [mul, gap] of [[1.5, 0.36], [1.3, 0.4], [1.9, 0.42], [2.4, 0.46]] as const) {
+      const r = find(mul, gap);
+      if (r.length <= secs * 2.4 && r.length >= secs * 1.1) return r;
+    }
+    return find(1.5, 0.45);
+  }
+
   startMusic(name: SongName = 'jaleo') {
-    if (!this.ctx) return;
+    if (!this.ctx || this.trackOn) return;
     this.song = SONGS[name];
     this.chords = harmonize(this.song);
     this.playing = true;

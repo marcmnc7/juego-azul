@@ -72,6 +72,13 @@ export const FERRERIES = {
     perfect: '¡Caricia perfecta! ✨🍀',
     late: 'Por los pelos 🍀',
     allLuck: '¡Tres caricias! Toda la plaza te aplaude 👏',
+    /** Con las tres en la mano, los burros se desbocan: hasta Tòfol sin derramar. */
+    stampede: '🫏 ¡Se han desbocado! Llévale las pomadas a Tòfol sin derramarlas',
+    spilled: ['🍋 ¡Se te ha derramado una!', '🍋 ¡Otra por el suelo!'],
+    arrived: (n: number) =>
+      n === 2
+        ? [{ who: 'Margaux', text: 'Toma… las que han llegado.' }, { who: 'Tòfol', text: 'Dues de tres. Bé, amb dues ja faig via.' }]
+        : [{ who: 'Margaux', text: 'Toma… la que ha llegado.' }, { who: 'Tòfol', text: 'Una?! Bé, sa intenció és lo que compta.' }],
   },
 };
 
@@ -101,27 +108,30 @@ export const SANTJOAN = {
   notExact: 'Con esta foto no sabrá dónde estás. Que salga el obelisco 📷',
   comingHint: 'Gas viene hacia ti',
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
-  /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul con dos amigas. */
+  /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul. */
   toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
   beHint: 'Ve con Gas a Sa Plaça d’es Bè',
   beGo: 'Toca el pecho de los caballos cuando se pongan de manos',
   beCount: (n: number, of: number) => `🐎 ${n}/${of}`,
+  /** Un caballo se desboca por Ses Voltes. */
+  charge: '🐎 ¡Un caballo desbocado viene de frente! ¡Apártate a los soportales!',
+  chargeOk: '¡Por poco! 😮‍💨',
   beDone: [
-    { who: 'Margaux', text: 'Mis amigas se vienen a dormir a casa. ¿Te vienes?' },
+    { who: 'Margaux', text: '¿Te vienes a dormir a casa?' },
     { who: 'Gas', text: 'Sí. Vamos.' },
   ] as Line[],
   /** Ya de noche: al taxi de la Plaça Espanya, a paso de Gas. */
   taxiNight: [
     { who: 'Narrador', text: 'Ya es de noche. Después de todo el día de jaleo, Gas casi no puede andar.' },
     { who: 'Gas', text: 'Ay, ay, ay… No siento el pie.' },
-    { who: 'Margaux', text: 'Venga, que cogemos un taxi. Está ahí, en la Plaça Espanya.' },
+    { who: 'Margaux', text: 'Agárrate a mí. Cogemos un taxi, está ahí, en la Plaça Espanya.' },
   ] as Line[],
-  taxiHint: 'Ve con Gas, a su paso, hasta el taxi de la Plaça Espanya',
+  taxiHint: 'Sujeta a Gas y llévale hasta el taxi de la Plaça Espanya',
   taxiBtn: '🚕 Subir al taxi',
-  taxiPals: [{ who: 'Amiga', text: '¡Por fin! ¿Qué le pasa a este, que anda así?' }, { who: 'Margaux', text: 'No preguntes. Sube.' }] as Line[],
+  taxiPals: [{ who: 'Taxista', text: '¿Adónde vais?' }, { who: 'Margaux', text: 'Camí de sa Farola, por favor.' }] as Line[],
   ride: [{ who: 'Narrador', text: 'De vuelta a casa, por el Camí de sa Farola.' }] as Line[],
-  home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los cuatro, muertos de sueño.' }] as Line[],
-  homeHint: 'Entra en casa con Gas y con tus amigas',
+  home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los dos, muertos de sueño.' }] as Line[],
+  homeHint: 'Entra en casa con Gas',
   sleepBtn: '😴 A dormir',
   after: [{ who: 'Narrador', text: 'Dos días después.' }] as Line[],
   hints: {
@@ -205,6 +215,9 @@ export const ROAD = {
   nearMiss: '¡Por los pelos! +1 📸',
   combo: (n: number) => `¡Racha de ${n} fotos! 📸`,
   stops: ['Madrid', 'San Vicente', 'Logroño'],
+  /** «Si da lluvia, coshe»: la tromba de Cantabria. */
+  storm: '🌧️ Tromba. Se ve fatal y el coche patina',
+  stormOff: '🌤️ Ya escampa',
   zamb: { served: '¡Al plato! Déjalo 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
 };
 
@@ -216,6 +229,10 @@ export const CONCERT = {
   ] as Line[],
   airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
   burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],
+  /** La puerta 26 se cierra. */
+  gateLast: '📢 Última llamada para Las Palmas. Puerta 26',
+  gateClosing: '📢 «Pasajera Margaux, se cierra la puerta» ¡Corre!',
+  gateLate: 'Por los pelos',
   landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria.' }] as Line[],
   stadium: [
     { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
@@ -257,6 +274,11 @@ export const NIGHT = {
   sneakHint: 'Silencio full: despacio y por las losas, que la grava cruje',
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
   caught: [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga. Otra vez, despacito.' }] as Line[],
+  /** En el agua: se enciende la luz de arriba y hay que quedarse quieta. */
+  freeze: '💡 ¡La luz de arriba! Quieta, que no se mueva el agua',
+  freezeMoved: 'Gas: «¡Shhh! ¡Quieta!»',
+  freezeOff: 'Se apaga. Uf.',
+  freezeHint: '💡 ¡Quieta! Ni un chapoteo',
 };
 
 // Crucigrama antes de la carta: lo del final.
@@ -289,6 +311,23 @@ export const CENA = {
     : n === 6 ? 'Gas: «Un 6’75.» Otra vez.'
     : `Gas: «Un ${n}…» Otra vez.`,
   dinner: [{ who: 'Narrador', text: 'Cenáis con un ojo en la puerta y otro en el reloj.' }] as Line[],
+  /** Unos faros en la calle: ¿son tus padres? (No lo eran: volvieron a la 1.30.) */
+  alarm: [
+    { who: 'Gas', text: '¿Eso es un coche?' },
+    { who: 'Margaux', text: '¡Son mis padres! ¡Recoge, recoge!' },
+  ] as Line[],
+  alarmHint: '🚗 ¡Unos faros! Quita de en medio los platos, la sartén y el casco de Gas',
+  alarmItems: { plates: '🍽️ Platos, fuera', pan: '🍳 Sartén, fuera', helmet: '🪖 Casco escondido' },
+  falseAlarm: [
+    { who: 'Narrador', text: 'El coche pasa de largo. Era el del vecino.' },
+    { who: 'Gas', text: 'Casi me da algo.' },
+    { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
+  ] as Line[],
+  falseAlarmLate: [
+    { who: 'Narrador', text: 'El coche pasa de largo. Era el del vecino. Menos mal, porque aún estaba todo por en medio.' },
+    { who: 'Gas', text: 'Casi me da algo.' },
+    { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
+  ] as Line[],
   leave: [
     { who: 'Narrador', text: '22:50. Gas se va en la moto justo a tiempo.' },
     { who: 'Narrador', text: 'Tú subes a la cama. Tus padres siguen sin volver.' },
@@ -374,6 +413,11 @@ export const MOTO = {
   photoHint: '📷 ¡Foto!',
   photoOk: ['📷 Foto guardada', '📷 Otra para el álbum', '📷 Esta es la buena'],
   lean: { good: 'Fluida ✨', bad: 'Uy, acompaña la curva' },
+  /** La tramontana de Cap de Creus: racha de viento, inclinarse hacia la flecha. */
+  wind: '🌬️ ¡Tramontana! Inclínate hacia donde marca la flecha',
+  windBad: '🌬️ ¡Que nos lleva!',
+  windOff: 'Pasó la racha 😮‍💨',
+  windHint: '🌬️ Inclínate hacia la flecha',
   creus: [
     { who: 'Narrador', text: 'El faro de Cap de Creus, ahí delante… y la carretera, cortada. El último tramo está cerrado.' },
     { who: 'Narrador', text: 'Hasta aquí llegasteis. Media vuelta, con el faro de fondo.' },
@@ -443,6 +487,9 @@ export const ECLIPSE = {
   parkHint: 'Marcha atrás: mete el coche dentro de la entrada',
   parkBump: 'Uy, el muro 😬',
   parkOk: 'Aparcado. A la primera (casi) 🅿️',
+  /** El reloj: en cuanto os vais, cuenta hacia atrás hasta el eclipse. */
+  clockLow: 'Gas: «Que no llegamos, eh»',
+  clockHit: '💥 Dos minutos menos',
   meetMarcParents: [
     { who: 'Narrador', text: 'Entráis los dos. Sus padres están en la cocina.' },
     { who: 'Margaux', text: 'Hola, soy Margaux.' },

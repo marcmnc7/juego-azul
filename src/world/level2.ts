@@ -45,6 +45,7 @@ const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; t
   rioja: { ground: 0xa8704a, fog: 0xf6c9a0, sky: 0xf2a77d, top: 0x5a4a9a },
 };
 const TURBO = 1.45;
+const STORM_SKY = new THREE.Color(0x56626e);
 // El juego del viaje: parar en el primer restaurante que empiece por M
 const EATERIES: { name: string; z: number; m?: boolean }[] = [
   { name: 'Asador El Cruce', z: 520 },
@@ -58,6 +59,8 @@ const CAMP_Z = 985;
 /** Las vacas de la carretera. */
 const COW_Z = [1110, 1345, LEG1 + 40 + 340];
 const COW_NEAR = 60;
+/** La tromba de Cantabria: dónde empieza y dónde acaba (entre dos vacas). */
+const STORM_Z0 = 1165, STORM_Z1 = 1295;
 const COW_BRAKE = 21; // a esta distancia se frena sí o sí (frenando, para unos metros antes)
 
 function canvasTex(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 256, h = 256) {
@@ -207,6 +210,9 @@ export class Level2 implements Level {
   private legStart = 0;
   private region: Region = 'madrid';
   private logronoTown: THREE.Object3D | null = null;
+  private rain: THREE.LineSegments | null = null;
+  private wet = 0;
+  private stormSaid = 0;
   /** Desde aquí, Logroño: sin viñas ni matas de cuneta. */
   private townZ = Infinity;
   private scatterAt = (z: number): Region | null => {
@@ -833,7 +839,60 @@ export class Level2 implements Level {
       this.scene.add(s);
       this.things.push({ obj: s, kind: turbo ? 'turbo' : 'smoke', lane, z: pz, speed: 0, alive: true });
     }
-    this.nextSpawn += 22 + Math.random() * 14;
+    // En la tromba, el tráfico se apelotona
+    this.nextSpawn += (22 + Math.random() * 14) * (z > STORM_Z0 && z < STORM_Z1 ? 0.68 : 1);
+  }
+
+  /** «Si da lluvia, coshe»: cae la tromba, la niebla se cierra, oscurece y el coche patina. */
+  private updateStorm(dt: number, drive: boolean) {
+    const z = this.carZ;
+    const want = this.phase === 'drive1' || this.phase === 'cow' ? THREE.MathUtils.smoothstep(z, STORM_Z0, STORM_Z0 + 25) * (1 - THREE.MathUtils.smoothstep(z, STORM_Z1 - 25, STORM_Z1)) : 0;
+    this.wet += (want - this.wet) * Math.min(1, dt * 1.5);
+    if (drive && this.stormSaid === 0 && want > 0.3) {
+      this.stormSaid = 1;
+      toast(ROAD.storm);
+      audio.warn();
+      vibrate(40);
+    } else if (drive && this.stormSaid === 1 && z > STORM_Z1 - 10) {
+      this.stormSaid = 2;
+      toast(ROAD.stormOff);
+    }
+    if (this.wet > 0.004 || this.rain?.visible) {
+      if (!this.rain) {
+        const N = 420;
+        const p = new Float32Array(N * 6);
+        for (let i = 0; i < N; i++) {
+          const x = (Math.random() - 0.5) * 34, y = Math.random() * 16, zz = Math.random() * 40 - 8;
+          p.set([x, y, zz, x + 0.03, y + 0.8, zz + 0.2], i * 6);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+        this.rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcfdbe6, transparent: true, opacity: 0.5, fog: false, depthWrite: false }));
+        this.rain.frustumCulled = false;
+        this.rain.userData.noCast = true;
+        this.scene.add(this.rain);
+      }
+      const r = this.rain;
+      r.visible = this.wet > 0.004;
+      (r.material as THREE.LineBasicMaterial).opacity = 0.5 * this.wet;
+      const pos = r.geometry.attributes.position as THREE.BufferAttribute;
+      const fall = dt * 30;
+      for (let i = 0; i < pos.count; i += 2) {
+        let y = pos.getY(i) - fall;
+        if (y < 0) y += 16;
+        pos.setY(i, y);
+        pos.setY(i + 1, y + 0.8);
+      }
+      pos.needsUpdate = true;
+      r.position.set(this.carX, 0, this.carZ);
+    }
+    // La niebla se cierra y oscurece. (Fuera de la tromba, lo de siempre; al llegar a Logroño manda lo suyo)
+    if (this.phase === 'drive1' || this.phase === 'cow') {
+      const fog = this.scene.fog as THREE.Fog;
+      fog.near = 60 - 46 * this.wet;
+      fog.far = 190 - 128 * this.wet;
+    }
+    this.sun.light.intensity = 2.3 * (1 - 0.6 * this.wet);
   }
 
   update(dt: number) {
@@ -886,7 +945,8 @@ export class Level2 implements Level {
     if (drive) this.dist = this.carZ - this.legStart;
     // Cambio de carril con volante y masa: el coche se desplaza con un muelle, no de golpe
     const prevVX = this.carVX;
-    [this.carX, this.carVX] = spring(this.carX, this.carVX, LANES[this.lane], 9, dt);
+    // (con la carretera mojada, el coche tarda en obedecer)
+    [this.carX, this.carVX] = spring(this.carX, this.carVX, LANES[this.lane], 9 - 4.5 * this.wet, dt);
     const latAccel = dt > 0 ? (this.carVX - prevVX) / dt : 0;
 
     const car = this.car;
@@ -905,6 +965,7 @@ export class Level2 implements Level {
     this.sea.position.z = this.carZ;
     this.sun.follow(this.car.root.position);
     for (const s of this.scatters) s.update(this.carZ, this.scatterAt);
+    this.updateStorm(dt, drive);
     // Llegando a Logroño la niebla se abre: la ciudad se ve entera, no como un telón pálido
     if (this.phase === 'drive2' || this.phase === 'logrono') {
       const near = THREE.MathUtils.smoothstep(this.dist, LEG2 - 320, LEG2 - 120);
@@ -921,14 +982,14 @@ export class Level2 implements Level {
     }
     const st = REGION_STYLE[this.region];
     const k = Math.min(1, dt * 0.8);
-    this.sky.lerp(this.tmpColor.set(st.sky), k);
-    this.skyTop.lerp(this.tmpColor.set(st.top), k);
+    this.sky.lerp(this.tmpColor.set(st.sky).lerp(STORM_SKY, this.wet), k);
+    this.skyTop.lerp(this.tmpColor.set(st.top).lerp(STORM_SKY, this.wet), k);
     this.skyTimer -= dt;
     if (this.skyTimer <= 0) {
       this.skyTimer = 0.15;
       this.skyDome.setColors(this.skyTop.getHex(), this.sky.getHex(), (this.scene.fog as THREE.Fog).color.getHex());
     }
-    (this.scene.fog as THREE.Fog).color.lerp(this.tmpColor.set(st.fog), k);
+    (this.scene.fog as THREE.Fog).color.lerp(this.tmpColor.set(st.fog).lerp(STORM_SKY, this.wet * 0.8), k * (1 + this.wet * 2));
     (this.ground.material as THREE.MeshToonMaterial).color.lerp(this.tmpColor.set(st.ground), k);
     this.sea.visible = this.region === 'cantabria';
     // Hierba seca o verde en casi todo el viaje; tierra roja de viñedo en La Rioja
@@ -1599,6 +1660,7 @@ export class Level2 implements Level {
         run: () => {
           clean();
           this.marcialDone = this.campDone = true;
+          this.stormSaid = 2;
           this.reset(LEG1 - 60);
           this.legStart = 0;
           this.phase = 'drive1';

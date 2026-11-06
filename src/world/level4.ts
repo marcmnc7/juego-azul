@@ -98,6 +98,12 @@ export class Level4 implements Level {
   private gas: Person;
   /** La puerta peatonal de casa: se abre al llegar y se cierra detrás. */
   private gate!: Door;
+  /** La luz de arriba, con vosotros en el agua: mientras dure, ni un chapoteo. */
+  private freezeT = 0;
+  private freezeDone = false;
+  private frozeMoved = false;
+  private swimMove = 0;
+  private gasSwim = 0;
   private gateWho: THREE.Vector3[] = [];
   private looks!: { azul: [Person, Person]; gas: [Person, Person] };
   private clothes!: THREE.Object3D;
@@ -656,7 +662,7 @@ export class Level4 implements Level {
         h.setObjective('🫂');
         break;
       case 'swim':
-        h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : 'Nada un rato con Marc 💙');
+        h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : this.freezeT > 0 ? NIGHT.freezeHint : 'Nada un rato con Marc 💙');
         break;
       case 'toTowels':
         h.setObjective('Ve a las toallas, al otro lado de la piscina');
@@ -732,7 +738,10 @@ export class Level4 implements Level {
       // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
       if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
       this.player.root.rotation.y = this.walker.facing;
-      if (swimming) this.swimPose(this.player, move, dt);
+      if (swimming) {
+        this.swimMove = move;
+        this.swimPose(this.player, move, dt);
+      }
       else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     }
 
@@ -745,7 +754,34 @@ export class Level4 implements Level {
 
     // Un rato nadando juntos, sin prisa; luego, por la escalera y al césped, a pie
     if (this.phase === 'swim' && swimming && !this.busy && !this.swimOut) {
-      this.swimT += dt;
+      if (this.freezeT > 0) {
+        this.freezeT -= dt;
+        this.winMat.color.lerp(this.winTarget.setRGB(1, 0.86, 0.6), Math.min(1, dt * 6));
+        if (this.swimMove > 0.12 && !this.frozeMoved) {
+          this.frozeMoved = true;
+          this.caught++;
+          this.freezeT += 1.5;
+          toast(NIGHT.freezeMoved);
+          audio.warn();
+          vibrate(40);
+        }
+        if (this.freezeT <= 0) {
+          toast(NIGHT.freezeOff);
+          this.updateHud();
+        }
+      } else {
+        this.winMat.color.lerp(this.winTarget.setRGB(0.105, 0.13, 0.21), Math.min(1, dt * 6));
+        this.swimT += dt;
+      }
+      if (!this.freezeDone && this.swimT > 4.5) {
+        this.freezeDone = true;
+        this.freezeT = 4.2;
+        this.frozeMoved = false;
+        toast(NIGHT.freeze);
+        audio.warn();
+        vibrate([40, 40, 40]);
+        this.updateHud();
+      }
       if (this.swimT > 12) {
         this.swimOut = true;
         this.updateHud();
@@ -941,13 +977,15 @@ export class Level4 implements Level {
     if (this.phase !== 'swim') g.root.rotation.z = 0;
     if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
-      const a = this.t * 0.3;
+      // (con la luz encendida, él también se queda quieto)
+      if (this.freezeT <= 0) this.gasSwim += dt;
+      const a = this.gasSwim * 0.3;
       const x = Math.cos(a) * 2.6;
       const z = 7.6 + Math.sin(a) * 1.1;
       // Flota: sube y baja con cada brazada y se balancea un poco
       g.root.position.set(x, g.root.position.y, z);
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
-      this.swimPose(g, 0.6, dt);
+      this.swimPose(g, this.freezeT > 0 ? 0 : 0.6, dt);
     } else if (this.phase === 'toTowels') {
       // Te sigue a pie
       const pp = this.player.root.position;

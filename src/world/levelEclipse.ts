@@ -145,6 +145,9 @@ export class LevelEclipse implements Level {
   private getOutT = -1;
   private getInT = -1;
   private getInFrom = new THREE.Vector3();
+  /** Minutos que quedan para el eclipse: cuenta desde que os despedís. Cada golpe aparcando, dos menos. */
+  private clockMin = 26;
+  private clockSaid = false;
   private joy: Dog | null = null;
   private joyOutT = -1;
   private houseDoor: Door | null = null;
@@ -579,7 +582,8 @@ export class LevelEclipse implements Level {
       done: '12 de agosto de 2026',
     };
     this.hud.setObjective(o[this.phase]);
-    this.hud.setCounters(this.phase === 'park' ? `<span class="chip">💥 ${this.bumps}</span>` : this.phase === 'eclipse' ? `<span class="chip">🌘 ${Math.round(this.progress * 100)}%</span>` : '');
+    const clock = `<span class="chip${this.clockMin <= 10 ? ' chip-alert' : ''}">🌘 faltan ${Math.ceil(this.clockMin)} min</span>`;
+    this.hud.setCounters(this.phase === 'toCar' ? clock : this.phase === 'park' ? `${clock}<span class="chip">💥 ${this.bumps}</span>` : this.phase === 'eclipse' ? `<span class="chip">🌘 ${Math.round(this.progress * 100)}%</span>` : '');
   }
 
   private startKayak() {
@@ -1155,6 +1159,34 @@ export class LevelEclipse implements Level {
         f.p.tail.rotation.z = Math.sin(this.t * 12) * 0.5;
       }
     }
+    // Van por el mismo rastro: que se abran a los lados en vez de atravesarse
+    const fs = this.followers;
+    const radius = (f: (typeof fs)[number]) => ('body' in f.p ? 0.42 : 0.56);
+    for (let i = 0; i < fs.length; i++) {
+      const a = fs[i], ap = a.p.root.position;
+      // Con quien lleva el mando solo se aparta quien sigue
+      const toX = ap.x - this.player.root.position.x, toZ = ap.z - this.player.root.position.z;
+      const dp = Math.hypot(toX, toZ);
+      if (dp > 1e-3 && dp < radius(a) + 0.4) {
+        const k = (radius(a) + 0.4 - dp) * Math.min(1, dt * 10);
+        a.trail?.nudge(a.p.root, (toX / dp) * k, (toZ / dp) * k, this.colliders);
+      }
+      for (let j = i + 1; j < fs.length; j++) {
+        const b = fs[j], bp = b.p.root.position;
+        const min = radius(a) + radius(b);
+        let dx = bp.x - ap.x, dz = bp.z - ap.z;
+        let d = Math.hypot(dx, dz);
+        if (d >= min) continue;
+        if (d < 1e-3) {
+          dx = Math.cos(i + j);
+          dz = Math.sin(i + j);
+          d = 1;
+        }
+        const k = (min - Math.min(d, min)) * 0.5 * Math.min(1, dt * 10);
+        a.trail?.nudge(a.p.root, (-dx / d) * k, (-dz / d) * k, this.colliders);
+        b.trail?.nudge(b.p.root, (dx / d) * k, (dz / d) * k, this.colliders);
+      }
+    }
   }
 
   private updateKayak(dt: number) {
@@ -1367,7 +1399,8 @@ export class LevelEclipse implements Level {
         if (Math.abs(this.carSpeed) > 0.6 && this.bumpT <= 0) {
           this.bumps++;
           this.bumpT = 0.8;
-          toast(ECLIPSE.parkBump);
+          this.clockMin = Math.max(4, this.clockMin - 2);
+          toast(ECLIPSE.clockHit);
           audio.hit();
           vibrate(60);
           this.rig?.kick(0.4, 0.2);
@@ -1473,6 +1506,17 @@ export class LevelEclipse implements Level {
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    // El reloj del eclipse no se para (ni mientras buscas sitio)
+    if ((this.phase === 'toCar' || this.phase === 'park') && !this.busy) {
+      const before = Math.ceil(this.clockMin);
+      this.clockMin = Math.max(4, this.clockMin - dt / 2.4);
+      if (Math.ceil(this.clockMin) !== before) this.updateHud();
+      if (this.clockMin <= 10 && !this.clockSaid) {
+        this.clockSaid = true;
+        toast(ECLIPSE.clockLow);
+        audio.warn();
+      }
+    }
     if (this.doors.length) {
       this.doorWho.length = 0;
       for (const p of [this.player, this.gas, ...this.others.map((o) => o.p), ...this.followers.map((f) => f.p)]) if (p?.root.visible && p.root.parent) this.doorWho.push(p.root.position);

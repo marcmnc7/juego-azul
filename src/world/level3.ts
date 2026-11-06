@@ -5,6 +5,7 @@ import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
+import { FITO_SONG } from '../core/songs';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook } from '../entities/models';
@@ -72,6 +73,8 @@ const FILM_SECS = 15;
 // Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona)
 const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
 /** Hasta dónde se anda en la terminal: a un cuerpo de las cristaleras y hasta el muro del fondo. */
+/** Segundos hasta que cierran la puerta 26 (y cada maleta que te da, dos menos). */
+const GATE_SECS = 26;
 const AIR_WALK = { minX: AIR.minX + 0.32, maxX: AIR.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: AIR.maxZ };
 // (entre pilar y pilar: con un pilar delante, de «PRENSA» se leía «PR SA»)
 const BURGERS: [number, number][] = [[302.6, -4.75], [289.4, 2.75], [302.6, 17.75]];
@@ -166,8 +169,10 @@ class Rhythm {
   total = 0;
   finished = false;
   beat = 0; // para animar el público
-  private end: number;
+  private end = 0;
   private nextDrum = 0;
+  /** Las notas salen de la canción que suena: no hay que tocar nada más encima. */
+  private onSong = false;
   private colors = ['#e2547a', '#f4c95d', '#3cc6b0'];
   private onKey = (e: KeyboardEvent) => {
     const m: Record<string, number> = { KeyA: 0, KeyS: 1, KeyD: 2, KeyJ: 0, KeyK: 1, KeyL: 2, ArrowLeft: 0, ArrowDown: 1, ArrowRight: 2 };
@@ -198,6 +203,15 @@ class Rhythm {
     window.addEventListener('keydown', this.onKey);
 
     this.t0 = audio.time() + 2.2;
+    // Sobre los golpes de la canción que está sonando; sin canción, el riff de siempre
+    const hits = audio.trackHits((SONG.length * 16 + 8) * EIGHTH, 2.2);
+    if (hits && hits.length > 12) {
+      this.onSong = true;
+      for (const h of hits) this.notes.push({ t: h.t, lane: h.lane, semi: 0, done: false, scheduled: true });
+      this.total = this.notes.length;
+      this.end = hits[hits.length - 1].t + 0.6;
+      return;
+    }
     let bar = 0;
     for (const riff of SONG) {
       for (const [e, semi] of riff) {
@@ -256,7 +270,7 @@ class Rhythm {
         this.combo = 0;
       }
     }
-    while (this.t0 + this.nextDrum * EIGHTH * 2 < now + 0.3 && this.t0 + this.nextDrum * EIGHTH * 2 < this.end) {
+    while (!this.onSong && this.t0 + this.nextDrum * EIGHTH * 2 < now + 0.3 && this.t0 + this.nextDrum * EIGHTH * 2 < this.end) {
       const t = Math.max(now, this.t0 + this.nextDrum * EIGHTH * 2);
       if (this.nextDrum % 2 === 0) audio.kickAt(t);
       else audio.snareAt(t);
@@ -392,6 +406,8 @@ export class Level3 implements Level {
   private wcRes = WC_Z.map(() => false);
   private wcLights: THREE.MeshBasicMaterial[] = [];
   /** Puertas de los WC: se abren a quien entra o sale. */
+  private gateT = GATE_SECS;
+  private gateStage = 0;
   private wcDoors: Door[] = [];
   private wcWho: THREE.Vector3[] = [];
   // La cola de los baños: gente que avanza, entra, sale y se une al final (Gas también, varias veces)
@@ -821,6 +837,8 @@ export class Level3 implements Level {
 
   private startAirport() {
     this.phase = 'airport';
+    this.gateT = GATE_SECS;
+    this.gateStage = 0;
     if (this.player !== this.azul) {
       this.player = this.azul;
       this.walker = new Walker(this.azul.root.position);
@@ -836,6 +854,23 @@ export class Level3 implements Level {
 
   private stepAirport(dt: number) {
     const pp = this.player.root.position;
+    // La puerta se cierra. Si se acaba el tiempo, te avisan por megafonía y te esperan un poco: pero se nota
+    const before = Math.ceil(this.gateT);
+    this.gateT = Math.max(0, this.gateT - dt);
+    if (Math.ceil(this.gateT) !== before) this.updateHud();
+    if (this.gateStage === 0 && this.gateT < 10) {
+      this.gateStage = 1;
+      toast(CONCERT.gateLast);
+      audio.warn();
+      vibrate(40);
+    } else if (this.gateStage === 1 && this.gateT <= 0) {
+      this.gateStage = 2;
+      this.gateT = 9;
+      toast(CONCERT.gateClosing);
+      audio.warn();
+      vibrate([60, 40, 60]);
+      this.walker.shake(0.25);
+    }
     // Viajeros con maleta
     // Viajeros: van y vuelven por el pasillo esquivando a Azul y entre ellos, sin girar en seco
     this.playerCircle.x = pp.x;
@@ -900,6 +935,7 @@ export class Level3 implements Level {
       if (this.invuln <= 0 && Math.hypot(b.o.position.x - pp.x, b.o.position.z - pp.z) < 0.6 && b.o.position.y < 2) {
         this.invuln = 1.2;
         this.burgerHits++;
+        this.gateT = Math.max(1, this.gateT - 2);
         this.walker.knock.set(Math.sign(b.v.x) * 6, 0, -2);
         this.walker.shake(0.3);
         audio.hit();
@@ -915,6 +951,7 @@ export class Level3 implements Level {
 
   /** Embarca: fundido y ya está en el estadio, con Gas en la cola. */
   private board() {
+    if (this.gateStage === 2) toast(CONCERT.gateLate);
     this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
@@ -946,6 +983,7 @@ export class Level3 implements Level {
 
   /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
   private toStadium() {
+    audio.playTrack(FITO_SONG);
     this.player = this.gas;
     this.walker = new Walker(this.gas.root.position);
     this.gas.root.visible = true;
@@ -1916,6 +1954,7 @@ export class Level3 implements Level {
     if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
+    if (this.phase === 'airport') chips += `<span class="chip${this.gateT < 10 || this.gateStage === 2 ? ' chip-alert' : ''}">🚪 ${Math.ceil(this.gateT)}s</span>`;
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {

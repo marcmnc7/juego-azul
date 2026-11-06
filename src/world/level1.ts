@@ -150,6 +150,9 @@ export class Level1 implements Level {
   private cupAt: [THREE.Object3D, number, number][] = [];
   private cupPost: (() => void) | null = null;
   private tofolCup: THREE.Mesh | null = null;
+  /** De vuelta a Tòfol: los burros van desbocados, y cada empujón derrama una. */
+  private stampede = false;
+  private spilled = 0;
   private fx: Particles;
   private confetti = new Confetti(180, 12, 10);
   private marker: THREE.Group;
@@ -520,7 +523,8 @@ export class Level1 implements Level {
           s.rearT = REAR;
         }
       } else {
-        const spd = s.mode === 'circle' ? 0.36 : 1.75; // al paso, pero a paso de burro de verdad (1,8 m/s)
+        const wild = this.stampede && this.stage === 'returnTofol';
+        const spd = s.mode === 'circle' ? (wild ? 0.95 : 0.36) : wild ? 5 : 1.75; // al paso, pero a paso de burro de verdad (1,8 m/s)
         if (s.mode === 'circle') {
           s.angle += dt * spd;
           const c = this.world.plazaCenter;
@@ -529,10 +533,12 @@ export class Level1 implements Level {
         } else {
           r.position.x += s.dir * spd * dt;
           if (Math.abs(r.position.x) > 40) s.dir *= -1;
-          r.position.z = 0;
+          // Desbocados, se le echan encima a quien va por su calle
+          const zt = wild && Math.abs(pp.x - r.position.x) < 16 ? THREE.MathUtils.clamp(pp.z, -3.4, 3.4) : 0;
+          r.position.z += THREE.MathUtils.clamp(zt - r.position.z, -dt * 1.8, dt * 1.8);
           r.rotation.y = (s.dir * Math.PI) / 2;
         }
-        s.walkPhase += dt * 9.5;
+        s.walkPhase += dt * (wild ? 19 : 9.5);
         const w = Math.sin(s.walkPhase) * 0.5;
         s.d.legs[0].rotation.x = w;
         s.d.legs[3].rotation.x = w;
@@ -542,7 +548,7 @@ export class Level1 implements Level {
         s.d.pivot.rotation.x = Math.sin(s.walkPhase * 2) * 0.015;
         s.nextRear -= dt;
         // En la calle solo se encabrita si estás cerca; en la plaza, siempre
-        if (s.nextRear <= 0 && (s.mode === 'circle' || dist < 7)) {
+        if (s.nextRear <= 0 && (s.mode === 'circle' || dist < 7) && !wild) {
           s.warnT = WARN;
           if (dist < 12) audio.warn();
         }
@@ -572,6 +578,12 @@ export class Level1 implements Level {
           }
           toast(this.T.hints.dropped);
           this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 5);
+          this.updateHud();
+        } else if (this.stage === 'returnTofol' && this.spilled < 2) {
+          // Le queda siempre al menos una: se derrama, pero no hay que volver a empezar
+          toast(FERRERIES.hints.spilled[this.spilled]);
+          this.spilled++;
+          this.fx.burst(this.v1.copy(pp).setY(1.4), '🍋', 7);
           this.updateHud();
         } else {
           toast(this.V.bumped);
@@ -728,7 +740,7 @@ export class Level1 implements Level {
     else if (this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
     else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
     // Las pomadas se llevan a Tòfol: con una, un brazo adelantado; con dos o tres, los dos. Entregadas, las manos libres
-    const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount : 0;
+    const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount - this.spilled : 0;
     this.inHand.forEach((c, i) => (c.visible = i < held));
     if (held > 0) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
     if (held > 1) this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
@@ -917,6 +929,7 @@ export class Level1 implements Level {
             stats: [
               ['Caricias perfectas', `${this.perfects}/3`],
               [this.V.statHits, `${this.hits}`],
+              ['Pomadas que llegaron', `${3 - this.spilled}/3 🍋`],
               ['Tiempo', clock(this.playTime)],
             ],
           }),
@@ -957,7 +970,19 @@ export class Level1 implements Level {
     if (this.pomadaCount >= 3 && this.luckCount >= 3) {
       this.stage = 'returnTofol';
       this.pomadas.forEach((p) => (p.mesh.visible = false));
-      this.donkeys.forEach((d) => (d.ring.visible = false));
+      this.donkeys.forEach((d) => {
+        d.ring.visible = false;
+        d.alert.visible = false;
+        d.warnT = d.rearT = 0;
+      });
+      this.stampede = true;
+      this.spilled = 0;
+      this.invuln = 1.5; // un respiro para arrancar
+      toast(FERRERIES.hints.stampede);
+      audio.warn();
+      audio.cheer(0.5);
+      vibrate([60, 40, 60]);
+      this.walker.shake(0.35);
     }
     this.updateHud();
   }
@@ -974,7 +999,10 @@ export class Level1 implements Level {
     else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
     else if (this.stage === 'returnTofol') {
       this.giveCups();
-      dialogue(this.T.tofolDone, this.V.findFirst ? () => { this.busy = false; this.faceToFace(); this.stage = 'kiss'; this.updateHud(); } : done('findMarc'));
+      this.stampede = false;
+      // Si se han derramado, Tòfol lo nota
+      const lines = this.spilled ? [...FERRERIES.hints.arrived(3 - this.spilled), ...this.T.tofolDone.slice(2)] : this.T.tofolDone;
+      dialogue(lines, this.V.findFirst ? () => { this.busy = false; this.faceToFace(); this.stage = 'kiss'; this.updateHud(); } : done('findMarc'));
     } else dialogue(this.T.tofolAgain, done());
   }
 

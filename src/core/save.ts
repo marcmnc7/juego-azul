@@ -6,6 +6,8 @@ export interface SaveData {
   version: number;
   levelsDone: number[];
   giftsUnlocked: string[];
+  /** Recuerdos escondidos encontrados. */
+  found?: string[];
 }
 
 const empty = (): SaveData => ({ version: VERSION, levelsDone: [], giftsUnlocked: [] });

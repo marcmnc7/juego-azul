@@ -51,7 +51,7 @@ function paint(color: number) {
 }
 
 /** Persona sentada (piernas hacia delante, manos al frente) que sigue con la animación de reposo arriba. */
-function seated(look: PersonLook, scale: number, hands: number) {
+export function seated(look: PersonLook, scale: number, hands: number) {
   const p = makeRigPerson(look, scale, new THREE.Object3D());
   p.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
   p.legL.rotation.set(-1.45, 0, -0.08);

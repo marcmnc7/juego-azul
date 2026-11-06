@@ -41,7 +41,7 @@ function pngBytes(url: string) {
   });
 }
 
-async function bytes(url: string) {
+export async function bytes(url: string) {
   if (url.startsWith('data:')) return dataUrlToBuffer(url);
   if (url.endsWith('.bin.png')) return pngBytes(url);
   return (await fetch(url)).arrayBuffer();

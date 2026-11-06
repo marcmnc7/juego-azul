@@ -81,7 +81,7 @@ export function twoBone(upper: THREE.Object3D, lower: THREE.Object3D, end: THREE
 }
 
 /** Hueso de un lado del personaje: Left o Right según quede a su izquierda (+x) o derecha. */
-function sideNames(p: Person) {
+export function sideNames(p: Person) {
   p.root.updateWorldMatrix(true, true);
   const l = wpos(p, 'LeftArm', _a);
   const inv = p.root.matrixWorld.clone().invert();

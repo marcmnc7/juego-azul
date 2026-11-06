@@ -81,6 +81,22 @@ export class Trail {
     return real > 1e-3;
   }
 
+  /** Solo apunta por dónde va el guía (mientras se va a su lado sin seguir el rastro): quedan los últimos metros. */
+  note(lead: { x: number; z: number }) {
+    const c = this.crumbs;
+    if (!c.length || Math.hypot(lead.x - c[c.length - 1].x, lead.z - c[c.length - 1].z) > CRUMB) c.push({ x: lead.x, z: lead.z });
+    if (c.length > 9) c.shift();
+  }
+
+  /** Un empujoncito lateral que respeta las paredes: para no pisar a otro acompañante. */
+  nudge(root: THREE.Object3D, dx: number, dz: number, walls: readonly Box2[], r = 0.26) {
+    const pos = root.position;
+    const phys = physFor(walls as Box2[]);
+    const got = phys ? phys.move(this, { x: pos.x, y: 0, z: pos.z }, dx, dz, r) : { x: dx, z: dz };
+    pos.x += got.x;
+    pos.z += got.z;
+  }
+
   /** Empieza un rastro nuevo (al cambiar de sitio o de fase). */
   reset() {
     this.crumbs.length = 0;

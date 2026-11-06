@@ -31,6 +31,9 @@ const PHOTO_AT = [0.27, 0.55, 0.8];
 const PHOTO_WIN = 0.035;
 /** Donde la carretera está cortada: el último tramo hasta el faro estaba cerrado. */
 const CLOSED_AT = 0.95;
+/** Dónde sopla la tramontana (metros de ruta desde la salida los pone el nivel). */
+const WIND_AT = 0.58;
+const WIND_SECS = 13;
 // Lo que viene de frente por el otro carril (dónde os cruzáis): a las motos se las saluda, a los coches no
 const ONCOMING: [number, 'moto' | 'car'][] = [[0.1, 'moto'], [0.17, 'car'], [0.36, 'moto'], [0.43, 'car'], [0.49, 'moto'], [0.63, 'car'], [0.7, 'moto'], [0.88, 'moto']];
 const ONCOMING_V = 12;
@@ -360,7 +363,7 @@ export class LevelMoto implements Level {
   private updateHud() {
     const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
     this.hud.setObjective(
-      this.phase === 'ride' ? MOTO.rideHint : this.phase === 'pack' ? 'La mochila' : this.phase === 'creus' || this.phase === 'done' ? 'Cap de Creus · carretera cortada' : '30 de abril · Costa Brava',
+      this.phase === 'ride' ? (this.windOn ? MOTO.windHint : MOTO.rideHint) : this.phase === 'pack' ? 'La mochila' : this.phase === 'creus' || this.phase === 'done' ? 'Cap de Creus · carretera cortada' : '30 de abril · Costa Brava',
     );
     this.hud.setCounters(this.phase === 'ride' || this.phase === 'creus' ? `<span class="chip">🏍️ ${pct}%</span><span class="chip">✌️ ${this.waves}/${this.motosMet}</span><span class="chip">📷 ${this.photos}/3</span>` : '');
   }
@@ -373,6 +376,10 @@ export class LevelMoto implements Level {
 
   private startRide() {
     this.phase = 'ride';
+    this.windOn = false;
+    this.windK = this.windOff = 0;
+    this.windEl?.remove();
+    this.windEl = null;
     this.s = 0.02;
     this.speed = 0;
     this.good = this.total = 0;
@@ -389,7 +396,8 @@ export class LevelMoto implements Level {
     const t = this.curve.getTangentAt(Math.min(1, u));
     const t2 = this.curve.getTangentAt(Math.min(1, u + 6 / this.len));
     // Va por el carril derecho
-    this.moto.root.position.set(p.x - t.z * 1.6, 0.05, p.z + t.x * 1.6);
+    const lane = 1.6 + this.windOff;
+    this.moto.root.position.set(p.x - t.z * lane, 0.05, p.z + t.x * lane);
     this.moto.root.rotation.y = Math.atan2(t.x, t.z);
     const dy = Math.atan2(t2.x, t2.z) - Math.atan2(t.x, t.z);
     return Math.atan2(Math.sin(dy), Math.cos(dy)) / 6;
@@ -405,6 +413,57 @@ export class LevelMoto implements Level {
     toast(MOTO.photoOk[(this.photos - 1) % MOTO.photoOk.length]);
     this.fx.burst(this.v1.copy(this.moto.root.position).setY(2.4), '📷', 4, 1.2, 0.6);
     this.updateHud();
+  }
+
+  /** La tramontana: rachas de un lado y de otro. Hay que inclinarse hacia la flecha o la moto se va del carril. */
+  private updateWind(dt: number, ax: number) {
+    const u0 = WIND_AT, u1 = WIND_AT + (WIND_SECS * SPEED) / this.len;
+    const inside = this.phase === 'ride' && this.s > u0 && this.s < u1;
+    this.windK += ((inside ? 1 : 0) - this.windK) * Math.min(1, dt * 2.2);
+    if (inside && !this.windOn) {
+      this.windOn = true;
+      toast(MOTO.wind);
+      audio.warn();
+      vibrate([60, 40, 60]);
+      this.windSide = Math.random() < 0.5 ? -1 : 1;
+      this.windT = 2.6;
+      if (!this.windEl) {
+        this.windEl = document.createElement('div');
+        this.windEl.className = 'wind-arrow';
+        document.getElementById('ui')!.append(this.windEl);
+      }
+      this.updateHud();
+    } else if (!inside && this.windOn) {
+      this.windOn = false;
+      toast(MOTO.windOff);
+      this.windEl?.remove();
+      this.windEl = null;
+      this.updateHud();
+    }
+    if (inside) {
+      this.windT -= dt;
+      if (this.windT <= 0) {
+        this.windT = 2.2 + Math.random() * 1.2;
+        this.windSide *= -1;
+        audio.whoosh();
+      }
+      if (this.windEl) {
+        this.windEl.textContent = this.windSide > 0 ? '🌬️ ➡️' : '⬅️ 🌬️';
+        this.windEl.style.opacity = this.windT < 0.5 ? '0.45' : '1';
+      }
+      const ok = ax * this.windSide > 0.3;
+      this.total += dt;
+      if (ok) this.good += dt;
+      else if (this.wobbleT <= 0) {
+        this.wobbleT = 1.2;
+        toast(MOTO.windBad);
+        vibrate(40);
+      }
+      if (Math.random() < dt * 14) this.fx.burst(this.v1.copy(this.moto.root.position).setY(0.4), 'dust', 2, 1.6, 0.3);
+    }
+    // Sin compensar, la racha se lleva la moto hacia el otro lado (sin salirse de la carretera)
+    const want = inside && ax * this.windSide <= 0.3 ? -this.windSide * 1.05 : 0;
+    this.windOff += (want - this.windOff) * Math.min(1, dt * 1.6);
   }
 
   private arrive() {
@@ -440,6 +499,7 @@ export class LevelMoto implements Level {
     } else if (this.phase === 'creus') this.speed = Math.max(0, this.speed - dt * 8);
     if (this.phase === 'creus') this.s = Math.min(CLOSED_AT - 6 / this.len, this.s + (this.speed * dt) / this.len);
     this.updateWave(dt);
+    this.updateWind(dt, this.phase === 'ride' ? this.input.axes().x : 0);
     curv = this.placeMoto(this.s);
 
     // Inclinación de la moto (la que manda Gas) y la de Azul (la que pone la jugadora)
@@ -447,7 +507,7 @@ export class LevelMoto implements Level {
     this.lean += (want - this.lean) * Math.min(1, dt * 4);
     const ax = this.phase === 'ride' ? this.input.axes().x : 0;
     this.azulLean += (ax * 0.45 - this.azulLean) * Math.min(1, dt * 6);
-    if (this.phase === 'ride' && Math.abs(want) > 0.03) {
+    if (this.phase === 'ride' && Math.abs(want) > 0.03 && !this.windOn) {
       // En curva: acompañar hacia el mismo lado; en recta: ir derechita
       const strong = Math.abs(want) > 0.12;
       const ok = strong ? Math.sign(ax) === Math.sign(want) && Math.abs(ax) > 0.25 : Math.abs(ax) < 0.6 || Math.sign(ax) === Math.sign(want);
@@ -462,7 +522,7 @@ export class LevelMoto implements Level {
     }
     if (this.wobbleT > 0) this.wobbleT -= dt;
     const wob = this.wobbleT > 0 ? Math.sin(this.t * 22) * 0.06 * this.wobbleT : 0;
-    this.moto.root.rotation.z = this.lean + wob;
+    this.moto.root.rotation.z = this.lean + wob + this.windK * Math.sin(this.t * 6) * 0.025;
     // Se inclina de cintura para arriba: la cadera sigue en el asiento y las piernas no se mueven
     leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);
     for (const w of this.moto.wheels) w.rotation.x += (this.speed * dt) / 0.33;
@@ -769,7 +829,15 @@ export class LevelMoto implements Level {
     ];
   }
 
+  private windK = 0;
+  private windOff = 0;
+  private windOn = false;
+  private windSide = 1;
+  private windT = 0;
+  private windEl: HTMLElement | null = null;
+
   dispose() {
+    this.windEl?.remove();
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);

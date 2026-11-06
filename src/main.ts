@@ -35,7 +35,10 @@ import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast } from './ui/ui';
+import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore } from './ui/ui';
+import { ChapterExtras } from './core/extras';
+import { TEASERS } from './data/extras';
+import { SONG_OF } from './core/songs';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -216,6 +219,8 @@ let data = load();
 let level: Level | null = null;
 let levelAt = 0;
 let closeDebug: (() => void) | null = null;
+/** Comentarios al andar y recuerdos escondidos del capítulo en marcha. */
+let extras: ChapterExtras | null = null;
 // Bocadillos de diálogo: quién es quién en cada capítulo (los niveles guardan a los personajes con estos nombres)
 const SPEAKERS: Record<string, string[]> = {
   Azul: ['azul', 'player'], Margaux: ['azul', 'player'], Gas: ['gas', 'marc'], Marc: ['marc', 'gas'],
@@ -284,6 +289,7 @@ const mapOpts = {
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo, panel de prueba y botón de saltar. */
 function leaveLevel() {
   stage.end();
+  audio.stopTrack();
   // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
   document.querySelectorAll('.ll, .panel-overlay, .radar-overlay, .trick-bar, .trick-say, .mission-card').forEach((e) => e.remove());
   cinema.stop();
@@ -293,6 +299,8 @@ function leaveLevel() {
   closeDebug = null;
   closeDialogue();
   newEpoch();
+  extras?.dispose();
+  extras = null;
   if (level) {
     level.dispose();
     level = null;
@@ -411,6 +419,7 @@ function startLevel(n: number) {
   clearScreens();
   tryFullscreen();
   audio.bed(BEDS[n] ?? 'none');
+  if (SONG_OF[n]) audio.playTrack(SONG_OF[n]);
   // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
   let ready!: () => void;
   chapterCard(n, new Promise<void>((r) => (ready = r)));
@@ -423,6 +432,14 @@ function buildLevel(n: number, ready: () => void) {
     if (level !== me) return;
     closeDebug?.();
     closeDebug = null;
+    // Lo de encima de la historia: recuerdos encontrados y cuántas respuestas recordaba
+    if (result && extras) {
+      const [a, b] = extras.score();
+      if (b) result.stats.push(['Recuerdos escondidos', `${a}/${b} 🔎`]);
+      if (quizScore.total) result.stats.push(['Te acordabas', `${quizScore.right}/${quizScore.total} 💬`]);
+    }
+    extras?.dispose();
+    extras = null;
     const g = giftForLevel(n);
     if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
     if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
@@ -435,7 +452,8 @@ function buildLevel(n: number, ready: () => void) {
           level = null;
         }
         crossword(startLetter, goMap);
-      } else goMap();
+      } else if (TEASERS[n + 1] && !data.levelsDone.includes(n + 1)) teaserCard(n + 1, goMap);
+      else goMap();
     };
     // Después del vale (o, si el capítulo no tiene, de sus estrellas) caen las fotos del capítulo; luego
     // mapa o, al final, crucigrama y carta
@@ -449,6 +467,8 @@ function buildLevel(n: number, ready: () => void) {
   setHd(HD_CHAPTERS.includes(n), n);
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
+  quizScore.right = quizScore.total = 0;
+  extras = new ChapterExtras(n, data, () => save(data));
   if (paintStyle.value) paintScene(level.threeScene);
   applyShadows(level.threeScene);
   levelAt = performance.now();
@@ -580,7 +600,10 @@ function frame() {
     beacon.attach(sc);
     camWorld.attach(sc);
     if (mission) mission.update(gdt);
-    else level!.update(gdt);
+    else {
+      level!.update(gdt);
+      extras?.update(gdt, level as unknown as Parameters<ChapterExtras['update']>[1], camera);
+    }
     dust.update(gdt);
     updateRigPeople(gdt);
     // Escenas de cine: mandan sobre la cámara que haya puesto el capítulo
