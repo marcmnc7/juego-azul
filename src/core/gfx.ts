@@ -361,7 +361,7 @@ export function applyShadows(scene: THREE.Object3D) {
     if (m.userData.outline) return;
     const mat = m.material as THREE.Material;
     if (mat.transparent || (mat as THREE.MeshBasicMaterial).isMeshBasicMaterial) return;
-    m.receiveShadow = true;
+    m.receiveShadow = !m.userData.noReceive;
     m.castShadow = !m.userData.noCast;
   });
   if ((scene as THREE.Scene).isScene) applyEnvironment(scene as THREE.Scene);

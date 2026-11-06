@@ -33,9 +33,44 @@ interface VatKind {
 const kinds: Partial<Record<Kind, VatKind>> = {};
 let baking: Promise<void> | null = null;
 
+/**
+ * Las mujeres del público: el modelo trae dos moños enormes, y repetidos por toda la plaza parecían pulpos.
+ * Se recogen en una melena corta: todo el pelo se aprieta contra un casquete redondo alrededor del cráneo.
+ */
+function tuckBuns(lod: THREE.Object3D) {
+  lod.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || !m.geometry.attributes.uv) return;
+    const g = m.geometry;
+    const pos = g.attributes.position as THREE.BufferAttribute, uv = g.attributes.uv as THREE.BufferAttribute, nrm = g.attributes.normal as THREE.BufferAttribute;
+    const face = new THREE.Box3();
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) if (womanPartAt(uv.getX(i), uv.getY(i)) === 6) face.expandByPoint(v.fromBufferAttribute(pos, i));
+    if (face.isEmpty()) return;
+    const c = face.getCenter(new THREE.Vector3()), sz = face.getSize(new THREE.Vector3());
+    const R = Math.max(sz.x, sz.y) * 0.6;
+    c.y += sz.y * 0.1;
+    c.z -= sz.z * 0.5;
+    for (let i = 0; i < pos.count; i++) {
+      if (womanPartAt(uv.getX(i), uv.getY(i)) !== 2) continue;
+      v.fromBufferAttribute(pos, i).sub(c);
+      const r = v.length();
+      if (r <= 0.0001) continue;
+      // Por detrás baja un poco más, hasta la nuca, como una melena
+      const lim = v.y < 0 && v.z < 0 ? R * 1.12 : R;
+      if (r > lim) {
+        nrm.setXYZ(i, v.x / r, v.y / r, v.z / r);
+        v.multiplyScalar(lim / r).add(c);
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+    }
+  });
+}
+
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
   const K = rigKind(kind);
   if (kind === 'man') stripFormal(lod);
+  else tuckBuns(lod);
   const model = lod;
   model.scale.setScalar(K.scale);
   model.position.y = -K.minY * K.scale;

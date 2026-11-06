@@ -14,6 +14,7 @@ import { Terrace } from './terrace';
 import { Camp } from './camp';
 import { makeCameraPickup, makeFuelPickup, makeTobaccoPickup } from '../entities/pickups';
 import { Laurel } from './laurel';
+import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
 import { Surf } from '../core/surfaces';
@@ -124,7 +125,7 @@ class Scatter {
     for (let i = 0; i < count; i++) this.z.push(-40 + i * spacing);
   }
 
-  reset(carZ: number, regionAt: (z: number) => Region) {
+  reset(carZ: number, regionAt: (z: number) => Region | null) {
     for (let i = 0; i < this.count; i++) {
       this.z[i] = carZ - 30 + i * this.spacing;
       this.place(i, regionAt);
@@ -132,9 +133,10 @@ class Scatter {
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
-  private place(i: number, regionAt: (z: number) => Region) {
+  private place(i: number, regionAt: (z: number) => Region | null) {
     const z = this.z[i] + (Math.random() - 0.5) * this.spacing * 0.6;
-    const on = this.region.includes(regionAt(z));
+    const r = regionAt(z);
+    const on = r !== null && this.region.includes(r);
     const side = this.bothSides ? (Math.random() < 0.5 ? -1 : 1) : 1;
     const x = side * (this.xRange[0] + Math.random() * (this.xRange[1] - this.xRange[0]));
     const sc = on ? this.scaleRange[0] + Math.random() * (this.scaleRange[1] - this.scaleRange[0]) : 0.0001;
@@ -142,7 +144,7 @@ class Scatter {
     this.mesh.setMatrixAt(i, this.m.compose(this.p.set(x, 0, z), this.q, this.s.set(sc, sc, sc)));
   }
 
-  update(carZ: number, regionAt: (z: number) => Region) {
+  update(carZ: number, regionAt: (z: number) => Region | null) {
     let dirty = false;
     for (let i = 0; i < this.count; i++) {
       if (this.z[i] < carZ - 30) {
@@ -204,6 +206,9 @@ export class Level2 implements Level {
   private legStart = 0;
   private region: Region = 'madrid';
   private logronoTown: THREE.Object3D | null = null;
+  /** Desde aquí, Logroño: sin viñas ni matas de cuneta. */
+  private townZ = Infinity;
+  private scatterAt = (z: number): Region | null => (z > this.townZ ? null : this.regionAt(z));
   private things: Thing[] = [];
   private nextSpawn = 60;
   private scatters: Scatter[] = [];
@@ -341,7 +346,7 @@ export class Level2 implements Level {
     sc.add(this.grill);
 
     this.logSign = makeSign(['LOGROÑO', 'Calle Laurel ↗'], '#7a1f3d');
-    this.logSign.position.set(6, 0, LEG1 + 40 + LEG2 + 12);
+    this.logSign.position.set(8, 0, LEG1 + 40 + LEG2 + 2);
     sc.add(this.logSign);
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
     sv.position.set(6, 0, LEG1 - 20);
@@ -624,22 +629,45 @@ export class Level2 implements Level {
     m.add(G.cone, 0x8a7a66, -31, 23, 30, 0, Math.PI / 4, 0, 5, 3, 5);
     // La plancha de El Ancla: suelo de losas, la fachada de piedra con soportales detrás, el toldo
     // de rayas azules y blancas, la barra y unas mesas
-    m.add(G.box, 0xbdb4a4, -9, 0.05, -22, 0, 0, 0, 22, 0.1, 16);
+    // (de la acera hacia dentro: antes la plataforma y la casa cruzaban la carretera)
+    m.add(G.box, 0xbdb4a4, -12.4, 0.05, -22, 0, 0, 0, 15.6, 0.1, 16);
+    m.add(G.box, 0xa89f90, -4.72, 0.08, -22, 0, 0, 0, 0.24, 0.16, 16); // bordillo
     const hd = hdSurfaces.value ? new TownHD() : null;
     if (hd) {
-      hd.wall(-20, 2, -14, -11, 10, 0xd4c8b0);
-      hd.facade(-20, 2, -14, -1, 3, true, false);
-    } else m.add(G.box, 0xb8ad97, -9, 5, -12.5, 0, 0, 0, 22, 10, 3);
-    for (let x = -18; x <= 0; x += 4.5) {
-      m.add(G.box, 0x2a2420, x + 2.25, 1.6, -13.98, 0, 0, 0, 3, 3.2, 0.1);
-      m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 14, 1, false, 0, Math.PI), 0x2a2420, x + 2.25, 3.2, -13.95, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+      hd.wall(-20, -5, -14, -11, 10, 0xd4c8b0);
+      hd.facade(-20, -5, -14, -1, 3, true, false);
+    } else m.add(G.box, 0xb8ad97, -12.5, 5, -12.5, 0, 0, 0, 15, 10, 3);
+    // Soportales de piedra: arco, jambas y dentro la luz cálida del bar, con su barra y sus botellas
+    for (let x = -18; x <= -9; x += 4.5) {
+      const cx = x + 2.25;
+      m.add(G.box, 0x6a5444, cx, 1.6, -13.97, 0, 0, 0, 3, 3.2, 0.06);
+      m.add(new THREE.CylinderGeometry(1.5, 1.5, 0.06, 18, 1, false, 0, Math.PI), 0x6a5444, cx, 3.2, -13.97, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
+      m.add(G.box, 0xe6be86, cx, 1.95, -14.02, 0, 0, 0, 2.6, 1.7, 0.03); // el fondo iluminado
+      m.add(G.box, 0x5a3e28, cx, 1.02, -14.06, 0, 0, 0, 2.7, 1.1, 0.08); // barra
+      m.add(G.box, 0x7a5a3a, cx, 2.1, -14.07, 0, 0, 0, 2.2, 0.04, 0.05);
+      for (let b = 0; b < 9; b++) m.add(G.cyl, [0x2f6b3a, 0x8a5a1c, 0x3a2418, 0xd8d0b8][b % 4], cx - 1 + b * 0.25, 2.27, -14.09, 0, 0, 0, 0.07, 0.28, 0.07);
+      for (const s of [-1, 1]) m.add(G.box, 0xe6e0d2, cx + s * 1.72, 1.6, -14.12, 0, 0, 0, 0.42, 3.2, 0.3); // jamba
+      m.add(new THREE.TorusGeometry(1.56, 0.11, 6, 18, Math.PI), 0xe6e0d2, cx, 3.2, -14.1); // el arco
     }
-    for (let k = 0; k < 11; k++) m.add(G.box, k % 2 ? 0xf4f4f0 : 0x1f5fbf, -18.9 + k * 1.8 + 0.9, 4.6, -15.2, -0.45, 0, 0, 1.8, 0.06, 3); // toldo
-    if (!hd) for (let k = 0; k < 4; k++) m.add(G.box, 0x6b4a2e, -16 + k * 4.5, 6.6, -14.2, 0, 0, 0, 2.6, 1.2, 0.8); // balcones de madera
-    m.add(G.box, 0x6b4a2e, -3, 0.55, -19, 0, 0, 0, 0.8, 1.1, 5); // barra
-    for (const [x, z] of [[-17, -24], [-14, -27], [-3, -26]]) {
-      m.add(G.box, 0x8a6a44, x, 0.75, z, 0, 0, 0, 1.4, 0.06, 1.0);
-      for (const sx of [-1, 1]) m.add(G.rbox, 0x1f5fbf, x + sx * 0.95, 0.45, z, 0, 0, 0, 0.45, 0.9, 0.45);
+    for (let k = 0; k < 8; k++) m.add(G.box, k % 2 ? 0xf4f4f0 : 0x1f5fbf, -19 + k * 1.75 + 0.87, 4.55, -15.2, -0.45, 0, 0, 1.75, 0.06, 3); // toldo
+    m.add(G.box, 0x1f43a8, -12, 3.82, -16.56, 0, 0, 0, 14, 0.42, 0.04); // faldón
+    if (!hd) for (let k = 0; k < 3; k++) m.add(G.box, 0x6b4a2e, -16 + k * 4.5, 6.6, -14.2, 0, 0, 0, 2.6, 1.2, 0.8); // balcones de madera
+    // Mesas de madera con patas de metal y sillas azules de respaldo, como las de la terraza
+    const chair = (x: number, z: number, ry: number) => {
+      const c = Math.cos(ry), sn = Math.sin(ry);
+      const part = (lx: number, y: number, lz: number, w: number, h: number, d: number, col: number) => m.add(G.box, col, x + lx * c + lz * sn, y, z - lx * sn + lz * c, 0, ry, 0, w, h, d);
+      part(0, 0.46, 0, 0.44, 0.04, 0.42, 0xb0714a);
+      for (const [dx, dz] of [[-0.2, -0.19], [0.2, -0.19], [-0.2, 0.19], [0.2, 0.19]]) part(dx, 0.23, dz, 0.03, 0.46, 0.03, 0x2a4fb0);
+      for (const dx of [-0.2, 0.2]) part(dx, 0.72, -0.2, 0.03, 0.55, 0.03, 0x2a4fb0);
+      part(0, 0.86, -0.2, 0.42, 0.18, 0.03, 0x2a4fb0);
+    };
+    for (const [x, z] of [[-17, -24], [-14, -27.5], [-6.4, -26], [-17.5, -18.5], [-6.4, -18]]) {
+      m.add(G.box, 0x9a6a3c, x, 0.76, z, 0, 0, 0, 1.3, 0.05, 0.85);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) m.add(G.box, 0xbdbdbd, x + dx * 0.59, 0.38, z + dz * 0.36, 0, 0, 0, 0.04, 0.76, 0.04);
+      chair(x - 0.85, z, Math.PI / 2);
+      chair(x + 0.85, z, -Math.PI / 2);
+      m.add(G.cyl, 0xffffff, x - 0.25, 0.79, z, 0, 0, 0, 0.22, 0.015, 0.22);
+      m.add(G.cyl, 0xe8f4f8, x + 0.3, 0.84, z - 0.1, 0, 0, 0, 0.06, 0.12, 0.06);
     }
     g.add(m.mesh());
     hd?.finish(g);
@@ -744,7 +772,7 @@ export class Level2 implements Level {
     this.nextSpawn = z + 60;
     while (this.cowIdx < COW_Z.length && COW_Z[this.cowIdx] < z + COW_BRAKE) this.cowIdx++;
     this.dropCow();
-    for (const s of this.scatters) s.reset(z, this.regionAt);
+    for (const s of this.scatters) s.reset(z, this.scatterAt);
   }
 
   private spawnRow() {
@@ -864,7 +892,14 @@ export class Level2 implements Level {
     this.roadTex.offset.y = (this.carZ + 100) / 8;
     this.sea.position.z = this.carZ;
     this.sun.follow(this.car.root.position);
-    for (const s of this.scatters) s.update(this.carZ, this.regionAt);
+    for (const s of this.scatters) s.update(this.carZ, this.scatterAt);
+    // Llegando a Logroño la niebla se abre: la ciudad se ve entera, no como un telón pálido
+    if (this.phase === 'drive2' || this.phase === 'logrono') {
+      const near = THREE.MathUtils.smoothstep(this.dist, LEG2 - 320, LEG2 - 120);
+      const fog = this.scene.fog as THREE.Fog;
+      fog.near = 60 + near * 90;
+      fog.far = 190 + near * 460;
+    }
 
     // Región: colores de cielo, suelo y niebla
     const reg = this.regionAt(this.carZ + 30);
@@ -1065,7 +1100,7 @@ export class Level2 implements Level {
     for (const sc of this.scatters) sc.mesh.visible = true;
     this.legStart = LEG1 + 40;
     this.reset(this.legStart);
-    this.buildLogrono(this.legStart + LEG2 + 60);
+    this.buildLogrono(this.legStart + LEG2 + 70);
     this.dist = 0;
     this.speed = 0;
     this.lane = 1;
@@ -1077,33 +1112,14 @@ export class Level2 implements Level {
     this.updateHud();
   }
 
-  /** Logroño al final: el Ebro con el Puente de Piedra y las dos torres barrocas de La Redonda. */
+  /** Logroño al final: el Ebro con el Puente de Piedra, el casco viejo y las dos torres barrocas de La Redonda. */
   private buildLogrono(z: number) {
     if (this.logronoTown) this.scene.remove(this.logronoTown);
-    const m = new Merger();
-    m.add(G.box, 0x4f7f8f, 0, 0.03, z, 0, 0, 0, 260, 0.05, 26); // el Ebro
-    for (let i = -6; i <= 6; i++) {
-      if (Math.abs(i) < 1) continue;
-      m.add(G.box, 0xc9b48c, i * 9, 1.8, z, 0, 0, 0, 2, 3.6, 4);
-      m.add(new THREE.CylinderGeometry(3.6, 3.6, 3.8, 18, 1, false, 0, Math.PI), 0xc9b48c, i * 9 + 4.5, 2.2, z, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
-    }
-    m.add(G.box, 0xc9b48c, 0, 4.4, z, 0, 0, 0, 120, 0.8, 9);
-    for (let i = 0; i < 18; i++) {
-      const x = -60 + i * 7 + (i % 3);
-      const h = 9 + (i * 7) % 11;
-      m.add(G.box, [0xe8dcc0, 0xd8b88a, 0xf0e6d2, 0xc89a6a][i % 4], x, h / 2, z + 26 + (i % 2) * 6, 0, 0, 0, 6, h, 8);
-      m.add(G.box, 0xa9573a, x, h + 0.3, z + 26 + (i % 2) * 6, 0, 0, 0, 6.2, 0.6, 8.2);
-    }
-    // Concatedral de Santa María de la Redonda: dos torres gemelas con chapitel
-    for (const sx of [-5, 5]) {
-      m.add(G.box, 0xd2b07a, sx + 12, 11, z + 40, 0, 0, 0, 4.4, 22, 4.4);
-      m.add(G.box, 0xc29c66, sx + 12, 23.5, z + 40, 0, 0, 0, 3.6, 3, 3.6);
-      m.add(G.cyl, 0xc29c66, sx + 12, 26.6, z + 40, 0, 0, 0, 3, 3.2, 3);
-      m.add(G.cone, 0x5a5a60, sx + 12, 30, z + 40, 0, 0, 0, 2.6, 3.6, 2.6);
-    }
-    m.add(G.box, 0xd2b07a, 12, 8, z + 46, 0, 0, 0, 14, 16, 16);
-    this.logronoTown = m.mesh();
+    this.logronoTown = buildLogronoTown(z);
     this.scene.add(this.logronoTown);
+    applyShadows(this.logronoTown);
+    this.townZ = z - 62;
+    for (const s of this.scatters) s.reset(this.carZ, this.scatterAt);
   }
 
   /** La vaca que toca, en mitad de la calzada; al acercarse, frenar y saludarla. */
@@ -1256,6 +1272,7 @@ export class Level2 implements Level {
     this.busy = true;
     this.updateHud();
     audio.chime(2);
+    // Antes de entrar, unos segundos para ver la ciudad desde el río
     later(() =>
       fadeFlash(() => {
         if (!this.laurel) {
@@ -1268,7 +1285,7 @@ export class Level2 implements Level {
         audio.stopMusic();
         audio.startMusic('jaleo');
         cinema.play([
-          { dur: Infinity, move: 7, pos: new THREE.Vector3(0.6, 2.6, -15), pos2: new THREE.Vector3(0.4, 1.9, -6), look: new THREE.Vector3(0, 1.5, 4), look2: l.mid },
+          { dur: Infinity, move: 7, pos: new THREE.Vector3(0, 2.3, -16), pos2: new THREE.Vector3(0, 1.75, -5.5), look: new THREE.Vector3(0, 1.8, 6), look2: l.mid },
           { dur: Infinity, move: 7, pos: new THREE.Vector3(-1.9, 1.5, -2.4), pos2: new THREE.Vector3(-2.3, 1.55, 1.6), look: l.mid, fov: 44, focus: l.mid },
         ]);
         later(() =>
@@ -1285,7 +1302,7 @@ export class Level2 implements Level {
           }),
         1200);
       }, 500),
-    1200);
+    3400);
   }
 
   /** En San Vicente: sentados en la terraza de El Ancla comiéndose una zamburiña. */
@@ -1456,7 +1473,11 @@ export class Level2 implements Level {
       const g = this.grill.position;
       this.camTarget.set(g.x - 0.14, 1.72, g.z - 0.72);
       this.camLook.set(g.x - 0.14, 0.94, g.z + 0.02);
-    } else if (this.phase === 'arriveSV' || this.phase === 'logrono') {
+    } else if (this.phase === 'logrono') {
+      // Se para antes del puente y la cámara sube: el Ebro, el casco viejo y las torres de La Redonda
+      this.camTarget.set(this.carX - 5, 3.4, this.carZ - 9);
+      this.camLook.set(this.carX + 3, 9, this.carZ + 100);
+    } else if (this.phase === 'arriveSV') {
       this.camTarget.set(this.carX - 6, 4, this.carZ - 7);
       this.camLook.set(this.carX + 2, 2, this.carZ + 14);
     } else {

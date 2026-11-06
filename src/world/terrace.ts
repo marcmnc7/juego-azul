@@ -28,6 +28,8 @@ function stoneWall() {
   return t;
 }
 
+const FINGER_AXIS = new THREE.Vector3(0, 0, 1);
+
 export class Terrace {
   scene = new THREE.Scene();
   private sky: Sky;
@@ -42,6 +44,16 @@ export class Terrace {
   private shine = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffcf7a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   private biteFrom = new THREE.Vector3();
   private mouth = new THREE.Vector3();
+  private grip = new THREE.Vector3();
+  private gripDir = new THREE.Vector3(0, 0, 1);
+  private handAt = new THREE.Vector3();
+  private basisX = new THREE.Vector3();
+  private basisY = new THREE.Vector3();
+  private basisM = new THREE.Matrix4();
+  private gripWorld = new THREE.Vector3();
+  private tipA = new THREE.Vector3();
+  private tipB = new THREE.Vector3();
+  private fingerQ = new THREE.Quaternion();
   private post: ((dt: number) => void) | null = null;
   private camPos = new THREE.Vector3(1.5, 1.65, -3.3);
   private camLook = new THREE.Vector3(0.8, 1.4, 1.0);
@@ -187,12 +199,28 @@ export class Terrace {
       m.add(G.box, 0x2a3f9a, x, 1.05, z - 0.18, 0, 0, 0, 0.3, 0.2, 0.02);
     }
     // Copas de vino y pan en nuestra mesa
-    for (const sx of [-1, 1]) {
-      m.add(G.cyl, 0xe8f4f8, sx * 0.32, 0.86, -0.25, 0, 0, 0, 0.06, 0.16, 0.06);
-      m.add(G.cyl, 0xe9d36a, sx * 0.32, 0.97, -0.25, 0, 0, 0, 0.14, 0.08, 0.14);
-    }
-    m.add(G.box, 0xd9a35a, 0.05, 0.82, 0.3, 0, 0.4, 0, 0.3, 0.08, 0.14);
+    // El pan, en su cestita de mimbre con servilleta
+    m.add(new THREE.CylinderGeometry(0.11, 0.085, 0.06, 14), 0x8a6238, 0.05, 0.815, 0.28);
+    m.add(new THREE.CylinderGeometry(0.1, 0.1, 0.008, 14), 0xf2efe6, 0.05, 0.846, 0.28);
+    for (const [dx, dz, ry] of [[-0.035, -0.02, 0.4], [0.04, 0.02, 1.4], [0, 0.05, 2.5]] as const) m.add(G.sphere, 0xc98f4e, 0.05 + dx, 0.868, 0.28 + dz, 0, ry, 0, 0.1, 0.05, 0.065);
     sc.add(m.mesh());
+    // Dos copas de albariño: pie y tallo finos, cáliz de cristal y el vino dentro
+    {
+      const prof = [[0.032, 0], [0.006, 0.006], [0.0045, 0.1], [0.02, 0.118], [0.034, 0.15], [0.036, 0.18], [0.033, 0.205]].map(([x, y]) => new THREE.Vector2(x, y));
+      const glassG = new THREE.LatheGeometry(prof, 18);
+      const wineG = new THREE.CylinderGeometry(0.031, 0.021, 0.055, 18);
+      const glassM = new THREE.MeshStandardMaterial({ color: 0xdfeaf0, transparent: true, opacity: 0.32, roughness: 0.08, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
+      const wineM = new THREE.MeshStandardMaterial({ color: 0xe6d680, transparent: true, opacity: 0.85, roughness: 0.2 });
+      for (const sx of [-1, 1]) {
+        const gl = new THREE.Mesh(glassG, glassM);
+        gl.position.set(sx * 0.32, 0.785, -0.25);
+        gl.userData.noCast = true;
+        const w = new THREE.Mesh(wineG, wineM);
+        w.position.set(sx * 0.32, 0.785 + 0.15, -0.25);
+        w.userData.noCast = true;
+        sc.add(gl, w);
+      }
+    }
 
     // Plato de zamburiñas
     this.plate.add(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.02, 28), toon({ color: 0xffffff })));
@@ -253,13 +281,39 @@ export class Terrace {
       const head = r.bones.get('Head')!.getWorldPosition(q);
       a.root.updateWorldMatrix(true, false);
       // Delante de la boca, en los ejes de ella
-      a.root.localToWorld(this.mouth.set(0, 0, 0));
       const fx = Math.sin(a.root.rotation.y), fz = Math.cos(a.root.rotation.y);
-      this.mouth.set(head.x + fx * 0.15, head.y - 0.06, head.z + fz * 0.15);
+      // (el hueso de la cabeza está en la base del cráneo: la boca, unos centímetros más arriba y delante)
+      this.mouth.set(head.x + fx * 0.15, head.y + 0.075, head.z + fz * 0.15);
       const k = THREE.MathUtils.smoothstep(e, 0.22, 1.02);
-      t.copy(this.biteFrom).lerp(this.mouth, k);
-      pole.set(head.x - fx * 0.1 + fz * (side === 'Right' ? -0.7 : 0.7), head.y - 0.75, head.z - fz * 0.1 - fx * (side === 'Right' ? -0.7 : 0.7));
+      // La mano llega con la punta de los dedos a la concha: la muñeca se queda unos centímetros por detrás
+      const ax = B('ForeArm').getWorldPosition(new THREE.Vector3());
+      this.grip.copy(this.biteFrom).lerp(this.mouth, k);
+      const toTarget = this.gripDir.copy(this.grip).sub(ax).normalize();
+      t.copy(this.grip).addScaledVector(toTarget, -0.14);
+      t.y += (1 - k) * 0.075; // (en el plato, la muñeca alta: los dedos bajan a la concha sin meterse en la mesa)
+      // El codo, abierto hacia fuera y por delante del cuerpo: el antebrazo no atraviesa el pecho
+      const sh = B('Arm').getWorldPosition(new THREE.Vector3());
+      const sd = side === 'Right' ? -1 : 1;
+      pole.set(sh.x + fx * 0.42 + fz * sd * 0.5, sh.y - 0.42, sh.z + fz * 0.42 - fx * sd * 0.5);
       twoBone(B('Arm'), B('ForeArm'), B('Hand'), t, pole, w);
+      // Los dedos: índice y corazón por delante, el pulgar enfrente, y anular y meñique recogidos
+      const pinch = THREE.MathUtils.smoothstep(e, 0.12, 0.3) * (1 - THREE.MathUtils.smoothstep(e, 1.5, 1.9));
+      for (const [f, ang] of [['Index', 0.22], ['Middle', 0.32], ['Ring', 0.5], ['Pinky', 0.55], ['Thumb', 0.1]] as const)
+        for (const i of [1, 2, 3]) {
+          const fb = r.bones.get(`${side}Hand${f}${i}`);
+          if (!fb) continue;
+          this.fingerQ.setFromAxisAngle(FINGER_AXIS, ang * pinch * (side === 'Right' ? 1 : -1));
+          fb.quaternion.multiply(this.fingerQ);
+        }
+      a.root.updateWorldMatrix(true, true);
+      // La concha, entre la yema del pulgar y la del índice
+      const tip = (f: string, o: THREE.Vector3) => (r.bones.get(`${side}Hand${f}4`) ?? r.bones.get(`${side}Hand${f}3`) ?? r.bones.get(`${side}Hand`)!).getWorldPosition(o);
+      tip('Thumb', this.tipA);
+      tip('Index', this.tipB);
+      this.gripWorld.copy(this.tipA).lerp(this.tipB, 0.5);
+      // Hacia dónde apuntan los dedos: la concha sale de ahí, cogida por la charnela
+      r.bones.get(`${side}Hand`)!.getWorldPosition(this.handAt);
+      this.gripDir.copy(this.gripWorld).sub(this.handAt).normalize();
     };
     rigPost.add(this.post);
   }
@@ -288,10 +342,22 @@ export class Terrace {
       const hand = this.azul.handR.getWorldPosition(new THREE.Vector3());
       // La coge al llegar la mano al plato y va con ella hasta la boca
       if (this.eatT > 0.22 && this.eatT < 1.14) {
-        // Cogida con la punta de los dedos: por delante de la mano, hacia él, no tapada por ella
-        const fx = Math.sin(this.azul.root.rotation.y), fz = Math.cos(this.azul.root.rotation.y);
-        this.bite.position.copy(this.plate.worldToLocal(hand.clone().add(new THREE.Vector3(fx * 0.075, 0.035, fz * 0.075))));
-        this.bite.rotation.set(0, 0, -0.75); // la concha, abierta hacia él: se ve lo que se come
+        // Cogida con la punta de los dedos, por la charnela (el lado estrecho), entre el pulgar y el índice;
+        // la carne hacia arriba, para que no se caiga y se vea lo que se come
+        if (this.azul.rig && this.gripWorld.lengthSq() > 0) {
+          const d = this.gripDir;
+          const at = this.gripWorld.clone().addScaledVector(d, 0.03).add(new THREE.Vector3(0, 0.004, 0));
+          at.y = Math.max(at.y, this.biteFrom.y + 0.012); // nunca por debajo de donde estaba, en el plato
+          this.bite.position.copy(this.plate.worldToLocal(at));
+          // Ejes de la concha: z hacia donde apuntan los dedos (casi plana), y hacia arriba
+          const z = this.basisY.set(d.x, Math.min(0.35, Math.max(-0.1, d.y)), d.z).normalize();
+          const x = this.basisX.set(0, 1, 0).cross(z).normalize();
+          const y = new THREE.Vector3().crossVectors(z, x);
+          this.bite.quaternion.setFromRotationMatrix(this.basisM.makeBasis(x, y, z));
+        } else {
+          this.bite.position.copy(this.plate.worldToLocal(hand.clone()));
+          this.bite.rotation.set(0, 0, -0.55);
+        }
       }
       const sm = this.shine.material;
       sm.opacity = this.bite.visible ? THREE.MathUtils.smoothstep(this.eatT, 0.3, 0.75) * (0.42 + Math.sin(this.t * 3) * 0.08) : Math.max(0, sm.opacity - dt * 3);

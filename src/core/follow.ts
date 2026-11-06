@@ -12,12 +12,18 @@ export class Trail {
   private crumbs: { x: number; z: number }[] = [];
   private stuck = 0;
   private last = { x: 0, z: 0 };
+  /** A qué ritmo va el guía (m/s, suavizado): quien sigue va casi igual de rápido. */
+  private leadSpeed = 0;
+  private leadAt: { x: number; z: number } | null = null;
+  /** La soltura con la que anda ahora (0 a 1): para la animación. */
+  pace = 0;
 
   /**
    * Avanza `root` hacia quien guía. `gap` es la distancia a la que se queda. Devuelve si se mueve.
-   * Si se ha quedado muy atrás (un corte, un salto de fase) reaparece en el rastro, detrás del guía.
+   * Va casi al paso del guía y, si se queda atrás, aprieta. Solo reaparece en el rastro tras un corte
+   * o un salto de fase (cuando el guía está tan lejos que corriendo no llegaría).
    */
-  step(root: THREE.Object3D, lead: { x: number; z: number }, gap: number, speed: number, dt: number, walls: readonly Box2[], r = 0.26) {
+  step(root: THREE.Object3D, lead: { x: number; z: number }, gap: number, speed: number, dt: number, walls: readonly Box2[], r = 0.26, limit = Infinity) {
     const pos = root.position;
     const c = this.crumbs;
     const tail = c[c.length - 1];
@@ -26,8 +32,13 @@ export class Trail {
     if (!c.length || Math.hypot(lead.x - c[c.length - 1].x, lead.z - c[c.length - 1].z) > CRUMB) c.push({ x: lead.x, z: lead.z });
 
     const dLead = Math.hypot(lead.x - pos.x, lead.z - pos.z);
-    // Demasiado lejos: se recoloca en el rastro (o, sin rastro, justo detrás)
-    if (dLead > 9) {
+    if (this.leadAt && dt > 0) {
+      const v = Math.min(12, Math.hypot(lead.x - this.leadAt.x, lead.z - this.leadAt.z) / dt);
+      this.leadSpeed += (v - this.leadSpeed) * Math.min(1, dt * 5);
+    }
+    this.leadAt = { x: lead.x, z: lead.z };
+    // Demasiado lejos (un corte, una fase nueva): se recoloca en el rastro (o, sin rastro, justo detrás)
+    if (dLead > 22) {
       const b = c.length > 4 ? c[c.length - 4] : lead;
       pos.x = b.x;
       pos.z = b.z;
@@ -37,6 +48,7 @@ export class Trail {
     }
     if (dLead <= gap) {
       this.stuck = 0;
+      this.pace = 0;
       return false;
     }
     // Borra las migas ya alcanzadas y coge la siguiente que no esté pegada
@@ -44,13 +56,16 @@ export class Trail {
     const t = c[0] ?? lead;
     const dx = t.x - pos.x, dz = t.z - pos.z;
     const d = Math.hypot(dx, dz) || 1;
-    const stepLen = Math.min(speed * dt * Math.min(1, (dLead - gap) * 1.5 + 0.3), d);
+    // Al ritmo del guía (nunca menos que el suyo propio) y, cuanto más atrás, más aprieta
+    const pace = Math.min(limit, Math.max(speed, this.leadSpeed * 0.97) + Math.max(0, dLead - gap - 1) * 0.9);
+    const stepLen = Math.min(pace * dt * Math.min(1, (dLead - gap) * 1.5 + 0.3), d);
     const want = { x: (dx / d) * stepLen, z: (dz / d) * stepLen };
     const phys = physFor(walls as Box2[]);
     const got = phys ? phys.move(this, { x: pos.x, y: 0, z: pos.z }, want.x, want.z, r) : want;
     pos.x += got.x;
     pos.z += got.z;
     const real = Math.hypot(got.x, got.z);
+    this.pace = dt > 0 ? Math.min(1, real / dt / 5.2) : 0;
     // Girar hacia donde anda de verdad, sin saltos
     if (real > 1e-3) {
       const a = Math.atan2(got.x, got.z);

@@ -110,27 +110,35 @@ export interface LoveLetterStage {
 }
 
 /**
- * Una partida de Love Letter contra Gas, con las reglas de dos jugadores. Ella empieza con la Princesa
- * y Gas juega con la cabeza en otra parte (el eclipse), así que ganar está en su mano. Si pierde,
- * revancha; a la tercera, Gas se rinde (el eclipse no espera). Se juega sobre la escena: se ve a los dos
- * en las rocas y la interfaz solo pone las cartas.
+ * Una partida de Love Letter contra Gas, con las reglas de dos jugadores: rondas hasta que alguien llegue a tres
+ * corazones. Las cartas se reparten de verdad y Gas juega con cabeza (se acuerda de lo que ha salido), aunque
+ * con media cabeza en el eclipse: si se pone por delante, se despista. Si gana él, revancha; a la segunda, se
+ * rinde (el eclipse no espera). Se juega sobre la escena: se ve a los dos en las rocas y la interfaz solo pone las cartas.
  */
+const TOKENS = 3;
 export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetterStage) {
   const o = el('div', 'princesa-screen ll');
   root.append(o);
   let rounds = 0;
+  let myTokens = 0;
+  let gasTokens = 0;
+  let lostMatches = 0;
   const T = MINIS.princesa;
+  const hearts = (n: number) => '❤️'.repeat(n) + '🤍'.repeat(Math.max(0, TOKENS - n));
   const play = () => {
     rounds++;
     o.innerHTML = '';
     stage?.reset();
     const deck: number[] = [];
-    for (const [v, n] of [[1, 5], [2, 2], [3, 2], [4, 2], [5, 2], [6, 1], [7, 1]] as const) for (let i = 0; i < n; i++) deck.push(v);
-    deck.sort(() => Math.random() - 0.5);
+    for (const [v, n] of [[1, 5], [2, 2], [3, 2], [4, 2], [5, 2], [6, 1], [7, 1], [8, 1]] as const) for (let i = 0; i < n; i++) deck.push(v);
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
     // Dos jugadores: una boca abajo fuera y tres boca arriba
     deck.pop();
     const faceUp = [deck.pop()!, deck.pop()!, deck.pop()!];
-    let me = [8];
+    let me = [deck.pop()!];
     let gas = [deck.pop()!];
     let meSafe = false;
     let gasSafe = false;
@@ -138,7 +146,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     let over = false;
 
     const top = el('div', 'll-top');
-    const title = el('div', 'll-title', `${T.title} <span>Ronda ${rounds}</span>`);
+    const title = el('div', 'll-title', `${T.title} <span>Ronda ${rounds} · Tú ${hearts(myTokens)} · Gas ${hearts(gasTokens)}</span>`);
     const gasInfo = el('div', 'll-gas');
     top.append(title, gasInfo);
     const log = el('div', 'pr-log ll-log', T.start);
@@ -209,21 +217,32 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     };
     const end = (iWin: boolean, why: string) => {
       over = true;
+      if (iWin) myTokens++;
+      else gasTokens++;
       render();
-      // A la tercera ronda perdida, Gas se rinde: ya empieza el eclipse
-      const concede = !iWin && rounds >= 3;
-      say(concede ? `${why} ${T.concede}` : why);
+      title.innerHTML = `${T.title} <span>Ronda ${rounds} · Tú ${hearts(myTokens)} · Gas ${hearts(gasTokens)}</span>`;
+      const won = myTokens >= TOKENS;
+      const lost = gasTokens >= TOKENS;
+      // Si Gas gana la partida entera, revancha; a la segunda se rinde: ya empieza el eclipse
+      const concede = lost && lostMatches >= 1;
+      say(won ? `${why} ${T.match}` : concede ? `${why} ${T.concede}` : lost ? `${why} ${T.matchGas}` : why);
       stage?.end(iWin || concede);
-      const b = el('button', 'big-btn', iWin || concede ? T.winBtn : T.again);
+      const b = el('button', 'big-btn', won || concede ? T.winBtn : lost ? T.again : T.next);
       if (iWin) {
         audio.fanfare();
         vibrate([30, 40, 60]);
       } else audio.boo();
       b.onclick = () => {
-        if (iWin || concede) {
+        if (won || concede) {
           o.remove();
           onWin(rounds);
-        } else play();
+          return;
+        }
+        if (lost) {
+          lostMatches++;
+          myTokens = gasTokens = 0;
+        }
+        play();
       };
       bottom.append(b);
     };
@@ -261,8 +280,10 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
         setTimeout(gasTurn, 1400);
       }
     };
+    /** Lo que Gas sabe de tu carta: se la vio con el Sacerdote, o te la dio con el Rey. */
+    let gasKnows: number | null = null;
     /** Aplica el efecto de una carta. Devuelve true si la partida ha terminado. */
-    const effect = (who: 'me' | 'gas', v: number, guess = 0): boolean => {
+    const effect = (who: 'me' | 'gas', v: number, guess = 0, princeAt?: 'me' | 'gas'): boolean => {
       const mine = who === 'me';
       const other = mine ? gas : me;
       const otherSafe = mine ? gasSafe : meSafe;
@@ -280,6 +301,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
           say(mine ? `Guardia: «¿${card(guess).name}?» No era.` : `Gas: «¿Tienes ${card(guess).name}?» No.`);
           return false;
         case 2:
+          if (!mine) gasKnows = me[0];
           say(mine ? `Sacerdote: Gas tiene ${card(other[0]).name} ${card(other[0]).icon}.` : MINIS.princesa.gasPeeks);
           return false;
         case 3: {
@@ -299,8 +321,10 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
           say(`${nm}: Doncella. ${mine ? 'Estás' : 'Está'} a salvo una ronda.`);
           return false;
         case 5: {
-          // El Príncipe: ella lo apunta a Gas si puede; Gas siempre a sí mismo
-          const target = mine ? (gasSafe ? me : gas) : gas;
+          // El Príncipe: ella elige a quién; si el otro tiene la Doncella, a sí mismo por fuerza
+          const at = princeAt ?? (mine ? 'gas' : 'me');
+          const target = at === 'me' ? (meSafe && !mine ? gas : me) : gasSafe && mine ? me : gas;
+          if (target === me) gasKnows = null;
           const lost = target.pop()!;
           (target === me ? discards.me : discards.gas).push(lost);
           if (lost === 8) {
@@ -317,6 +341,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
           const t = me[0];
           me[0] = gas[0];
           gas[0] = t;
+          gasKnows = me[0]; // sabe lo que tienes: su carta de antes
           say(`Rey: os cambiáis las cartas. Ahora tienes ${card(me[0]).name}.`);
           return false;
         }
@@ -350,25 +375,58 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
         o.append(pick);
         return;
       }
+      if (v === 5 && !gasSafe) {
+        // A quién: si tu otra carta es buena, a Gas; si no, puede convenirte descartarla a ti
+        render();
+        const pick = el('div', 'pr-guess');
+        pick.append(el('div', '', T.princeWho));
+        for (const [who, label] of [['gas', T.princeGas], ['me', T.princeMe]] as const) {
+          const b = el('button', 'll-guess');
+          b.append(el('span', '', label));
+          b.onclick = () => {
+            pick.remove();
+            if (!effect('me', 5, 0, who)) afterTurn('gas');
+            else render();
+          };
+          pick.append(b);
+        }
+        o.append(pick);
+        return;
+      }
       if (!effect('me', v)) afterTurn('gas');
       else render();
     };
     const gasTurn = () => {
       if (over) return;
-      // Gas, con la cabeza en el eclipse: nunca juega el Rey ni el Príncipe contra ella
+      // Gas juega con cabeza, salvo cuando va ganando: entonces se despista mirando el cielo
+      const distracted = gasTokens > myTokens || gasTokens === TOKENS - 1;
       const [a, b] = gas;
       let idx: number;
       if (gas.includes(7) && (gas.includes(5) || gas.includes(6))) idx = gas.indexOf(7);
+      else if (gas.includes(8)) idx = gas.indexOf(8) === 0 ? 1 : 0; // la Princesa no se suelta
+      else if (gasKnows !== null && !meSafe && gas.includes(1) && gasKnows !== 1 && !distracted) idx = gas.indexOf(1); // sabe qué tienes: Guardia
+      else if (gasKnows !== null && !meSafe && gas.includes(3) && Math.max(a, b) > gasKnows && !distracted) idx = gas.indexOf(3); // gana en la comparación
+      else if (distracted && Math.random() < 0.5) idx = Math.random() < 0.5 ? 0 : 1;
       else {
-        const rank = (v: number) => (v === 6 ? 9 : v === 3 ? 8 : v === 8 ? 10 : v);
+        // La más baja, guardando las fuertes; el Rey y el Barón, con cuidado
+        const rank = (v: number) => (v === 6 ? 6.5 : v === 3 ? (Math.max(a, b) >= 6 ? 1.5 : 7.5) : v === 7 ? 9 : v);
         idx = rank(a) <= rank(b) ? 0 : 1;
       }
       const v = gas.splice(idx, 1)[0];
       discards.gas.push(v);
       stage?.play('gas', v);
-      const guesses = [2, 3, 4, 5, 6, 7].filter((g) => g !== me[0]);
-      const guess = guesses[Math.floor(Math.random() * guesses.length)];
-      if (!effect('gas', v, guess)) afterTurn('me');
+      // Adivina con lo que aún no ha salido; si te vio la carta, va a por ella
+      const seen = [...faceUp, ...discards.me, ...discards.gas, ...gas];
+      const left: number[] = [];
+      for (const [cv, n] of [[2, 2], [3, 2], [4, 2], [5, 2], [6, 1], [7, 1], [8, 1]] as const) {
+        const out = seen.filter((x) => x === cv).length;
+        for (let i = out; i < n; i++) left.push(cv);
+      }
+      const known = gasKnows !== null && gasKnows !== 1 && !distracted ? gasKnows : null;
+      const guess = known ?? (left.length ? left[Math.floor(Math.random() * left.length)] : 2);
+      // El Príncipe: si sabe que tienes la Princesa, a ti; si no, según tenga buena carta
+      const princeAt: 'me' | 'gas' = v === 5 && !meSafe && (gasKnows === 8 || gas[0] >= 5) ? 'me' : 'gas';
+      if (!effect('gas', v, guess, princeAt)) afterTurn('me');
       else render();
     };
     // Empieza ella

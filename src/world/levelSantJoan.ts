@@ -18,6 +18,12 @@ import type { Door } from './door';
 import { CHATS } from '../data/chats';
 import { canvasTex, mergedPlanes } from './deco';
 import type { Box2 } from './ferreries';
+import { makeTaxi, TaxiRide } from './camiFarola';
+import { limpPose } from '../entities/limp';
+import { rigPost } from '../entities/rig';
+import { twoBone } from '../entities/embrace';
+import { CarRig } from '../entities/models';
+import { cinema } from '../core/cinema';
 import { buildSurroundings, collidersBox } from './surround';
 import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
@@ -37,7 +43,7 @@ const LA_NOCHE = {
 // de Azul: a dormir, los dos y un par de amigas de ella.
 // Todos los chats son trozos literales.
 
-type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'be' | 'home' | 'ending' | 'done';
+type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
 
 // Plano (metros): el Born en el origen; hacia el este, el Carrer Major des Born con la Catedral, Ses Voltes
 // y, al final, la Plaça Nova y la Plaça Espanya
@@ -57,6 +63,10 @@ const BE_BOX: Box2 = { minX: BE.x - 15, maxX: BE.x + 15, minZ: BE.z - 11, maxZ: 
 const BE_HORSES = 3;
 const BE_R = 4.4;
 const BE_NEED = 3;
+/** El taxi, en la Plaça Espanya, junto a las casas del norte. */
+const TAXI = new THREE.Vector3(77, 0, 10.9); // (junto a la fachada, entre dos árboles: la puerta queda libre)
+/** Cuánto dura el empujón a un caballo (s). */
+const PUSH = 1.05;
 const STREET_HORSES = 2;
 const REACH = 6;
 const AISLES: [number, number][] = [[19, 0], [2, 14.5], [-19, -6.5], [-19, 7]];
@@ -79,6 +89,8 @@ interface Horse {
   angle: number;
   warnT: number;
   rearT: number;
+  /** El empujón que le dan al pecho: sube más y da un bote. */
+  boostT?: number;
   nextRear: number;
   walk: number;
   /** Velocidad con signo (calle) o angular (Born): cambia poco a poco, un caballo pesa 500 kg. */
@@ -124,7 +136,14 @@ export class LevelSantJoan implements Level {
   private gasTrail = new Trail();
   private beTouched = 0;
   /** El final del día, en casa de Azul. */
-  private home: { scene: THREE.Scene; sky: Sky; sun: Sun; colliders: Box2[]; doors: Door[]; pals: { p: Person; trail: Trail; lead: () => THREE.Vector3; gap: number }[]; who: THREE.Vector3[]; marker: THREE.Object3D } | null = null;
+  private home: { scene: THREE.Scene; sky: Sky; sun: Sun; colliders: Box2[]; doors: Door[]; pals: { p: Person; trail: Trail; lead: () => THREE.Vector3; gap: number }[]; who: THREE.Vector3[]; marker: THREE.Object3D; taxi: ReturnType<typeof makeTaxi>; rig: CarRig; taxiT: number; outT: number; homeLine?: boolean } | null = null;
+  private ride: TaxiRide | null = null;
+  /** Las dos amigas, esperando junto al taxi. */
+  private nightPals: Person[] = [];
+  private pushT = 0;
+  private pushHorse: Horse | null = null;
+  private pushGas = false;
+  private pushPost: (() => void) | null = null;
   private phase: Phase = 'intro';
   private player: Person;
   private walker: Walker;
@@ -245,7 +264,7 @@ export class LevelSantJoan implements Level {
   }
 
   get threeScene() {
-    return this.home ? this.home.scene : this.scene;
+    return this.home ? this.home.scene : this.ride ? this.ride.scene : this.scene;
   }
 
   // ---------------- Ciutadella ----------------
@@ -520,6 +539,7 @@ export class LevelSantJoan implements Level {
           pm.add(fg, fc[i % fc.length], x0 + (x1 - x0) * k, 7 - Math.sin(k * Math.PI) * 1.4, BE.z + dz, 0, Math.PI / 2, 0, 1, 1, 0.15);
         }
       sc.add(pm.mesh());
+      this.buildBeStatue(sc);
       this.sign('Sa Plaça d’es Bè', x0 + 0.05, 3.12, 4.6, Math.PI / 2, 3.6);
       this.sign('A Sa Plaça d’es Bè →', ESPANYA.maxX - 0.05, 3.12, 5, -Math.PI / 2, 3.2);
       const pl = new THREE.PointLight(0xffb070, 16, 24, 1.6);
@@ -560,12 +580,74 @@ export class LevelSantJoan implements Level {
     this.hd?.finish(sc);
   }
 
+  /**
+   * El Bè, en medio de la plaza: la columna blanca, gastada abajo, con su placa de bronce y, en lo alto, el
+   * cordero de bronce con la bandera.
+   */
+  private buildBeStatue(sc: THREE.Scene) {
+    const H = 4.1, R0 = 0.215;
+    const col = new Merger();
+    col.add(new THREE.CylinderGeometry(R0 - 0.01, R0, H, 28), 0xeee9dd, 0, H / 2, 0);
+    // Los desconchones de abajo y un zócalo apenas marcado
+    col.add(new THREE.CylinderGeometry(R0 + 0.004, R0 + 0.006, 0.24, 28), 0xc9c1ae, 0, 0.12, 0);
+    for (let i = 0; i < 9; i++) col.add(G.box, i % 2 ? 0x9a927f : 0xb5ad99, Math.cos(i * 1.9) * R0, 0.1 + (i % 4) * 0.07, Math.sin(i * 1.9) * R0, 0, -i * 1.9, 0, 0.012, 0.05 + (i % 3) * 0.03, 0.07);
+    col.add(new THREE.CylinderGeometry(0.3, 0.27, 0.05, 28), 0xc9c1ae, 0, 0.025, 0);
+    // Placa de bronce, mirando a quien entra en la plaza
+    col.add(G.box, 0x2c2f2c, -R0 - 0.012, 2.3, 0, 0, 0, 0, 0.02, 0.28, 0.4);
+    col.add(G.box, 0x4a4c44, -R0 - 0.024, 2.3, 0, 0, 0, 0, 0.008, 0.2, 0.32);
+    const cm = col.mesh();
+    cm.position.set(BE.x, 0, BE.z);
+    sc.add(cm);
+
+    const B = 0x2e3230, B2 = 0x3c403a;
+    const r = new Merger(false);
+    r.add(new THREE.CylinderGeometry(0.29, 0.27, 0.07, 24), B, 0, 0.035, 0);
+    // Cuerpo: una masa de vellones pequeños sobre un tonel, como un cordero de bronce de verdad
+    r.add(G.sphere, B, 0, 0.5, 0, 0, 0, 0, 0.42, 0.4, 0.74);
+    for (let i = 0; i < 70; i++) {
+      const a = i * 2.399, py = 1 - ((i + 0.5) / 70) * 1.55, rr = Math.sqrt(Math.max(0, 1 - py * py));
+      const s = 0.085 + (i % 3) * 0.012;
+      r.add(G.sphere, i % 3 ? B : B2, Math.cos(a) * rr * 0.205, 0.5 + py * 0.195, Math.sin(a) * rr * 0.36, 0, i, 0, s, s * 0.9, s);
+    }
+    // Cuello, cabeza alargada con su hocico, orejas y cuernos enroscados
+    r.add(G.capsule, B, 0, 0.72, 0.36, 0.65, 0, 0, 0.17, 0.12, 0.17);
+    r.add(G.sphere, B, 0, 0.92, 0.5, 0.25, 0, 0, 0.17, 0.19, 0.27);
+    r.add(G.sphere, B2, 0, 0.87, 0.63, 0.25, 0, 0, 0.1, 0.1, 0.13);
+    for (let i = 0; i < 9; i++) r.add(G.sphere, B2, Math.cos(i * 2.4) * 0.05, 1.0 + (i % 2) * 0.012, 0.46 + Math.sin(i * 2.4) * 0.05, 0, 0, 0, 0.055, 0.05, 0.055);
+    for (const s of [-1, 1]) {
+      r.add(new THREE.TorusGeometry(0.05, 0.017, 7, 16), B2, s * 0.105, 0.95, 0.44, 0, Math.PI / 2, 0);
+      r.add(G.sphere, B, s * 0.125, 0.93, 0.52, 0, 0, s * 0.7, 0.085, 0.03, 0.045);
+    }
+    // Patas: tres apoyadas en el disco, con su pezuña, y la mano delantera levantada, sujetando el asta
+    for (const [x, z] of [[-0.11, -0.25], [0.11, -0.25], [0.11, 0.24]] as const) {
+      r.add(G.cyl, B, x, 0.2, z, 0, 0, 0, 0.06, 0.34, 0.06);
+      r.add(G.cyl, B2, x, 0.09, z, 0, 0, 0, 0.075, 0.05, 0.075);
+    }
+    r.add(G.cyl, B, -0.13, 0.42, 0.37, 1.05, 0, 0, 0.055, 0.28, 0.055);
+    r.add(G.sphere, B, 0, 0.56, -0.4, 0, 0, 0, 0.09, 0.12, 0.1); // rabo
+    // El asta, inclinada, con la bandera grande cayendo hacia atrás
+    r.add(G.cyl, 0x1e201e, -0.16, 0.68, 0.46, 0.08, 0, 0.02, 0.022, 1.36, 0.022);
+    r.add(G.sphere, B2, -0.14, 1.37, 0.51, 0, 0, 0, 0.05, 0.05, 0.05);
+    const fl = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(-0.14, 0.04), new THREE.Vector2(-0.46, -0.18), new THREE.Vector2(-0.78, -0.62), new THREE.Vector2(-0.46, -0.58), new THREE.Vector2(-0.3, -0.72), new THREE.Vector2(-0.04, -0.5)]);
+    r.add(new THREE.ExtrudeGeometry(fl, { depth: 0.012, bevelEnabled: false }).translate(0, 0, -0.006), 0x262a28, -0.14, 1.33, 0.5, 0, Math.PI / 2 + 0.25, 0);
+    const rm = r.mesh();
+    // Mira hacia la calle por donde se entra
+    rm.position.set(BE.x, H, BE.z);
+    rm.rotation.y = -Math.PI / 2;
+    sc.add(rm);
+    this.colliders.push({ minX: BE.x - 0.3, maxX: BE.x + 0.3, minZ: BE.z - 0.3, maxZ: BE.z + 0.3, round: true });
+    // Una luz que la saca de la penumbra
+    const l = new THREE.PointLight(0xfff0d8, 8, 8, 1.6);
+    l.position.set(BE.x - 2.2, 3.4, BE.z);
+    sc.add(l);
+  }
+
   /** El jaleo: gente alrededor del círculo de los caballos y algo en Ses Voltes y la Plaça Espanya. */
   private buildCrowd() {
     const pts: { x: number; z: number }[] = [];
     // Ni encima de otro ni dentro de nada: ni columnas de Ses Voltes, ni bancos, ni árboles
     const clear = (x: number, z: number) => !this.colliders.some((b) => !b.round && x > b.minX - 0.42 && x < b.maxX + 0.42 && z > b.minZ - 0.42 && z < b.maxZ + 0.42);
-    const ok = (x: number, z: number) => clear(x, z) && !pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.95) && !PINS.some((p) => Math.hypot(p.x - x, p.z - z) < 2.5);
+    const ok = (x: number, z: number) => clear(x, z) && !pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.95) && !PINS.some((p) => Math.hypot(p.x - x, p.z - z) < 2.5) && Math.hypot(x - TAXI.x, z - TAXI.z) > 5.2;
     for (let i = 0; i < 9000 && pts.length < 170; i++) {
       const x = BORN.minX + 1 + Math.random() * (BORN.maxX - BORN.minX - 2);
       const z = BORN.minZ + 1 + Math.random() * (BORN.maxZ - BORN.minZ - 2);
@@ -750,8 +832,10 @@ export class LevelSantJoan implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
+    h.setCounters(this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
     if (this.phase === 'be') h.setObjective(this.beIn ? SANTJOAN.beGo : SANTJOAN.beHint);
+    else if (this.phase === 'taxi') h.setObjective(SANTJOAN.taxiHint);
+    else if (this.phase === 'ride') h.setObjective('');
     else if (this.phase === 'home') h.setObjective(SANTJOAN.homeHint);
     else if (this.phase === 'hunt') h.setObjective(SANTJOAN.huntHint);
     else if (this.phase === 'exact') h.setObjective(SANTJOAN.exactHint);
@@ -765,6 +849,7 @@ export class LevelSantJoan implements Level {
     if (this.phase === 'coming') return this.gas.root.position;
     if (this.phase === 'exact') return this.v2.set(0, 0, 0);
     if (this.phase === 'be' && !this.beIn) return BE;
+    if (this.phase === 'taxi') return this.v2.set(TAXI.x + 0.3, 0, TAXI.z - 1.55);
     return null;
   }
 
@@ -772,6 +857,13 @@ export class LevelSantJoan implements Level {
     this.t += dt;
     if (this.home) {
       this.updateHome(dt);
+      return;
+    }
+    if (this.ride) {
+      if (this.ride.update(dt, this.camera) && !this.busy) {
+        this.busy = true;
+        this.startHome();
+      }
       return;
     }
     this.fx.update(dt);
@@ -794,17 +886,31 @@ export class LevelSantJoan implements Level {
     const rearNear = this.updateHorses(dt);
 
     // Azul
-    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'be');
+    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'be' || this.phase === 'taxi');
     this.walker.turn(this.input.consumeCam());
-    this.walker.canJump = walking;
-    const mag = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
+    this.walker.canJump = walking && this.phase !== 'taxi';
+    if (this.phase === 'taxi') {
+      // A su paso: si se queda atrás, ella le espera
+      const lag = Math.hypot(this.gas.root.position.x - pp.x, this.gas.root.position.z - pp.z);
+      this.walker.speed = lag > 3.2 ? 0.9 : 1.9;
+    }
+    const pushing = this.pushT > 0;
+    const mag = this.walker.move(dt, walking && !pushing ? this.input.axes() : { x: 0, y: 0 }, this.colliders, this.bounds, this.people);
+    if (pushing) this.stepPush(dt);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     // La explanada del obelisco está un escalón más alta que la calle
     for (const q of [this.player, this.gas]) q.root.position.y = bornHeight(q.root.position.x, q.root.position.z) + (q === this.player ? this.walker.hop : 0);
     this.player.root.rotation.y = this.walker.facing;
     if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.player, dt, 'idle');
     else if (this.phase === 'meet') animatePerson(this.player, dt, 'talk');
-    else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+    else animatePerson(this.player, dt, !pushing && mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+
+    // Las amigas, junto al taxi, haciendo señas hasta que llegáis
+    for (const [i, f] of this.nightPals.entries()) {
+      const near = Math.hypot(pp.x - f.root.position.x, pp.z - f.root.position.z) < 6;
+      animatePerson(f, dt, near ? 'talk' : i ? 'idle' : 'wave');
+      f.root.rotation.y = Math.atan2(pp.x - f.root.position.x, pp.z - f.root.position.z);
+    }
 
     // Gas
     if (this.gas.root.visible) {
@@ -824,8 +930,18 @@ export class LevelSantJoan implements Level {
           this.updateHud();
           audio.cheer(0.4);
         }
-        const moving = this.gasTrail.step(this.gas.root, pp, 1.6, 4.2, dt, this.colliders, 0.26);
-        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+        if (this.pushT > 0 && this.pushGas) animatePerson(this.gas, dt, 'idle');
+        else {
+          const moving = this.gasTrail.step(this.gas.root, pp, 1.6, 4.2, dt, this.colliders, 0.26);
+          animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+        }
+      } else if (this.phase === 'taxi') {
+        // Cojísimo: al apoyar el pie malo casi no avanza
+        const ph = this.gas.auto?.ph ?? 0;
+        const limit = 1.05 + 1.25 * Math.max(0, Math.sin(ph));
+        const moving = this.gasTrail.step(this.gas.root, pp, 1.25, 1.7, dt, this.colliders, 0.26, limit);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.3);
+        limpPose(this.gas, moving);
       } else if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.gas, dt, 'idle');
       else animatePerson(this.gas, dt, 'talk');
     }
@@ -857,9 +973,12 @@ export class LevelSantJoan implements Level {
     // Acción contextual
     let label: string | null = null;
     let action: (() => void) | null = null;
-    if (walking && rearNear) {
+    if (walking && rearNear && !pushing) {
       label = SANTJOAN.hints.rear;
       action = () => this.touchHorse(rearNear);
+    } else if (!this.busy && this.phase === 'taxi' && Math.hypot(pp.x - TAXI.x, pp.z - (TAXI.z - 1.55)) < 2.1) {
+      label = SANTJOAN.taxiBtn;
+      action = () => this.boardTaxi();
     } else if (!this.busy && this.phase === 'exact') {
       label = '📷 Foto exacta';
       action = () => this.takePhoto();
@@ -903,9 +1022,17 @@ export class LevelSantJoan implements Level {
       const dist = r.position.distanceTo(pp);
       if (s.rearT > 0) {
         const before = s.rearT;
+        // Con el empujón aguanta más arriba, y sube otro poco y da un bote
+        let b = 0;
+        if ((s.boostT ?? 0) > 0) {
+          s.boostT! -= dt;
+          b = Math.sin(Math.max(0, 1 - s.boostT! / PUSH) * Math.PI);
+          s.rearT += dt * 0.72;
+        }
         s.rearT -= dt;
         const k = Math.sin(Math.min(1, 1 - s.rearT / REAR) * Math.PI);
-        s.d.pivot.rotation.x = -k * 0.85;
+        s.d.pivot.rotation.x = -k * 0.85 - b * 0.16;
+        s.d.pivot.position.y = b * 0.34;
         s.d.legs[0].rotation.x = s.d.legs[1].rotation.x = -k * 1.2 + Math.sin(this.t * 16) * 0.35 * k;
         s.d.head.rotation.x = -k * 0.4;
         if (before > 0.3 && s.rearT <= 0.3) {
@@ -915,6 +1042,8 @@ export class LevelSantJoan implements Level {
         }
         if (s.rearT <= 0) {
           s.d.pivot.rotation.x = 0;
+          s.d.pivot.position.y = 0;
+          s.boostT = 0;
           s.nextRear = s.plaza ? 0.8 + Math.random() * 1.6 : 3 + Math.random() * 4;
           s.touched = false;
         }
@@ -989,10 +1118,76 @@ export class LevelSantJoan implements Level {
     return near;
   }
 
+  /** El pecho del caballo, en el mundo: a donde van las manos. */
+  private chest(s: Horse, side: number, out: THREE.Vector3) {
+    s.d.pivot.updateWorldMatrix(true, false);
+    return s.d.pivot.localToWorld(out.set(side * 0.17, 1.3, 1.75));
+  }
+
+  /** Se acerca y empuja con las dos manos: cada fotograma, después de la animación, las manos al pecho del caballo. */
+  private startPush(s: Horse) {
+    this.pushT = PUSH;
+    this.pushHorse = s;
+    s.boostT = PUSH;
+    const gd = this.gas.root.visible ? this.gas.root.position.distanceTo(s.d.root.position) : 99;
+    this.pushGas = this.phase === 'be' && gd < 5;
+    if (this.pushPost) rigPost.delete(this.pushPost);
+    const t = new THREE.Vector3(), pole = new THREE.Vector3(), hip = new THREE.Vector3();
+    this.pushPost = () => {
+      const h = this.pushHorse;
+      if (!h || this.pushT <= 0) return;
+      const e = PUSH - this.pushT;
+      const w = THREE.MathUtils.smoothstep(e, 0, 0.16) * THREE.MathUtils.smoothstep(this.pushT, 0, 0.22);
+      for (const p of this.pushGas ? [this.player, this.gas] : [this.player]) {
+        const r = p.rig;
+        if (!r) continue;
+        const off = p === this.gas ? 0.5 : -0.1;
+        for (const [side, sg] of [['Left', 1], ['Right', -1]] as const) {
+          this.chest(h, off + sg * 0.85, t);
+          // Las manos no llegan más arriba de donde da el brazo: empujan hacia allí
+          const shoulder = r.bones.get(side + 'Arm')!.getWorldPosition(hip);
+          pole.set(shoulder.x, shoulder.y - 0.6, shoulder.z);
+          twoBone(r.bones.get(side + 'Arm')!, r.bones.get(side + 'ForeArm')!, r.bones.get(side + 'Hand')!, t, pole, w);
+        }
+      }
+    };
+    rigPost.add(this.pushPost);
+  }
+
+  private stepPush(dt: number) {
+    this.pushT -= dt;
+    const h = this.pushHorse;
+    if (!h) return;
+    const pp = this.player.root.position, c = h.d.root.position;
+    const place = (p: THREE.Vector3, sx: number, r: THREE.Object3D, setFacing: boolean) => {
+      this.chest(h, 0, this.v1);
+      // Delante del pecho, a un brazo; un poco a un lado para no ponerse uno encima del otro
+      const fx = Math.sin(h.d.root.rotation.y), fz = Math.cos(h.d.root.rotation.y);
+      const wantX = c.x + fx * 1.75 + fz * sx, wantZ = c.z + fz * 1.75 - fx * sx;
+      const dx = wantX - p.x, dz = wantZ - p.z, d = Math.hypot(dx, dz);
+      const st = Math.min(d, 3.4 * dt);
+      if (d > 0.02) {
+        p.x += (dx / d) * st;
+        p.z += (dz / d) * st;
+      }
+      const yaw = Math.atan2(this.v1.x - p.x, this.v1.z - p.z);
+      if (setFacing) this.walker.facing = yaw;
+      else r.rotation.y = yaw;
+    };
+    place(pp, -0.24, this.player.root, true);
+    if (this.pushGas) place(this.gas.root.position, 0.62, this.gas.root, false);
+    if (this.pushT <= 0) {
+      this.pushHorse = null;
+      if (this.pushPost) rigPost.delete(this.pushPost);
+      this.pushPost = null;
+    }
+  }
+
   private touchHorse(s: Horse) {
     const k = Math.sin(Math.min(1, 1 - s.rearT / REAR) * Math.PI);
     s.touched = true;
     this.luck++;
+    this.startPush(s);
     const at = this.v1.copy(s.d.root.position).setY(2.4);
     if (k > 0.85) {
       audio.perfect();
@@ -1011,7 +1206,7 @@ export class LevelSantJoan implements Level {
         this.input.reset();
         this.walker.stop();
         this.hud.setAction(null);
-        later(() => dialogue(SANTJOAN.beDone, () => this.startHome()), 900);
+        later(() => dialogue(SANTJOAN.beDone, () => this.startTaxi()), 1200);
       }
     }
     this.updateHud();
@@ -1048,9 +1243,108 @@ export class LevelSantJoan implements Level {
     this.updateHud();
   }
 
+  /** La misma plaza, ya de noche: fuera los caballos, luces de farola y estrellas. */
+  private goNight() {
+    const sc = this.scene;
+    this.sky.group.removeFromParent();
+    this.sky = new Sky({ top: 0x02030f, mid: 0x0b1440, bottom: 0x1d2350, stars: 1400 });
+    sc.add(this.sky.group);
+    const fog = sc.fog as THREE.Fog;
+    fog.color.set(0x0d1430);
+    fog.near = 26;
+    fog.far = 165;
+    sc.traverse((o) => {
+      const h = o as THREE.HemisphereLight;
+      if (h.isHemisphereLight) {
+        h.color.set(0x8090c8);
+        h.groundColor.set(0x241f2a);
+        h.intensity = 0.42;
+      }
+      const pl = o as THREE.PointLight;
+      if (pl.isPointLight) pl.intensity *= 1.2;
+    });
+    this.sun.light.color.set(0xa9bcff);
+    this.sun.light.intensity = 0.55;
+    sc.environmentIntensity = 0.14;
+    for (const h of this.horses) {
+      h.d.root.visible = false;
+      h.alert.visible = false;
+    }
+    // Y en la calle por donde se llega al taxi, otras dos farolas encendidas
+    for (const [x, z] of [[92, 0], [78, 5]] as const) {
+      const l = new THREE.PointLight(0xffb070, 9, 18, 1.6);
+      l.position.set(x, 5, z);
+      sc.add(l);
+    }
+  }
+
+  /** Ya de noche, a coger un taxi: Gas va cojísimo y sus dos amigas esperan junto al coche. */
+  private startTaxi() {
+    fadeFlash(() => {
+      this.goNight();
+      const sc = this.scene;
+      const taxi = makeTaxi();
+      taxi.azul.visible = false;
+      taxi.root.position.copy(TAXI);
+      taxi.root.rotation.y = -Math.PI / 2;
+      sc.add(taxi.root);
+      new CarRig(taxi).update(0.016, 0);
+      this.colliders.push({ minX: TAXI.x - 2.25, maxX: TAXI.x + 2.25, minZ: TAXI.z - 1, maxZ: TAXI.z + 1, low: true });
+      const f1 = makePerson({ skin: 0xf3d2b6, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x7a4a26, hairStyle: 'long', shorts: true });
+      const f2 = makePerson({ skin: 0xe2b08c, shirt: 0xffffff, pants: 0x6f8fb8, hair: 0x2b1d14, hairStyle: 'pony', shorts: true });
+      f1.root.position.set(TAXI.x - 1.3, 0, TAXI.z - 1.6);
+      f2.root.position.set(TAXI.x - 2.1, 0, TAXI.z - 2.2);
+      sc.add(f1.root, f2.root);
+      this.nightPals = [f1, f2];
+      this.phase = 'taxi';
+      this.busy = true;
+      this.gasTrail = new Trail();
+      const pp = this.player.root.position;
+      this.gas.root.position.set(pp.x + 1.1, 0, pp.z + 0.7);
+      this.walker.stop();
+      this.walker.speed = 1.9;
+      this.input.reset();
+      this.updateHud();
+      audio.stopMusic();
+      audio.startMusic('night');
+      dialogue(SANTJOAN.taxiNight, () => {
+        this.busy = false;
+      });
+    }, 800);
+  }
+
+  /** Suben al taxi: hablan un segundo con las amigas y arranca. */
+  private boardTaxi() {
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    dialogue(SANTJOAN.taxiPals, () => {
+      audio.pop();
+      fadeFlash(() => {
+        // Del todo fuera de la plaza: los que quedan se van a la escena de casa
+        this.walker.speed = 5.2;
+        this.ride = new TaxiRide();
+        this.phase = 'ride';
+        this.updateHud();
+        this.ride.start();
+        later(() => {
+          if (this.phase === 'ride') dialogue(SANTJOAN.ride, () => {});
+        }, 900);
+        this.busy = false;
+      }, 700);
+    });
+  }
+
   /** De madrugada, a casa de Azul: ella, Gas y dos amigas, por la cancela hasta la puerta. A dormir. */
   private startHome() {
     fadeFlash(() => {
+      cinema.stop();
+      document.querySelectorAll('.dialogue').forEach((e) => e.remove());
+      if (this.ride) disposeScene(this.ride.scene);
+      this.ride = null;
       const sc = new THREE.Scene();
       sc.fog = new THREE.Fog(0x0d1430, 30, 170);
       const sky = new Sky({ top: 0x02030f, mid: 0x0b1440, bottom: 0x1d2350, stars: 1400 });
@@ -1066,14 +1360,29 @@ export class LevelSantJoan implements Level {
       for (const sx of [-1, 1]) colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: 10.1, maxZ: 10.5 });
       sc.add(this.player.root, this.gas.root);
       const pp = this.player.root.position;
-      pp.set(0.3, 0, STREET_Z);
+      // Todos dentro del taxi, que llega por la calle: se bajan al parar
+      pp.set(1.5, -0.45, STREET_Z);
       this.walker.stop();
+      this.walker.speed = 2.6;
       this.walker.yaw = this.walker.facing = Math.PI;
-      this.gas.root.position.set(1.4, 0, STREET_Z + 0.8);
+      this.player.root.visible = false;
+      this.gas.root.position.set(1.5, -0.45, STREET_Z);
+      this.gas.root.visible = false;
+      const taxi = makeTaxi();
+      taxi.azul.visible = true;
+      taxi.root.rotation.y = -Math.PI / 2;
+      taxi.root.position.set(36, 0, STREET_Z + 0.6);
+      sc.add(taxi.root);
+      const head = new THREE.SpotLight(0xfff0d0, 50, 30, 0.55, 0.7, 1.2);
+      head.position.set(0, 0.85, 2);
+      head.target.position.set(0, 0, 14);
+      taxi.root.add(head, head.target);
       const f1 = makePerson({ skin: 0xf3d2b6, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x7a4a26, hairStyle: 'long', shorts: true });
       const f2 = makePerson({ skin: 0xe2b08c, shirt: 0xffffff, pants: 0x6f8fb8, hair: 0x2b1d14, hairStyle: 'pony', shorts: true });
-      f1.root.position.set(-0.6, 0, STREET_Z + 1.2);
-      f2.root.position.set(0.6, 0, STREET_Z + 2);
+      for (const f of [f1, f2]) {
+        f.root.position.set(1.5, -0.45, STREET_Z);
+        f.root.visible = false;
+      }
       sc.add(f1.root, f2.root);
       const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({ color: 0xffd23f, fog: false }));
       marker.position.set(DOOR.x, 2.6, DOOR.z + 0.7);
@@ -1081,7 +1390,7 @@ export class LevelSantJoan implements Level {
       const gr = this.gas.root.position;
       const f1r = f1.root.position;
       this.home = {
-        scene: sc, sky, sun, colliders, doors: [place.gate, place.door], who: [], marker,
+        scene: sc, sky, sun, colliders, doors: [place.gate, place.door], who: [], marker, taxi, rig: new CarRig(taxi), taxiT: 0, outT: -1,
         pals: [
           { p: this.gas, trail: new Trail(), lead: () => pp, gap: 1.5 },
           { p: f1, trail: new Trail(), lead: () => gr, gap: 1.4 },
@@ -1089,16 +1398,62 @@ export class LevelSantJoan implements Level {
         ],
       };
       applyShadows(sc);
-      this.camera.position.set(pp.x + 1, 3.4, pp.z + 6);
+      this.camera.position.set(14, 2.6, STREET_Z + 6);
       this.phase = 'home';
       this.busy = true;
       this.updateHud();
       audio.stopMusic();
       audio.startMusic('night');
-      dialogue(SANTJOAN.home, () => {
-        this.busy = false;
-      });
     }, 700);
+  }
+
+  /** El taxi entra por la calle, para delante de casa, se bajan uno a uno por la acera y se va. */
+  private stepTaxiArrival(dt: number) {
+    const h = this.home!;
+    const c = h.taxi.root.position;
+    const X0 = 36, X1 = 1.5, T = 4.2;
+    const prev = c.x;
+    if (h.taxiT < T) {
+      h.taxiT += dt;
+      const e = Math.min(1, h.taxiT / T);
+      c.x = X0 + (X1 - X0) * (1 - (1 - e) * (1 - e));
+      if (e >= 1) {
+        h.taxi.azul.visible = false;
+        h.outT = 0;
+      }
+    } else if (h.outT >= 0) {
+      h.outT += dt;
+      const ss = THREE.MathUtils.smoothstep;
+      const who: [Person, number, number][] = [[this.player, 0, 0.3], [h.pals[1].p, 0.7, -0.75], [this.gas, 1.5, -0.25], [h.pals[2].p, 2.3, -1.2]];
+      for (const [p, t0, ox] of who) {
+        const k = h.outT - t0;
+        if (k < 0) continue;
+        const r = p.root;
+        r.visible = true;
+        const kk = Math.min(1, k / 0.95);
+        r.position.set(c.x + ox, THREE.MathUtils.lerp(-0.45, 0, ss(kk, 0, 0.55)), THREE.MathUtils.lerp(c.z - 0.2, c.z - 1.8 - (p === h.pals[2].p ? 0.75 : 0), ss(kk, 0, 1)));
+        r.rotation.y = Math.PI;
+        animatePerson(p, dt, k < 0.95 ? 'walk' : 'idle', 0.6);
+        if (p === this.gas && k >= 0.95) limpPose(p, false);
+      }
+      if (h.outT > 3.4) {
+        h.outT = -1;
+        this.walker.facing = this.walker.yaw = Math.PI;
+        for (const f of h.pals) f.trail.reset();
+      }
+    } else {
+      // Se va por donde iba
+      c.x -= dt * Math.min(9, (h.taxiT - T + 0.01) * 6);
+      h.taxiT += dt;
+      if (h.taxiT > T + 2.2 && this.busy && !document.querySelector('.dialogue') && !h.homeLine) {
+        h.homeLine = true;
+        dialogue(SANTJOAN.home, () => {
+          this.busy = false;
+        });
+      }
+      if (c.x < -70) h.taxi.root.visible = false;
+    }
+    h.rig.update(dt, dt > 0 ? (prev - c.x) / dt : 0, 0, 1.2);
   }
 
   private updateHome(dt: number) {
@@ -1107,15 +1462,21 @@ export class LevelSantJoan implements Level {
     const free = !this.busy && this.phase === 'home';
     this.walker.turn(this.input.consumeCam());
     this.walker.canJump = false;
-    const mag = this.walker.move(dt, free ? this.input.axes() : { x: 0, y: 0 }, h.colliders, { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 });
-    this.player.root.rotation.y = this.walker.facing;
-    animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+    if (h.taxi.root.visible) this.stepTaxiArrival(dt);
     h.who.length = 0;
     h.who.push(pp);
-    for (const f of h.pals) {
-      const moving = f.trail.step(f.p.root, f.lead(), f.gap, 3.8, dt, h.colliders, 0.26);
-      animatePerson(f.p, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
-      h.who.push(f.p.root.position);
+    if (h.outT < 0 && h.taxiT > 4.2) {
+      const mag = this.walker.move(dt, free ? this.input.axes() : { x: 0, y: 0 }, h.colliders, { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 });
+      this.player.root.rotation.y = this.walker.facing;
+      animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+      for (const f of h.pals) {
+        const lame = f.p === this.gas;
+        const limit = lame ? 1.4 + 1.3 * Math.max(0, Math.sin(this.gas.auto?.ph ?? 0)) : Infinity;
+        const moving = f.trail.step(f.p.root, f.lead(), f.gap, lame ? 2 : 3.2, dt, h.colliders, 0.26, limit);
+        animatePerson(f.p, dt, moving ? 'walk' : 'idle', lame ? 0.32 : moving ? Math.max(0.35, f.trail.pace) : 0);
+        if (lame) limpPose(f.p, moving);
+        h.who.push(f.p.root.position);
+      }
     }
     for (const d of h.doors) d.update(dt, h.who, this.camera.position);
     const near = Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 2;
@@ -1132,7 +1493,12 @@ export class LevelSantJoan implements Level {
       this.hud.setArrow(null);
       beacon.at(null);
     }
-    this.walker.camera(this.camera, dt, h.colliders, 6, pp.z < 10.4 && pp.z > -0.5 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
+    if (h.taxi.root.visible && this.busy) {
+      // Plano fijo de la calle: el taxi llega, se bajan y se va
+      const c = h.taxi.root.position;
+      this.camera.position.lerp(this.v1.set(Math.max(c.x, 2) + 7, 2.5, STREET_Z + 5.5), 1 - Math.exp(-dt * 2));
+      this.camera.lookAt(Math.max(c.x, -3), 1.1, STREET_Z - 0.4);
+    } else this.walker.camera(this.camera, dt, h.colliders, 6, pp.z < 10.4 && pp.z > -0.5 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
     h.sun.follow(pp);
     h.sky.update(this.camera, dt);
   }
@@ -1187,6 +1553,8 @@ export class LevelSantJoan implements Level {
       { label: '3 · Foto exacta (Correus)', run: () => { hunt(0); this.pinObj.visible = false; this.phase = 'exact'; this.updateHud(); tp(5, -9.5, Math.PI); } },
       { label: '4 · Se encuentran', run: () => { tp(1, 4.5); this.gas.root.visible = true; this.gas.root.position.set(2, 0, 5.5); this.meet(); } },
       { label: '5 · Sa Plaça d’es Bè', run: () => { tp(88, 0, Math.PI / 2); this.gas.root.position.set(86.5, 0, 0.8); this.startBe(); } },
+      { label: '5b · Al taxi, de noche', run: () => { tp(100, 0, -Math.PI / 2); this.gas.root.visible = true; this.startTaxi(); } },
+      { label: '5c · En el taxi', run: () => { tp(80, 7, -Math.PI / 2); this.gas.root.visible = true; this.busy = true; fadeFlash(() => { this.ride = new TaxiRide(); this.phase = 'ride'; this.ride.start(); this.busy = false; this.updateHud(); }, 200); } },
       { label: '6 · A casa de Azul', run: () => { this.busy = true; this.startHome(); } },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
@@ -1198,6 +1566,8 @@ export class LevelSantJoan implements Level {
     audio.stopMusic();
     audio.ambience(0);
     disposeScene(this.scene);
+    if (this.pushPost) rigPost.delete(this.pushPost);
+    if (this.ride) disposeScene(this.ride.scene);
     if (this.home) disposeScene(this.home.scene);
   }
 }

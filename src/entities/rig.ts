@@ -352,44 +352,137 @@ export const rigFailed = () => failed;
 const lin = (hex: number) => new THREE.Color(hex);
 const texCache = new Map<string, THREE.Texture>();
 
+/**
+ * La cara, pintada encima de la textura: el modelo la trae diminuta y a manchas. Cejas del color del pelo,
+ * ojos con su iris, algo de color en las mejillas, una sombra suave en las cuencas y bajo la nariz, y labios.
+ * En la textura la cara está tumbada: la frente hacia la izquierda (x menor), la barbilla hacia la derecha.
+ */
+function paintFace(g: CanvasRenderingContext2D, look: PersonLook, M: number) {
+  const C = 88.4;
+  g.save();
+  g.scale(M, M);
+  const blob = (x: number, y: number, r: number, c: string, a: number) => {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${c},${a})`);
+    gr.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = gr;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+  const hairC = new THREE.Color(look.hair);
+  const brow = `rgb(${Math.round(hairC.clone().convertLinearToSRGB().r * 255 * 0.5)},${Math.round(hairC.clone().convertLinearToSRGB().g * 255 * 0.42)},${Math.round(hairC.clone().convertLinearToSRGB().b * 255 * 0.36)})`;
+  g.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    blob(463, C + s * 25, 11, '228,118,104', 0.2); // mejilla
+    blob(441.5, C + s * 15.5, 9.5, '150,98,74', 0.12); // cuenca del ojo
+    // Ceja: más gruesa hacia la nariz y afinándose hacia fuera
+    g.strokeStyle = brow;
+    g.globalAlpha = 0.82;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(433.6, C + s * 6.5);
+    g.quadraticCurveTo(430.2, C + s * 12, 430.6, C + s * 17);
+    g.stroke();
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.moveTo(430.6, C + s * 16);
+    g.quadraticCurveTo(431.4, C + s * 22, 435.2, C + s * 26.5);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+  blob(450.8, C, 3.6, '160,100,80', 0.22); // bajo la nariz
+  blob(461.5, C, 3.4, '160,100,80', 0.1); // bajo el labio
+  // Labios: el de arriba con su arco, el de abajo más lleno, y la línea que los separa
+  g.fillStyle = '#b5636a';
+  g.beginPath();
+  g.moveTo(456.1, C - 6);
+  g.quadraticCurveTo(453.9, C - 2.3, 454.8, C);
+  g.quadraticCurveTo(453.9, C + 2.3, 456.1, C + 6);
+  g.quadraticCurveTo(456.9, C, 456.1, C - 6);
+  g.fill();
+  g.fillStyle = '#c67a7e';
+  g.beginPath();
+  g.moveTo(456.1, C - 6);
+  g.quadraticCurveTo(459.6, C, 456.1, C + 6);
+  g.quadraticCurveTo(456.9, C, 456.1, C - 6);
+  g.fill();
+  g.strokeStyle = 'rgba(112,38,48,.85)';
+  g.lineWidth = 0.45;
+  g.beginPath();
+  g.moveTo(456.1, C - 6);
+  g.quadraticCurveTo(456.9, C, 456.1, C + 6);
+  g.stroke();
+  // Los ojos: la esclerótica limpia, iris del color de sus ojos, pupila y un brillo
+  const ic = new THREE.Color(look.eyes ?? 0x5a3a22).convertLinearToSRGB();
+  const rgb = (k: number) => `rgb(${Math.round(ic.r * 255 * k)},${Math.round(ic.g * 255 * k)},${Math.round(ic.b * 255 * k)})`;
+  for (const [x, y] of [[501.5, 484.5], [499.25, 503.4]]) {
+    const R = 4.1;
+    const gr = g.createRadialGradient(x, y, 1.1, x, y, R);
+    gr.addColorStop(0, rgb(0.92));
+    gr.addColorStop(0.7, rgb(0.62));
+    gr.addColorStop(1, rgb(0.26));
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(x, y, R, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#0c0a0a';
+    g.beginPath();
+    g.arc(x, y, 1.7, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,.9)';
+    g.beginPath();
+    g.arc(x - 1.1, y - 1.2, 0.62, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
+
 /** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}${look.nude ? 'n' : ''}`;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}${look.nude ? 'n' : ''}`;
   const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
   let t = texCache.get(k);
   if (t) return t;
   const img = src.image as HTMLImageElement | ImageBitmap;
-  const S = 512;
+  // Al doble que la máscara de partes: la cara ocupa muy poco de la textura y en los primeros planos se ve
+  const S = 1024;
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.imageSmoothingQuality = 'high';
   g.drawImage(img, 0, 0, S, S);
   const id = g.getImageData(0, 0, S, S);
   const px = id.data;
   const sum = new Float64Array(7), cnt = new Float64Array(7);
   // 1 piel, 2 pelo, 3 camiseta, 4 pantalón, 5 zapatos, 6 cara (piel con menos detalle); 0 se queda igual
-  const part = (i: number) => (over && over[i >> 2]) || Math.round((parts?.[i] ?? 0) / 36);
-  for (let i = 0; i < px.length; i += 4) {
-    const p = part(i);
-    sum[p] += px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-    cnt[p]++;
-  }
+  const part = (x: number, y: number) => {
+    const m = (y >> 1) * 512 + (x >> 1);
+    return (over && over[m]) || Math.round((parts?.[m * 4] ?? 0) / 36);
+  };
+  for (let y = 0, i = 0; y < S; y++)
+    for (let x = 0; x < S; x++, i += 4) {
+      const p = part(x, y);
+      sum[p] += px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+      cnt[p]++;
+    }
   // En sRGB, como los píxeles del lienzo
   const target = [0, look.skin, look.hair, look.shirt, look.pants, look.shoes ?? 0x2a2420, look.skin].map((h) => ({ r: ((h >> 16) & 255) / 255, g: ((h >> 8) & 255) / 255, b: (h & 255) / 255 }));
-  for (let i = 0; i < px.length; i += 4) {
-    const p = part(i);
-    if (!p) continue;
-    const l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-    const mean = sum[p] / Math.max(1, cnt[p]);
-    const r = l / Math.max(8, mean);
-    // Sin ropa, la piel es lisa: los pliegues y costuras de la textura la delatarían
-    const f = p === 6 ? Math.min(1.25, Math.max(0.7, 1 + (r - 1) * 0.45)) : look.nude && p !== 2 ? 1 : Math.min(1.7, Math.max(0.3, r));
-    const col = target[p];
-    px[i] = Math.min(255, col.r * 255 * f);
-    px[i + 1] = Math.min(255, col.g * 255 * f);
-    px[i + 2] = Math.min(255, col.b * 255 * f);
-  }
+  for (let y = 0, i = 0; y < S; y++)
+    for (let x = 0; x < S; x++, i += 4) {
+      const p = part(x, y);
+      if (!p) continue;
+      const l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+      const mean = sum[p] / Math.max(1, cnt[p]);
+      const r = l / Math.max(8, mean);
+      // La cara, casi lisa y sin pasarse de su tono (por encima se saturaba y quedaba amarillo verdosa); los
+      // rasgos se pintan después. Sin ropa, la piel es lisa: los pliegues y costuras la delatarían
+      const f = p === 6 ? Math.min(1, Math.max(0.94, 0.985 + (r - 1) * 0.06)) : look.nude && p !== 2 ? 1 : p === 1 ? Math.min(1.08, Math.max(0.62, r)) : Math.min(1.7, Math.max(0.3, r));
+      const col = target[p];
+      px[i] = Math.min(255, col.r * 255 * f);
+      px[i + 1] = Math.min(255, col.g * 255 * f);
+      px[i + 2] = Math.min(255, col.b * 255 * f);
+    }
   g.putImageData(id, 0, 0);
+  paintFace(g, look, S / 512);
   t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.flipY = src.flipY;
@@ -465,6 +558,10 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
     // (mate: con brillo, el pelo oscuro de una sola pieza parecía de globos de látex negro)
     mat.roughness = 0.9;
     mat.envMapIntensity = 0.55;
+    // Un poco de luz propia en la piel y la ropa: a la sombra, las caras no se quedan grises
+    mat.emissive = new THREE.Color(0xffffff);
+    mat.emissiveMap = mat.map;
+    mat.emissiveIntensity = 0.13;
     if (look.nude) mat.normalMap = null;
     return true;
   }
@@ -490,6 +587,9 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
     const mc = meanColor(mat.map);
     const t = lin(look.skin);
     mat.color.setRGB(Math.min(2, t.r / mc.r), Math.min(2, t.g / mc.g), Math.min(2, t.b / mc.b));
+    mat.emissive = mat.color.clone();
+    mat.emissiveMap = mat.map;
+    mat.emissiveIntensity = 0.13;
   } else if (/Beard/.test(name)) {
     mat.color = lin(look.hair);
     if (!look.beard) return false;
@@ -649,7 +749,9 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     const m = o as THREE.SkinnedMesh;
     if (!m.isMesh) return;
     m.castShadow = true;
-    m.receiveShadow = true;
+    // Sin sombra propia: en los primeros planos, la del pelo y la nariz les manchaba la cara de gris
+    m.receiveShadow = false;
+    m.userData.noReceive = true;
     m.frustumCulled = false;
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
     if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
@@ -1183,8 +1285,9 @@ function straightHair(p: Person, look: PersonLook) {
       uvs.push((i / A) * 6, s * 3);
       // Fuera la cara: por delante, por debajo de la línea de la frente
       const front = ca; // 1 = justo delante
-      const hairline = cy + ry * (0.55 - 0.25 * Math.max(0, 1 - Math.abs(a - Math.PI * 0.12) / 0.9)); // flequillo ladeado
-      keep.push(!(front > 0.42 && y < hairline));
+      const hairline = cy + ry * (0.55 - 0.25 * Math.max(0, 1 - Math.abs(Math.atan2(Math.sin(a - 0.377), Math.cos(a - 0.377))) / 1.15)); // flequillo ladeado
+      // (la malla solo se quita con margen: el borde exacto lo recorta el sombreador, sin escalones)
+      keep.push(!(front > 0.56 && y < hairline - ry * 0.28));
       const k = Math.min(1, s * 1.6);
       const cc = root.clone().lerp(hair, k).multiplyScalar(0.92 + 0.16 * Math.sin(i * 2.7) * Math.sin(i * 1.3));
       col.push(cc.r, cc.g, cc.b);
@@ -1202,6 +1305,24 @@ function straightHair(p: Person, look: PersonLook) {
   g.setIndex(idx);
   g.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.8, 0.8) });
+  // El contorno de la cara, recortado píxel a píxel: flequillo ladeado con el borde limpio y algo de mecha
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uHair = { value: new THREE.Vector4(cx, cz, cy, ry) };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHairP = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairP;\nuniform vec4 uHair;').replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+      {
+        vec2 hd = vHairP.xz - uHair.xy;
+        float ha = atan(hd.x, hd.y);
+        if (ha < 0.0) ha += 6.28318;
+        float hdA = abs(mod(ha - 0.377 + 3.14159, 6.28318) - 3.14159);
+        float hl = uHair.z + uHair.w * (0.55 - 0.25 * max(0.0, 1.0 - hdA / 1.15)) + uHair.w * (0.009 * sin(ha * 37.0) + 0.006 * sin(ha * 83.0));
+        if (cos(ha) > 0.42 && vHairP.y < hl) discard;
+      }`,
+    );
+  };
+  mat.customProgramCacheKey = () => 'hair-clip';
   const mesh = new THREE.Mesh(g, mat);
   mesh.castShadow = true;
   anchor.add(mesh);

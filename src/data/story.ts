@@ -39,11 +39,12 @@ export const FERRERIES = {
     { who: 'Margaux', text: '¿Y qué se hace aquí?' },
     { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
     { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
-    { who: 'Tòfol', text: 'Tres pomades i tres carícies. I alerta, que si un ase t’envesteix se’t cau es got. I amb sa purpurina no t’hi fixis, avui surts brillant segur.' },
+    { who: 'Tòfol', text: 'Tres pomades i tres carícies. Ses pomades me les dus a mi, que tenc set. I alerta, que si un ase t’envesteix se’t cau es got.' },
   ] as Line[],
   tofolNotYet: [{ who: 'Tòfol', text: 'Encara no. Pomades i ases, que es jaleo no espera.' }] as Line[],
   tofolDone: [
-    { who: 'Tòfol', text: 'Ja ets de Ferreries, al·lota.' },
+    { who: 'Margaux', text: 'Toma: tus tres pomadas.' },
+    { who: 'Tòfol', text: 'Ara sí! Ja ets de Ferreries, al·lota.' },
     { who: 'Margaux', text: '¡Y llena de purpurina!' },
     { who: 'Tòfol', text: 'Ara vés a ballar an es bar de Sa Font, que està molt guai. Na Carme ja hi és.' },
   ] as Line[],
@@ -109,6 +110,16 @@ export const SANTJOAN = {
     { who: 'Margaux', text: 'Mis amigas se vienen a dormir a casa. ¿Te vienes?' },
     { who: 'Gas', text: 'Sí. Vamos.' },
   ] as Line[],
+  /** Ya de noche: al taxi de la Plaça Espanya, a paso de Gas. */
+  taxiNight: [
+    { who: 'Narrador', text: 'Ya es de noche. Después de todo el día de jaleo, Gas casi no puede andar.' },
+    { who: 'Gas', text: 'Ay, ay, ay… No siento el pie.' },
+    { who: 'Margaux', text: 'Venga, que cogemos un taxi. Está ahí, en la Plaça Espanya.' },
+  ] as Line[],
+  taxiHint: 'Ve con Gas, a su paso, hasta el taxi de la Plaça Espanya',
+  taxiBtn: '🚕 Subir al taxi',
+  taxiPals: [{ who: 'Amiga', text: '¡Por fin! ¿Qué le pasa a este, que anda así?' }, { who: 'Margaux', text: 'No preguntes. Sube.' }] as Line[],
+  ride: [{ who: 'Narrador', text: 'De vuelta a casa, por el Camí de sa Farola.' }] as Line[],
   home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los cuatro, muertos de sueño.' }] as Line[],
   homeHint: 'Entra en casa con Gas y con tus amigas',
   sleepBtn: '😴 A dormir',
@@ -232,7 +243,7 @@ export const CONCERT = {
 export const NIGHT = {
   intro: [{ who: 'Narrador', text: 'Ciutadella. 27 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
-  /** Después de hacer el amor en la hamaca: lo que se dijeron esa noche. */
+  /** Después de hacer el amor en las toallas: lo que se dijeron esa noche. */
   love: [{ who: 'Narrador', text: 'Solo el césped sabe qué pasó.' }] as Line[],
   talk: [
     { who: 'Marc', text: 'Yo me voy a quedar sobre todo con tu chiste inicial del Uber. Ha sido un buen comienzo.' },
@@ -413,7 +424,21 @@ export const ECLIPSE = {
     { who: 'Margaux', text: 'Vamos a dar una vuelta con Joy y Eric.' },
   ] as Line[],
   walkHint: 'Da una vuelta con Joy y Eric hasta la farola',
-  walkDone: [{ who: 'Narrador', text: 'Eric quiere ir a hombros. Joy quiere ir a todas partes.' }] as Line[],
+  walkDone: [
+    { who: 'Narrador', text: 'Eric quiere ir a hombros. Joy quiere ir a todas partes.' },
+    { who: 'Margaux', text: 'Venga, para casa, que se nos hace tarde.' },
+  ] as Line[],
+  backHint: 'Volved a casa de tus padres con Joy y Eric',
+  byeHint: 'Despídete de tu padre',
+  byeBtn: '👋 Despedirse',
+  byeDad: [
+    { who: 'Margaux', text: 'Papá, nos tenemos que ir, que si no, no llegamos a ver el eclipse.' },
+    { who: 'Gas', text: 'Lo vamos a ver desde las rocas, cerca de mi casa. Encantado, de verdad.' },
+    { who: 'Padre de Azul', text: 'Id, id. Y nada de kayak, ¿eh?' },
+    { who: 'Gas', text: 'Nada de kayak.' },
+  ] as Line[],
+  carHint: 'Sube al coche: a casa de Gas',
+  carBtn: '🚗 Subir al coche',
   driveIntro: [{ who: 'Narrador', text: 'Ahora, a casa de Gas. Toca aparcar marcha atrás dentro, en la entrada.' }] as Line[],
   parkHint: 'Marcha atrás: mete el coche dentro de la entrada',
   parkBump: 'Uy, el muro 😬',
@@ -421,20 +446,31 @@ export const ECLIPSE = {
   meetMarcParents: [
     { who: 'Narrador', text: 'Entráis los dos. Sus padres están en la cocina.' },
     { who: 'Margaux', text: 'Hola, soy Margaux.' },
+    { who: 'Madre de Gas', text: '¡Por fin! Pasa, pasa, que Marc no para de hablar de ti.' },
+    { who: 'Padre de Gas', text: 'Nos ha dicho que vives en Madrid. ¿Y a qué te dedicas?' },
+    { who: 'Margaux', text: 'Trabajo en Amazon, de account manager.' },
+    { who: 'Padre de Gas', text: 'Amazon… Entonces ya sé a quién reclamarle los paquetes.' },
+  ] as Line[],
+  meetMarcParents2: [
+    { who: 'Madre de Gas', text: '¿Y de dónde eres? Marc nos dijo algo, pero se hizo un lío.' },
+    { who: 'Margaux', text: 'Soy italiana y francesa. Pero mis padres tienen casa aquí, en Sa Farola.' },
+    { who: 'Margaux', text: 'Vengo prácticamente todos los años.' },
+    { who: 'Madre de Gas', text: '¿En Sa Farola? ¿Tan cerca, todos los años, y os conocéis en Ferreries?' },
+    { who: 'Gas', text: 'Bueno, nos vamos a las rocas, que empieza el eclipse.' },
     { who: 'Narrador', text: 'Ahora sí: los cuatro padres, en un solo día.' },
   ] as Line[],
   rocks: [
     { who: 'Narrador', text: 'Por fin solos. A la roca de Es Castellar, a esperar el eclipse.' },
     { who: 'Gas', text: '¿Una partida a Love Letter mientras tanto?' },
   ] as Line[],
-  afterCards: [{ who: 'Narrador', text: 'Te ha ganado ella. Como siempre. Y empieza el eclipse.' }] as Line[],
+  afterCards: [{ who: 'Narrador', text: 'Le has ganado. Como siempre. Y empieza el eclipse.' }] as Line[],
   glassesHint: 'Ponte las gafas de eclipse 🕶️',
   noGlasses: '¡Sin gafas no! Ponte las gafas 🕶️',
   photo: '📸 Los dos, con las gafas puestas, en el momento exacto',
   kitchenHint: 'Entra con Gas: sus padres están en la cocina',
   totality: '🌘 Ya está',
   end: [{ who: 'Narrador', text: 'La luna tapa el sol. Se hace de noche un momento.' }] as Line[],
-  stats: (rounds: number, parkTries: number) => [['Partidas a Love Letter', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
+  stats: (rounds: number, parkTries: number) => [['Rondas de Love Letter', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
 };
 
 // Capítulo 9: un año después, otra vez Ferreries. Como en el 1, el pueblo habla en menorquín y ella y Gas, en castellano. Chats: tarde, veintidos, asesOnce, bocata, fecha.
@@ -449,6 +485,7 @@ export const ANIVERSARIO = {
     { who: 'Tòfol', text: 'Ja sabeu com va: tres pomades i tres carícies, però ara a dues mans.' },
   ] as Line[],
   tofolDone: [
+    { who: 'Margaux', text: 'Toma, tus pomadas. Otro año más.' },
     { who: 'Tòfol', text: 'Ja sou més de Ferreries que jo.' },
     { who: 'Tòfol', text: 'I ara, que és Sant Bartomeu, un petó.' },
   ] as Line[],
@@ -477,8 +514,14 @@ export const MINIS = {
   },
   princesa: {
     title: 'Love Letter',
-    start: 'Tú tienes la Princesa. Si la descartas o te eliminan, pierdes. Toca una carta para jugarla.',
+    start: 'Gana quien llegue a 3 corazones. Cada ronda, una carta en la mano y otra que robas: juega una.',
     concede: 'Gas: «Venga, va, te la dejo: que empieza el eclipse».',
+    next: 'Siguiente ronda',
+    match: 'Partida para ti 👑',
+    matchGas: 'Partida para Gas. Revancha, que no puedes dejarlo así.',
+    princeWho: 'Príncipe: ¿quién descarta?',
+    princeGas: 'Gas',
+    princeMe: 'Yo',
     countess: 'Con el Rey o el Príncipe en la mano, la Condesa se juega sí o sí',
     guess: '¿Qué carta crees que tiene Gas?',
     win: 'Ganas tú 👑',

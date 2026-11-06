@@ -555,7 +555,7 @@ export class Level3 implements Level {
     const X0 = AIR.minX - 0.3, X1 = AIR.maxX + 0.3;
     const DW = 1.1; // media anchura de la puerta
     // Dintel y faldón de la cristalera
-    m.add(G.box, 0xd8dde3, cx, 5.2, Z, 0, 0, 0, X1 - X0, 1.6, 0.3);
+    m.add(G.box, 0xd8dde3, cx, 6.1, Z, 0, 0, 0, X1 - X0, 3.4, 0.3);
     m.add(G.box, 0x4a525c, cx, 0.12, Z, 0, 0, 0, X1 - X0, 0.24, 0.3);
     // Montantes de la cristalera
     for (let x = X0; x <= X1 + 0.01; x += 1.5) if (Math.abs(x - cx) > DW + 0.1) m.add(G.box, 0x3f4750, x, 2.3, Z, 0, 0, 0, 0.09, 4.4, 0.16);
@@ -698,11 +698,40 @@ export class Level3 implements Level {
     const m = new Merger();
     // Cristaleras a los dos lados y techo con lucernarios (las ondas de Barajas)
     for (const x of [A.minX - 0.15, A.maxX + 0.15]) {
-      m.add(G.box, 0x9fc4e0, x, 3, (A.minZ + A.maxZ) / 2, 0, 0, 0, 0.2, 6, A.maxZ - A.minZ + 6);
-      for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 3) m.add(G.box, 0x5a6470, x, 3, z, 0, 0, 0, 0.3, 6, 0.15);
+      // (hasta la cubierta: por arriba se colaba el cielo)
+      m.add(G.box, 0xb4d4ea, x, 3.9, (A.minZ + A.maxZ) / 2, 0, 0, 0, 0.2, 7.8, A.maxZ - A.minZ + 6);
+      for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 3) m.add(G.box, 0x5a6470, x, 3.9, z, 0, 0, 0, 0.3, 7.8, 0.15);
+      for (const y of [2.4, 4.6]) m.add(G.box, 0x5a6470, x, y, (A.minZ + A.maxZ) / 2, 0, 0, 0, 0.26, 0.08, A.maxZ - A.minZ + 6);
     }
-    for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 2.2) m.add(G.box, 0xd9b26a, cx, 6.6 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.12, 0.8);
-    m.add(G.box, 0xd8dde3, cx, 3, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 6, 0.3);
+    // Lamas finas de bambú, una al lado de la otra, por debajo de la cubierta
+    for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 0.42) m.add(G.box, 0xd9b26a, cx, 6.62 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.06, 0.24);
+    for (let x = A.minX + 2.6; x < A.maxX - 2; x += 3.2) for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 4) m.add(G.box, 0xb8905a, x, 6.72 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, 0.1, 0.1, 4.05);
+    // La cubierta: una sola pieza ondulada que cierra toda la terminal, con lucernarios redondos, como en la T4
+    {
+      const W = A.maxX - A.minX + 0.8, D = A.maxZ - A.minZ + 7;
+      const roof = new THREE.PlaneGeometry(W, D, 2, 90).rotateX(Math.PI / 2);
+      const rp = roof.attributes.position;
+      const z0 = (A.minZ + A.maxZ) / 2;
+      for (let i = 0; i < rp.count; i++) rp.setY(i, 6.86 + Math.sin((rp.getZ(i) + z0) * 0.3) * 0.35);
+      roof.computeVertexNormals();
+      const rm = new THREE.Mesh(roof, toon({ color: 0xc9a468, roughness: 0.8, side: THREE.DoubleSide }));
+      rm.position.set(cx, 0, z0);
+      rm.userData.noCast = true;
+      sc.add(rm);
+      const skyMat = new THREE.MeshBasicMaterial({ color: 0xeaf4ff, fog: false, toneMapped: false });
+      const ringMat = toon({ color: 0xf2f2ee, roughness: 0.5 });
+      for (let z = A.minZ - 1; z <= A.maxZ + 1; z += 7.5)
+        for (const x of [cx - 3, cx + 3]) {
+          const y = 6.5 + Math.sin(z * 0.3) * 0.35;
+          const sk = new THREE.Mesh(new THREE.CircleGeometry(0.72, 20).rotateX(Math.PI / 2), skyMat);
+          sk.position.set(x, y + 0.02, z);
+          sc.add(sk);
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.05, 6, 22).rotateX(Math.PI / 2), ringMat);
+          ring.position.set(x, y, z);
+          sc.add(ring);
+        }
+    }
+    m.add(G.box, 0xd8dde3, cx, 3.9, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 7.8, 0.3);
     this.colliders.push(
       { minX: A.minX - 0.4, maxX: A.minX - 0.02, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },
       { minX: A.maxX + 0.02, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },

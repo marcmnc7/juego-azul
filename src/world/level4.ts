@@ -7,7 +7,7 @@ import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
-import { CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
+import { POT_CORE, woodChair, CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
 import { Door } from './door';
 import { buildSurroundings } from './surround';
@@ -30,7 +30,7 @@ import { beacon } from '../core/beacon';
 // van a Sa Son 69 B4 y no entran por la puerta: por el pasillo de la derecha hasta la piscina.
 // Bucle: cruzar sin despertar a sus padres (la grava cruje, correr hace ruido y se encienden las
 // ventanas de arriba) → desnudarse, al agua y abrazarse → nadar un rato juntos → salir por la escalera
-// de la piscina → a pie hasta la hamaca del césped → en la hamaca, hacer el amor (a pixeles) → hablar un
+// de la piscina → a pie hasta las toallas, en el césped del lado de la casa → hacer el amor (a pixeles) → hablar un
 // rato → unir las estrellas → el chat real de la 01:01.
 //
 // El nado es de verdad: crol con el cuerpo tumbado en el agua, brazos que entran y salen, patada,
@@ -43,19 +43,17 @@ type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug
 const POOL = { minX: -4.1, maxX: 4.1, minZ: 5.6, maxZ: 10.1 };
 /** Todo el patio al mismo nivel: las únicas escaleras son las de la piscina. */
 const LAWN_Y = 0;
-/** Lo alto de la colchoneta de la hamaca. */
-const BED_Y = LAWN_Y + 0.5;
-/** Tumbados en la hamaca: la espalda sobre la colchoneta. */
-const LIE_Y = BED_Y + 0.1; // «Muy pequeñita ella», pero algo más de lo que parecía
+/** Tumbados en la toalla: la espalda sobre la tela, en el suelo. */
+const LIE_Y = LAWN_Y + 0.14;
 const WATER_Y = -0.22;
 // Nadando, el agua por los hombros (con -1,12 la cadera quedaba por encima del agua y parecían flotar de pie)
 const SWIM_Y = -1.4;
-/** La hamaca doble, en el césped de arriba. */
-const TOWELS = new THREE.Vector3(1.0, LAWN_Y, 12.75); // (con su pie a 15 cm del seto: antes se metía dentro)
-/** Largo de la hamaca: cabe él (1,85 m) de la cabeza a los pies. */
-const TOWEL_LEN = 2.2;
-/** Tumbado, la raíz (a los pies) queda en este z y la cabeza hacia la piscina, sobre la colchoneta. */
-const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.12;
+/** Las dos toallas, en el césped entre la casa y la piscina. */
+const TOWELS = new THREE.Vector3(1.6, LAWN_Y, 3.35);
+/** Largo de la toalla: cabe él (1,85 m) de la cabeza a los pies. */
+const TOWEL_LEN = 2.3;
+/** Tumbado, la raíz (a los pies) queda en este z: los pies hacia la piscina y la cabeza hacia la casa. */
+const LIE_FEET_Z = TOWELS.z + TOWEL_LEN / 2 - 0.3; // (los zapatos, dentro de la toalla)
 /** La escalera para salir de la piscina, en su lado oeste. */
 const LADDER = new THREE.Vector3(POOL.minX + 0.12, 0, 7.2);
 const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 13.62 };
@@ -75,8 +73,8 @@ const DRIVE_FROM_X = -46;
 const CAR_STOP_X = -0.6;
 const DRIVE_TIME = 7;
 // Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
-const GRAVEL = { minX: CORRIDOR.minX, maxX: 4.4, minZ: 1.9, maxZ: 4.6 };
-const STONES: [number, number][] = [[-5.5, 2.2], [-5.35, 3.0], [-5.5, 3.8], [1.7, 2.75], [2.3, 3.55], [1.8, 4.35]];
+const GRAVEL = { minX: CORRIDOR.minX, maxX: -0.3, minZ: 1.9, maxZ: 4.6 };
+const STONES: [number, number][] = [[-5.5, 2.2], [-5.35, 3.0], [-5.5, 3.8]];
 const GAS_POOL = new THREE.Vector3(-5.45, 0, 8.6);
 const NOISE_LIGHT = 0.55;
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
@@ -474,20 +472,42 @@ export class Level4 implements Level {
     m.add(G.cyl, 0x8a6a44, -4.2, 1.3, 1.3, 0, 0, 0, 0.12, 2.6, 0.12);
     m.add(G.cyl, 0xf4efe2, -1.0, 0.75, 0.8, 0, 0, 0, 1.2, 0.05, 1.2);
     m.add(G.cyl, 0x777777, -1.0, 0.37, 0.8, 0, 0, 0, 0.08, 0.75, 0.08);
-    for (const sx of [-1.8, -0.2]) m.add(G.rbox, 0x8a6a44, sx, 0.45, 0.8, 0, 0, 0, 0.45, 0.9, 0.45);
+    woodChair(m, -1.75, 0.8, Math.PI / 2);
+    woodChair(m, -0.25, 0.8, -Math.PI / 2);
     this.colliders.push({ minX: -2.1, maxX: 0.1, minZ: 0.3, maxZ: 1.3 });
     // Sombrilla azul en la esquina de la terraza
     m.add(G.cyl, 0xdddddd, 3.6, 1.2, 0.7, 0, 0, 0, 0.08, 2.4, 0.08);
     m.add(G.cone, 0x2b4fa0, 3.6, 2.5, 0.7, 0, 0, 0, 2.4, 0.6, 2.4);
     this.colliders.push({ minX: 3.45, maxX: 3.75, minZ: 0.55, maxZ: 0.85 });
     {
-      // Hamaca doble: bastidor de madera, patas, colchoneta y dos cojines (la cabeza, hacia la piscina)
-      const H = TOWELS, Y = LAWN_Y;
-      m.add(G.box, 0x8a6a44, H.x, Y + 0.32, H.z, 0, 0, 0, 1.75, 0.08, TOWEL_LEN + 0.1);
-      for (const [lx, lz] of [[-0.78, -1.0], [0.78, -1.0], [-0.78, 1.0], [0.78, 1.0]]) m.add(G.box, 0x6e5234, H.x + lx, Y + 0.14, H.z + lz, 0, 0, 0, 0.09, 0.3, 0.09);
-      m.add(G.rbox, 0xf1ecdf, H.x, Y + 0.43, H.z, 0, 0, 0, 1.65, 0.14, TOWEL_LEN);
-      for (const sx of [-0.4, 0.4]) m.add(G.rbox, 0x5aa9e6, H.x + sx, Y + 0.55, H.z - TOWEL_LEN / 2 + 0.27, 0.15, 0, 0, 0.66, 0.13, 0.42);
-      this.colliders.push({ minX: H.x - 0.9, maxX: H.x + 0.9, minZ: H.z - TOWEL_LEN / 2 - 0.05, maxZ: H.z + TOWEL_LEN / 2 + 0.05, low: true });
+      // Dos toallas de playa, una al lado de la otra: rayas, rizo de la tela, flecos y alguna arruga
+      const towel = (a: string, b: string) =>
+        canvasTex((ctx, w, h) => {
+          ctx.fillStyle = a;
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = b;
+          for (let y = 26; y < h - 20; y += 54) ctx.fillRect(0, y, w, 20);
+          for (let i = 0; i < 7000; i++) {
+            ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
+            ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+          }
+          ctx.fillStyle = '#efe9da';
+          for (let x = 2; x < w; x += 7) {
+            ctx.fillRect(x, 0, 3, 9);
+            ctx.fillRect(x, h - 9, 3, 9);
+          }
+        }, 256, 512);
+      for (const [sx, a, b, ry] of [[-0.42, '#2f6fb5', '#e9eef3', 0.015], [0.42, '#e8e0cc', '#c0503f', -0.02]] as const) {
+        const g = new THREE.PlaneGeometry(0.8, TOWEL_LEN, 8, 20).rotateX(-Math.PI / 2);
+        const pos = g.attributes.position;
+        for (let i = 0; i < pos.count; i++) pos.setY(i, Math.sin(pos.getX(i) * 11 + pos.getZ(i) * 4 + sx * 5) * 0.004 + Math.sin(pos.getZ(i) * 13) * 0.003);
+        g.computeVertexNormals();
+        const t = new THREE.Mesh(g, toon({ map: towel(a, b), roughness: 1 }));
+        t.position.set(TOWELS.x + sx, LAWN_Y + 0.022, TOWELS.z);
+        t.rotation.y = ry;
+        t.userData.noCast = true;
+        sc.add(t);
+      }
     }
 
     // Muros del jardín y setos
@@ -497,7 +517,10 @@ export class Level4 implements Level {
     m.add(G.box, 0x5f8f4e, -0.8, 1.0, 14.2, 0, 0, 0, 10, 2, 0.4); // (más claro: de noche, con la luna azul, un verde oscuro se quedaba en un muro negro)
     for (const [x, z] of [[-5.5, 10.9], [-3.8, 1.8], [3.9, 4.8]]) {
       m.add(G.cyl, 0xb5603b, x, 0.3, z, 0, 0, 0, 0.6, 0.6, 0.6);
-      m.add(G.sphere, 0x3e7a3a, x, 0.9, z, 0, 0, 0, 0.9, 0.9, 0.9);
+      // La mata de la maceta: hojas de verdad (una bola de hojas recortadas parecía de alambre)
+      m.add(G.sphere, POT_CORE, x, 0.92, z, 0, 0, 0, 0.703, 0.629, 0.703); // (por dentro, macizo: que no se vea a través de las hojas)
+      m.add(G.bush, 0x3e7a3a, x, 0.92, z, 0, 0, 0, 0.95, 0.85, 0.95);
+      m.add(G.bush, 0x4a8a44, x + 0.1, 1.1, z - 0.06, 0, 1.4, 0, 0.66, 0.6, 0.66);
       this.colliders.push({ minX: x - 0.42, maxX: x + 0.42, minZ: z - 0.42, maxZ: z + 0.42, round: true });
     }
 
@@ -518,8 +541,9 @@ export class Level4 implements Level {
     // Palmera junto a la casa del vecino
     for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -8.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
     palmCrown(m, -8.1, 7.1, 2.6, 2.8, 15);
-    // Hierba de verdad en el césped: matas sueltas, menos en la hamaca
-    grassTufts(m, -4.4, 4.4, 10.55, 14.1, 260, [0x47803c, 0x3f7236, 0x568a42], 5, (x, z) => Math.abs(x - TOWELS.x) < 1.05 && Math.abs(z - TOWELS.z) < 1.3);
+    // Hierba de verdad en el césped: matas sueltas, menos debajo de las toallas
+    grassTufts(m, -4.4, 4.4, 10.55, 14.1, 260, [0x47803c, 0x3f7236, 0x568a42], 5);
+    grassTufts(m, -0.2, 4.4, 1.6, 5.15, 120, [0x47803c, 0x3f7236, 0x568a42], 8, (x, z) => (Math.abs(x - TOWELS.x) < 0.95 && Math.abs(z - TOWELS.z) < 1.15) || Math.hypot(x - 3.9, z - 4.8) < 0.5);
     grassTufts(m, -4.4, -4.5 + 0.1, 1.6, 10.5, 30, [0x47803c, 0x3f7236], 6);
     sc.add(m.mesh());
 
@@ -571,7 +595,7 @@ export class Level4 implements Level {
     this.mosaicData.needsUpdate = true;
   }
 
-  /** Estrellas grandes que forman un corazón en el cielo, vistas desde la hamaca. */
+  /** Estrellas grandes que forman un corazón en el cielo, vistas desde las toallas. */
   private buildConstellation() {
     this.starCamPos.set(TOWELS.x, LIE_Y + 0.5, TOWELS.z - 0.9);
     const dir = new THREE.Vector3(0.05, 0.78, 0.62).normalize();
@@ -635,7 +659,7 @@ export class Level4 implements Level {
         h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : 'Nada un rato con Marc 💙');
         break;
       case 'toTowels':
-        h.setObjective('Ve hasta la hamaca del césped');
+        h.setObjective('Ve a las toallas, al otro lado de la piscina');
         break;
       case 'love':
         h.setObjective('💙');
@@ -929,7 +953,7 @@ export class Level4 implements Level {
       const pp = this.player.root.position;
       const moving = this.gasTrail.step(g.root, pp, 1.5, 4.2, dt, this.colliders, 0.26);
       g.root.position.y = 0;
-      animatePerson(g, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      animatePerson(g, dt, moving ? 'walk' : 'idle', moving ? Math.max(0.35, this.gasTrail.pace) : 0);
       if (!moving) g.root.rotation.y = Math.atan2(pp.x - g.root.position.x, pp.z - g.root.position.z);
     } else if (this.phase === 'love' || this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
       animatePerson(g, dt, 'idle');
@@ -1296,18 +1320,18 @@ export class Level4 implements Level {
       this.setNude(false);
       this.phase = 'toTowels';
       this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
-      this.walker.yaw = this.walker.facing = 0;
-      this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z - 1.2);
-      this.gas.root.rotation.set(0, 0, 0);
+      this.walker.yaw = this.walker.facing = Math.PI; // (mirando hacia las toallas, hacia la casa)
+      this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z + 1.2);
+      this.gas.root.rotation.set(0, Math.PI, 0);
       this.gasTrail = new Trail();
       this.busy = false;
       this.updateHud();
     }, 400);
   }
 
-  /** Los dos tumbados uno al lado del otro en la hamaca. */
+  /** Los dos tumbados uno al lado del otro, cada uno en su toalla. */
   private layDown() {
-    for (const [p, sx] of [[this.player, -0.38], [this.gas, 0.38]] as const) {
+    for (const [p, sx] of [[this.player, -0.42], [this.gas, 0.42]] as const) {
       p.root.position.set(TOWELS.x + sx, LIE_Y, LIE_FEET_Z);
       p.root.rotation.set(-Math.PI / 2, 0, 0);
       p.body.rotation.set(0, 0, 0);
@@ -1316,7 +1340,7 @@ export class Level4 implements Level {
   }
 
   /**
-   * En la hamaca. Es la censura de toda la vida: un plano fijo de lejos, el mosaico tapándolos del todo
+   * En las toallas. Es la censura de toda la vida: un plano fijo de lejos, el mosaico tapándolos del todo
    * y nada más. Luego hablan un rato tumbados y, ya, las estrellas.
    */
   private makeLove() {
@@ -1327,11 +1351,11 @@ export class Level4 implements Level {
     fadeFlash(() => {
       this.phase = 'love';
       this.layDown();
-      // La pelota, a la piscina: podía haberse quedado rodando encima de la hamaca
+      // La pelota, a la piscina: podía haberse quedado rodando encima de las toallas
       this.ball.pos.set(2.6, WATER_Y + 0.4, 8.2);
       this.ball.vel.set(0, 0, 0);
       this.updateHud();
-      this.camera.position.set(TOWELS.x + 4.4, LAWN_Y + 2.6, TOWELS.z - 3.6);
+      this.camera.position.set(TOWELS.x + 1.6, LAWN_Y + 2.7, TOWELS.z + 4.4); // (desde encima de la piscina, mirando a la casa)
       this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z);
       this.camera.lookAt(this.camLook);
       this.mosaic.position.set(TOWELS.x, LIE_Y + 0.28, TOWELS.z);
@@ -1342,7 +1366,7 @@ export class Level4 implements Level {
         dialogue(NIGHT.love, () =>
           fadeFlash(() => {
             this.mosaic.visible = false;
-            // Hablando, de cerca: las dos caras en la hamaca
+            // Hablando, de cerca: las dos caras sobre las toallas
             this.camera.position.set(TOWELS.x + 1.5, LIE_Y + 0.75, TOWELS.z - 1.7);
             this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z - 0.45);
             this.camera.lookAt(this.camLook);
@@ -1427,7 +1451,7 @@ export class Level4 implements Level {
   }
 
   private updateStars(dt: number) {
-    // La cámara mira al cielo desde la hamaca, con un vaivén suave
+    // La cámara mira al cielo desde las toallas, con un vaivén suave
     this.camera.position.copy(this.starCamPos);
     this.v1.copy(this.starCamLook).add(this.v2.set(Math.sin(this.t * 0.2) * 1.5, Math.sin(this.t * 0.15) * 1, 0));
     this.camera.lookAt(this.v1);
@@ -1542,9 +1566,9 @@ export class Level4 implements Level {
           reset();
           this.phase = 'toTowels';
           this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
-          this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z - 1.2);
-          this.gas.root.rotation.set(0, 0, 0);
-          this.walker.yaw = this.walker.facing = 0;
+          this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z + 1.2);
+          this.gas.root.rotation.set(0, Math.PI, 0);
+          this.walker.yaw = this.walker.facing = Math.PI;
           this.gasTrail = new Trail();
           this.updateHud();
         },

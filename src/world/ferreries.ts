@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Surf } from '../core/surfaces';
 import { buildSurroundings, collidersBox } from './surround';
-import { G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
+import { POT_CORE, G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
 import { paintStyle } from '../core/paint';
 import dayHdr from '../assets/env/quarry.hdr';
@@ -170,7 +170,8 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
           hangs.push({ x, y: y - 0.2, z: fz + facing * 0.8, facing });
           for (let k = -1; k <= 1; k++) {
             m.add(G.cyl, 0xb5603b, x + k * 0.55, y - 0.65, fz + facing * 0.5, 0, 0, 0, 0.28, 0.28, 0.28);
-            m.add(G.sphere, 0x3e7a3a, x + k * 0.55, y - 0.4, fz + facing * 0.5, 0, 0, 0, 0.42, 0.3, 0.42);
+            m.add(G.sphere, POT_CORE, x + k * 0.55, y - 0.38, fz + facing * 0.5, 0, 0, 0, 0.311, 0.222, 0.311); // (por dentro, macizo: que no se vea a través de las hojas)
+            m.add(G.bush, 0x3e7a3a, x + k * 0.55, y - 0.38, fz + facing * 0.5, 0, k, 0, 0.42, 0.3, 0.42);
             m.add(G.sphere, FLOWERS[Math.floor(r() * 4)], x + k * 0.55, y - 0.28, fz + facing * 0.55, 0, 0, 0, 0.3, 0.18, 0.3);
           }
         } else {
@@ -205,7 +206,8 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
   if (r() < 0.5) {
     const px = cx + (r() < 0.5 ? -1 : 1) * (w / 2 - 0.8);
     m.add(G.cyl, 0xb5603b, px, 0.3, fz + facing * 0.4, 0, 0, 0, 0.6, 0.6, 0.6);
-    m.add(G.sphere, 0x3e7a3a, px, 0.9, fz + facing * 0.4, 0, 0, 0, 0.9, 0.9, 0.9);
+    m.add(G.sphere, POT_CORE, px, 0.92, fz + facing * 0.4, 0, 0, 0, 0.703, 0.629, 0.703); // (por dentro, macizo: que no se vea a través de las hojas)
+    m.add(G.bush, 0x3e7a3a, px, 0.92, fz + facing * 0.4, 0, 0, 0, 0.95, 0.85, 0.95);
     front(px, 0.45, 0.85);
   }
   colliders.push({ minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 });
@@ -535,7 +537,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
 
   // Placas de calle
   const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu') }));
-  sign1.position.set(-41, 2.78, -4.86); // (por debajo de la cornisa)
+  sign1.position.set(-43.6, 2.78, -4.86); // (por debajo de la cornisa y sin ninguna farola delante)
   const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església") }));
   sign2.position.set(-11.86, 3.0, 14.6);
   sign2.rotation.y = Math.PI / 2;

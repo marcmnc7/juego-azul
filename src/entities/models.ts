@@ -8,7 +8,7 @@ import { RigCrowd, crowdReady } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
 import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
-import { surfaceFor, Surf } from '../core/surfaces';
+import { surfaceFor, setSurface, Surf } from '../core/surfaces';
 
 // Personajes y decorado hechos con primitivas low-poly y sombreado "cel":
 // no hay que descargar modelos y el juego entero cabe en un único archivo.
@@ -1174,6 +1174,19 @@ export function streetLamp(m: Merger, x: number, y0: number, z: number) {
   }
   m.add(LAMP_CAP, iron, x, y0 + 4.63, z, 0, 0, 0, 1, 1, 1);
   m.add(G.sphere, iron, x, y0 + 4.85, z, 0, 0, 0, 0.09, 0.14, 0.09);
+}
+/** El interior macizo de las matas de maceta (liso: las hojas ya van por encima). */
+export const POT_CORE = 0x1f3a1c;
+setSurface(POT_CORE, Surf.None);
+
+/** Silla sencilla de patio: cuatro patas, asiento y respaldo de lamas. ry = hacia dónde mira quien se sienta. */
+export function woodChair(m: Merger, x: number, z: number, ry: number, color = 0x8a6a44) {
+  const c = Math.cos(ry), sn = Math.sin(ry);
+  const part = (lx: number, y: number, lz: number, w: number, h: number, d: number) => m.add(G.box, color, x + lx * c + lz * sn, y, z - lx * sn + lz * c, 0, ry, 0, w, h, d);
+  part(0, 0.46, 0, 0.44, 0.04, 0.42);
+  for (const [dx, dz] of [[-0.19, 0.18], [0.19, 0.18]]) part(dx, 0.23, dz, 0.04, 0.46, 0.04);
+  for (const dx of [-0.19, 0.19]) part(dx, 0.47, -0.19, 0.04, 0.94, 0.04);
+  for (const y of [0.66, 0.78, 0.9]) part(0, y, -0.19, 0.36, 0.06, 0.02);
 }
 const LAMP_GLASS = new THREE.CylinderGeometry(0.25, 0.17, 0.62, 6);
 const LAMP_CAP = new THREE.ConeGeometry(0.34, 0.3, 6);

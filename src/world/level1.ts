@@ -7,7 +7,7 @@ import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, Glitter, toon, vibrate } from '../core/gfx';
 import { FERRERIES, FERRERIES_MEET } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
-import { boneAnchor } from '../entities/rig';
+import { boneAnchor, rigPost } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
@@ -143,7 +143,13 @@ export class Level1 implements Level {
   private movers: Mover[] = [];
   private moverPrev: THREE.Vector3[] = [];
   private pomadas: Pomada[] = [];
-  private inHand: THREE.Object3D;
+  /** Las pomadas que lleva encima: una en cada mano y la tercera junto a la primera. */
+  private inHand: THREE.Object3D[] = [];
+  /** Ya se las ha dado a Tòfol: no se pasean más. */
+  private cupsGiven = false;
+  private cupAt: [THREE.Object3D, number, number][] = [];
+  private cupPost: (() => void) | null = null;
+  private tofolCup: THREE.Mesh | null = null;
   private fx: Particles;
   private confetti = new Confetti(180, 12, 10);
   private marker: THREE.Group;
@@ -332,7 +338,9 @@ export class Level1 implements Level {
     const beamMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     for (const home of this.world.pomadaSpots) {
       const g = new THREE.Group();
-      g.add(new THREE.Mesh(glassGeo, glassMat));
+      const cup = new THREE.Mesh(glassGeo, glassMat);
+      cup.scale.setScalar(0.62); // (algo más grande que de verdad, para verlo entre la gente)
+      g.add(cup);
       const glow = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.6, depthWrite: false }));
       glow.position.y = 0.02;
       g.add(glow, new THREE.Mesh(beamGeo, beamMat));
@@ -342,11 +350,30 @@ export class Level1 implements Level {
       this.pomadas.push({ mesh: g, home: home.clone(), taken: false });
     }
     // La pomada que lleva en la mano
-    this.inHand = new THREE.Mesh(glassGeo, glassMat);
-    this.inHand.scale.setScalar(0.7);
-    this.inHand.position.set(0, -0.2, 0.02);
-    this.inHand.visible = false;
-    this.player.handR.add(this.inHand);
+    // (un vaso de verdad, de doce o trece centímetros; siempre derecho aunque el brazo se mueva, para no derramarlo)
+    const left = this.player.rig ? boneAnchor(this.player, 'LeftHand') : this.player.handR;
+    this.cupAt = [[this.player.handR, 0.03, -0.06], [left, 0, -0.06], [this.player.handR, -0.05, -0.06]];
+    for (let i = 0; i < 3; i++) {
+      const cup = new THREE.Mesh(glassGeo, glassMat);
+      cup.scale.setScalar(0.34);
+      cup.visible = false;
+      this.scene.add(cup);
+      this.inHand.push(cup);
+    }
+    this.cupPost = () => {
+      for (let i = 0; i < 3; i++) {
+        if (!this.inHand[i].visible) continue;
+        const [hand, ox, oy] = this.cupAt[i];
+        hand.getWorldPosition(this.inHand[i].position);
+        this.inHand[i].position.x += ox;
+        this.inHand[i].position.y += oy;
+      }
+      if (this.tofolCup) {
+        this.tofol.handR.getWorldPosition(this.tofolCup.position);
+        this.tofolCup.position.y -= 0.06;
+      }
+    };
+    rigPost.add(this.cupPost);
 
     // Marcador de objetivo: flecha dorada que flota
     this.marker = new THREE.Group();
@@ -700,15 +727,22 @@ export class Level1 implements Level {
     if (ending || this.stage === 'barDance' || this.stage === 'pairDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
     else if (this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
     else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
-    // Con una pomada en la mano, el brazo va un poco adelantado
-    const carrying = this.pomadaCount > 0 && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc');
-    this.inHand.visible = carrying;
-    if (carrying && !ending) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+    // Las pomadas se llevan a Tòfol: con una, un brazo adelantado; con dos o tres, los dos. Entregadas, las manos libres
+    const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount : 0;
+    this.inHand.forEach((c, i) => (c.visible = i < held));
+    if (held > 0) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+    if (held > 1) this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
 
     const dT = pp.distanceTo(this.world.tofolPos);
     if (this.stage === 'findMarc' && this.gasMovesLeft > 0 && !this.busy && pp.distanceTo(this.world.marcPos) < 6) this.moveGas();
     const dM = pp.distanceTo(this.world.marcPos);
-    animatePerson(this.tofol, dt, dT < 5 && !ending ? 'wave' : 'idle');
+    animatePerson(this.tofol, dt, dT < 5 && !ending && !this.cupsGiven ? 'wave' : 'idle');
+    if (this.tofolCup) {
+      // Con su pomada en la mano, y de vez en cuando un trago
+      const sip = Math.max(0, Math.sin(this.t * 0.55) - 0.82) / 0.18;
+      this.tofol.armR.rotation.x = -0.75 - sip * 1.15;
+      this.tofol.elbowR.rotation.x = -0.9 - sip * 0.7;
+    }
     if (dT < 8) this.tofol.root.rotation.y = Math.atan2(pp.x - this.world.tofolPos.x, pp.z - this.world.tofolPos.z);
     // Marc baila hasta que va a hablar con Carme; luego, en el final, bailáis los tres
     if (this.marcTo) {
@@ -938,9 +972,21 @@ export class Level1 implements Level {
     };
     if (this.stage === 'talkTofol') dialogue(this.T.tofolQuest, done('collect'));
     else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
-    else if (this.stage === 'returnTofol')
+    else if (this.stage === 'returnTofol') {
+      this.giveCups();
       dialogue(this.T.tofolDone, this.V.findFirst ? () => { this.busy = false; this.faceToFace(); this.stage = 'kiss'; this.updateHud(); } : done('findMarc'));
-    else dialogue(this.T.tofolAgain, done());
+    } else dialogue(this.T.tofolAgain, done());
+  }
+
+  /** Le da las tres a Tòfol: ella se queda con las manos libres y él, con el vaso en la mano. */
+  private giveCups() {
+    if (this.cupsGiven) return;
+    this.cupsGiven = true;
+    audio.pickup();
+    const cup = new THREE.Mesh((this.inHand[0] as THREE.Mesh).geometry, (this.inHand[0] as THREE.Mesh).material);
+    cup.scale.setScalar(0.34);
+    this.scene.add(cup);
+    this.tofolCup = cup;
   }
 
   /** En el bar: bailas con Carme hasta que Marc se acerca a saludarla. */

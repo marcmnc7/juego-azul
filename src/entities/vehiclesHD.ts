@@ -65,7 +65,7 @@ function seated(look: PersonLook, scale: number, hands: number) {
 
 
 /** Perfil lateral (z hacia delante, y hacia arriba) extruido a lo ancho y centrado en x. */
-function profile(pts: [number, number][], width: number, bevel: number) {
+export function profile(pts: [number, number][], width: number, bevel: number) {
   const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)));
   const g = new THREE.ExtrudeGeometry(sh, { depth: width - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 });
   g.translate(0, 0, -(width - bevel * 2) / 2);
