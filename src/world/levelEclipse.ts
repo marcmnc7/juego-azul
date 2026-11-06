@@ -1,6 +1,8 @@
 import { Surf } from '../core/surfaces';
 import * as THREE from 'three';
 import { Trail } from '../core/follow';
+import { RockHop } from './sideGames';
+import { SIDE } from '../data/story';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
@@ -81,7 +83,7 @@ function coronaTexture() {
 /** Nivel del mar en Sa Farola (el plano del agua de buildSaFarola). */
 const WATER_Y = -0.4;
 
-type Phase = 'kayak' | 'ferry' | 'arrive' | 'parents' | 'walk' | 'back' | 'toCar' | 'park' | 'marcParents' | 'cards' | 'eclipse' | 'done';
+type Phase = 'kayak' | 'ferry' | 'arrive' | 'parents' | 'walk' | 'back' | 'toCar' | 'park' | 'marcParents' | 'hop' | 'cards' | 'eclipse' | 'done';
 
 const ERIC_LOOK: PersonLook = { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8, hair: 0xd9b56a, hairStyle: 'short', male: true };
 // Los padres de Gas: él y ella, de unos cincuenta, como los de Azul (sin moños)
@@ -146,6 +148,7 @@ export class LevelEclipse implements Level {
   private getInT = -1;
   private getInFrom = new THREE.Vector3();
   /** Minutos que quedan para el eclipse: cuenta desde que os despedís. Cada golpe aparcando, dos menos. */
+  private rockHop: RockHop | null = null;
   private clockMin = 26;
   private clockSaid = false;
   private joy: Dog | null = null;
@@ -577,6 +580,7 @@ export class LevelEclipse implements Level {
       toCar: ECLIPSE.carHint,
       park: ECLIPSE.parkHint,
       marcParents: ECLIPSE.kitchenHint,
+      hop: SIDE.hop.hint,
       cards: 'En las rocas',
       eclipse: this.glasses ? 'Mira cómo la luna tapa el sol' : ECLIPSE.glassesHint,
       done: '12 de agosto de 2026',
@@ -913,10 +917,30 @@ export class LevelEclipse implements Level {
   private startRocks() {
     this.buildRocks();
     applyShadows(this.scene);
-    this.phase = 'cards';
+    // Ellos dos, sentados en su sitio, esperan ocultos: antes hay que llegar hasta allí
+    this.player.root.visible = this.gas.root.visible = false;
+    this.phase = 'hop';
     this.busy = true;
     this.updateHud();
     audio.startMusic('night');
+    this.rockHop = new RockHop(this.scene, this.fx, -1.6, () => {
+      this.rockHop?.dispose();
+      this.rockHop = null;
+      this.busy = true;
+      this.hud.setAction(null);
+      fadeFlash(() => this.startCards(), 500);
+    });
+    dialogue(SIDE.hop.intro, () => {
+      this.busy = false;
+      this.updateHud();
+    });
+  }
+
+  private startCards() {
+    this.player.root.visible = this.gas.root.visible = true;
+    this.phase = 'cards';
+    this.busy = true;
+    this.updateHud();
     this.setupCards();
     dialogue(ECLIPSE.rocks, () =>
       princesaGame((rounds) => {
@@ -1528,7 +1552,14 @@ export class LevelEclipse implements Level {
     else if (this.phase === 'arrive' || this.phase === 'parents' || this.phase === 'walk' || this.phase === 'back' || this.phase === 'toCar') this.updateAzul(dt);
     else if (this.phase === 'park') this.updatePark(dt);
     else if (this.phase === 'marcParents') this.updateKitchen(dt);
-    else this.updateRocks(dt);
+    else if (this.rockHop) {
+      this.rockHop.update(dt, this.camera, this.busy);
+      if (this.rockHop) {
+        const can = !this.busy && this.rockHop.canJump;
+        this.hud.setAction(can ? SIDE.hop.btn : null, can);
+        if (this.input.consumeAction() && can) this.rockHop.jump();
+      }
+    } else this.updateRocks(dt);
     this.sky.update(this.camera, dt);
   }
 

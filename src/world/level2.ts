@@ -15,6 +15,7 @@ import { Terrace } from './terrace';
 import { Camp } from './camp';
 import { makeCameraPickup, makeFuelPickup, makeTobaccoPickup } from '../entities/pickups';
 import { Laurel } from './laurel';
+import { SIDE } from '../data/story';
 import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
@@ -1363,15 +1364,23 @@ export class Level2 implements Level {
         ]);
         later(() =>
           dialogue(ROAD.arriveLogrono, () => {
-            cinema.next();
-            later(() =>
-              dialogue(ROAD.logronoEnd, () => {
+            // Antes de bailar, una ronda en la barra: sin servirla bien no se sigue
+            cinema.stop();
+            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 2.25, -15.7), look: new THREE.Vector3(0, 1.02, -19.5), fov: 44 }]);
+            dialogue(SIDE.pinchos.intro, () =>
+              l.startPinchos(() => {
                 cinema.stop();
-                audio.stopMusic();
-                // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
-                phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish()));
+                cinema.play([{ dur: Infinity, move: 7, pos: new THREE.Vector3(-1.9, 1.5, -2.4), pos2: new THREE.Vector3(-2.3, 1.55, 1.6), look: l.mid, fov: 44, focus: l.mid }]);
+                later(() =>
+                  dialogue(ROAD.logronoEnd, () => {
+                    cinema.stop();
+                    audio.stopMusic();
+                    // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
+                    phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish()));
+                  }),
+                4200);
               }),
-            4200);
+            );
           }),
         1200);
       }, 500),

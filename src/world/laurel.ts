@@ -5,6 +5,7 @@ import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
 import { ROOF_GEO } from './ferreries';
+import { PinchoGame } from './sideGames';
 
 // Final del capítulo 3: Logroño, de fiesta. La Calle Laurel de noche: bares de tapas a los dos lados (cada uno
 // con su color, su puerta abierta, su barra al fondo, su rótulo de bandera y sus barriles de vino en la acera),
@@ -34,6 +35,7 @@ export class Laurel {
   private sky: Sky;
   private azul: Person;
   private gas: Person;
+  private pinchos: PinchoGame | null = null;
   private crowd: { p: Person; dance: boolean }[] = [];
   private t = 0;
 
@@ -216,10 +218,29 @@ export class Laurel {
   /** Plano medio de los dos. */
   readonly mid = new THREE.Vector3(0, 1.35, 0);
 
+  /** La barra en plena calle: ellos dos delante y el camarero cantando la ronda. */
+  startPinchos(onDone: () => void) {
+    const Z = -19.5;
+    this.azul.root.position.set(-1.25, 0, Z + 0.95);
+    this.gas.root.position.set(1.3, 0, Z + 0.95);
+    this.azul.root.rotation.y = this.gas.root.rotation.y = Math.PI;
+    this.pinchos = new PinchoGame(this.scene, Z, () => {
+      this.pinchos?.dispose();
+      this.pinchos = null;
+      this.azul.root.position.set(-0.42, 0, 0);
+      this.gas.root.position.set(0.42, 0, 0);
+      this.azul.root.rotation.y = Math.PI / 2;
+      this.gas.root.rotation.y = -Math.PI / 2;
+      onDone();
+    });
+  }
+
   update(dt: number, camera: THREE.Camera) {
     this.t += dt;
-    animatePerson(this.azul, dt, 'dance', 0, this.t * 6);
-    animatePerson(this.gas, dt, 'dance', 0, this.t * 6 + 1);
+    this.pinchos?.update(dt, camera);
+    const play = !!this.pinchos;
+    animatePerson(this.azul, dt, play ? 'idle' : 'dance', 0, this.t * 6);
+    animatePerson(this.gas, dt, play ? 'talk' : 'dance', 0, this.t * 6 + 1);
     this.crowd.forEach((c, i) => animatePerson(c.p, dt, c.dance ? 'dance' : 'talk', 0, this.t * 6 + i));
     this.sky.update(camera, dt);
   }

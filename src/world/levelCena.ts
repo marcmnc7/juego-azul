@@ -8,6 +8,9 @@ import { Walker } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
 import { CENA } from '../data/story';
 import { makeHelmet } from '../entities/helmet';
+import { TableMemory } from './sideGames';
+import { cinema } from '../core/cinema';
+import { SIDE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { araucaria, CarRig, G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
@@ -28,7 +31,7 @@ import { Door } from './door';
 // cocinar la carbonara en la cocina de fuera (guanciale, pasta y crema, sin nata) → Gas pone nota →
 // cenar en la terraza → 22:50, Gas se va en su moto → 23:39, el WhatsApp real de esa noche.
 
-type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'alarm' | 'leaving' | 'done';
+type Phase = 'intro' | 'wait' | 'gasComing' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'alarm' | 'leaving' | 'tidy' | 'done';
 
 export const STREET_Z = 13.5;
 export const GATE = new THREE.Vector3(0, 0, 10.2);
@@ -88,6 +91,7 @@ export class LevelCena implements Level {
   private doors: Door[] = [];
   private doorWho: THREE.Vector3[] = [];
   private gasWalk: THREE.Vector3[] = [];
+  private tableGame: TableMemory | null = null;
   private alarmT = 0;
   private alarmItems: { key: 'plates' | 'pan' | 'helmet'; at: THREE.Vector3; obj: THREE.Object3D; ring: THREE.Mesh }[] = [];
   private neighbor: ReturnType<typeof makeCar> | null = null;
@@ -501,8 +505,32 @@ export class LevelCena implements Level {
     this.gasWalk = [new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.4), GATE.clone().setZ(8.8), GATE.clone().setZ(11.5), new THREE.Vector3(2.4, 0, STREET_Z - 1.6)];
     later(() => {
       if (this.phase !== 'leaving') return;
-      fadeFlash(() => this.ending(), 500);
+      fadeFlash(() => this.startTidy(), 500);
     }, 5200);
+  }
+
+  /** Se ha ido: hay que dejar la mesa igual que en la foto que hizo antes de empezar. */
+  private startTidy() {
+    this.phase = 'tidy';
+    this.gas.root.visible = false;
+    this.gasCar.root.visible = false;
+    for (const it of this.alarmItems) it.obj.visible = false;
+    this.player.root.visible = false;
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    this.updateHud();
+    cinema.play([{ dur: Infinity, pos: new THREE.Vector3(TABLE.x, 2.2, TABLE.z - 1.05), look: new THREE.Vector3(TABLE.x, 0.8, TABLE.z + 0.04), fov: 44 }]);
+    dialogue(SIDE.table.intro, () => {
+      this.tableGame = new TableMemory(this.scene, TABLE, 0.8, () => {
+        this.tableGame?.dispose();
+        this.tableGame = null;
+        this.player.root.visible = true;
+        cinema.stop();
+        fadeFlash(() => this.ending(), 500);
+      });
+    });
   }
 
   private ending() {
@@ -642,6 +670,7 @@ export class LevelCena implements Level {
     const pp = this.player.root.position;
     const free = !this.busy && (this.phase === 'toKitchen' || this.phase === 'toTable' || this.phase === 'alarm');
     if (this.phase === 'alarm') this.updateAlarm(dt);
+    this.tableGame?.update(this.camera);
     // Mientras hay susto, corre: el coche no espera
     this.walker.speed = this.phase === 'alarm' ? 5.8 : 5.2;
     this.walker.turn(this.input.consumeCam());

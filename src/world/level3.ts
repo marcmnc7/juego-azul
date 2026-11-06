@@ -6,6 +6,8 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { FITO_SONG } from '../core/songs';
+import { BeerRun, BEERS_NEED } from './sideGames';
+import { SIDE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook } from '../entities/models';
@@ -30,7 +32,7 @@ import { Door } from './door';
 // cuesta encontrarla entre la gente (ella hace flash con el móvil) y cada canción que pasa buscándola
 // se la pierde → minijuego de ritmo juntos en primera fila → fuegos.
 
-type Phase = 'airport' | 'intro' | 'toWc' | 'film' | 'seek' | 'found' | 'rhythm' | 'ending' | 'done';
+type Phase = 'airport' | 'intro' | 'beers' | 'toWc' | 'film' | 'seek' | 'found' | 'rhythm' | 'ending' | 'done';
 
 // Textos nuevos: si story.ts los trae, mandan esos; si no, estos.
 const TXT = CONCERT as unknown as Record<string, unknown>;
@@ -406,6 +408,7 @@ export class Level3 implements Level {
   private wcRes = WC_Z.map(() => false);
   private wcLights: THREE.MeshBasicMaterial[] = [];
   /** Puertas de los WC: se abren a quien entra o sale. */
+  private beers: BeerRun | null = null;
   private gateT = GATE_SECS;
   private gateStage = 0;
   private wcDoors: Door[] = [];
@@ -970,15 +973,44 @@ export class Level3 implements Level {
       () =>
         dialogue(CONCERT.landed, () =>
           phoneChat(CHATS.vasTarde, () =>
-            dialogue(CONCERT.stadium, () => {
-              this.busy = false;
-              this.phase = 'toWc';
-              this.updateHud();
-            }),
+            dialogue(CONCERT.stadium, () => this.startBeers()),
           ),
         ),
       1500,
     );
+  }
+
+  /** Antes de ir al baño, la ronda: tres cervezas por el pasillo, entre la gente. */
+  private startBeers() {
+    this.phase = 'beers';
+    this.busy = true;
+    this.beers = new BeerRun(this.scene, this.gas, this.walker, this.fx, new THREE.Vector3(AISLE_X - 1.25, 0, 17), AISLE_X, [-3, 3, 9, 13.5], () => this.updateHud());
+    this.updateHud();
+    dialogue(SIDE.beers.intro, () => (this.busy = false));
+  }
+
+  private deliverBeers() {
+    const b = this.beers!;
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    if (b.cupsLeft < BEERS_NEED) {
+      dialogue(SIDE.beers.few, () => {
+        b.reset();
+        this.busy = false;
+        this.updateHud();
+      });
+      return;
+    }
+    const left = b.cupsLeft;
+    b.finish();
+    audio.cheer(0.5);
+    dialogue(SIDE.beers.done(left), () => {
+      this.busy = false;
+      this.phase = 'toWc';
+      this.updateHud();
+    });
   }
 
   /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
@@ -1964,6 +1996,9 @@ export class Level3 implements Level {
       case 'airport':
         setObj(T_AIRPORT_HINT());
         break;
+      case 'beers':
+        setObj(this.beers?.stage === 'carry' ? SIDE.beers.hintCarry : SIDE.beers.hintBar);
+        break;
       case 'intro':
       case 'toWc':
         setObj(this.trip === 0 ? 'Gas: ve a la cola del baño (al fondo, a la derecha)' : 'Otra vez al baño: a la cola');
@@ -1986,6 +2021,7 @@ export class Level3 implements Level {
   private target(): THREE.Vector3 | null {
     if (this.phase === 'airport') return this.v1.set((AIR.minX + AIR.maxX) / 2, 0, AIR.maxZ - 1);
     if (this.phase === 'toWc') return this.tailSpot(this.v1);
+    if (this.phase === 'beers' && this.beers) return this.beers.stage === 'carry' ? this.beers.friendAt : BAR_POS;
     return null;
   }
 
@@ -2079,7 +2115,7 @@ export class Level3 implements Level {
     });
 
     // Personaje que se lleva (Azul en el aeropuerto, Gas en el estadio)
-    const walking = !this.busy && (this.phase === 'toWc' || this.phase === 'airport' || this.phase === 'seek');
+    const walking = !this.busy && (this.phase === 'beers' || this.phase === 'toWc' || this.phase === 'airport' || this.phase === 'seek');
     this.invuln -= dt;
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
@@ -2089,6 +2125,7 @@ export class Level3 implements Level {
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCrowd(dt);
     this.stepQueue(dt);
+    this.beers?.update(dt, this.busy);
     if (this.phase === 'seek' && !this.busy) this.stepSeek(dt);
     if (this.phase === 'film') this.stepFilm(dt);
     {
@@ -2177,6 +2214,17 @@ export class Level3 implements Level {
         label = '🛫 Embarcar';
         action = () => this.board();
       }
+    } else if (walking && this.phase === 'beers' && this.beers) {
+      if (this.beers.stage === 'toBar' && pp.distanceTo(BAR_POS) < 3.2) {
+        label = SIDE.beers.btn;
+        action = () => {
+          this.beers!.pick();
+          this.updateHud();
+        };
+      } else if (this.beers.stage === 'carry' && pp.distanceTo(this.beers.friendAt) < 2.2) {
+        label = SIDE.beers.give;
+        action = () => this.deliverBeers();
+      }
     } else if (walking && this.phase === 'toWc') {
       if (pp.distanceTo(this.tailSpot()) < 1.6) {
         label = '🚻 A la cola';
@@ -2186,7 +2234,7 @@ export class Level3 implements Level {
         action = () => this.talk(CONCERT.barmanAgain, () => this.phase);
       }
     }
-    this.hud.setAction(label, label === 'Tirar 🚭' || label === '🛫 Embarcar' || label === '🚻 A la cola');
+    this.hud.setAction(label, label === 'Tirar 🚭' || label === '🛫 Embarcar' || label === '🚻 A la cola' || this.phase === 'beers');
     if (this.input.consumeAction() && action) action();
     if (this.phase === 'seek') this.updateHud();
 
@@ -2341,6 +2389,7 @@ export class Level3 implements Level {
   }
 
   dispose() {
+    this.beers?.dispose();
     this.rhythm?.dispose();
     this.filmUi?.remove();
     this.hud.remove();

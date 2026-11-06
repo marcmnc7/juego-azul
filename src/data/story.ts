@@ -625,3 +625,97 @@ export const MINIS = {
     done: (passes: number) => `${passes} pases. Nivel 6 (apuntado al 3) 🧐`,
   },
 };
+
+/** Los minijuegos que hay que pasar para seguir con la historia (se inventan, no son chats ni hechos reales). */
+export const SIDE = {
+  water: {
+    intro: [
+      { who: 'Narrador', text: 'Pistolas de agua por todas partes. Unos críos te cortan el paso.' },
+      { who: 'Un crío', text: 'D\'aquí no passes si no ens mulles!' },
+      { who: 'Narrador', text: 'Te han prestado una pistola. Moja a los cinco: dos veces cada uno.' },
+    ] as Line[],
+    hint: '💦 Moja a los críos: dos veces a cada uno',
+    btn: '💦 Disparar',
+    out: ['¡Uno rendido! 💦', '¡Dos!', '¡Tres! Ya huyen', '¡Solo queda uno!', '¡Todos mojados!'],
+    soaked: '💦 ¡Te han dado!',
+    end: [{ who: 'Un crío', text: 'Vale, vale! Passa, passa.' }] as Line[],
+  },
+  pinchos: {
+    intro: [
+      { who: 'Camarero', text: '¡Va, que hay cola! Te canto la ronda y me la sacas en orden.' },
+      { who: 'Gas', text: 'Si aciertas, la siguiente la pago yo.' },
+    ] as Line[],
+    listen: (r: number, of: number) => `Ronda ${r} de ${of}: escucha al camarero…`,
+    yourTurn: (i: number, n: number) => `Sírvelos en el mismo orden (${i}/${n})`,
+    wrong: ['«Ese no era, majo.» Otra vez', '«Pero bueno.» Otra vez', '«Que no, que no.» Otra vez'],
+    good: '¡Esa ronda, bien!',
+    won: '¡Todas servidas! 🍢',
+    end: [{ who: 'Camarero', text: 'Con este ritmo te contrato. ¡Hala, a bailar!' }] as Line[],
+  },
+  beers: {
+    intro: [
+      { who: 'Un amigo', text: 'Gas, ya que estás de pie: tres cervezas. La barra está allí detrás.' },
+      { who: 'Gas', text: 'Por este pasillo no llegan ni dos.' },
+      { who: 'Un amigo', text: 'Con dos me conformo. Yo estoy más adelante, a la izquierda del pasillo.' },
+    ] as Line[],
+    hintBar: '🍺 Ve a la barra a por las cervezas',
+    hintCarry: '🍺 Llévaselas a tu amigo sin frenazos ni empujones',
+    btn: '🍺 Tres, por favor',
+    give: '🍺 Toma',
+    spilled: ['🍺 ¡Se te ha caído una! Te queda una', '🍺 ¡Se te ha caído una! Te quedan dos'],
+    empty: '🍺 ¡Ninguna! Vuelta a la barra',
+    bump: '¡Cuidado, que pasan!',
+    few: [{ who: 'Un amigo', text: 'Una sola? Con esto no brindo ni yo. Otra ronda.' }] as Line[],
+    done: (n: number) => [{ who: 'Un amigo', text: n === 3 ? 'Las tres! Y ni una gota. Eres un artista.' : 'Dos de tres. Bueno, me vale.' }] as Line[],
+  },
+  stones: {
+    start: [
+      { who: 'Gas', text: 'Ya que no se puede llegar al faro: a ver quién hace más ranas.' },
+      { who: 'Margaux', text: 'Empieza tú, que quiero ver cómo pierdes.' },
+    ] as Line[],
+    gasDone: [{ who: 'Gas', text: 'Cinco. Te toca.' }] as Line[],
+    angle: 'Agáchate: la piedra tiene que salir rasante',
+    power: 'Y ahora, fuerte pero sin pasarse',
+    win: (n: number) => [
+      { who: 'Margaux', text: `${n}. Dime otra vez cuántas hiciste tú.` },
+      { who: 'Gas', text: 'Ha sido el viento.' },
+    ] as Line[],
+    lose: (n: number, tries: number) => [{ who: 'Gas', text: tries > 2 ? `${n}. Va, que casi. Inténtalo otra vez.` : `${n}. Tengo tiempo. Otra.` }] as Line[],
+  },
+  nuts: {
+    intro: [
+      { who: 'Una de Ciutadella', text: 'Avellanes! Qui en vol? Els del balcó del Casino no paren de tirar-ne.' },
+      { who: 'Gas', text: 'Toma la bolsa. Devuélveselas, que si no no nos dejan salir de aquí.' },
+    ] as Line[],
+    hint: '🌰 Acierta a los del balcón cuando se paren',
+    btn: '🌰 Tirar',
+    far: 'Acércate más al balcón',
+    miss: 'Se ha movido. ¡Tira cuando se pare!',
+    pelted: ['🌰 ¡En toda la cabeza!', '🌰 ¡Au!', '🌰 Mira el anillo del suelo: ahí cae'],
+    end: [
+      { who: 'Una de Ciutadella', text: 'Molt bé! Ja et pots quedar la bossa.' },
+    ] as Line[],
+  },
+  table: {
+    intro: [
+      { who: 'Narrador', text: 'Gas se ha ido. Queda lo más difícil: que tu madre no note nada.' },
+      { who: 'Margaux', text: 'Menos mal que hice una foto de la mesa antes de empezar.' },
+    ] as Line[],
+    caption: '📷 Antes de que llegara Gas',
+    memorize: 'Mira bien la foto: cada cosa en su sitio',
+    place: 'Elige abajo y toca su sitio en la mesa',
+    good: '¡Igual que en la foto!',
+    wrong: (n: number) => `${n} de 5. Tu madre lo notaría. Otra vez la foto…`,
+    end: [{ who: 'Margaux', text: 'Ni una miga. Aquí no ha venido nadie.' }] as Line[],
+  },
+  hop: {
+    intro: [
+      { who: 'Gas', text: 'El mejor sitio está en aquellas rocas. Yo ya he cruzado. Salta cuando no venga ola.' },
+      { who: 'Margaux', text: 'Si me mojo el vestido, te tiro al agua.' },
+    ] as Line[],
+    hint: '🪨 Salta de roca en roca. Espera las olas en las rocas altas',
+    btn: '🪨 Saltar',
+    fall: ['💦 ¡La ola! A la última roca alta', '💦 ¡Otra vez! Espera a que pase', '💦 ¡Que está fría!'],
+    end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
+  },
+};

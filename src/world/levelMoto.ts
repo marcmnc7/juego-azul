@@ -1,3 +1,4 @@
+import { StoneSkip } from './sideGames';
 import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
@@ -182,7 +183,7 @@ export class LevelMoto implements Level {
   }
 
   get threeScene() {
-    return this.scene;
+    return this.stones ? this.stones.scene : this.scene;
   }
 
   // ---------------- Construcción ----------------
@@ -471,23 +472,34 @@ export class LevelMoto implements Level {
     this.hud.setAction(null);
     audio.fanfare();
     dialogue(MOTO.creus, () =>
-      fadeFlash(() =>
-        dialogue(MOTO.back, () =>
-          phoneChat(CHATS.motoTrip, () => {
-            this.phase = 'done';
-            const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
-            // Tres cosas: curvas fluidas, las tres fotos y el saludo motero sin fallos (dos de tres ya dan las tres estrellas)
-            const ok = (pct >= 70 ? 1 : 0) + (this.photos >= 3 ? 1 : 0) + (this.waves >= this.motosMet && this.wrongWaves === 0 ? 1 : 0);
-            this.onComplete({ stars: Math.min(3, 1 + ok), stats: MOTO.stats(pct, this.photos, this.waves, this.motosMet, this.wrongWaves) });
+      // Como al faro no se llega, un rato en una cala: hasta ganarle a las ranas no volvéis
+      fadeFlash(() => {
+        this.stones = new StoneSkip(() =>
+          fadeFlash(() => {
+            this.stones?.dispose();
+            this.stones = null;
+            dialogue(MOTO.back, () =>
+              phoneChat(CHATS.motoTrip, () => {
+                this.phase = 'done';
+                const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
+                // Tres cosas: curvas fluidas, las tres fotos y el saludo motero sin fallos (dos de tres ya dan las tres estrellas)
+                const ok = (pct >= 70 ? 1 : 0) + (this.photos >= 3 ? 1 : 0) + (this.waves >= this.motosMet && this.wrongWaves === 0 ? 1 : 0);
+                this.onComplete({ stars: Math.min(3, 1 + ok), stats: MOTO.stats(pct, this.photos, this.waves, this.motosMet, this.wrongWaves) });
+              }),
+            );
           }),
-        ),
-      ),
+        );
+      }),
     );
   }
 
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    if (this.stones) {
+      this.stones.update(dt, this.camera);
+      return;
+    }
     let curv = 0;
     if (this.phase === 'ride') {
       const target = SPEED * (this.wobbleT > 0 ? 0.75 : 1);
@@ -829,6 +841,7 @@ export class LevelMoto implements Level {
     ];
   }
 
+  private stones: StoneSkip | null = null;
   private windK = 0;
   private windOff = 0;
   private windOn = false;
@@ -837,6 +850,7 @@ export class LevelMoto implements Level {
   private windEl: HTMLElement | null = null;
 
   dispose() {
+    this.stones?.dispose();
     this.windEl?.remove();
     this.hud.remove();
     audio.stopMusic();

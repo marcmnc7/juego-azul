@@ -1,3 +1,5 @@
+import { WaterFight } from './sideGames';
+import { SIDE } from '../data/story';
 import * as THREE from 'three';
 import { camWorld } from '../core/camWorld';
 import { steerTo, type SteerState } from '../core/steer';
@@ -65,7 +67,7 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   meetScene: FERRERIES_MEET,
 };
 
-type Stage = 'intro' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
+type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
 const REAR = 1.8;
@@ -152,6 +154,8 @@ export class Level1 implements Level {
   private tofolCup: THREE.Mesh | null = null;
   /** De vuelta a Tòfol: los burros van desbocados, y cada empujón derrama una. */
   private stampede = false;
+  /** Antes de nada, los críos de las pistolas de agua (no en el último capítulo). */
+  private water: WaterFight | null = null;
   private spilled = 0;
   private fx: Particles;
   private confetti = new Confetti(180, 12, 10);
@@ -401,6 +405,7 @@ export class Level1 implements Level {
         this.busy = false;
         this.stage = V.findFirst ? 'findMarc' : 'talkTofol';
         this.updateHud();
+        if (!V.findFirst) this.startWater();
       };
       dialogue(this.T.intro, () => (V.introChats ? phoneChat(V.introChats, go) : go()));
     }, 2300);
@@ -410,10 +415,37 @@ export class Level1 implements Level {
     return this.scene;
   }
 
+  /** Unos críos cortan el paso: hay que mojarlos a todos antes de seguir. */
+  private startWater() {
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    const pp = this.player.root.position;
+    this.stage = 'water';
+    this.water = new WaterFight(
+      this.scene, this.player, this.walker, this.fx, this.world.colliders, this.world.people,
+      { minX: pp.x + 4, maxX: pp.x + 21, minZ: -3.1, maxZ: 3.1 },
+      () => this.updateHud(),
+      () => {
+        this.water?.dispose();
+        this.water = null;
+        this.busy = false;
+        this.stage = 'talkTofol';
+        this.updateHud();
+      },
+    );
+    this.updateHud();
+    dialogue(SIDE.water.intro, () => (this.busy = false));
+  }
+
   private updateHud() {
     const h = this.hud;
     const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
     switch (this.stage) {
+      case 'water':
+        h.setObjective(SIDE.water.hint);
+        h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span>`);
+        break;
       case 'intro':
       case 'talkTofol':
         h.setObjective(this.V.hud.talk);
@@ -456,6 +488,8 @@ export class Level1 implements Level {
 
   private target(): THREE.Vector3 | null {
     switch (this.stage) {
+      case 'water':
+        return this.water?.nearest() ?? null;
       case 'talkTofol':
       case 'returnTofol':
         return this.world.tofolPos;
@@ -744,6 +778,10 @@ export class Level1 implements Level {
     this.inHand.forEach((c, i) => (c.visible = i < held));
     if (held > 0) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
     if (held > 1) this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
+    if (this.water) {
+      this.water.update(dt, this.busy);
+      this.water?.pose(dt);
+    }
 
     const dT = pp.distanceTo(this.world.tofolPos);
     if (this.stage === 'findMarc' && this.gasMovesLeft > 0 && !this.busy && pp.distanceTo(this.world.marcPos) < 6) this.moveGas();
@@ -853,7 +891,11 @@ export class Level1 implements Level {
     this.pendingAction = null;
     let label: string | null = null;
     let pulse = false;
-    if (!this.busy && !ending) {
+    if (!this.busy && !ending && this.stage === 'water') {
+      label = SIDE.water.btn;
+      pulse = true;
+      this.pendingAction = () => this.water?.shoot();
+    } else if (!this.busy && !ending) {
       if (this.stage === 'collect' && rearingNear) {
         label = this.T.hints.rear;
         pulse = true;

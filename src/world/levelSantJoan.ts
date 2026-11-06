@@ -21,6 +21,8 @@ import type { Box2 } from './ferreries';
 import { makeTaxi, TaxiRide } from './camiFarola';
 import { limpPose } from '../entities/limp';
 import { LimpPair } from '../entities/limpPair';
+import { NutThrow, NUTS_NEED } from './sideGames';
+import { SIDE } from '../data/story';
 import { rigPost } from '../entities/rig';
 import { twoBone } from '../entities/embrace';
 import { CarRig } from '../entities/models';
@@ -44,7 +46,7 @@ const LA_NOCHE = {
 // de Azul: a dormir, los dos.
 // Todos los chats son trozos literales.
 
-type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
+type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'nuts' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
 
 // Plano (metros): el Born en el origen; hacia el este, el Carrer Major des Born con la Catedral, Ses Voltes
 // y, al final, la Plaça Nova y la Plaça Espanya
@@ -139,6 +141,7 @@ export class LevelSantJoan implements Level {
   private gasTrail = new Trail();
   /** De noche, él apoyado en ella. */
   private pair: LimpPair | null = null;
+  private nuts: NutThrow | null = null;
   private beTouched = 0;
   /** El final del día, en casa de Azul. */
   private home: { scene: THREE.Scene; sky: Sky; sun: Sun; colliders: Box2[]; doors: Door[]; pals: { p: Person; trail: Trail; lead: () => THREE.Vector3; gap: number }[]; who: THREE.Vector3[]; marker: THREE.Object3D; taxi: ReturnType<typeof makeTaxi>; rig: CarRig; taxiT: number; outT: number; homeLine?: boolean } | null = null;
@@ -836,8 +839,9 @@ export class LevelSantJoan implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
-    if (this.phase === 'be') h.setObjective(this.beIn ? SANTJOAN.beGo : SANTJOAN.beHint);
+    h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span>` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
+    if (this.phase === 'nuts') h.setObjective(SIDE.nuts.hint);
+    else if (this.phase === 'be') h.setObjective(this.beIn ? SANTJOAN.beGo : SANTJOAN.beHint);
     else if (this.phase === 'taxi') h.setObjective(SANTJOAN.taxiHint);
     else if (this.phase === 'ride') h.setObjective('');
     else if (this.phase === 'home') h.setObjective(SANTJOAN.homeHint);
@@ -853,6 +857,10 @@ export class LevelSantJoan implements Level {
     if (this.phase === 'coming') return this.gas.root.position;
     if (this.phase === 'exact') return this.v2.set(0, 0, 0);
     if (this.phase === 'be' && !this.beIn) return BE;
+    if (this.phase === 'nuts' && this.nuts) {
+      const near = this.nuts.nearest();
+      return near.dist > 13 ? near.at : null;
+    }
     if (this.phase === 'taxi') return this.v2.set(TAXI.x + 0.3, 0, TAXI.z - 1.55);
     return null;
   }
@@ -904,7 +912,7 @@ export class LevelSantJoan implements Level {
     const rearNear = this.phase === 'taxi' ? null : this.updateHorses(dt);
 
     // Azul
-    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'be' || this.phase === 'taxi');
+    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'nuts' || this.phase === 'be' || this.phase === 'taxi');
     this.walker.turn(this.input.consumeCam());
     this.walker.canJump = walking && this.phase !== 'taxi';
     if (this.phase === 'taxi' && this.pair) {
@@ -934,6 +942,9 @@ export class LevelSantJoan implements Level {
           animatePerson(this.gas, dt, 'walk');
           if (Math.random() < dt * 1.2) this.fx.burst(this.v1.copy(g).setY(2.4), '👋', 1, 0.4, 0.6);
         } else this.meet();
+      } else if (this.phase === 'nuts') {
+        const moving = this.gasTrail.step(this.gas.root, pp, 1.7, 4.2, dt, this.colliders, 0.26);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
       } else if (this.phase === 'be') {
         // Va contigo, sin atravesar a nadie
         if (!this.beIn && pp.x > BE_BOX.minX + 1) {
@@ -953,6 +964,11 @@ export class LevelSantJoan implements Level {
         this.pair!.pose();
       } else if (this.phase === 'ending' || this.phase === 'done') animatePerson(this.gas, dt, 'idle');
       else animatePerson(this.gas, dt, 'talk');
+    }
+
+    if (this.nuts) {
+      this.nuts.update(dt, this.busy);
+      this.nuts?.pose(dt);
     }
 
     // Pin flotando, que se mueve un poco (Gas no para quieto)
@@ -982,7 +998,10 @@ export class LevelSantJoan implements Level {
     // Acción contextual
     let label: string | null = null;
     let action: (() => void) | null = null;
-    if (walking && rearNear && !pushing) {
+    if (walking && this.phase === 'nuts') {
+      label = SIDE.nuts.btn;
+      action = () => this.nuts?.throw();
+    } else if (walking && rearNear && !pushing) {
       label = SANTJOAN.hints.rear;
       action = () => this.touchHorse(rearNear);
     } else if (!this.busy && this.phase === 'taxi' && Math.hypot(pp.x - TAXI.x, pp.z - (TAXI.z - 1.55)) < 2.1) {
@@ -1249,7 +1268,34 @@ export class LevelSantJoan implements Level {
     // Nada de bailes: se encuentran, se abrazan y a seguir
     hugFor(this.player, this.gas, 4);
     audio.luck();
-    dialogue(SANTJOAN.meet, () => later(() => dialogue(SANTJOAN.toBe, () => this.startBe()), 700));
+    dialogue(SANTJOAN.meet, () => later(() => this.startNuts(), 700));
+  }
+
+  /** Los del balcón del Casino no paran de tirar avellanes: hasta devolvérselas, no se sale de aquí. */
+  private startNuts() {
+    this.phase = 'nuts';
+    this.map.style.display = 'none';
+    this.pinObj.visible = false;
+    this.gasTrail = new Trail();
+    this.busy = true;
+    this.input.reset();
+    this.nuts = new NutThrow(this.scene, this.player, this.walker, this.fx, -3.2, 11.2, BORN.minZ, () => this.updateHud(), () => {
+      this.nuts?.dispose();
+      this.nuts = null;
+      this.pushNothing();
+      dialogue(SANTJOAN.toBe, () => this.startBe());
+    });
+    this.updateHud();
+    dialogue(SIDE.nuts.intro, () => (this.busy = false));
+  }
+
+  private pushNothing() {
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
   }
 
   /** A Sa Plaça d'es Bè, los dos juntos y andando: por Ses Voltes y la Plaça Espanya. */
