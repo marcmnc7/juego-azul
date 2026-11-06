@@ -708,7 +708,7 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
     // Un poco de luz propia en la piel y la ropa: a la sombra, las caras no se quedan grises
     mat.emissive = new THREE.Color(0xffffff);
     mat.emissiveMap = mat.map;
-    mat.emissiveIntensity = 0.13;
+    mat.emissiveIntensity = 0.09;
     if (look.nude) mat.normalMap = null;
     return true;
   }
@@ -736,7 +736,7 @@ export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStanda
     mat.color.setRGB(Math.min(2, t.r / mc.r), Math.min(2, t.g / mc.g), Math.min(2, t.b / mc.b));
     mat.emissive = mat.color.clone();
     mat.emissiveMap = mat.map;
-    mat.emissiveIntensity = 0.13;
+    mat.emissiveIntensity = 0.09;
   } else if (/Beard/.test(name)) {
     mat.color = lin(look.hair);
     if (!look.beard) return false;
