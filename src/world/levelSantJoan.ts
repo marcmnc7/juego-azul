@@ -1270,12 +1270,6 @@ export class LevelSantJoan implements Level {
       h.d.root.visible = false;
       h.alert.visible = false;
     }
-    // Y en la calle por donde se llega al taxi, otras dos farolas encendidas
-    for (const [x, z] of [[92, 0], [78, 5]] as const) {
-      const l = new THREE.PointLight(0xffb070, 9, 18, 1.6);
-      l.position.set(x, 5, z);
-      sc.add(l);
-    }
   }
 
   /** Ya de noche, a coger un taxi: Gas va cojísimo y sus dos amigas esperan junto al coche. */
