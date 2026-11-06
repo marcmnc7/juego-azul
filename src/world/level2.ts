@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
-import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, CarRig } from '../entities/models';
+import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, woodChair, CarRig } from '../entities/models';
+import { ROOF_GEO } from './ferreries';
 import { hdSurfaces } from '../core/gfx';
 import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
@@ -208,7 +209,11 @@ export class Level2 implements Level {
   private logronoTown: THREE.Object3D | null = null;
   /** Desde aquí, Logroño: sin viñas ni matas de cuneta. */
   private townZ = Infinity;
-  private scatterAt = (z: number): Region | null => (z > this.townZ ? null : this.regionAt(z));
+  private scatterAt = (z: number): Region | null => {
+    // Ni en la ciudad, ni en la terraza de San Vicente, ni delante de los restaurantes: salían matas y vacas encima
+    if (z > this.townZ || (z > LEG1 - 8 && z < LEG1 + 52) || EATERIES.some((e) => Math.abs(z - e.z) < 11)) return null;
+    return this.regionAt(z);
+  };
   private things: Thing[] = [];
   private nextSpawn = 60;
   private scatters: Scatter[] = [];
@@ -610,15 +615,21 @@ export class Level2 implements Level {
       m.add(G.cyl, 0xb8ad97, 14.5 + i * 5, 4.4, 6, Math.PI / 2, 0, 0, 3.8, 3, 3.8);
     }
     m.add(G.box, 0xb8ad97, 32, 5.6, 6, 0, 0, 0, 42, 0.6, 3.2);
-    // Casas del pueblo
-    for (let i = 0; i < 7; i++) {
-      const x = -12 - (i % 3) * 7;
-      const z = -4 + Math.floor(i / 3) * 9 + (i % 2) * 2;
-      const h = 5 + (i % 3) * 2;
-      m.add(G.box, [0xf2ede2, 0xe9d8b4, 0xf4f1ea][i % 3], x, h / 2, z, 0, 0, 0, 6, h, 6);
-      m.add(G.cone, 0xa9573a, x, h + 1, z, 0, Math.PI / 4, 0, 8.4, 2, 8.4);
-      m.add(G.box, [0x2f6b46, 0x1f5fbf, 0x9b2335][i % 3], x + 3.02, h / 2, z, 0, 0, 0, 0.05, 1.2, 1);
-    }
+    // Casas del pueblo (las de verdad, en cuanto hay con qué: ver más abajo)
+    const houses = (hdT: TownHD | null) => {
+      for (let i = 0; i < 7; i++) {
+        const x = -12 - (i % 3) * 7;
+        const z = -4 + Math.floor(i / 3) * 9 + (i % 2) * 2;
+        const floors = 2 + (i % 3);
+        const h = floors * 3 + 0.6;
+        const c = [0xf2ede2, 0xe9d8b4, 0xf4f1ea][i % 3];
+        if (hdT) {
+          hdT.wall(x - 3, x + 3, z - 3, z + 3, h, c);
+          hdT.facade(z - 2.9, z + 2.9, x + 3, 1, floors, false);
+        } else m.add(G.box, c, x, h / 2, z, 0, 0, 0, 6, h, 6);
+        m.add(ROOF_GEO, 0xa9573a, x, h + 0.2, z, 0, Math.PI / 2, 0, 6.5, 2, 6.5);
+      }
+    };
     // Castillo del Rey
     m.add(G.box, 0xa89c86, -16, 8, 26, 0, 0, 0, 10, 16, 10);
     for (const [dx, dz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) m.add(G.box, 0xa89c86, -16 + dx, 17, 26 + dz, 0, 0, 0, 1.6, 2, 1.6);
@@ -633,6 +644,7 @@ export class Level2 implements Level {
     m.add(G.box, 0xbdb4a4, -12.4, 0.05, -22, 0, 0, 0, 15.6, 0.1, 16);
     m.add(G.box, 0xa89f90, -4.72, 0.08, -22, 0, 0, 0, 0.24, 0.16, 16); // bordillo
     const hd = hdSurfaces.value ? new TownHD() : null;
+    houses(hd);
     if (hd) {
       hd.wall(-20, -5, -14, -11, 10, 0xd4c8b0);
       hd.facade(-20, -5, -14, -1, 3, true, false);
@@ -1366,17 +1378,43 @@ export class Level2 implements Level {
   private buildEatery(name: string, isM: boolean) {
     const g = new THREE.Group();
     const wall = isM ? 0xf2e6c8 : [0xe8d9c0, 0xd9cfc0, 0xf0e2c8][name.length % 3];
-    g.add(
-      new Merger()
-        .add(G.box, wall, 16, 2.4, 0, 0, 0, 0, 8, 4.8, 10)
-        .add(G.box, 0xa9573a, 16, 5.0, 0, 0, 0, 0, 8.6, 0.4, 10.6)
-        .add(G.box, 0x7a8fa6, 11.98, 1.8, -2, 0, 0, 0, 0.05, 1.6, 2.4)
-        .add(G.box, 0x7a8fa6, 11.98, 1.8, 2.2, 0, 0, 0, 0.05, 1.6, 2.4)
-        .add(G.box, 0x6b4428, 11.98, 1.3, 0, 0, 0, 0, 0.06, 2.6, 1.2)
-        .add(G.box, isM ? 0xc0392b : 0x2f6b46, 11.4, 3.2, 0, 0, 0, 0, 1.2, 0.14, 8) // toldo
-        .add(G.box, 0x9a9a9a, 9, 0.03, 0, 0, 0, 0, 6, 0.05, 12) // aparcamiento
-        .mesh(),
-    );
+    const m = new Merger();
+    const hd = hdSurfaces.value ? new TownHD() : null;
+    const H = 6.4;
+    if (hd) {
+      hd.wall(12, 20, -6, 6, H, wall);
+      hd.facade(-5.8, 5.8, 12, -1, 2, false, false);
+    } else m.add(G.box, wall, 16, H / 2, 0, 0, 0, 0, 8, H, 12);
+    m.add(ROOF_GEO, 0xa9573a, 16, H + 0.22, 0, 0, Math.PI / 2, 0, 12.6, 2.2, 8.6);
+    m.add(G.box, 0xb98f6a, 18, H + 1.8, 3.4, 0, 0, 0, 0.7, 1.4, 0.7);
+    // El bajo: zócalo, cristaleras con la barra detrás, puerta de madera y carpintería
+    m.add(G.box, 0x8a7a68, 11.96, 0.3, 0, 0, 0, 0, 0.08, 0.6, 12);
+    for (const z of [-3.6, 3.6]) {
+      m.add(G.box, 0xdcae74, 11.97, 1.6, z, 0, 0, 0, 0.02, 2, 3.8); // el interior, con luz
+      m.add(G.box, 0x4a2c1a, 11.95, 1.05, z, 0, 0, 0, 0.03, 0.9, 3.8); // la barra
+      for (let b = 0; b < 12; b++) m.add(G.box, [0x2f5a3a, 0x6b2a2a, 0x8a6a2a][b % 3], 11.94, 2, z - 1.6 + b * 0.29, 0, 0, 0, 0.01, 0.34, 0.09);
+      for (const d of [-1.9, -0.63, 0.63, 1.9]) m.add(G.box, 0x2a2a2e, 11.91, 1.6, z + d, 0, 0, 0, 0.05, 2, 0.07);
+      m.add(G.box, 0x2a2a2e, 11.91, 2.62, z, 0, 0, 0, 0.05, 0.07, 3.9);
+    }
+    m.add(G.box, 0x6b4428, 11.94, 1.3, 0, 0, 0, 0, 0.06, 2.6, 1.3);
+    m.add(G.box, 0x9fc4e0, 11.9, 1.75, 0, 0, 0, 0, 0.02, 1.2, 0.8);
+    m.add(G.sphere, 0xc8ccd0, 11.88, 1.15, 0.42, 0, 0, 0, 0.06, 0.06, 0.06);
+    // Toldo a rayas, con su faldón
+    const c1 = isM ? 0xc0392b : 0x2f6b46;
+    for (let k = 0; k < 14; k++) m.add(G.box, k % 2 ? 0xf4f1e8 : c1, 11.1, 3.05, -5.53 + k * 0.85, 0, 0, 0.32, 1.9, 0.05, 0.85);
+    m.add(G.box, c1, 10.2, 2.63, 0, 0, 0, 0, 0.04, 0.3, 11.9);
+    // Terraza: mesas y sillas, y el aparcamiento con sus plazas
+    m.add(G.box, 0xbdb4a4, 10.3, 0.05, 0, 0, 0, 0, 3.4, 0.1, 12);
+    for (const z of [-4, 0.6, 4.4]) {
+      m.add(G.box, 0xe8e2d2, 10.4, 0.76, z, 0, 0, 0, 0.8, 0.04, 0.8);
+      m.add(G.cyl, 0x4a4a50, 10.4, 0.4, z, 0, 0, 0, 0.06, 0.7, 0.06);
+      woodChair(m, 10.4, z - 0.75, 0, 0x4a4a50);
+      woodChair(m, 10.4, z + 0.75, Math.PI, 0x4a4a50);
+    }
+    m.add(G.box, 0x4a4a50, 7, 0.025, 0, 0, 0, 0, 5.8, 0.03, 14);
+    for (let z = -6; z <= 6; z += 3) m.add(G.box, 0xdcd8cc, 7, 0.045, z, 0, 0, 0, 5, 0.006, 0.1);
+    g.add(m.mesh());
+    hd?.finish(g);
     const sign = makeSign(isM ? ['CAFETERÍA', 'MARCIAL'] : name.split(' ').length > 2 ? [name.split(' ')[0], name.split(' ').slice(1).join(' ')] : [name], isM ? '#b8322a' : '#5a4632');
     sign.position.set(6.2, 0, -6);
     g.add(sign);

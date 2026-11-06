@@ -353,7 +353,7 @@ export class LevelEclipse implements Level {
   /** Cocina de casa de los padres de Gas: baldosa de barro, paredes encaladas, vigas, encimera, mesa y ventana. */
   private buildKitchen() {
     const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.6, new THREE.Vector3(-0.5, 1, 0.6));
-    this.hemi.intensity = 1.0;
+    this.hemi.intensity = 0.62; // (con 1, la cocina salía quemada)
     const W = 4.6, D = 3.4, H = 2.8;
     const tiles = canvasTex((ctx, w, h) => {
       ctx.fillStyle = '#9c5a3a';
@@ -452,7 +452,7 @@ export class LevelEclipse implements Level {
     m.add(G.sphere, 0xc23030, 0.85, 0.86, 0.9, 0, 0, 0, 0.13, 0.13, 0.13);
     this.colliders.push({ minX: -1.1, maxX: 1.9, minZ: 0.3, maxZ: 1.5 });
     sc.add(m.mesh());
-    const light = new THREE.PointLight(0xfff0d0, 6, 12, 1.4);
+    const light = new THREE.PointLight(0xfff0d0, 3, 12, 1.4);
     light.position.set(0.4, 2.5, 0.5);
     sc.add(light);
     // Sus padres en la cocina; vosotros entráis por la puerta

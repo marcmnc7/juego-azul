@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loadGLB } from '../core/assets';
 import horseUrl from '../assets/chars/horse.glb';
 import { boneAnchor, makeRigPerson, rigTickers } from './rig';
@@ -129,7 +130,10 @@ function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, b
     if (Math.abs(z) < 25) standBack = Math.max(standBack, y);
   }
   mixer.uncacheRoot(dummy);
-  return { geo, clip, name: src.name, scale, minY, backY: Math.max(backY, standBack), standT, stride: reach * scale * 1.6 };
+  // Caras unidas y normales suaves: con facetas, los animales parecían de papiroflexia al lado de los personajes
+  const smooth = mergeVertices(geo, 0.01);
+  smooth.computeVertexNormals();
+  return { geo: smooth, clip, name: src.name, scale, minY, backY: Math.max(backY, standBack), standT, stride: reach * scale * 1.6 };
 }
 
 /**
@@ -187,7 +191,7 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   inner.position.z = 0.75;
   pivot.add(inner);
 
-  const mat = new THREE.MeshStandardMaterial({ color: lin(coat), vertexColors: true, roughness: horse ? 0.55 : 0.9, metalness: 0, flatShading: true });
+  const mat = new THREE.MeshStandardMaterial({ color: lin(coat), vertexColors: true, roughness: horse ? 0.55 : 0.9, metalness: 0 });
   const mesh = new THREE.Mesh(P.geo, mat);
   mesh.name = P.name;
   mesh.scale.setScalar(P.scale);
