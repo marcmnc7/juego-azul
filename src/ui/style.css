@@ -1308,3 +1308,15 @@ body:has(.princesa-screen) .counters { display: none; }
   font-size: 34px; line-height: 1; display: grid; place-items: center; text-shadow: 0 2px 4px rgba(0,0,0,.25);
 }
 @media (max-height: 520px) { .action-btn { width: 64px; height: 64px; font-size: 29px; } }
+
+/* Debajo del reloj, iOS difumina una franja (si la app se dibuja bajo la barra de estado): nada de texto ahí.
+   Lo de arriba empieza un poco más abajo de la zona segura, y el fondo de la página es negro como la barra. */
+html, body { background: #000; }
+.ap-head { padding-top: calc(env(safe-area-inset-top) + 16px); }
+.ap-body { padding-top: calc(env(safe-area-inset-top) + 84px); }
+.hud-top { top: calc(env(safe-area-inset-top) + 10px); }
+.counters, .hud-menu { top: calc(env(safe-area-inset-top) + 56px); }
+.side-panel, .side-count { top: calc(env(safe-area-inset-top) + 58px); }
+.kp-pop { top: calc(env(safe-area-inset-top) + 58px); }
+.screen { padding-top: calc(env(safe-area-inset-top) + 28px); }
+.app-screen { padding-top: 0; }
