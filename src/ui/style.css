@@ -984,7 +984,6 @@ body:has(.princesa-screen) .counters { display: none; }
   .dialogue .text { font-size: 15px; }
   .action-btn { width: 70px; height: 70px; font-size: 12px; }
 }
-.install-tip { margin-top: 4px !important; max-width: 300px !important; }
 
 /* ---------- Capítulo 4: el urinario ---------- */
 .pee-game { position: fixed; inset: 0; z-index: 36; touch-action: none; animation: screenIn .35s ease both; }
@@ -1032,3 +1031,10 @@ body:has(.princesa-screen) .counters { display: none; }
 .panel-overlay .pack-item.in { background: rgba(47, 157, 98, .55); border-color: rgba(160, 255, 200, .6); }
 .panel-overlay .pack-item.in .pi-label::after { color: #b8ffd6; }
 .panel-overlay .pack-item.nope { background: rgba(229, 72, 77, .55); border-color: rgba(255, 170, 170, .7); }
+
+/* ---------- Abrirlo desde la pantalla de inicio ---------- */
+.install-gate { gap: 14px; }
+.ig-steps { display: flex; flex-direction: column; gap: 8px; width: min(360px, 100%); }
+.ig-step { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 14px; border-radius: 14px; background: var(--paper); border: 3px solid var(--sea); box-shadow: 0 4px 0 rgba(18,58,92,.35); font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+.ig-n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--sea); font-weight: 900; border: 2px solid var(--sea); }
+.ig-icon { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 6px; background: #e8eef4; color: #2a6fd8; font-weight: 900; }

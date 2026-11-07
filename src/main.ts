@@ -35,7 +35,7 @@ import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore, installGate, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -239,7 +239,16 @@ idle.background = new THREE.Color(0x2b1840);
 // Modo prueba: abrir el enlace terminado en #test (o ?debug en local).
 // ?hq desactiva la bajada automática de calidad (para capturas)
 const HQ = new URLSearchParams(location.search).has('hq');
-const TEST = location.hash === '#test' || new URLSearchParams(location.search).has('debug');
+const TEST =
+  location.hash === '#test' ||
+  new URLSearchParams(location.search).has('debug') ||
+  (() => {
+    try {
+      return localStorage.getItem('margaux-test') === '1';
+    } catch {
+      return false;
+    }
+  })();
 
 function resize() {
   const w = window.innerWidth;
@@ -731,14 +740,6 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-titleScreen(
-  () => {
-    data = load();
-    mapScreen(data, mapOpts);
-  },
-  { done: allLoading, progress: () => Math.min(1, loadedParts / LOAD_PARTS) },
-);
-
 // Instalable (PWA): servido desde su propia dirección, se guarda para abrirse sin conexión. Dentro del artifact
 // (un iframe) no se puede instalar, así que ni se intenta.
 const topLevel = (() => {
@@ -752,11 +753,15 @@ const standalone = matchMedia('(display-mode: standalone), (display-mode: fullsc
 if ('serviceWorker' in navigator && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && topLevel && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[pwa]', e));
 }
-// En el iPhone, desde Safari: cómo ponerlo a pantalla completa
-if (topLevel && !standalone && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-  const tip = document.createElement('p');
-  tip.className = 'fine install-tip';
-  tip.innerHTML = 'Para jugar a pantalla completa: <b>Compartir ⎋ → Añadir a pantalla de inicio</b>';
-  const put = () => document.querySelector('.title-screen')?.append(tip);
-  setTimeout(put, 300);
-}
+// En el navegador del móvil no se juega: hay que abrirlo desde la pantalla de inicio (pantalla completa, sin
+// barras, sin conexión). Dentro del artifact, en el ordenador y en modo prueba sí se puede
+const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+if (topLevel && !standalone && phone && !TEST) installGate(/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+else
+  titleScreen(
+    () => {
+      data = load();
+      mapScreen(data, mapOpts);
+    },
+    { done: allLoading, progress: () => Math.min(1, loadedParts / LOAD_PARTS) },
+  );

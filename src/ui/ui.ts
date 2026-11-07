@@ -25,12 +25,71 @@ export function clearScreens() {
   root.querySelectorAll('.screen, .gift-overlay').forEach((e) => e.remove());
 }
 
+/**
+ * Modo prueba sin tocar la dirección (la app instalada no deja añadir #test): cinco toques seguidos en el
+ * elemento lo encienden o lo apagan, y se queda guardado en este navegador o en esta app.
+ */
+function testTaps(target: HTMLElement) {
+  let taps: number[] = [];
+  target.onpointerdown = () => {
+    const now = performance.now();
+    taps = [...taps.filter((t) => now - t < 2500), now];
+    if (taps.length < 5) return;
+    taps = [];
+    let on = false;
+    try {
+      on = localStorage.getItem('margaux-test') !== '1';
+      if (on) localStorage.setItem('margaux-test', '1');
+      else localStorage.removeItem('margaux-test');
+    } catch {
+      return;
+    }
+    toast(on ? '🛠 Modo prueba activado' : 'Modo prueba desactivado');
+    setTimeout(() => location.reload(), 900);
+  };
+}
+
+/**
+ * En el navegador del móvil no se juega: se pide abrirlo desde la pantalla de inicio (a pantalla completa, sin
+ * barras y sin conexión). Con el modo prueba se puede seguir en el navegador.
+ */
+export function installGate(ios: boolean) {
+  clearScreens();
+  const s = el('div', 'screen install-gate');
+  const eyebrow = el('div', 'eyebrow', 'De Gas, para ti');
+  testTaps(eyebrow);
+  const steps = ios
+    ? [
+        ['1', 'Toca <b>Compartir</b> <span class="ig-icon">⎋</span> abajo en Safari'],
+        ['2', 'Elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span>'],
+        ['3', 'Ábrelo desde el icono del <b>osito</b> 🐻'],
+      ]
+    : [
+        ['1', 'Abre el menú <b>⋮</b> del navegador'],
+        ['2', 'Elige <b>Añadir a pantalla de inicio</b> o <b>Instalar</b>'],
+        ['3', 'Ábrelo desde el icono del <b>osito</b> 🐻'],
+      ];
+  const list = el('div', 'ig-steps');
+  for (const [n, t] of steps) list.append(el('div', 'ig-step', `<span class="ig-n">${n}</span><span>${t}</span>`));
+  s.append(
+    eyebrow,
+    el('h1', 'display', 'Para<br><em>Azul</em>'),
+    sticker(STICKERS.oso, 'title-sticker'),
+    el('p', 'lead', 'Este juego se abre desde la pantalla de inicio: así va a pantalla completa y sin barras.'),
+    list,
+    el('p', 'fine', 'Solo hay que hacerlo una vez.'),
+  );
+  root.append(s);
+}
+
 /** Portada. Si se le pasa la carga, el botón espera (con porcentaje) a que todo esté listo, para que luego cada capítulo abra al momento. */
 export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }) {
   clearScreens();
   const s = el('div', 'screen title-screen');
+  const eyebrow = el('div', 'eyebrow', 'De Gas, para ti');
+  testTaps(eyebrow);
   s.append(
-    el('div', 'eyebrow', 'De Gas, para ti'),
+    eyebrow,
     el('h1', 'display', 'Para<br><em>Azul</em>'),
     sticker(STICKERS.oso, 'title-sticker'),
     el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),

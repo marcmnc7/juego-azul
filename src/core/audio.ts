@@ -131,14 +131,72 @@ export class Audio {
     this.onCue?.(c);
   }
 
+  /**
+   * En el iPhone, Web Audio sigue al botón de silencio: con el móvil en silencio no se oía nada aunque el volumen
+   * estuviera alto. Pidiendo la sesión de audio «playback» (como una app de música) suena siempre. En iOS sin esa
+   * API, el mismo efecto se consigue con un <audio> silencioso en bucle, arrancado dentro del toque.
+   */
+  private silentEl: HTMLAudioElement | null = null;
+  private playbackSession() {
+    const nav = navigator as unknown as { audioSession?: { type: string } };
+    try {
+      if (nav.audioSession) {
+        nav.audioSession.type = 'playback';
+        return;
+      }
+    } catch {
+      /* sigue con el truco del <audio> */
+    }
+    if (!/iPhone|iPad|iPod/.test(navigator.userAgent) || this.silentEl) return;
+    // 0,1 s de silencio en WAV (8 kHz, 8 bits)
+    const n = 800;
+    const bytes = new Uint8Array(44 + n);
+    const dv = new DataView(bytes.buffer);
+    const str = (o: number, t: string) => [...t].forEach((c, i) => (bytes[o + i] = c.charCodeAt(0)));
+    str(0, 'RIFF');
+    dv.setUint32(4, 36 + n, true);
+    str(8, 'WAVEfmt ');
+    dv.setUint32(16, 16, true);
+    dv.setUint16(20, 1, true);
+    dv.setUint16(22, 1, true);
+    dv.setUint32(24, 8000, true);
+    dv.setUint32(28, 8000, true);
+    dv.setUint16(32, 1, true);
+    dv.setUint16(34, 8, true);
+    str(36, 'data');
+    dv.setUint32(40, n, true);
+    bytes.fill(128, 44);
+    let bin = '';
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    const el = new window.Audio('data:audio/wav;base64,' + btoa(bin));
+    el.loop = true;
+    el.setAttribute('playsinline', '');
+    el.volume = 0.01;
+    void el.play().catch(() => {});
+    this.silentEl = el;
+  }
+
   /** Debe llamarse dentro de un gesto del usuario (iOS). */
   unlock() {
+    this.playbackSession();
     if (this.ctx) {
       void this.ctx.resume();
       return;
     }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.ctx = new AC();
+    // En segundo plano, callado (con la sesión de música seguiría sonando con la app cerrada); al volver, el
+    // primer toque lo reanuda
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) {
+        void this.ctx.suspend();
+        this.silentEl?.pause();
+      } else {
+        void this.ctx.resume();
+        void this.silentEl?.play().catch(() => {});
+      }
+    });
     this.master = this.ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.6;
     this.master.connect(this.ctx.destination);
@@ -185,7 +243,10 @@ export class Audio {
 
   /** Tras una llamada o bloquear el móvil, iOS deja el audio suspendido: se reanuda con el siguiente toque. */
   resume() {
-    if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume();
+    if (this.ctx && this.ctx.state !== 'running') {
+      this.playbackSession();
+      void this.ctx.resume();
+    }
   }
 
   /** Reloj de audio en segundos (o reloj normal si no hay audio). */
