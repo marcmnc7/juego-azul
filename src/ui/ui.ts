@@ -1572,6 +1572,16 @@ export interface DebugItem {
   run: () => void;
 }
 
+const EMOJI = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/u;
+/** El icono de una acción: el emoji de su texto (o uno según lo que diga, si no lleva). */
+function actionIcon(label: string) {
+  const m = label.match(EMOJI);
+  if (m) return m[0];
+  if (/hablar|decir|saludar/i.test(label)) return '💬';
+  if (/buu/i.test(label)) return '👻';
+  return '✋';
+}
+
 /** Fases del capítulo en marcha (modo prueba): se saltan desde la pausa. */
 let debugList: HTMLElement | null = null;
 
@@ -1722,9 +1732,10 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     e.preventDefault();
     onAction();
   };
-  const hint = el('div', 'hint-move' + (mission ? ' m-hud' : ''), hintText);
-  setTimeout(() => hint.remove(), 7000);
-  root.append(top, counters, act, hint);
+  // (la ayuda de los controles ya la dan los primeros pasos y «Cómo se juega»)
+  void hintText;
+  const hint = el('div', 'hint-move');
+  root.append(top, counters, act);
   return {
     root: top,
     setObjective: (t) => {
@@ -1735,8 +1746,10 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       if (t) expand(5500);
     },
     setArrow: (a) => {
-      arrow.style.display = a === null ? 'none' : '';
-      if (a !== null) arrow.style.transform = `rotate(${a}rad)`;
+      // Sin dirección, el icono del objetivo; con dirección, la flecha que apunta
+      const glyph = a === null ? '✦' : '⬆';
+      if (arrow.textContent !== glyph) arrow.textContent = glyph;
+      arrow.style.transform = a === null ? '' : `rotate(${a}rad)`;
     },
     setCounters: (h) => {
       if (counters.innerHTML !== h) counters.innerHTML = h;
@@ -1744,7 +1757,12 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     setAction: (label, pulse) => {
       act.classList.toggle('hidden', !label);
       act.classList.toggle('pulse', !!pulse);
-      if (label && act.textContent !== label) act.textContent = label;
+      // Solo el icono: el texto queda para la accesibilidad
+      if (label && act.title !== label) {
+        act.title = label;
+        act.setAttribute('aria-label', label);
+        act.textContent = actionIcon(label);
+      }
     },
     remove: () => {
       clearTimeout(objTimer);

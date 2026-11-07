@@ -1291,3 +1291,20 @@ body:has(.princesa-screen) .counters { display: none; }
   .tuto.step1 .tuto-bubble { top: 18%; }
   .tuto.step2 .tuto-bubble { bottom: auto; top: 22%; }
 }
+
+/* =====================================================================================================
+   HUD mínimo: sin velos arriba, el objetivo se recoge en un icono, el joystick solo aparece al tocar y el
+   botón de acción es un icono.
+   ===================================================================================================== */
+.ap-head { background: #59b4ef; box-shadow: 0 6px 16px -10px rgba(15, 55, 86, .5); padding-bottom: 12px; }
+.objective:not(.open) { padding: 4px; opacity: .9; }
+.objective:not(.open) .obj-text { display: none; }
+.objective .arrow { width: 28px; height: 28px; font-size: 13px; }
+.stick-base.ghost { display: none !important; }
+.hint-move { display: none !important; }
+.counters .chip { font-size: 12px; padding: 2px 9px; }
+.action-btn {
+  width: 74px; height: 74px; min-width: 0; min-height: 0; max-width: none; padding: 0; border-radius: 50%;
+  font-size: 34px; line-height: 1; display: grid; place-items: center; text-shadow: 0 2px 4px rgba(0,0,0,.25);
+}
+@media (max-height: 520px) { .action-btn { width: 64px; height: 64px; font-size: 29px; } }

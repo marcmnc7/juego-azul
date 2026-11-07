@@ -280,7 +280,8 @@ export class Post {
     u.get('saturation')!.value = c.saturation;
     u.get('contrast')!.value = c.contrast;
     u.get('tint')!.value = c.tint;
-    u.get('vignette')!.value = c.vignette + this.cinematic * 0.15;
+    // Suave: más fuerte oscurecía la franja de arriba, donde van el objetivo y el botón de pausa
+    u.get('vignette')!.value = c.vignette * 0.45 + this.cinematic * 0.08;
     half(c.shadows, u.get('shadowCol')!.value);
     half(c.highlights, u.get('lightCol')!.value);
     u.get('letterbox')!.value = this.cinematic;

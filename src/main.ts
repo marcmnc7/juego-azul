@@ -553,7 +553,8 @@ const clock = new THREE.Clock();
 let avg = 16;
 let lastAdjust = 0;
 let lastDrop = -100;
-const stats = TEST ? document.createElement('div') : null;
+// El contador de fps, solo si se pide (?stats): en el móvil, incluso en modo prueba, estorbaba
+const stats = new URLSearchParams(location.search).has('stats') ? document.createElement('div') : null;
 // Modo prueba: acceso desde la consola para revisar colisiones
 // Captura del lienzo a resolución real (las capturas de pantalla del navegador salen reducidas)
 let shotReq: ((url: string) => void) | null = null;
