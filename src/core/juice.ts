@@ -1,11 +1,22 @@
 import type * as THREE from 'three';
 import { vibrate } from './gfx';
+import { comic, comicBurst } from './comic';
 
 // "Juice": lo que hace que un acierto se sienta. Una micro-pausa (hit-stop), un golpe de zoom, un
 // destello y un pelín de aberración cromática, coordinados. Cada sonido de premio dispara su efecto
 // (ver audio.onCue en main.ts), así todos los capítulos lo tienen sin tocar su lógica.
 
 export type Cue = 'perfect' | 'luck' | 'pickup' | 'fanfare' | 'hit' | 'splash' | 'chime' | 'pop' | 'cheer';
+
+/** Onomatopeyas de tebeo para cada efecto (las de recoger y los pops, que son muy seguidos, sin palabra). */
+const WORDS: Partial<Record<Cue, string[]>> = {
+  perfect: ['¡TOMA!', '¡BRAVO!', '¡GENIAL!'],
+  luck: ['¡UF!', '¡POR POCO!'],
+  hit: ['¡PAF!', '¡ZAS!', '¡PUM!', '¡CATAPUM!'],
+  splash: ['¡SPLASH!', '¡CHOF!', '¡PLAF!', '¡SPLOSH!'],
+  fanfare: ['¡TACHÁN!'],
+  cheer: ['¡BIEN!', '¡OLÉ!'],
+};
 
 interface Fx {
   flashScreen(color: number, amount: number): void;
@@ -35,8 +46,23 @@ class Juice {
     this.shakeT = Math.max(this.shakeT, sec);
   }
 
+  /** Cómic: dibuja la onomatopeya del golpe (la pone la interfaz, ver main.ts). */
+  onWord: ((word: string, cue: Cue) => void) | null = null;
+  private lastWord = 0;
+
   cue(c: Cue) {
     const fx = this.fx;
+    if (comic.on) {
+      const words = WORDS[c];
+      // (sin amontonar: una cada medio segundo como mucho)
+      const now = performance.now();
+      if (words && now - this.lastWord > 500) {
+        this.lastWord = now;
+        this.onWord?.(words[Math.floor(Math.random() * words.length)], c);
+      }
+      if (c === 'perfect' || c === 'hit') comicBurst(1);
+      else if (c === 'splash' || c === 'luck' || c === 'fanfare') comicBurst(0.6);
+    }
     switch (c) {
       case 'perfect':
         this.hitstop(0.09);

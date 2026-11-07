@@ -1145,6 +1145,24 @@ export function toast(text: string) {
   setTimeout(() => t.remove(), 1900);
 }
 
+/**
+ * Onomatopeya de tebeo («¡SPLASH!», «¡PAF!») que salta en la parte de arriba-centro, girada, con su estallido
+ * detrás, y se va. Solo en los capítulos de cómic.
+ */
+export function comicWord(text: string, kind: string) {
+  root.querySelectorAll('.pow').forEach((n) => n.remove());
+  const w = el('div', `pow pow-${kind}`);
+  w.append(el('span', '', text));
+  const W = window.innerWidth, H = window.innerHeight;
+  const x = W * (0.5 + (Math.random() - 0.5) * 0.36);
+  const y = H * (0.3 + Math.random() * 0.12);
+  w.style.left = `${x}px`;
+  w.style.top = `${y}px`;
+  w.style.setProperty('--rot', `${(Math.random() - 0.5) * 22}deg`);
+  root.append(w);
+  setTimeout(() => w.remove(), 1100);
+}
+
 let barkEnd = 0;
 let barkRaf = 0;
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */

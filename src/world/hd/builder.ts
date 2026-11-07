@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { comic } from '../../core/comic';
 
 // Constructor de decorado de la prueba de concepto: cajas con UV en metros (la textura no se
 // estira), recortes del atlas de puertas y ventanas, y toda la geometría fusionada por material
@@ -23,25 +24,35 @@ export class Builder {
   }
 
   /** Caja con UV en metros; tile = metros que ocupa una repetición de la textura. */
-  box(mat: THREE.Material, c: V3, s: V3, o: { ry?: number; rx?: number; rz?: number; tile?: number; parent?: THREE.Matrix4 } = {}) {
-    const g = new THREE.BoxGeometry(s[0], s[1], s[2]);
+  box(mat: THREE.Material, c: V3, s0: V3, o: { ry?: number; rx?: number; rz?: number; tile?: number; parent?: THREE.Matrix4 } = {}) {
+    // Cómic: lo fino (marcos, alféizares, barrotes, cornisas) más grueso, como lo dibujaría un dibujante; y las
+    // caras grandes partidas en trozos para que la pared pueda combarse (ver handDrawn en core/comic)
+    // (solo lo fino en dos dimensiones, como un barrote o un marco: las placas finas llevan persianas y puertas
+    // pegadas delante, y al engordarlas las tapaban)
+    const thin = s0.filter((v) => v < 0.2).length >= 2;
+    const s: V3 = comic.on && thin ? (s0.map((v) => (v < 0.2 ? Math.max(v * 1.5, v + 0.03) : v)) as V3) : s0;
+    const seg = s.map((v) => (comic.on ? Math.min(8, Math.max(1, Math.round(v / 1.2))) : 1));
+    const g = new THREE.BoxGeometry(s[0], s[1], s[2], seg[0], seg[1], seg[2]);
     const tile = o.tile ?? 2.5;
     const uv = g.attributes.uv as THREE.BufferAttribute;
     const dims: [number, number][] = [[s[2], s[1]], [s[2], s[1]], [s[0], s[2]], [s[0], s[2]], [s[0], s[1]], [s[0], s[1]]];
+    // vértices de cada cara (en el orden de BoxGeometry: +x, -x, +y, -y, +z, -z)
+    const fseg: [number, number][] = [[seg[2], seg[1]], [seg[2], seg[1]], [seg[0], seg[2]], [seg[0], seg[2]], [seg[0], seg[1]], [seg[0], seg[1]]];
     const off = this.rnd() * 8;
+    let i = 0;
     for (let f = 0; f < 6; f++)
-      for (let k = 0; k < 4; k++) {
-        const i = f * 4 + k;
-        uv.setXY(i, (uv.getX(i) * dims[f][0]) / tile + off, (uv.getY(i) * dims[f][1]) / tile);
-      }
+      for (let k = 0; k < (fseg[f][0] + 1) * (fseg[f][1] + 1); k++, i++) uv.setXY(i, (uv.getX(i) * dims[f][0]) / tile + off, (uv.getY(i) * dims[f][1]) / tile);
     const m = new THREE.Matrix4().compose(new THREE.Vector3(...c), new THREE.Quaternion().setFromEuler(new THREE.Euler(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0)), new THREE.Vector3(1, 1, 1));
     if (o.parent) m.premultiply(o.parent);
     this.add(g, mat, m);
   }
 
   /** Cilindro con UV en metros. */
-  cyl(mat: THREE.Material, c: V3, rTop: number, rBot: number, h: number, o: { seg?: number; tile?: number; parent?: THREE.Matrix4; rx?: number } = {}) {
-    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12);
+  cyl(mat: THREE.Material, c: V3, rTop0: number, rBot0: number, h: number, o: { seg?: number; tile?: number; parent?: THREE.Matrix4; rx?: number } = {}) {
+    // (cómic: barrotes y postes finos, más gruesos)
+    const fat = (r: number) => (comic.on && r < 0.06 ? r * 1.6 : r);
+    const rTop = fat(rTop0), rBot = fat(rBot0);
+    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12, comic.on ? Math.min(8, Math.max(1, Math.round(h / 1.2))) : 1);
     const tile = o.tile ?? 1;
     const uv = g.attributes.uv as THREE.BufferAttribute;
     const circ = Math.PI * 2 * Math.max(rTop, rBot);

@@ -36,7 +36,7 @@ import { comic, comicScene, drawComic } from './core/comic';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, quizScore, installGate, pauseState, openPause, Tutorial, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, pauseState, openPause, Tutorial, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -174,6 +174,8 @@ const post = new Post(renderer, camera, MOBILE);
 // La oclusión ambiental son varias pasadas a pantalla completa: en el móvil, fuera desde el principio
 if (MOBILE) post.aoEnabled = false;
 juice.fx = post;
+// Cómic: cada golpe, chapuzón o acierto, con su onomatopeya
+juice.onWord = (w, c) => comicWord(w, c);
 audio.onCue = (c) => juice.cue(c);
 let cine = 0;
 function draw(scene: THREE.Scene, dt = 1 / 60) {
@@ -422,6 +424,8 @@ function setHd(on: boolean, n = 0) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
   }
+  // la interfaz (bocadillos, cartuchos, avisos) se dibuja como un tebeo en los capítulos de cómic
+  document.documentElement.classList.toggle('comic-mode', comic.on);
   if (on) applyLook(n, paint);
   else post.setGrade(NEUTRAL, true);
 }

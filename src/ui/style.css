@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Fredoka:wght@500;600;700&family=Caveat:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&family=Fredoka:wght@500;600;700&family=Caveat:wght@500;700&family=Bangers&family=Comic+Neue:wght@700&display=swap');
 
 /* Estilo de la interfaz: cajas de papel encalado con borde azul mar, como los menús de Pokémon,
    sobre el cielo y el mar de Menorca del propio juego. */
@@ -1320,3 +1320,72 @@ html, body { background: #000; }
 .kp-pop { top: calc(env(safe-area-inset-top) + 58px); }
 .screen { padding-top: calc(env(safe-area-inset-top) + 28px); }
 .app-screen { padding-top: 0; }
+
+/* ---------- Cómic: la interfaz de los capítulos de cómic dibujada como un tebeo ---------- */
+/* Rotulación de tebeo, tinta negra, sombra dura desplazada (sin difuminar) y papel crema */
+.comic-mode { --ink-c: #141018; --paper-c: #fffbf0; --caption-c: #ffe27a; }
+.comic-mode .dialogue {
+  background: var(--paper-c); color: var(--ink-c); border: 3px solid var(--ink-c); border-radius: 26px / 22px;
+  box-shadow: 4px 5px 0 var(--ink-c); font-family: 'Comic Neue', var(--font); padding: 12px 18px 12px;
+}
+.comic-mode .dialogue .text { font-size: 15.5px; font-weight: 700; line-height: 1.28; text-transform: uppercase; letter-spacing: .015em; color: var(--ink-c); text-shadow: none; }
+.comic-mode .dialogue .who {
+  font-family: 'Bangers', var(--display); font-weight: 400; font-size: 17px; letter-spacing: .07em; color: #fff;
+  border: 2.5px solid var(--ink-c); border-radius: 5px; box-shadow: 2px 2px 0 var(--ink-c); padding: 0 9px; top: -15px; left: 14px;
+  -webkit-text-stroke: .6px var(--ink-c);
+}
+.comic-mode .dialogue .next { color: var(--ink-c); }
+/* El narrador: cartucho amarillo rectangular, como los textos de «mientras tanto…» */
+.comic-mode .dialogue.who-narr:not(.speech) { background: var(--caption-c); border-radius: 3px; box-shadow: 4px 4px 0 var(--ink-c); transform: translateX(-50%) rotate(-.6deg); }
+.comic-mode .dialogue.who-narr .text { font-style: normal; color: #2a1c00; }
+/* Bocadillo: globo blanco con su rabito entintado */
+.comic-mode .dialogue.speech { border-radius: 50% / 44%; padding: 16px 24px 18px; transform: translate(var(--bx, 0), var(--by, 0)); }
+.comic-mode .dialogue.speech .text { font-size: 14.5px; text-align: center; }
+.comic-mode .dialogue.speech .who { left: 50%; transform: translateX(-50%); top: -16px; }
+.comic-mode .dialogue.speech::before { top: calc(100% - 1px); border-width: 20px 9px 0 9px; border-color: var(--ink-c) transparent transparent transparent; transform: translateX(-50%) skewX(-14deg); }
+.comic-mode .dialogue.speech::after { top: calc(100% - 4px); border-width: 15px 5.5px 0 5.5px; border-color: var(--paper-c) transparent transparent transparent; transform: translateX(-50%) skewX(-14deg); }
+.comic-mode .dialogue.wa { background: #dcf8c6; border-radius: 16px; }
+/* Comentarios al andar: globo pequeño */
+.comic-mode .bark {
+  background: var(--paper-c); color: var(--ink-c); border: 2.5px solid var(--ink-c); border-radius: 50% / 42%;
+  box-shadow: 3px 3px 0 var(--ink-c); font-family: 'Comic Neue', var(--font); font-weight: 700; font-size: 12.5px;
+  text-transform: uppercase; text-align: center; padding: 8px 16px 9px;
+}
+.comic-mode .bark b { font-family: 'Bangers', var(--display); font-weight: 400; font-size: 13px; letter-spacing: .07em; color: var(--ink-c); }
+.comic-mode .bark.who-gas b { color: #b4501a; }
+.comic-mode .bark.who-azul b { color: #1f5f9e; }
+.comic-mode .bark.wa { background: #dcf8c6; border-radius: 14px; }
+.comic-mode .bark.anchored::before, .comic-mode .bark.anchored::after { content: ''; position: absolute; left: 50%; width: 0; height: 0; border-style: solid; }
+.comic-mode .bark.anchored::before { top: calc(100% - 1px); margin-left: -7px; border-width: 13px 7px 0 7px; border-color: var(--ink-c) transparent transparent transparent; bottom: auto; }
+.comic-mode .bark.anchored::after { top: calc(100% - 4px); margin-left: -4px; border-width: 9px 4px 0 4px; border-color: var(--paper-c) transparent transparent transparent; bottom: auto; }
+/* Avisos: cartucho amarillo */
+.comic-mode .toast {
+  background: var(--caption-c); color: var(--ink-c); border: 3px solid var(--ink-c); border-radius: 3px; box-shadow: 3px 3px 0 var(--ink-c);
+  font-family: 'Bangers', var(--display); font-weight: 400; font-size: 19px; letter-spacing: .06em;
+}
+/* Onomatopeya: letras gordas de tebeo sobre un estallido, que saltan y se van */
+.pow {
+  position: fixed; z-index: 8; pointer-events: none; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+  animation: powIn 1.1s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.pow::before {
+  content: ''; position: absolute; inset: -34px -44px; z-index: -1; background: #fff3a8;
+  clip-path: polygon(50% 0%, 59% 22%, 80% 6%, 74% 30%, 100% 24%, 82% 45%, 100% 62%, 76% 64%, 86% 92%, 62% 76%, 50% 100%, 40% 76%, 14% 94%, 24% 66%, 0% 64%, 18% 46%, 0% 26%, 26% 30%, 18% 6%, 40% 22%);
+}
+/* (el contorno del estallido: la misma estrella en tinta, algo mayor y desplazada, detrás) */
+.pow::after { content: ''; position: absolute; inset: -40px -51px; z-index: -2; background: #141018; transform: translate(3px, 4px); clip-path: polygon(50% 0%, 59% 22%, 80% 6%, 74% 30%, 100% 24%, 82% 45%, 100% 62%, 76% 64%, 86% 92%, 62% 76%, 50% 100%, 40% 76%, 14% 94%, 24% 66%, 0% 64%, 18% 46%, 0% 26%, 26% 30%, 18% 6%, 40% 22%); }
+.pow span {
+  display: block; font-family: 'Bangers', var(--display); font-size: 44px; line-height: 1; letter-spacing: .04em; white-space: nowrap;
+  color: #ff4a2e; -webkit-text-stroke: 2.5px #141018; paint-order: stroke fill; text-shadow: 4px 4px 0 #141018;
+}
+.pow-splash span { color: #38a8ff; }
+.pow-splash::before { background: #d8f1ff; }
+.pow-perfect span, .pow-fanfare span, .pow-cheer span { color: #ffcf1f; }
+.pow-luck span { color: #7bd66a; }
+@keyframes powIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(.2); }
+  18% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1.12); }
+  30% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -62%) rotate(var(--rot, 0deg)) scale(1.04); }
+}

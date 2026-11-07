@@ -333,8 +333,60 @@ function ink(m: THREE.Material, person: boolean, name: string) {
   } else if (person) m.userData.outlineParameters = { thickness: 0.0075 };
 }
 
+/**
+ * Desplazamiento «a mano alzada» de un punto del mundo: las paredes se inclinan un poco (más cuanto más altas),
+ * se comban y los tejados ceden por el medio, como en los pueblos de los tebeos. Es un campo suave en
+ * coordenadas del mundo: todas las piezas de una casa se mueven igual en el mismo sitio, sin abrir grietas, y a
+ * ras de suelo no mueve nada (las colisiones y los pies de la gente siguen donde estaban).
+ */
+function handOffset(p: THREE.Vector3, out: THREE.Vector3) {
+  const { x, y, z } = p;
+  if (y <= 0.02) return out.set(0, 0, 0);
+  const lean = 0.024 * y;
+  const nx = Math.sin(x * 0.37 + z * 0.21 + 1.3) * Math.cos(z * 0.29 - x * 0.13 + 0.4);
+  const nz = Math.sin(z * 0.33 - x * 0.19 + 2.1) * Math.cos(x * 0.27 + z * 0.11 + 1.7);
+  const bow = 0.055 * THREE.MathUtils.smoothstep(y, 0, 1.4);
+  const sag = THREE.MathUtils.smoothstep(y, 3, 6);
+  return out.set(
+    lean * nx + bow * Math.sin(y * 0.9 + z * 0.55 + x * 0.1),
+    -0.09 * sag * Math.pow(Math.sin(x * 0.8 + 0.3) * Math.sin(z * 0.7 + 1.1), 2),
+    lean * nz + bow * Math.sin(y * 0.8 + x * 0.6 - z * 0.1),
+  );
+}
+
+/** Dobla a mano alzada lo fijo y grande del decorado (una vez por pieza; nunca personas ni geometría compartida). */
+function handDrawn(scene: THREE.Object3D) {
+  const users = new Map<THREE.BufferGeometry, number>();
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) users.set(m.geometry, (users.get(m.geometry) ?? 0) + 1);
+  });
+  const p = new THREE.Vector3(), d = new THREE.Vector3(), inv = new THREE.Matrix4();
+  scene.updateMatrixWorld();
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.comicBent || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) return;
+    if (o.parent?.userData.sky || o.userData.noComic || users.get(m.geometry)! > 1) return;
+    m.userData.comicBent = true;
+    const g = m.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if (g.boundingSphere!.radius * o.matrixWorld.getMaxScaleOnAxis() < 0.8) return;
+    const pos = g.attributes.position as THREE.BufferAttribute;
+    inv.copy(o.matrixWorld).invert();
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      p.add(handOffset(p, d)).applyMatrix4(inv);
+      pos.setXYZ(i, p.x, p.y, p.z);
+    }
+    pos.needsUpdate = true;
+    g.computeBoundingSphere();
+    g.computeBoundingBox();
+  });
+}
+
 /** Pasa la escena al estilo cómic (se puede llamar varias veces: lo ya convertido se queda). */
 export function comicScene(scene: THREE.Object3D) {
+  handDrawn(scene);
   scene.traverse((o) => {
     const m = o as THREE.Mesh;
     // Brillos (luces de fiesta, halos de farolas): de día, en un tebeo, apenas un punto de color, no un foco
@@ -404,7 +456,7 @@ const PASS_FRAG = /* glsl */ `
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 texel;
-uniform float near, far, linePx, dotPx;
+uniform float near, far, linePx, dotPx, action, seed;
 varying vec2 vUv;
 float rawD(vec2 uv) { return texture2D(tDepth, uv).x; }
 float linD(float d) { float z = d * 2.0 - 1.0; return 2.0 * near * far / (far + near - z * (far - near)); }
@@ -454,6 +506,18 @@ void main() {
     float rad = 0.5 * sqrt(amt);
     c.rgb *= 1.0 - (1.0 - smoothstep(rad - 0.07, rad + 0.07, dist)) * step(0.02, amt) * 0.16;
   }
+  // líneas de acción: rayas radiales desde el borde, al dar un golpe o al ir deprisa
+  if (action > 0.01) {
+    vec2 q = (vUv - 0.5) * vec2(texel.y / texel.x, 1.0);
+    float rr = length(q) / length(vec2(0.5 * texel.y / texel.x, 0.5));
+    float a = atan(q.y, q.x) / 6.28318 * 90.0;
+    float id = floor(a);
+    float h = fract(sin(id * 91.7 + floor(seed) * 13.1) * 43758.5);
+    float w = abs(fract(a) - 0.5);
+    float start = 0.42 + 0.3 * h - 0.18 * action;
+    float line = step(0.55, h) * smoothstep(start, start + 0.25, rr) * (1.0 - smoothstep(0.012 + 0.06 * rr, 0.03 + 0.07 * rr, w));
+    c.rgb = mix(c.rgb, vec3(0.045, 0.035, 0.055), line * action * 0.8);
+  }
   // papel: lo blanco tira a crema, como impreso
   c.rgb *= vec3(1.0, 0.978, 0.93);
   gl_FragColor = vec4(c.rgb, 1.0);
@@ -488,6 +552,8 @@ function makePass(renderer: THREE.WebGLRenderer): Pass {
       far: { value: 1000 },
       linePx: { value: 1 },
       dotPx: { value: 5 },
+      action: { value: 0 },
+      seed: { value: 0 },
     },
     depthTest: false,
     depthWrite: false,
@@ -496,6 +562,17 @@ function makePass(renderer: THREE.WebGLRenderer): Pass {
   quad.frustumCulled = false;
   return { rt, mat, quad, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) };
 }
+
+let burst = 0;
+let burstSeed = 0;
+/** Líneas de acción de un golpe o un acierto (0..1); se apagan solas en un tercio de segundo. */
+export function comicBurst(amount: number) {
+  if (amount > burst) burstSeed++;
+  burst = Math.max(burst, amount);
+}
+const lastCam = new THREE.Vector3();
+let lastT = 0;
+let speedAmt = 0;
 
 let outline: OutlineEffect | null = null;
 /** Dibuja en estilo cómic (sustituye al postproceso en los capítulos de cómic). */
@@ -513,6 +590,19 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   u.far.value = pc.far ?? 1000;
   u.linePx.value = Math.max(1.5, pr * 1.35);
   u.dotPx.value = 4.2 * pr;
+  // líneas de velocidad: a partir de ~5 m/s de cámara (en burro, en moto, en coche); más el golpe que se apaga
+  const now = performance.now() / 1000;
+  const dt = Math.min(0.1, Math.max(1e-3, now - lastT));
+  const v = lastT ? camera.position.distanceTo(lastCam) / dt : 0;
+  lastT = now;
+  lastCam.copy(camera.position);
+  // (un salto de cámara de un plano a otro no es velocidad)
+  const target = v > 40 ? speedAmt : THREE.MathUtils.smoothstep(v, 5, 11) * 0.7;
+  speedAmt += (target - speedAmt) * Math.min(1, dt * 4);
+  burst = Math.max(0, burst - dt * 3);
+  u.action.value = Math.max(speedAmt, burst);
+  // las rayas de velocidad cambian a saltos (8 por segundo), como dibujadas a mano; las de golpe, por golpe
+  u.seed.value = burst > speedAmt ? burstSeed * 7 : Math.floor(now * 8);
   renderer.autoClear = true;
   renderer.setRenderTarget(pass.rt);
   outline.render(scene, camera);
