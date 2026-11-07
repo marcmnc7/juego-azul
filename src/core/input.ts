@@ -13,6 +13,9 @@ export class Input {
   private camId: number | null = null;
   private camLastX = 0;
   enabled = true;
+  /** Cuánto se ha usado cada control (lo mira el tutorial): segundos de joystick, píxeles de cámara, acciones. */
+  readonly usage = { stick: 0, cam: 0, action: 0 };
+  private stickAt = 0;
 
   private base: HTMLDivElement;
   private knob: HTMLDivElement;
@@ -85,9 +88,13 @@ export class Input {
       const g = m < 0.1 ? 0 : Math.pow((m - 0.1) / 0.9, 1.1) / (r || 1);
       this.moveX = (dx / R) * g;
       this.moveY = (-dy / R) * g;
+      const now = performance.now();
+      if (m > 0.3 && this.stickAt) this.usage.stick += Math.min(0.1, (now - this.stickAt) / 1000);
+      this.stickAt = now;
     } else if (e.pointerId === this.camId) {
       // Misma sensación en cualquier pantalla: media pantalla de arrastre ≈ media vuelta
       this.camDelta += ((e.clientX - this.camLastX) / Math.max(480, window.innerWidth)) * 6.5;
+      this.usage.cam += Math.abs(e.clientX - this.camLastX);
       this.camLastX = e.clientX;
     }
   };
@@ -113,6 +120,7 @@ export class Input {
       if (kx || ky) {
         x = kx;
         y = ky;
+        this.usage.stick += 1 / 60;
       }
       if (k.has('KeyQ')) this.camDelta -= 0.04;
       if (k.has('KeyR')) this.camDelta += 0.04;
@@ -123,6 +131,7 @@ export class Input {
 
   queueAction() {
     this.actionQueued = true;
+    this.usage.action++;
   }
 
   consumeAction() {

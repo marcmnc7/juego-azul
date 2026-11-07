@@ -1240,3 +1240,54 @@ body:has(.princesa-screen) .counters { display: none; }
 .app-screen.still { animation: none; }
 .app-screen.still::before { animation: none; }
 .ap-strip { align-self: stretch; }
+
+/* ---------- Portada: calendario de adviento y cuenta atrás ---------- */
+.advent { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(420px, 100%); }
+.advent-days { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; width: 100%; }
+.advent-day {
+  aspect-ratio: 3 / 4; border-radius: 10px; background: rgba(255,253,248,.55); color: rgba(15,55,86,.65);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; box-shadow: 0 3px 8px -4px rgba(18,58,92,.4);
+}
+.advent-day b { font-family: var(--display); font-size: 15px; line-height: 1; }
+.advent-day span { font-size: 12px; line-height: 1; }
+.advent-day.open { background: rgba(255,253,248,.9); color: var(--sea); }
+.advent-day.done { background: var(--green); color: #fff; }
+.advent-day.ready { background: var(--gold); color: var(--sea); animation: chipBeat 1.1s ease-in-out infinite; }
+.advent-day.today { box-shadow: 0 0 0 2px #fff, 0 3px 8px -4px rgba(18,58,92,.4); }
+.advent-day.last:not(.done) { background: linear-gradient(160deg, #fff4d6, rgba(255,253,248,.8)); }
+.advent-count { font-size: 14px; font-weight: 700; color: var(--sea); background: rgba(255,253,248,.85); padding: 7px 14px; border-radius: 999px; box-shadow: 0 4px 12px -6px rgba(18,58,92,.5); text-align: center; font-variant-numeric: tabular-nums; }
+.advent-count b { font-weight: 900; }
+
+/* ---------- Primeros pasos: la mano que enseña los controles ---------- */
+.tuto { position: fixed; inset: 0; z-index: 28; pointer-events: none !important; transition: opacity .25s; }
+.tuto.off, .tuto.bye { opacity: 0; }
+.tuto-hand { position: fixed; font-size: 46px; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,.45)); transform-origin: 30% 10%; }
+.tuto-ring { position: fixed; width: 116px; height: 116px; margin: 0; border-radius: 999px; border: 3px solid rgba(255, 213, 106, .95); transform: translate(-50%, -50%); animation: tutoRing 1.4s ease-out infinite; }
+.tuto-bubble {
+  position: fixed; max-width: min(250px, 66vw); padding: 10px 14px 11px; border-radius: 16px; background: rgba(14, 20, 34, .78); color: #fffaf0;
+  border: 1px solid rgba(255,255,255,.18); box-shadow: 0 10px 24px -10px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 2px; animation: dlgIn .3s ease both;
+}
+.tuto-bubble small { font-size: 10.5px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-soft); }
+.tuto-bubble b { font-size: 16px; }
+.tuto-bubble span { font-size: 13.5px; font-weight: 600; line-height: 1.3; opacity: .92; }
+.tuto.ok .tuto-bubble { background: rgba(47, 157, 98, .9); }
+/* Paso 1: el joystick (abajo a la izquierda) */
+.tuto.step0 .tuto-ring { left: calc(max(18px, env(safe-area-inset-left)) + 58px); top: calc(100dvh - max(22px, calc(env(safe-area-inset-bottom) + 8px)) - 58px); }
+.tuto.step0 .tuto-hand { left: calc(max(18px, env(safe-area-inset-left)) + 44px); top: calc(100dvh - max(22px, calc(env(safe-area-inset-bottom) + 8px)) - 52px); animation: tutoDrag 1.7s ease-in-out infinite; }
+.tuto.step0 .tuto-bubble { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(22px, calc(env(safe-area-inset-bottom) + 8px)) + 140px); }
+/* Paso 2: arrastrar por la derecha */
+.tuto.step1 .tuto-ring { display: none; }
+.tuto.step1 .tuto-hand { left: 66%; top: 58%; animation: tutoSwipe 1.8s ease-in-out infinite; }
+.tuto.step1 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); top: calc(58% - 120px); }
+/* Paso 3: el botón de acción (lo coloca el código) */
+.tuto.step2 .tuto-hand { animation: tutoTap 1s ease-in-out infinite; }
+.tuto.step2 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); bottom: calc(max(22px, calc(env(safe-area-inset-bottom) + 8px)) + 120px); }
+@keyframes tutoRing { 0% { transform: translate(-50%, -50%) scale(.8); opacity: .9; } 100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; } }
+@keyframes tutoDrag { 0%, 15% { transform: translate(0, 0); } 55%, 70% { transform: translate(22px, -46px); } 100% { transform: translate(0, 0); } }
+@keyframes tutoSwipe { 0%, 10% { transform: translateX(46px); } 50%, 60% { transform: translateX(-56px); } 100% { transform: translateX(46px); } }
+@keyframes tutoTap { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(10px) scale(.92); } }
+@media (max-height: 520px) {
+  .tuto.step0 .tuto-bubble { bottom: auto; top: 22%; }
+  .tuto.step1 .tuto-bubble { top: 18%; }
+  .tuto.step2 .tuto-bubble { bottom: auto; top: 22%; }
+}

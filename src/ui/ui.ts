@@ -82,8 +82,54 @@ export function installGate(ios: boolean) {
   root.append(s);
 }
 
+/**
+ * Calendario de adviento de la portada: los nueve días (del 20 al 28 de noviembre), hechos, el de hoy y los que
+ * faltan, y debajo la cuenta atrás en vivo hasta el siguiente capítulo.
+ */
+function adventCalendar(save: SaveData) {
+  const wrap = el('div', 'advent');
+  const row = el('div', 'advent-days');
+  const done = new Set(save.levelsDone);
+  const nextI = LEVELS.findIndex((l) => !done.has(l.id));
+  const today = new Date();
+  LEVELS.forEach((lv, i) => {
+    const d = openDay(i);
+    const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    const cls = done.has(lv.id) ? ' done' : i === nextI && Date.now() >= d.getTime() ? ' ready' : Date.now() >= d.getTime() ? ' open' : '';
+    const t = el('div', 'advent-day' + cls + (isToday ? ' today' : '') + (i === LEVELS.length - 1 ? ' last' : ''), `<b>${d.getDate()}</b><span>${done.has(lv.id) ? '✓' : i === LEVELS.length - 1 ? '🎂' : Date.now() >= d.getTime() ? lv.emoji : '🔒'}</span>`);
+    row.append(t);
+  });
+  const line = el('div', 'advent-count');
+  wrap.append(row, line);
+  const tick = () => {
+    if (!wrap.isConnected) return;
+    line.innerHTML = countdownLine(save);
+    setTimeout(tick, 1000);
+  };
+  // (primero se pinta, luego se engancha a la portada)
+  line.innerHTML = countdownLine(save);
+  setTimeout(tick, 1000);
+  return wrap;
+}
+
+/** «El capítulo 4 se abre en 2 días, 5 h y 13 min», «¡Hoy toca el capítulo 4!», o la sorpresa final. */
+function countdownLine(save: SaveData) {
+  const done = new Set(save.levelsDone);
+  const i = LEVELS.findIndex((l) => !done.has(l.id));
+  if (i < 0) return '💌 Todo completado: te espera la sorpresa final';
+  const d = openDay(i);
+  const ms = d.getTime() - Date.now();
+  const lv = LEVELS[i];
+  if (ms <= 0) return i > 0 && !done.has(LEVELS[i - 1].id) ? `Te queda pendiente el capítulo ${i}` : `<b>¡Ya puedes jugar el capítulo ${lv.id}!</b>`;
+  const sec = Math.floor(ms / 1000);
+  const dd = Math.floor(sec / 86400), hh = Math.floor((sec % 86400) / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const left = dd > 0 ? `${dd} ${dd === 1 ? 'día' : 'días'}, ${hh} h y ${mm} min` : `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+  return `${i === 0 ? 'El primer capítulo' : `El capítulo ${lv.id}`} se abre en <b>${left}</b>`;
+}
+
 /** Portada. Si se le pasa la carga, el botón espera (con porcentaje) a que todo esté listo, para que luego cada capítulo abra al momento. */
-export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }) {
+export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }, save?: SaveData) {
   clearScreens();
   const s = el('div', 'screen title-screen');
   const eyebrow = el('div', 'eyebrow', 'De Gas, para ti');
@@ -94,6 +140,7 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
     sticker(STICKERS.oso, 'title-sticker'),
     el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),
   );
+  if (save) s.append(adventCalendar(save));
   const b = el('button', 'big-btn', 'Empezar ▸') as HTMLButtonElement;
   b.onclick = () => {
     audio.unlock();
@@ -1728,4 +1775,114 @@ export function missionCard(title: string, goal = '', done = false) {
     vibrate([30, 40, 60]);
   } else audio.chime(1);
   setTimeout(() => c.remove(), 3300);
+}
+
+
+/**
+ * Primeros pasos (capítulo 1, solo la primera vez): una mano animada enseña a andar, a mirar alrededor y el botón
+ * de acción. Cada paso se da por hecho cuando se hace de verdad. Mientras hay un diálogo o la pausa, se esconde.
+ */
+export class Tutorial {
+  private wrap = el('div', 'tuto');
+  private hand = el('div', 'tuto-hand', '👆');
+  private ring = el('div', 'tuto-ring');
+  private bubble = el('div', 'tuto-bubble');
+  private step = 0;
+  private stepAt = 0;
+  private base = { stick: 0, cam: 0, action: 0 };
+  done = false;
+  static readonly KEY = 'margaux-tuto';
+  static pending() {
+    try {
+      return localStorage.getItem(Tutorial.KEY) !== '1';
+    } catch {
+      return false;
+    }
+  }
+
+  constructor(private usage: { stick: number; cam: number; action: number }) {
+    this.wrap.append(this.ring, this.hand, this.bubble);
+    root.append(this.wrap);
+    this.go(0);
+  }
+
+  private go(n: number) {
+    this.step = n;
+    this.stepAt = performance.now();
+    Object.assign(this.base, this.usage);
+    this.wrap.className = `tuto step${n}`;
+    const steps = [
+      ['Para andar', 'Pon el pulgar aquí y deslízalo. No hace falta llegar al borde para correr.'],
+      ['Para mirar alrededor', 'Arrastra el dedo por este lado de la pantalla.'],
+      ['Cuando haya algo que hacer', 'Aparece este botón. Tócalo.'],
+    ];
+    const [t, d] = steps[n];
+    this.bubble.innerHTML = `<small>${n + 1} de 3</small><b>${t}</b><span>${d}</span>`;
+    this.place();
+  }
+
+  /** En el paso del botón, la mano va donde esté el botón de acción. */
+  private place() {
+    if (this.step !== 2) {
+      this.hand.style.left = this.hand.style.top = this.ring.style.left = this.ring.style.top = '';
+      return;
+    }
+    const b = root.querySelector('.action-btn:not(.hidden)') as HTMLElement | null;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    this.ring.style.left = `${r.left + r.width / 2}px`;
+    this.ring.style.top = `${r.top + r.height / 2}px`;
+    this.ring.style.width = `${r.width + 26}px`;
+    this.ring.style.height = `${r.height + 26}px`;
+    this.hand.style.left = `${r.left + r.width / 2 - 8}px`;
+    this.hand.style.top = `${r.top - 30}px`;
+  }
+
+  /** Cada fotograma. busy: hay algo delante (diálogo, cine, pausa…): el tutorial espera escondido. */
+  update(busy: boolean) {
+    if (this.done) return;
+    const hidden = busy || !!root.querySelector('.dialogue, .phone-overlay, .pause, .ap-sheet-back, .screen, .gauge, .pee-game, .gh-game');
+    const actionShown = !!root.querySelector('.action-btn:not(.hidden)');
+    this.wrap.classList.toggle('off', hidden || (this.step === 2 && !actionShown));
+    if (hidden) {
+      this.stepAt = performance.now();
+      return;
+    }
+    const u = this.usage, b = this.base;
+    if (this.step === 0 && u.stick - b.stick > 1.0) this.next();
+    else if (this.step === 1 && u.cam - b.cam > 140) this.next();
+    else if (this.step === 2) {
+      this.place();
+      if (u.action > b.action) this.next();
+      // Si en un buen rato no sale ningún botón, se deja (ya lo verá)
+      else if (!actionShown && performance.now() - this.stepAt > 45000) this.finish();
+    }
+  }
+
+  private next() {
+    audio.pickup();
+    vibrate(15);
+    if (this.step >= 2) return this.finish();
+    this.wrap.classList.add('ok');
+    const n = this.step + 1;
+    setTimeout(() => !this.done && this.go(n), 450);
+  }
+
+  finish() {
+    if (this.done) return;
+    this.done = true;
+    try {
+      localStorage.setItem(Tutorial.KEY, '1');
+    } catch {
+      /* sin guardar: saldría otra vez */
+    }
+    toast('✨ ¡Listo! Sigue la luz para saber a dónde ir');
+    this.wrap.classList.add('bye');
+    setTimeout(() => this.wrap.remove(), 500);
+  }
+
+  dispose() {
+    this.done = true;
+    this.wrap.remove();
+  }
 }
