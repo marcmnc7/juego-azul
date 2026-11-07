@@ -233,7 +233,8 @@ export async function buildMH(o: MHOpts) {
         T.push(t[0], 1 - t[1]);
         const sw = weightsOf(vi);
         SI.push(...sw.i);
-        SW.push(...sw.w);
+        // el ajuste de la ropa (pesos baricéntricos) puede dar pesos negativos: estiraban los zapatos en picos
+        SW.push(...normWeights(sw.w));
       }
       return id;
     };
@@ -403,6 +404,13 @@ export async function buildMH(o: MHOpts) {
 }
 
 /** Normales promediadas con las vecinas: los pliegues de la ropa no hacen manchas de sombra en el cómic. */
+/** Pesos de piel sin negativos y que suman 1. */
+function normWeights(w: number[]) {
+  const c = w.map((x) => Math.max(0, x));
+  const s = c.reduce((a, b) => a + b, 0);
+  return s > 0 ? c.map((x) => x / s) : [1, 0, 0, 0];
+}
+
 function smoothNormals(g: THREE.BufferGeometry, iters: number) {
   const n = g.attributes.normal as THREE.BufferAttribute;
   const p = g.attributes.position as THREE.BufferAttribute;

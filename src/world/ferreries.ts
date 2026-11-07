@@ -1,3 +1,4 @@
+import { comic } from '../core/comic';
 import * as THREE from 'three';
 import { Surf } from '../core/surfaces';
 import { buildSurroundings, collidersBox } from './surround';
@@ -304,7 +305,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   scene.fog = new THREE.Fog(paintStyle.value > 0 ? 0xe9e6dc : 0xcfe0ee, 70, 180);
   const hd = hdSurfaces.value > 0;
   // Estilo pintado: cielo de acuarela (azul intenso arriba, horizonte cálido) con cúmulos pintados
-  const painted = paintStyle.value > 0;
+  // (el cómic usa este mismo cielo: el físico, sin curva de tono, salía morado)
+  const painted = paintStyle.value > 0 || comic.on;
   const sky = new Sky({
     top: painted ? 0x2a6fd0 : 0x2f72c4,
     mid: painted ? 0x7fbdf2 : 0x86bff0,

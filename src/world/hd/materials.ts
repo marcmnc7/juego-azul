@@ -25,6 +25,11 @@ import roofMC from '../../assets/hd/roofm_c.jpg';
 
 const loader = new THREE.TextureLoader();
 const texCache = new Map<string, THREE.Texture>();
+/** Qué dibujo de tebeo sustituye a cada foto en el estilo cómic (ver core/comicTiles.ts). */
+const COMIC_KIND = new Map<string, string>([
+  [slabsC, 'slabs'], [maresC, 'mares'], [roofMC, 'roof'], [roofC, 'roofGrey'],
+  [whitewashC, 'wash'], [plasterC, 'wash'], [woodC, 'wood'],
+]);
 function tex(url: string, color: boolean) {
   let t = texCache.get(url);
   if (!t) {
@@ -32,6 +37,8 @@ function tex(url: string, color: boolean) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.anisotropy = 8;
     if (color) t.colorSpace = THREE.SRGBColorSpace;
+    const kind = color ? COMIC_KIND.get(url) : undefined;
+    if (kind) t.userData.comic = kind;
     texCache.set(url, t);
   }
   return t;

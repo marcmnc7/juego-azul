@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
 import { loadHdriSync } from './assets';
 import { paintStyle } from './paint';
+import { comic } from './comic';
+import { comicCloudTextures } from './comicTiles';
 import { Water } from 'three/examples/jsm/objects/Water.js';
 import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSurfaceTexture, hdNormalTexture, hdMeans, hdRoughMeans, type Surf } from './surfaces';
 
@@ -580,7 +582,8 @@ export class Sky {
       this.group.add(s);
     }
     if (opts.clouds) {
-      const painted = opts.clouds.painted || paintStyle.value > 0 ? paintedCloudTextures() : null;
+      // (en el cómic, nubes de tebeo con su contorno; van igual que las pintadas: opacas, bajas y grandes)
+      const painted = comic.on ? comicCloudTextures() : opts.clouds.painted || paintStyle.value > 0 ? paintedCloudTextures() : null;
       for (let i = 0; i < opts.clouds.count; i++) {
         const map = painted ? painted[i % painted.length] : cloudTexture();
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: opts.clouds.tint, fog: false, depthWrite: false, transparent: true, opacity: painted ? 1 : 0.9 }));
@@ -594,8 +597,9 @@ export class Sky {
         }
         const r = 300 + Math.random() * 60;
         // Las pintadas, más bajas y más grandes: cúmulos de verano sobre los tejados
-        sp.position.set(Math.cos(a) * r, (painted ? 32 : 50) + Math.random() * (painted ? 55 : 70), Math.sin(a) * r);
-        const w = (painted ? 130 : 90) + Math.random() * 90;
+        sp.position.set(Math.cos(a) * r, (painted ? 32 : 50) + (comic.on ? 25 : 0) + Math.random() * (painted ? 55 : 70), Math.sin(a) * r);
+        // (las de tebeo, más pequeñas: con contorno, una nube enorme encima del pueblo pesa mucho)
+        const w = ((painted ? 130 : 90) + Math.random() * 90) * (comic.on ? 0.6 : 1);
         sp.scale.set(w, w / 2, 1);
         sp.renderOrder = -8;
         sp.userData.a = a;

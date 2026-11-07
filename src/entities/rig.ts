@@ -3,6 +3,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
 import { airOf } from '../core/air';
+import { comic } from '../core/comic';
 import type { Person, PersonLook, PersonMode } from './models';
 import womanUrl from '../assets/chars/woman.glb';
 import manUrl from '../assets/chars/man.glb';
@@ -235,8 +236,31 @@ async function loadImageData(url: string, w: number, h: number) {
   return g.getImageData(0, 0, w, h).data;
 }
 
+/**
+ * Pesos de piel sin negativos y normalizados. Los de la ropa de MakeHuman salen de un ajuste baricéntrico y
+ * algunos eran negativos: al moverse, la puntera de los zapatos salía disparada en picos.
+ */
+function cleanWeights(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    const sw = m.geometry.attributes.skinWeight as THREE.BufferAttribute;
+    for (let i = 0; i < sw.count; i++) {
+      let s = 0;
+      const w = [0, 1, 2, 3].map((k) => {
+        const x = Math.max(0, sw.getComponent(i, k));
+        s += x;
+        return x;
+      });
+      if (s > 0) w.forEach((x, k) => sw.setComponent(i, k, x / s));
+    }
+    sw.needsUpdate = true;
+  });
+}
+
 function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }): KindData {
   const model = gltf.scene;
+  if (kind === 'gas' || kind === 'man') cleanWeights(model);
   // Medir siempre en la misma pose: la T limpia
   const tpose = gltf.animations.find((c) => c.name === 'TPose');
   if (tpose) {
@@ -601,10 +625,23 @@ function mirror(v: number, n: number) {
   return m < n ? m : 2 * n - 1 - m;
 }
 const jeansOn = (look: PersonLook) => !!look.jeans && !look.jumpsuit && !look.shorts && !look.nude;
+let denimAvg: number[] | null = null;
+/** Color medio de la foto de tela vaquera. */
+function denimMean() {
+  if (denimAvg) return denimAvg;
+  const s = [0, 0, 0];
+  const n = denimPx!.length / 4;
+  for (let i = 0; i < denimPx!.length; i += 4) for (let q = 0; q < 3; q++) s[q] += denimPx![i + q] / n;
+  return (denimAvg = s);
+}
+
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : jeansOn(look) ? 'J' : ''}${look.nude ? 'n' : ''}`;
+  // En el cómic la ropa va en color liso: los pliegues y el sombreado de la foto, casi fuera (la luz la pone
+  // el sombreado en tres tonos)
+  const cm = comic.on;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : jeansOn(look) ? 'J' : ''}${look.nude ? 'n' : ''}${cm ? 'C' : ''}`;
   const jeans = jeansOn(look);
-  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
+  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : jeans ? waistMask() : null;
   let t = texCache.get(k);
   if (t) return t;
   const img = src.image as HTMLImageElement | ImageBitmap;
@@ -640,13 +677,14 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
       const r = l / Math.max(8, mean);
       // La cara, casi lisa y sin pasarse de su tono (por encima se saturaba y quedaba amarillo verdosa); los
       // rasgos se pintan después. Sin ropa, la piel es lisa: los pliegues y costuras la delatarían
-      const f = p === 6 ? Math.min(1, Math.max(0.94, 0.985 + (r - 1) * 0.06)) : look.nude && p !== 2 ? 1 : p === 1 ? Math.min(1.08, Math.max(0.62, r)) : Math.min(1.7, Math.max(0.3, r));
+      let f = p === 6 ? Math.min(1, Math.max(0.94, 0.985 + (r - 1) * 0.06)) : look.nude && p !== 2 ? 1 : p === 1 ? Math.min(1.08, Math.max(0.62, r)) : Math.min(1.7, Math.max(0.3, r));
+      if (cm && (p === 1 || p === 3 || p === 4)) f = 1 + (f - 1) * (p === 1 ? 0.45 : 0.3);
       const col = target[p];
       if (jeans && p === 3 && knitPx) {
         // Top de punto: color liso con el relieve de una foto de tela (sin las costuras del top original)
         const fl = Math.min(1.04, Math.max(0.86, 0.96 + (f - 1) * 0.35));
         const j = (mirror(y * 3, FAB) * FAB + mirror(x * 3, FAB)) * 4;
-        const k = fl * (0.9 + 0.2 * ((knitPx[j] * 0.3 + knitPx[j + 1] * 0.59 + knitPx[j + 2] * 0.11) / 96 - 0.5));
+        const k = fl * (cm ? 1 : 0.9 + 0.2 * ((knitPx[j] * 0.3 + knitPx[j + 1] * 0.59 + knitPx[j + 2] * 0.11) / 96 - 0.5));
         px[i] = Math.min(255, col.r * 255 * k);
         px[i + 1] = Math.min(255, col.g * 255 * k);
         px[i + 2] = Math.min(255, col.b * 255 * k);
@@ -656,6 +694,12 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
         // Vaquero: foto de tela vaquera con los pliegues del pantalón (sin sus parches)
         const sh = Math.min(1.15, Math.max(0.78, 1 + (f - 1) * 0.55));
         const j = (mirror(Math.floor(y * 1.6), FAB) * FAB + mirror(Math.floor(x * 1.6), FAB)) * 4;
+        if (cm) {
+          // cómic: azul vaquero liso (el medio de la foto), con una pizca de su trama y las costuras
+          const dm = denimMean();
+          for (let q = 0; q < 3; q++) px[i + q] = Math.min(255, (dm[q] + (denimPx[j + q] - dm[q]) * 0.2) * sh);
+          continue;
+        }
         px[i] = Math.min(255, denimPx[j] * sh);
         px[i + 1] = Math.min(255, denimPx[j + 1] * sh);
         px[i + 2] = Math.min(255, denimPx[j + 2] * sh);
@@ -1247,6 +1291,71 @@ function shortSuit() {
     if (hp[i * 4 + 1] > 128 && hp[i * 4] / 255 < HEM) mask[i] = 6; // piel lisa, sin los pliegues del vaquero
   }
   return short;
+}
+
+let waist: Uint8Array | null = null;
+/**
+ * Con vaqueros: la franja de la máscara de partes que el modelo original tenía como «camiseta» en la cintura del
+ * pantalón pasa a ser pantalón (salía una tira dentada del color del top encima del vaquero). Se decide por la
+ * altura de cada triángulo en la pose de reposo.
+ */
+function waistMask() {
+  if (waist) return waist;
+  waist = new Uint8Array(512 * 512);
+  const scene = data.woman?.gltf.scene;
+  if (!scene || !parts) return waist;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 512;
+  const g = cv.getContext('2d', { willReadFrequently: true })!;
+  g.lineWidth = 2;
+  g.fillStyle = g.strokeStyle = '#ff0000';
+  scene.updateWorldMatrix(true, true);
+  const meshes: THREE.SkinnedMesh[] = [];
+  scene.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh && m.geometry.attributes.uv) meshes.push(m);
+  });
+  const box = new THREE.Box3();
+  const W = meshes.map((m) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const w: THREE.Vector3[] = [];
+    for (let i = 0; i < pos.count; i++) w.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(skinMatrix(m, i)));
+    w.forEach((v) => box.expandByPoint(v));
+    return w;
+  });
+  const H = box.max.y - box.min.y;
+  meshes.forEach((m, mi) => {
+    const uv = m.geometry.attributes.uv as THREE.BufferAttribute;
+    const w = W[mi];
+    const partOf = (i: number) => {
+      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
+      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
+      return Math.round(parts![(y * 512 + x) * 4] / 36);
+    };
+    const n = m.geometry.attributes.position.count;
+    const index = m.geometry.index ? Array.from(m.geometry.index.array) : [...Array(n).keys()];
+    for (let t = 0; t < index.length; t += 3) {
+      const tri = [index[t], index[t + 1], index[t + 2]];
+      // (la tira es «camiseta» o sin clasificar, que conserva el azul del conjunto original del modelo)
+      if (!tri.some((q) => partOf(q) === 3 || partOf(q) === 0)) continue;
+      const h = tri.reduce((s, q) => s + (w[q].y - box.min.y) / H, 0) / 3;
+      // la tira llega hasta 0.64 de la altura; el top empieza en 0.66 (entre medias no hay triángulos)
+      if (h > 0.645 || h < 0.42) continue;
+      g.beginPath();
+      g.moveTo(uv.getX(tri[0]) * 512, uv.getY(tri[0]) * 512);
+      g.lineTo(uv.getX(tri[1]) * 512, uv.getY(tri[1]) * 512);
+      g.lineTo(uv.getX(tri[2]) * 512, uv.getY(tri[2]) * 512);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+  });
+  const px = g.getImageData(0, 0, 512, 512).data;
+  for (let i = 0; i < waist.length; i++) {
+    const p = Math.round(parts[i * 4] / 36);
+    if (px[i * 4] > 70 && (p === 3 || p === 0)) waist[i] = 4;
+  }
+  return waist;
 }
 
 // ---------- MakeHuman (Gas y los hombres secundarios) ----------

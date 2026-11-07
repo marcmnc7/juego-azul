@@ -32,6 +32,7 @@ import sunsetHdr from './assets/env/venice_sunset.hdr';
 import quarryHdr from './assets/env/quarry.hdr';
 import { Post, GRADES, NEUTRAL, type Grade } from './core/post';
 import { paintPalette, paintScene, paintStyle } from './core/paint';
+import { comic, comicScene, drawComic } from './core/comic';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
@@ -178,6 +179,11 @@ let cine = 0;
 function draw(scene: THREE.Scene, dt = 1 / 60) {
   // El postproceso borra por su cuenta y deja autoClear apagado. Sin él hay que volver a encenderlo: si
   // no, cada fotograma se pintaba encima del anterior (fantasmas y cosas que asomaban a través de otras)
+  // Estilo cómic: luz en tres tonos y contorno de tinta, sin postproceso
+  if (comic.on) {
+    drawComic(renderer, scene, camera);
+    return;
+  }
   renderer.autoClear = !quality.post;
   if (!quality.post) {
     renderer.render(scene, camera);
@@ -190,6 +196,7 @@ const input = new Input(canvas, uiRoot);
 stage.setContext({ camera, input });
 stage.onStart = (sc) => {
   if (paintStyle.value) paintScene(sc);
+  if (comic.on) comicScene(sc);
   applyShadows(sc);
   try {
     renderer.compile(sc, camera);
@@ -362,7 +369,9 @@ const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const HD_DAY_CHAPTERS = [3, 5, 6, 8];
 // Estilo pintado en todos los capítulos. ?estilo=antes lo quita para comparar con el aspecto anterior
 const ESTILO = new URLSearchParams(location.search).get('estilo');
-const PAINT_CHAPTERS = ESTILO === 'antes' ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+/** Estilo cómic (el elegido): de momento en Ferreries (capítulos 1 y 9) para probarlo; ?estilo=pintado lo quita. */
+const COMIC_CHAPTERS = ESTILO === 'antes' || ESTILO === 'pintado' ? [] : [1, 9];
+const PAINT_CHAPTERS = ESTILO === 'antes' ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((n) => !COMIC_CHAPTERS.includes(n));
 /** Luz pintada de cada capítulo: tinte de las sombras, de lo que da el sol (o la luna) y del perfil de los personajes. */
 const PAINT_LIGHT: Record<number, [number, number, number]> = {
   1: [0xc9c8f2, 0xfff0d4, 0xfff3cf], // Ferreries a las 11: sombras lavanda, sol de mediodía
@@ -398,15 +407,21 @@ function applyLook(n: number, paint: boolean, mood?: 'day' | 'night') {
 let lookN = 0;
 let lookMood: 'day' | 'night' | undefined;
 function setHd(on: boolean, n = 0) {
+  comic.on = on && COMIC_CHAPTERS.includes(n);
   const paint = on && PAINT_CHAPTERS.includes(n);
   paintStyle.value = paint ? 1 : 0;
   lookN = n;
   lookMood = undefined;
   hdSurfaces.value = on ? 1 : 0;
-  hdEnvDefault.url = on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
+  hdEnvDefault.url = on && !comic.on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
   // AgX apaga los colores: el pintado va con ACES, más vivo
   renderer.toneMapping = on && !paint ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = paint ? 0.98 : on ? 1.05 : 0.92;
+  // (el cómic, con una curva de tono suave: el sol del capítulo es fuerte y sin ella se quemaba)
+  if (comic.on) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+  }
   if (on) applyLook(n, paint);
   else post.setGrade(NEUTRAL, true);
 }
@@ -505,6 +520,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   extras = new ChapterExtras(n, data, () => save(data));
   // Pintado y sombras en el mismo paso: si se dibujara antes sin ellos, cada shader se compilaría dos veces
   if (paintStyle.value) paintScene(me.threeScene);
+  if (comic.on) comicScene(me.threeScene);
   applyShadows(me.threeScene);
   console.info(`[juego] capítulo ${n} montado en ${Math.round(performance.now() - t0)} ms`);
   if (TEST) closeDebug = debugPanel(me.debug());
@@ -701,10 +717,11 @@ function frame() {
       applyLook(lookN, paintStyle.value > 0, lookMood);
     }
     // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pinta
-    if (paintStyle.value && (sc !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
+    if ((paintStyle.value || comic.on) && (sc !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
       paintedScene = sc;
       paintedAt = clock.elapsedTime;
-      paintScene(paintedScene);
+      if (comic.on) comicScene(paintedScene);
+      else paintScene(paintedScene);
     }
     draw(sc, dt);
     if (shotReq) {
@@ -759,7 +776,8 @@ window.addEventListener('keydown', (e) => {
 });
 document.addEventListener('visibilitychange', () => {
   // Al irse a segundo plano en mitad de un capítulo, al volver lo encuentra en pausa
-  if (document.hidden && level && !loadingLevel) openPause();
+  // (en las revisiones automáticas, con keepAlive, la partida sigue aunque la página quede oculta)
+  if (document.hidden && level && !loadingLevel && !keepAlive) openPause();
   if (document.hidden) renderer.setAnimationLoop(null);
   else {
     audio.resume();
