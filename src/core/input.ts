@@ -1,6 +1,8 @@
 // Entrada unificada: joystick virtual (mitad izquierda), arrastre para girar cámara (mitad derecha),
 // botón de acción en pantalla, y teclado/ratón para probar en el ordenador.
 export class Input {
+  /** Radio del aro del joystick, en píxeles de pantalla. */
+  static readonly R = 52;
   moveX = 0; // -1..1 (derecha +)
   moveY = 0; // -1..1 (adelante +)
   camDelta = 0; // radianes acumulados desde el último consume
@@ -47,9 +49,14 @@ export class Input {
     const left = e.clientX < window.innerWidth * 0.45;
     if (left) {
       this.stickId = e.pointerId;
-      this.stickOrigin = { x: e.clientX, y: e.clientY };
-      this.base.style.left = `${e.clientX}px`;
-      this.base.style.top = `${e.clientY}px`;
+      // El aro se queda donde cae el pulgar (algo hacia dentro si es muy al borde, para que se vea entero) y ya
+      // no se mueve: solo se mueve la bola, hasta el borde del aro
+      const m = Input.R + 14;
+      const x = Math.max(m, Math.min(window.innerWidth * 0.45, e.clientX));
+      const y = Math.max(m + 60, Math.min(window.innerHeight - m, e.clientY));
+      this.stickOrigin = { x, y };
+      this.base.style.left = `${x}px`;
+      this.base.style.top = `${y}px`;
       this.base.classList.add('on');
       this.base.classList.remove('ghost');
       this.knob.style.transform = 'translate(-50%,-50%)';
@@ -61,24 +68,20 @@ export class Input {
 
   private onMove = (e: PointerEvent) => {
     if (e.pointerId === this.stickId) {
-      const R = 55;
+      const R = Input.R;
       let dx = e.clientX - this.stickOrigin.x;
       let dy = e.clientY - this.stickOrigin.y;
       const len = Math.hypot(dx, dy);
       if (len > R) {
-        // El joystick sigue al pulgar: si se pasa del borde, la base se arrastra con él
-        this.stickOrigin.x += (dx / len) * (len - R);
-        this.stickOrigin.y += (dy / len) * (len - R);
-        this.base.style.left = `${this.stickOrigin.x}px`;
-        this.base.style.top = `${this.stickOrigin.y}px`;
+        // Pasado el borde, la bola se queda en el borde (el aro no se mueve)
         dx = (dx / len) * R;
         dy = (dy / len) * R;
       }
       this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       // Zona muerta pequeña y velocidad máxima a algo más de media carrera: no hace falta llevar el pulgar al
       // borde para correr. Por debajo, un poco de pulgar = andar despacio
-      const r = Math.min(1, len / R);
-      const m = Math.min(1, len / (R * 0.58));
+      const r = Math.min(1, Math.hypot(dx, dy) / R);
+      const m = Math.min(1, len / (R * 0.62));
       const g = m < 0.1 ? 0 : Math.pow((m - 0.1) / 0.9, 1.1) / (r || 1);
       this.moveX = (dx / R) * g;
       this.moveY = (-dy / R) * g;

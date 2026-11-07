@@ -35,10 +35,11 @@ import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore, installGate, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, quizScore, installGate, pauseState, openPause, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
+import { LEVELS } from './data/story';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const uiRoot = document.getElementById('ui')!;
@@ -280,6 +281,7 @@ const mapOpts = {
 
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo y panel de prueba. */
 function leaveLevel() {
+  pauseState.on = false;
   stage.end();
   audio.stopTrack();
   // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
@@ -411,6 +413,8 @@ function startLevel(n: number) {
   tryFullscreen();
   audio.bed(BEDS[n] ?? 'none');
   const card = chapterCard(n);
+  pauseState.on = false;
+  pauseState.title = `Capítulo ${n} · ${LEVELS[n - 1].name}`;
   void buildLevel(n, card).catch((e) => {
     console.warn('[juego] montar capítulo', e);
     loadingLevel = false;
@@ -470,15 +474,11 @@ async function buildLevel(n: number, card: ChapterLoading) {
           level = null;
         }
         crossword(startLetter, goMap);
-      } else if (TEASERS[n + 1] && !data.levelsDone.includes(n + 1)) teaserCard(n + 1, goMap);
-      else goMap();
+      } else goMap();
     };
-    // Después del vale (o, si el capítulo no tiene, de sus estrellas) caen las fotos del capítulo; luego
-    // mapa o, al final, crucigrama y carta
-    const photos = () => memories(n, after);
-    if (g) showGift(g, photos, result);
-    else if (result) chapterResult(n, result, photos);
-    else photos();
+    // Todo el final en una pantalla: estrellas, regalo, fotos y lo que viene mañana
+    const teaser = TEASERS[n + 1] && !data.levelsDone.includes(n + 1) ? n + 1 : null;
+    chapterComplete(n, result, g ?? null, teaser, after);
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
@@ -634,7 +634,8 @@ function frame() {
   const mission = stage.current;
   if (level || mission) {
     const sc = mission ? mission.scene : level!.threeScene;
-    const gdt = loadingLevel ? 1e-4 : juice.scaleDt(dt) * cinema.timeScale;
+    const frozen = loadingLevel || pauseState.on;
+    const gdt = frozen ? 1e-4 : juice.scaleDt(dt) * cinema.timeScale;
     dust.attach(sc);
     beacon.attach(sc);
     camWorld.attach(sc);
@@ -646,7 +647,7 @@ function frame() {
     dust.update(gdt);
     updateRigPeople(gdt);
     // Escenas de cine: mandan sobre la cámara que haya puesto el capítulo
-    const filming = cinema.update(camera, loadingLevel ? 1e-4 : dt);
+    const filming = cinema.update(camera, frozen ? 1e-4 : dt);
     if (uiRoot.classList.contains('filming') !== filming) uiRoot.classList.toggle('filming', filming);
     // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
     beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
@@ -731,7 +732,12 @@ function dropShadows() {
 }
 
 window.addEventListener('pointerdown', () => audio.resume(), true);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && level && !loadingLevel) openPause();
+});
 document.addEventListener('visibilitychange', () => {
+  // Al irse a segundo plano en mitad de un capítulo, al volver lo encuentra en pausa
+  if (document.hidden && level && !loadingLevel) openPause();
   if (document.hidden) renderer.setAnimationLoop(null);
   else {
     audio.resume();
