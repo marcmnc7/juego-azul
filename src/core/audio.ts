@@ -206,6 +206,25 @@ export class Audio {
   private trackToken = 0;
   private trackOn = false;
 
+  /** Canciones ya descodificadas (la pantalla de carga del capítulo la deja lista antes de empezar). */
+  private decoded = new Map<string, Promise<AudioBuffer>>();
+  private decode(url: string) {
+    let p = this.decoded.get(url);
+    if (!p) {
+      p = bytes(url).then((b) => this.ctx!.decodeAudioData(b));
+      p.catch(() => this.decoded.delete(url));
+      // Solo se guarda la última (cada una ocupa decenas de MB descodificada)
+      for (const k of this.decoded.keys()) if (k !== url) this.decoded.delete(k);
+      this.decoded.set(url, p);
+    }
+    return p;
+  }
+  /** Descodifica la canción sin tocarla. Resuelve cuando está lista (o enseguida si aún no hay audio). */
+  preloadTrack(url: string): Promise<unknown> {
+    if (!this.ctx) return Promise.resolve();
+    return this.decode(url).catch(() => {});
+  }
+
   /** Suena esta canción en bucle (fundiendo la anterior). Si ya está sonando, sigue por donde iba. */
   playTrack(url: string) {
     if (this.trackWant === url) return;
@@ -215,8 +234,7 @@ export class Audio {
     if (!this.ctx) return; // arranca al desbloquear el audio
     const tok = ++this.trackToken;
     this.fadeTrack();
-    void bytes(url)
-      .then((b) => this.ctx!.decodeAudioData(b))
+    void this.decode(url)
       .then((buf) => {
         if (tok !== this.trackToken || !this.ctx) return;
         const ctx = this.ctx;

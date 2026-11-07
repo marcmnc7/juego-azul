@@ -10,6 +10,11 @@ import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSu
 // móvil no llega. (El antiguo estilo "dibujo animado" con contornos se puede recuperar con
 // quality.outlines = true.)
 
+/** Móvil o tableta: menos sombras, sin oclusión ambiental y mapas de sombra más pequeños. */
+export const MOBILE =
+  typeof navigator !== 'undefined' &&
+  (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900));
+
 export const quality = {
   shadows: true,
   outlines: false,
@@ -377,7 +382,7 @@ export class Sun {
     this.offset = dir.clone().normalize().multiplyScalar(40);
     this.light.castShadow = quality.shadows;
     const s = this.light.shadow;
-    s.mapSize.set(2048, 2048);
+    s.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048);
     s.radius = 3;
     s.camera.left = s.camera.bottom = -range;
     s.camera.right = s.camera.top = range;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MOBILE } from '../core/gfx';
 import { loadGLB } from '../core/assets';
 import { stripFormal, rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, noTails, womanPartsTexture, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
@@ -410,9 +411,12 @@ export class RigCrowd {
       vatify(depth, part);
       im.customDepthMaterial = depth;
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      im.frustumCulled = false;
-      // Las piezas pequeñas (ojos) no hace falta que proyecten sombra
-      if (/Eye/.test(part.name)) im.userData.noCast = true;
+      // Se recorta con la esfera que envuelve a todo el grupo (se recalcula en commit): la gente que queda
+      // detrás de la cámara no se dibuja
+      im.frustumCulled = true;
+      // Las piezas pequeñas (ojos) no hace falta que proyecten sombra; en el móvil, ninguna: la multitud
+      // proyectándose en el mapa de sombras costaba tanto como dibujarla
+      if (/Eye/.test(part.name) || MOBILE) im.userData.noCast = true;
       this.meshes.push(im);
       this.group.add(im);
     }
@@ -427,7 +431,15 @@ export class RigCrowd {
   }
   commit() {
     for (const im of this.meshes) im.instanceMatrix.needsUpdate = true;
+    // Las piezas comparten matrices: una esfera para todas, recalculada de vez en cuando (apenas se mueven)
+    const c = this.commits++;
+    if (this.meshes.length && (c < 5 || c % 30 === 0)) {
+      const m0 = this.meshes[0];
+      m0.computeBoundingSphere();
+      for (const im of this.meshes) im.boundingSphere = m0.boundingSphere;
+    }
   }
+  private commits = 0;
 }
 
 const _m = new THREE.Matrix4();

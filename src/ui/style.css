@@ -840,3 +840,195 @@ body:has(.princesa-screen) .hud-top { display: none; }
 .table-item small { font-size: 11px; font-weight: 700; }
 .table-item.sel { border-color: #ffd23f; background: #6a521a; transform: translateY(-6px); }
 .table-item.used { opacity: .4; }
+
+/* =====================================================================================================
+   Interfaz de juego para el móvil: todo lo que va encima de la escena es translúcido y oscuro (se ve el
+   decorado detrás), pequeño y pegado a los bordes. Las pantallas (portada, mapa, regalos) siguen igual.
+   ===================================================================================================== */
+:root {
+  --glass: rgba(14, 20, 34, .42);
+  --glass-2: rgba(14, 20, 34, .62);
+  --glass-line: rgba(255, 255, 255, .16);
+  --glass-shadow: 0 6px 18px -8px rgba(0, 0, 0, .45);
+  --on-glass: #fffaf0;
+  --gold-soft: #ffd56a;
+}
+
+/* Arriba: objetivo a la izquierda, menú a la derecha */
+.hud-top { top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); gap: 8px; }
+.objective, .chip, .icon-btn {
+  background: var(--glass); color: var(--on-glass); border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow);
+}
+.objective {
+  flex: 0 1 auto; max-width: min(72vw, 420px); border-radius: 999px; padding: 5px 13px 5px 6px; gap: 7px;
+  font-size: 13px; font-weight: 700; line-height: 1.25; text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  transition: opacity .3s, background .3s;
+}
+.objective .obj-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.objective.open { border-radius: 14px; background: var(--glass-2); }
+.objective.open .obj-text { white-space: normal; }
+.objective:not(.open) { opacity: .82; }
+.objective.empty { display: none; }
+.objective .arrow { width: 22px; height: 22px; font-size: 12px; border: 0; background: rgba(255,255,255,.92); color: #17324d; }
+.icon-btn { width: 38px; height: 38px; border-radius: 50%; font-size: 16px; }
+.menu-btn { display: grid; place-content: center; gap: 3px; flex: none; }
+.menu-btn i { display: block; width: 15px; height: 2px; border-radius: 2px; background: var(--on-glass); }
+
+/* Contadores: columna a la derecha, debajo del menú */
+.counters {
+  position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: max(10px, env(safe-area-inset-right));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: none !important;
+}
+.counters:empty { display: none; }
+.chip { border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+
+/* Menú de pausa */
+.hud-menu {
+  position: fixed; z-index: 45; top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: max(10px, env(safe-area-inset-right));
+  display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 16px;
+  background: rgba(14, 20, 34, .82); border: 1px solid var(--glass-line); box-shadow: 0 14px 30px -10px rgba(0,0,0,.6);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); animation: dlgIn .15s ease both;
+}
+.hud-menu[hidden] { display: none; }
+.hm-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border-radius: 11px; background: transparent; color: var(--on-glass); font-size: 15px; font-weight: 700; text-align: left; }
+.hm-item:active { background: rgba(255,255,255,.12); }
+.hm-resume { color: var(--gold-soft); }
+
+/* Botón de acción: sigue siendo el protagonista, pero sin canto ni marco gordo */
+.action-btn {
+  right: max(18px, env(safe-area-inset-right)); bottom: max(22px, calc(env(safe-area-inset-bottom) + 8px));
+  width: 80px; height: 80px; padding: 6px; font-size: 13px; line-height: 1.1;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 128, 132, .95), rgba(229, 72, 77, .9) 62%, rgba(176, 44, 52, .92));
+  border: 2px solid rgba(255, 255, 255, .75); box-shadow: 0 8px 22px -6px rgba(0, 0, 0, .5);
+}
+.action-btn:active { transform: scale(.94); box-shadow: 0 4px 12px -6px rgba(0,0,0,.5); }
+.action-btn.pulse { background: radial-gradient(circle at 35% 30%, rgba(120, 232, 172, .95), rgba(47, 157, 98, .92) 62%, rgba(31, 115, 72, .94)); }
+@keyframes pulse { 0%, 100% { box-shadow: 0 8px 22px -6px rgba(0,0,0,.5), 0 0 0 0 rgba(120,232,172,.55); } 50% { box-shadow: 0 8px 22px -6px rgba(0,0,0,.5), 0 0 0 12px rgba(120,232,172,0); transform: scale(1.04); } }
+
+/* Joystick: un aro claro, casi invisible hasta que se toca */
+.stick-base { width: 116px; height: 116px; margin: -58px 0 0 -58px; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.42); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.stick-base.ghost { left: calc(max(18px, env(safe-area-inset-left)) + 58px); top: calc(100dvh - max(22px, calc(env(safe-area-inset-bottom) + 8px)) - 58px); opacity: .5; }
+.stick-knob { width: 48px; height: 48px; background: rgba(255,255,255,.7); border: 0; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+.hint-move {
+  background: none; border: 0; padding: 0; color: var(--on-glass); font-size: 12px; font-weight: 700; max-width: 40vw;
+  bottom: max(30px, calc(env(safe-area-inset-bottom) + 14px)); text-shadow: 0 1px 3px rgba(0,0,0,.8); opacity: .9; animation: hintOut 7s ease forwards;
+}
+
+/* Diálogos: caja de cine translúcida abajo (narrador) o bocadillo oscuro sobre quien habla */
+.dialogue {
+  background: var(--glass-2); color: var(--on-glass); border: 1px solid var(--glass-line); border-radius: 18px;
+  box-shadow: 0 10px 30px -12px rgba(0,0,0,.6); padding: 12px 16px 10px; min-height: 0;
+  width: min(640px, calc(100vw - 24px)); bottom: max(12px, calc(env(safe-area-inset-bottom) + 4px));
+}
+.dialogue .text { font-size: 16px; font-weight: 600; line-height: 1.38; min-height: 0; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.dialogue.who-narr .text { color: #e9e3ff; }
+.dialogue .who { top: -12px; left: 14px; padding: 2px 10px; border: 0; border-radius: 999px; font-size: 12.5px; box-shadow: 0 3px 8px rgba(0,0,0,.3); }
+.dialogue .next { color: var(--gold-soft); font-size: 13px; bottom: 4px; right: 12px; }
+.dialogue.speech { padding: 10px 14px 12px; border-radius: 16px; max-width: min(300px, calc(100vw - 24px)); }
+.dialogue.speech .text { font-size: 15px; }
+.dialogue.speech::before { border-color: rgba(255,255,255,.16) transparent transparent transparent; border-width: 12px 9px 0 9px; }
+.dialogue.speech::after { border-color: rgba(14, 20, 34, .62) transparent transparent transparent; top: calc(100% - 1px); border-width: 11px 8px 0 8px; }
+.dialogue.wa { background: rgba(18, 66, 40, .72); }
+.dialogue.wa .text { color: #f1ffe9; }
+
+/* Avisos, comentarios al andar y recuerdos encontrados */
+.toast { background: var(--glass-2); color: var(--on-glass); border: 1px solid var(--glass-line); border-radius: 999px; padding: 7px 16px; font-size: 14px; font-weight: 700; top: 20%; box-shadow: var(--glass-shadow); }
+.bark { background: var(--glass-2); color: var(--on-glass); font-size: 13.5px; font-weight: 600; border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow); max-width: min(70vw, 300px); }
+.bark b { color: #d9cfc2; }
+.bark.who-gas b { color: #ffb37a; }
+.bark.who-azul b { color: #9fd0ff; }
+.bark.wa { background: rgba(18, 66, 40, .72); }
+.bark.anchored::after { border-top-color: rgba(14, 20, 34, .62); }
+.kp-pop {
+  top: calc(max(8px, env(safe-area-inset-top)) + 48px); flex-direction: row; gap: 9px; padding: 6px 12px 6px 6px; border-radius: 14px;
+  background: var(--glass-2); border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow); max-width: min(78vw, 340px);
+}
+.kp-thumb { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex: none; background: #2a2f40; display: grid; place-items: center; font-size: 22px; }
+.kp-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; }
+.kp-text b { font-size: 12px; color: var(--gold-soft); font-weight: 800; }
+.kp-text span { font-size: 13px; color: var(--on-glass); font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* Minijuegos y barras encima de la escena */
+.gauge { background: var(--glass-2); color: var(--on-glass); border: 1px solid var(--glass-line); box-shadow: 0 14px 30px -12px rgba(0,0,0,.6); }
+.gauge-bar { border: 1px solid rgba(255,255,255,.3); }
+.lane-btn { width: 74px; height: 74px; background: var(--glass); color: var(--on-glass); border: 2px solid rgba(255,255,255,.45); box-shadow: var(--glass-shadow); font-size: 26px; }
+.lane-btn:active { transform: scale(.94); box-shadow: none; background: rgba(255,213,106,.55); }
+.route .track { background: rgba(14,20,34,.45); border: 1px solid rgba(255,255,255,.35); }
+.trick-btn { background: var(--glass-2); color: var(--on-glass); border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow); }
+.trick-btn:active { transform: scale(.95); box-shadow: none; }
+.side-panel { top: calc(max(8px, env(safe-area-inset-top)) + 50px); max-width: 66vw; }
+.side-info { font-size: 13.5px; padding: 7px 13px; background: var(--glass-2); border: 1px solid var(--glass-line); }
+.side-count { top: calc(max(8px, env(safe-area-inset-top)) + 50px); font-size: 20px; padding: 5px 14px; background: var(--glass-2); }
+.tray-meter { top: calc(max(8px, env(safe-area-inset-top)) + 92px); }
+.debug-btn { top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: calc(max(10px, env(safe-area-inset-right)) + 48px); min-height: 30px; padding: 4px 10px; font-size: 12px; opacity: .8; }
+
+/* Escenas de cine, partidas de cartas y misiones: también fuera los contadores y el menú */
+#ui.filming .counters, #ui:has(.ll) .counters, #ui.mission > .counters:not(.m-hud) { opacity: 0; pointer-events: none !important; }
+#ui.mission > .counters:not(.m-hud) { display: none !important; }
+body:has(.princesa-screen) .counters { display: none; }
+#ui:has(.screen, .gift-overlay) .hud-menu { display: none; }
+
+/* Rótulo del capítulo con la barra de carga */
+.chapter-card { z-index: 60; }
+.cc-load { margin-top: 18px; width: min(260px, 70vw); display: flex; flex-direction: column; align-items: center; gap: 8px; animation: rise .8s .6s ease both; }
+.cc-bar { position: relative; width: 100%; height: 6px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
+.cc-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #ffd56a, #fff1c4); transform-origin: 0 50%; transform: scaleX(.04); transition: transform .5s ease; border-radius: 99px; }
+/* Brillo que corre aunque el móvil esté ocupado montando la escena (es una animación de transform) */
+.cc-bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); animation: ccShine 1.1s linear infinite; }
+@keyframes ccShine { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+.cc-label { font-size: 12.5px; font-weight: 700; letter-spacing: .04em; color: rgba(255,253,246,.85); }
+.chapter-card.ready .cc-bar::after { display: none; }
+
+@media (max-height: 520px) {
+  .dialogue { width: min(600px, calc(100vw - 170px)); }
+  .dialogue .text { font-size: 15px; }
+  .action-btn { width: 70px; height: 70px; font-size: 12px; }
+}
+.install-tip { margin-top: 4px !important; max-width: 300px !important; }
+
+/* ---------- Capítulo 4: el urinario ---------- */
+.pee-game { position: fixed; inset: 0; z-index: 36; touch-action: none; animation: screenIn .35s ease both; }
+.pee-game canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+.pee-head { position: absolute; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; width: min(320px, 86vw); }
+.pee-title { padding: 6px 14px; border-radius: 999px; background: var(--glass-2); color: var(--on-glass); font-weight: 800; font-size: 15px; border: 1px solid var(--glass-line); }
+.pee-tank { display: flex; align-items: center; gap: 8px; width: 100%; color: #33404a; font-size: 12px; font-weight: 800; }
+.pee-track { flex: 1; height: 8px; border-radius: 99px; background: rgba(40,50,60,.2); overflow: hidden; }
+.pee-fill { height: 100%; background: linear-gradient(90deg, #e9c53c, #f6e08a); transform-origin: 0 50%; }
+.pee-hint { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: 86vw; text-align: center; color: #fffaf0; font-size: 13px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; animation: hintOut 6s ease forwards; }
+
+/* ---------- Capítulo 4: las gafas de sol en las cabinas ---------- */
+.gh-game {
+  position: fixed; inset: 0; z-index: 36; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, #cfd6d9 0%, #c3cbcf 72%, #5f5a55 72.4%, #45413d 100%); animation: screenIn .35s ease both;
+}
+.gh-title { padding: 6px 14px; border-radius: 999px; background: var(--glass-2); color: var(--on-glass); font-weight: 800; font-size: 15px; text-align: center; }
+.gh-hint { color: #33404a; font-size: 13px; font-weight: 700; }
+.gh-row { display: flex; gap: clamp(4px, 1.6vw, 10px); align-items: flex-end; margin-top: 8px; }
+.gh-door { position: relative; width: clamp(56px, 17vw, 96px); height: clamp(150px, 38vh, 230px); padding: 0; background: #1d2226; border-radius: 6px 6px 2px 2px; box-shadow: inset 0 0 0 3px #8a9399; perspective: 600px; overflow: visible; }
+.gh-inside { position: absolute; inset: 3px; border-radius: 4px; background: linear-gradient(180deg, #e6ebed, #b9c1c5); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 14%; }
+.gh-wc { font-size: clamp(28px, 8vw, 42px); }
+.gh-glasses { position: absolute; top: 40%; font-size: clamp(22px, 6vw, 32px); animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+.gh-panel {
+  position: absolute; inset: 0; border-radius: 6px 6px 2px 2px; background: linear-gradient(90deg, #6f8ea3, #86a6ba 40%, #6f8ea3); box-shadow: inset 0 0 0 2px rgba(0,0,0,.15), 0 2px 0 rgba(0,0,0,.2);
+  transform-origin: 0 50%; transition: transform .45s cubic-bezier(.3, 1.2, .5, 1); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 4px;
+}
+.gh-door.open .gh-panel { transform: rotateY(-78deg); }
+.gh-sign { font-size: 11px; font-weight: 900; letter-spacing: .08em; color: #fff; background: rgba(0,0,0,.25); padding: 2px 6px; border-radius: 4px; }
+.gh-handle { width: 6px; height: 22px; border-radius: 3px; background: #d8dde0; align-self: flex-end; margin-right: 4px; margin-bottom: 40%; }
+.gh-door.broken .gh-panel { background: repeating-linear-gradient(-45deg, #f2c230 0 10px, #222 10px 20px); }
+.gh-door.broken .gh-sign { background: #c0392b; }
+.gh-door.shake { animation: nope .45s ease; }
+.gh-say { min-height: 26px; color: #22303a; font-weight: 800; font-size: 15px; text-align: center; background: rgba(255,255,255,.7); padding: 4px 12px; border-radius: 12px; }
+.gh-say:empty { visibility: hidden; }
+.gh-say.pop { animation: pop .35s cubic-bezier(.2, 1.6, .4, 1); }
+.gh-cistern { position: absolute; left: 22%; right: 22%; top: 46%; height: 12%; border-radius: 4px 4px 2px 2px; background: linear-gradient(180deg, #ffffff, #dfe5e8); box-shadow: 0 2px 3px rgba(0,0,0,.2); }
+.gh-glasses { top: auto; bottom: calc(54% + 2px); }
+
+/* Con un panel o un minijuego encima, el rótulo de misión no se pinta por encima de su título */
+#ui:has(.panel-overlay, .pee-game, .gh-game, .gauge) .mission-card { display: none; }
+#ui:has(.pee-game, .gh-game) .hud-top, #ui:has(.pee-game, .gh-game) .counters, #ui:has(.pee-game, .gh-game) .action-btn, #ui:has(.pee-game, .gh-game) .stick-base { display: none !important; }
+.panel-overlay .pack-item { background: rgba(14, 20, 34, .55); color: var(--on-glass); border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow); }
+.panel-overlay .pack-item.in { background: rgba(47, 157, 98, .55); border-color: rgba(160, 255, 200, .6); }
+.panel-overlay .pack-item.in .pi-label::after { color: #b8ffd6; }
+.panel-overlay .pack-item.nope { background: rgba(229, 72, 77, .55); border-color: rgba(255, 170, 170, .7); }

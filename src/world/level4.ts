@@ -63,14 +63,17 @@ const BORN_O = new THREE.Vector3(-600, 0, STREET.laneZ - BORN_SOUTH_LANE);
 const BAR_AREA = { minX: BORN_O.x + BORN.minX + 0.4, maxX: BORN_O.x + 29.6, minZ: BORN_O.z + BORN.minZ + 0.4, maxZ: BORN_O.z + BORN.maxZ - 0.4 };
 const BAR_START = new THREE.Vector3(BORN_O.x + IMPERI.x + 3.2, 0, BORN_O.z + IMPERI.z - 1);
 /** Llegada a casa: calle, patio delantero y el pasillo lateral hasta el jardín. */
-const HOME_AREA = PLOT;
+// Al llegar: la calle desde donde para el coche (delante del vecino) hasta casa
+const HOME_AREA = { ...PLOT, maxX: 15.5 };
 // «Ve hacia Pins»: la esquina sureste de la explanada, junto a la calle por donde llega el coche
 const PINS = new THREE.Vector3(BORN_O.x + 11, 0, STREET.laneZ + 1.9);
 const CAR_START_X = PINS.x + 1.2;
 const CAR_FAR_X = BORN_O.x - 14;
 /** En la calle de casa, el coche entra desde aquí. */
-const DRIVE_FROM_X = -46;
-const CAR_STOP_X = -0.6;
+// La calle de casa es de sentido único hacia el oeste (-x): el coche entra por el otro extremo y para unos
+// metros antes de casa, delante del vecino; desde ahí se va andando hasta la verja
+const DRIVE_FROM_X = 40;
+const CAR_STOP_X = 11;
 const DRIVE_TIME = 7;
 // Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
 const GRAVEL = { minX: CORRIDOR.minX, maxX: -0.3, minZ: 1.9, maxZ: 4.6 };
@@ -208,6 +211,8 @@ export class Level4 implements Level {
       sc.add(l);
     }
     this.colliders.push(...street.colliders, this.carBox);
+    // Entre el muro del vecino y el de la casa siguiente queda un hueco hacia los jardines: cerrado
+    this.colliders.push({ minX: 13.3, maxX: 16, minZ: STREET.wallZ - 0.3, maxZ: STREET.wallZ + 0.3, low: true });
     this.car.root.rotation.y = Math.PI / 2;
     this.car.azul.visible = false;
     this.placeCar(CAR_FAR_X);
@@ -828,9 +833,9 @@ export class Level4 implements Level {
       this.camera.lookAt(this.camLook);
     } else if (this.phase === 'drive') {
       const c = this.car.root.position;
-      this.v1.set(c.x - 7.5, 3.2, c.z - 4.2);
+      this.v1.set(c.x + 7.5, 3.2, c.z - 4.2);
       this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
-      this.camLook.lerp(this.v2.set(c.x + 3, 1, c.z), Math.min(1, dt * 4));
+      this.camLook.lerp(this.v2.set(c.x - 3, 1, c.z), Math.min(1, dt * 4));
       this.camera.lookAt(this.camLook);
     } else if (this.phase === 'love') {
       this.camera.lookAt(this.camLook);
@@ -1103,8 +1108,9 @@ export class Level4 implements Level {
       this.driveT = 0;
       this.driveTalkDone = false;
       // Del Born a casa: el coche aparece ya en la calle de casa
+      this.car.root.rotation.y = -Math.PI / 2;
       this.placeCar(DRIVE_FROM_X);
-      this.camera.position.set(DRIVE_FROM_X - 7.5, 3.2, STREET.laneZ - 4.2);
+      this.camera.position.set(DRIVE_FROM_X + 7.5, 3.2, STREET.laneZ - 4.2);
       this.camLook.copy(this.car.root.position);
       this.driveTalkDone = true;
       this.updateHud();
@@ -1119,7 +1125,7 @@ export class Level4 implements Level {
     this.placeCar(THREE.MathUtils.lerp(DRIVE_FROM_X, CAR_STOP_X, e));
     const dx = this.car.root.position.x - prev;
     if (!this.rig) this.rig = new CarRig(this.car);
-    this.rig.update(dt, dt > 0 ? dx / dt : 0, 0, 1.4); // calle de pueblo: algo más de bache
+    this.rig.update(dt, dt > 0 ? Math.abs(dx) / dt : 0, 0, 1.4); // calle de pueblo: algo más de bache
     if (k >= 1 && this.driveTalkDone && this.busy && this.phase === 'drive') {
       this.phase = 'arrive';
       fadeFlash(() => this.arriveHome());
@@ -1129,18 +1135,22 @@ export class Level4 implements Level {
   /** Bajan del coche delante de casa; Gas abre la puerta peatonal. */
   private arriveHome() {
     this.phase = 'arrive';
+    this.car.root.rotation.y = -Math.PI / 2;
     this.placeCar(CAR_STOP_X);
     this.car.azul.visible = false;
     this.player.root.visible = true;
-    this.player.root.position.set(CAR_STOP_X - 1.2, 0, STREET.laneZ + 1.6);
-    this.walker.yaw = this.walker.facing = 0;
-    this.camera.position.set(this.player.root.position.x, 3.6, this.player.root.position.z - 6.5);
-    // Marc se baja por su lado, rodea el morro y va delante: abre la verja y entra por el pasillo
+    // Ella se baja por el lado de la acera, detrás del coche (el coche mira hacia casa)
+    this.player.root.position.set(CAR_STOP_X + 2.7, 0, STREET.laneZ + 1.55);
+    // Mirando calle abajo, hacia casa (Gas va delante por la acera)
+    this.walker.yaw = this.walker.facing = -Math.PI / 2;
+    this.camera.position.set(this.player.root.position.x + 5, 2.8, this.player.root.position.z - 0.6);
+    // Marc se baja por su lado, rodea el morro y va delante por la acera: abre la verja y entra por el pasillo
     this.gas.root.visible = true;
     const gx = (STREET.gate.minX + STREET.gate.maxX) / 2;
     const cx = (CORRIDOR.minX + CORRIDOR.maxX) / 2;
-    this.gas.root.position.set(CAR_STOP_X + 0.3, 0, STREET.laneZ - 1.15);
-    this.gasPath = [[CAR_STOP_X + 3, STREET.laneZ - 1.15], [CAR_STOP_X + 3, STREET.laneZ + 1.5], [gx, STREET.laneZ + 1.5], [gx, STREET.wallZ + 1.6], [cx, STREET.wallZ + 2.6], [cx, -15.4], [GAS_POOL.x, GAS_POOL.z]];
+    // (conduce él: con el coche mirando al oeste, su puerta es la del lado de la acera)
+    this.gas.root.position.set(CAR_STOP_X + 0.4, 0, STREET.laneZ + 1.2);
+    this.gasPath = [[CAR_STOP_X - 0.6, STREET.laneZ + 1.6], [gx, STREET.laneZ + 1.6], [gx, STREET.wallZ + 1.6], [cx, STREET.wallZ + 2.6], [cx, -15.4], [GAS_POOL.x, GAS_POOL.z]];
     this.updateHud();
     dialogue(NIGHT.arrive, () => {
       this.busy = false;
@@ -1216,6 +1226,9 @@ export class Level4 implements Level {
     this.phase = 'hug';
     this.hugT = 0;
     this.busy = true;
+    // Lo que llevaba de la carrera hasta el borde y del salto no puede quedarse guardado para después
+    this.walker.stop();
+    this.input.reset();
     this.updateHud();
   }
 
@@ -1246,6 +1259,11 @@ export class Level4 implements Level {
     if (this.hugT > 5) {
       this.hugE?.stop();
       this.hugE = null;
+      // Al soltarse, quieta y mirando hacia donde miraba en el abrazo: antes salía disparada hasta el fondo de la
+      // piscina con el impulso que traía de antes de tirarse (en el agua apenas frena)
+      this.walker.stop();
+      this.walker.facing = this.player.root.rotation.y;
+      this.input.reset();
       this.phase = 'swim';
       this.swimT = 0;
       this.busy = false;
@@ -1260,6 +1278,7 @@ export class Level4 implements Level {
     this.walker.yaw = this.walker.facing = 0;
     this.camera.position.set(-5.45, 4, -9);
     this.car.azul.visible = false;
+    this.car.root.rotation.y = -Math.PI / 2;
     this.placeCar(CAR_STOP_X);
     this.gas.root.visible = true;
     this.gas.root.position.copy(GAS_POOL);

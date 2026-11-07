@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { Sky, Sun, toon, vibrate, glowTexture } from '../core/gfx';
-import { rigPost } from '../entities/rig';
+import { rigPost, leanTorso } from '../entities/rig';
 import { twoBone } from '../entities/embrace';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, makeScallop, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
@@ -28,7 +28,15 @@ function stoneWall() {
   return t;
 }
 
-const FINGER_AXIS = new THREE.Vector3(0, 0, 1);
+const FINGER_AXIS = new THREE.Vector3(1, 0, 0);
+const sstep = THREE.MathUtils.smoothstep;
+
+/**
+ * Cómo se come la zamburiña (segundos de juego; la escena va a cámara lenta):
+ * se inclina y alarga la mano, la coge por la charnela, se la lleva a los labios, la inclina y se la come, y
+ * deja la concha vacía en el plato.
+ */
+const EAT = { reach: 0.42, grab: 0.5, lips: 1.0, tilt: 1.12, gone: 1.2, back: 1.42, down: 1.85, end: 2.3 };
 
 export class Terrace {
   scene = new THREE.Scene();
@@ -38,6 +46,12 @@ export class Terrace {
   readonly gas: Person;
   private plate = new THREE.Group();
   private bite: THREE.Group;
+  /** Lo que se come (carne, coral, ajo y perejil): la concha se queda. */
+  private biteMeat: THREE.Object3D[] = [];
+  private biteHome = new THREE.Vector3();
+  private biteHomeQ = new THREE.Quaternion();
+  private shellDir = new THREE.Vector3();
+  private shellUp = new THREE.Vector3();
   private t = 0;
   private eatT = -1;
   /** Brillo dorado de la zamburiña, en el primer plano. */
@@ -46,7 +60,6 @@ export class Terrace {
   private mouth = new THREE.Vector3();
   private grip = new THREE.Vector3();
   private gripDir = new THREE.Vector3(0, 0, 1);
-  private handAt = new THREE.Vector3();
   private basisX = new THREE.Vector3();
   private basisY = new THREE.Vector3();
   private basisM = new THREE.Matrix4();
@@ -232,9 +245,12 @@ export class Terrace {
       (s.meat.material as THREE.MeshStandardMaterial).color.set(0xeec691);
       this.plate.add(s.root);
     }
-    this.plate.position.set(0, 0.8, 0.05);
+    // El plato, algo más cerca de ella (la mesa es pequeña: está entre los dos) y la zamburiña que se come, la
+    // de su lado
+    this.plate.position.set(-0.24, 0.8, 0.05);
     sc.add(this.plate);
-    this.bite = this.plate.children[1] as THREE.Group;
+    this.bite = this.plate.children[4] as THREE.Group;
+    this.biteMeat = this.bite.children.slice(1);
 
     // Azul y Gas sentados uno frente al otro
     this.azul = makePerson(MARGAUX_LOOK);
@@ -257,63 +273,109 @@ export class Terrace {
     return this.bite.getWorldPosition(new THREE.Vector3());
   }
 
-  /** Empieza: la coge del plato y se la lleva a la boca (el tiempo lo frena la cámara lenta de la escena). */
+  /** Empieza: la coge del plato, se la come y deja la concha (el tiempo lo frena la cámara lenta de la escena). */
   eat() {
     if (this.eatT >= 0) return;
     this.eatT = 0;
+    if (this.post) rigPost.delete(this.post);
+    if (this.biteHome.lengthSq() === 0) {
+      this.biteHome.copy(this.bite.position);
+      this.biteHomeQ.copy(this.bite.quaternion);
+    }
+    this.bite.position.copy(this.biteHome);
+    this.bite.quaternion.copy(this.biteHomeQ);
+    for (const o of this.biteMeat) o.visible = true;
     this.bite.getWorldPosition(this.biteFrom);
     this.shine.scale.setScalar(0.16);
     this.scene.add(this.shine);
     const a = this.azul;
     const r = a.rig;
     if (!r) return;
-    // La mano de verdad hasta la boca: del hombro al codo y del codo a la mano, sin atravesar la cara
     const side = r.bones.get('RightHand') === a.handR.parent ? 'Right' : 'Left';
     const B = (n: string) => r.bones.get(side + n)!;
     const t = new THREE.Vector3();
     const pole = new THREE.Vector3();
     const q = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    const headQ = new THREE.Quaternion();
+    const X = new THREE.Vector3(1, 0, 0);
     this.post = () => {
       if (!a.root.parent || this.eatT < 0) return;
       const e = this.eatT;
-      const w = THREE.MathUtils.smoothstep(e, 0, 0.3) * (1 - THREE.MathUtils.smoothstep(e, 1.5, 2.1));
+      const w = sstep(e, 0, 0.32) * (1 - sstep(e, EAT.down, EAT.end));
       if (w <= 0) return;
-      const head = r.bones.get('Head')!.getWorldPosition(q);
-      a.root.updateWorldMatrix(true, false);
-      // Delante de la boca, en los ejes de ella
+      a.root.updateWorldMatrix(true, true);
       const fx = Math.sin(a.root.rotation.y), fz = Math.cos(a.root.rotation.y);
-      // (el hueso de la cabeza está en la base del cráneo: la boca, unos centímetros más arriba y delante)
-      this.mouth.set(head.x + fx * 0.15, head.y + 0.075, head.z + fz * 0.15);
-      const k = THREE.MathUtils.smoothstep(e, 0.22, 1.02);
-      // La mano llega con la punta de los dedos a la concha: la muñeca se queda unos centímetros por detrás
+      // La cabeza baja un poco hacia la zamburiña al acercarla y se echa atrás al comérsela
+      const nod = 0.16 * sstep(e, EAT.grab, EAT.lips) * (1 - sstep(e, EAT.tilt, EAT.back)) - 0.1 * sstep(e, EAT.tilt, EAT.gone) * (1 - sstep(e, EAT.back, EAT.down));
+      const hb = r.bones.get('Head')!;
+      hb.quaternion.multiply(headQ.setFromAxisAngle(X, nod));
+      hb.updateWorldMatrix(false, false);
+      // La boca: delante y algo por encima del hueso de la cabeza (que está en la base del cráneo), en los ejes de la cabeza
+      hb.getWorldPosition(q);
+      const hq = hb.getWorldQuaternion(new THREE.Quaternion());
+      this.mouth.copy(v.set(0, 0.035, 0.11).applyQuaternion(hq)).add(q);
+      // Dónde va la charnela de la concha (donde la pellizcan los dedos) y hacia dónde apunta su borde ancho
+      const lift = sstep(e, EAT.grab, EAT.lips);
+      const ret = sstep(e, EAT.back, EAT.down);
+      const toMouth = v.copy(this.mouth).sub(this.biteFrom);
+      // En el plato, apuntando hacia fuera (hacia Gas); en la boca, el borde ancho a los labios
+      const flatDir = this.shellUp.set(fx, 0, fz);
+      this.shellDir.copy(flatDir).lerp(toMouth.clone().normalize(), lift * (1 - ret)).normalize();
+      const len = 0.075; // de la charnela al borde
+      const atMouth = this.mouth.clone().addScaledVector(this.shellDir, -len - 0.006);
+      // Arco: sube por encima del plato antes de ir hacia la boca, y lo mismo al volver
+      const k = lift * (1 - ret);
+      this.grip.copy(this.biteFrom).lerp(atMouth, k);
+      this.grip.y += Math.sin(Math.PI * k) * 0.05;
+      // Al comérsela, se acerca un poco más a los labios
+      this.grip.addScaledVector(this.shellDir, 0.02 * sstep(e, EAT.lips, EAT.tilt) * (1 - sstep(e, EAT.gone, EAT.back)));
+      // Antes de cogerla, la mano llega desde arriba (la muñeca alta, los dedos bajan a la concha)
+      const reach = sstep(e, 0.05, EAT.reach);
+      const hover = (1 - sstep(e, EAT.reach - 0.08, EAT.grab)) * 0.06 + ret * sstep(e, EAT.down - 0.2, EAT.down) * 0.05;
       const ax = B('ForeArm').getWorldPosition(new THREE.Vector3());
-      this.grip.copy(this.biteFrom).lerp(this.mouth, k);
       const toTarget = this.gripDir.copy(this.grip).sub(ax).normalize();
-      t.copy(this.grip).addScaledVector(toTarget, -0.14);
-      t.y += (1 - k) * 0.075; // (en el plato, la muñeca alta: los dedos bajan a la concha sin meterse en la mesa)
-      // El codo, abierto hacia fuera y por delante del cuerpo: el antebrazo no atraviesa el pecho
+      t.copy(this.grip).addScaledVector(toTarget, -0.13);
+      t.y += 0.045 * (1 - k) + hover;
+      // Desde donde estaba la mano (en reposo) hasta la concha
+      if (reach < 1) {
+        const rest = B('Hand').getWorldPosition(new THREE.Vector3());
+        t.lerp(rest, 1 - reach);
+      }
+      // El codo, abierto hacia fuera, por delante y más bajo que la mano: el brazo no queda tieso
       const sh = B('Arm').getWorldPosition(new THREE.Vector3());
       const sd = side === 'Right' ? -1 : 1;
-      pole.set(sh.x + fx * 0.42 + fz * sd * 0.5, sh.y - 0.42, sh.z + fz * 0.42 - fx * sd * 0.5);
-      twoBone(B('Arm'), B('ForeArm'), B('Hand'), t, pole, w);
-      // Los dedos: índice y corazón por delante, el pulgar enfrente, y anular y meñique recogidos
-      const pinch = THREE.MathUtils.smoothstep(e, 0.12, 0.3) * (1 - THREE.MathUtils.smoothstep(e, 1.5, 1.9));
-      for (const [f, ang] of [['Index', 0.22], ['Middle', 0.32], ['Ring', 0.5], ['Pinky', 0.55], ['Thumb', 0.1]] as const)
+      pole.set(sh.x + fx * 0.25 + fz * sd * 0.55, sh.y - 0.55, sh.z + fz * 0.25 - fx * sd * 0.55);
+      // Pinza: índice y pulgar se juntan sobre la charnela; corazón, anular y meñique, algo recogidos
+      const pinch = sstep(e, EAT.reach - 0.1, EAT.grab) * (1 - sstep(e, EAT.down - 0.1, EAT.down + 0.15));
+      for (const [f, ang] of [['Index', 0.22], ['Middle', 0.36], ['Ring', 0.5], ['Pinky', 0.55], ['Thumb', 0.12]] as const)
         for (const i of [1, 2, 3]) {
           const fb = r.bones.get(`${side}Hand${f}${i}`);
           if (!fb) continue;
-          this.fingerQ.setFromAxisAngle(FINGER_AXIS, ang * pinch * (side === 'Right' ? 1 : -1));
+          this.fingerQ.setFromAxisAngle(FINGER_AXIS, ang * pinch);
           fb.quaternion.multiply(this.fingerQ);
         }
-      a.root.updateWorldMatrix(true, true);
-      // La concha, entre la yema del pulgar y la del índice
       const tip = (f: string, o: THREE.Vector3) => (r.bones.get(`${side}Hand${f}4`) ?? r.bones.get(`${side}Hand${f}3`) ?? r.bones.get(`${side}Hand`)!).getWorldPosition(o);
-      tip('Thumb', this.tipA);
-      tip('Index', this.tipB);
-      this.gripWorld.copy(this.tipA).lerp(this.tipB, 0.5);
-      // Hacia dónde apuntan los dedos: la concha sale de ahí, cogida por la charnela
-      r.bones.get(`${side}Hand`)!.getWorldPosition(this.handAt);
-      this.gripDir.copy(this.gripWorld).sub(this.handAt).normalize();
+      const measure = () => {
+        a.root.updateWorldMatrix(true, true);
+        tip('Thumb', this.tipA);
+        tip('Index', this.tipB);
+        this.gripWorld.copy(this.tipA).lerp(this.tipB, 0.5);
+      };
+      // Dos pasadas: la segunda corrige lo que separa la pinza de los dedos de donde tiene que estar la concha
+      // (la mano no mide lo mismo en cada postura). Antes la concha acababa bajo la barbilla
+      const q0 = [B('Arm').quaternion.clone(), B('ForeArm').quaternion.clone(), B('Hand').quaternion.clone()];
+      twoBone(B('Arm'), B('ForeArm'), B('Hand'), t, pole, w);
+      if (reach >= 1 || e > EAT.reach)
+        for (let it = 0; it < 3; it++) {
+          measure();
+          t.add(v.copy(this.grip).sub(this.gripWorld).multiplyScalar(w));
+          B('Arm').quaternion.copy(q0[0]);
+          B('ForeArm').quaternion.copy(q0[1]);
+          B('Hand').quaternion.copy(q0[2]);
+          twoBone(B('Arm'), B('ForeArm'), B('Hand'), t, pole, w);
+        }
+      measure();
     };
     rigPost.add(this.post);
   }
@@ -333,43 +395,52 @@ export class Terrace {
     this.gas.head.rotation.z = Math.sin(this.t * 0.8) * 0.05;
     if (this.eatT >= 0) {
       this.eatT += dt;
-      const k = Math.min(1, this.eatT / 1.0);
+      const e = this.eatT;
+      // Se inclina hacia la mesa para cogerla y se endereza para comérsela
+      if (this.azul.rig) leanTorso(this.azul, 0.2 * sstep(e, 0.02, EAT.reach) * (1 - sstep(e, EAT.grab, EAT.lips)) + 0.12 * sstep(e, EAT.back, EAT.down) * (1 - sstep(e, EAT.down, EAT.end)), 0, 0);
+      const k = Math.min(1, e / 1.0);
       // Sin esqueleto (modo ligero): el brazo a la boca a mano
       if (!this.azul.rig) {
         this.azul.armR.rotation.x = -Math.sin(k * Math.PI * 0.5) * 1.1;
         this.azul.elbowR.rotation.x = -Math.sin(k * Math.PI * 0.5) * 1.9;
       }
-      const hand = this.azul.handR.getWorldPosition(new THREE.Vector3());
-      // La coge al llegar la mano al plato y va con ella hasta la boca
-      if (this.eatT > 0.22 && this.eatT < 1.14) {
-        // Cogida con la punta de los dedos, por la charnela (el lado estrecho), entre el pulgar y el índice;
-        // la carne hacia arriba, para que no se caiga y se vea lo que se come
-        if (this.azul.rig && this.gripWorld.lengthSq() > 0) {
-          const d = this.gripDir;
-          const at = this.gripWorld.clone().addScaledVector(d, 0.03).add(new THREE.Vector3(0, 0.004, 0));
-          at.y = Math.max(at.y, this.biteFrom.y + 0.012); // nunca por debajo de donde estaba, en el plato
-          this.bite.position.copy(this.plate.worldToLocal(at));
-          // Ejes de la concha: z hacia donde apuntan los dedos (casi plana), y hacia arriba
-          const z = this.basisY.set(d.x, Math.min(0.35, Math.max(-0.1, d.y)), d.z).normalize();
-          const x = this.basisX.set(0, 1, 0).cross(z).normalize();
-          const y = new THREE.Vector3().crossVectors(z, x);
-          this.bite.quaternion.setFromRotationMatrix(this.basisM.makeBasis(x, y, z));
-        } else {
-          this.bite.position.copy(this.plate.worldToLocal(hand.clone()));
-          this.bite.rotation.set(0, 0, -0.55);
-        }
+      const held = e > EAT.grab - 0.04 && e < EAT.down;
+      if (held && this.azul.rig && this.gripWorld.lengthSq() > 0) {
+        // La concha sale de entre el pulgar y el índice, cogida por la charnela, con el borde ancho hacia donde va
+        const d = this.shellDir;
+        const at = this.gripWorld.clone().addScaledVector(d, 0.012);
+        at.y = Math.max(at.y, this.biteFrom.y + 0.008);
+        this.bite.position.copy(this.plate.worldToLocal(at));
+        // Al comérsela, se inclina hacia la boca: la carne mira a los labios
+        const tilt = 0.9 * sstep(e, EAT.lips, EAT.tilt) * (1 - sstep(e, EAT.gone + 0.05, EAT.back));
+        const z = this.basisY.copy(d).normalize();
+        const x = this.basisX.set(0, 1, 0).cross(z).normalize();
+        const y = new THREE.Vector3().crossVectors(z, x);
+        this.basisM.makeBasis(x, y, z);
+        this.bite.quaternion.setFromRotationMatrix(this.basisM).multiply(this.fingerQ.setFromAxisAngle(FINGER_AXIS, -tilt));
+        // (los ejes de la concha están en los del plato, que no gira)
+      } else if (!held && this.azul.rig && e >= EAT.down) {
+        // Vacía, otra vez en su sitio del plato
+        this.bite.position.copy(this.biteHome);
+        this.bite.quaternion.copy(this.biteHomeQ);
+      } else if (!this.azul.rig && e > 0.22 && e < 1.14) {
+        this.bite.position.copy(this.plate.worldToLocal(this.azul.handR.getWorldPosition(new THREE.Vector3())));
+        this.bite.rotation.set(0, 0, -0.55);
       }
+      const eaten = this.biteMeat[0] && !this.biteMeat[0].visible;
       const sm = this.shine.material;
-      sm.opacity = this.bite.visible ? THREE.MathUtils.smoothstep(this.eatT, 0.3, 0.75) * (0.42 + Math.sin(this.t * 3) * 0.08) : Math.max(0, sm.opacity - dt * 3);
+      sm.opacity = !eaten ? sstep(e, 0.3, 0.75) * (0.42 + Math.sin(this.t * 3) * 0.08) : Math.max(0, sm.opacity - dt * 3);
       this.bite.getWorldPosition(this.shine.position);
-      if (this.eatT >= 1.14 && this.bite.visible) {
-        this.bite.visible = false;
+      if (e >= EAT.gone && !eaten) {
+        for (const o of this.biteMeat) o.visible = false;
+        if (!this.azul.rig) this.bite.visible = false;
         audio.pickup();
         vibrate(30);
       }
-      if (this.eatT > 2.3 && this.post) {
+      if (e > EAT.end && this.post) {
         rigPost.delete(this.post);
         this.post = null;
+        leanTorso(this.azul, 0, 0, 0);
       }
     }
     camera.position.lerp(this.camPos, Math.min(1, dt * 2));

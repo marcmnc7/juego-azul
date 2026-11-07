@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
-import { requestJump, releaseJump, walkerActiveAt, lastBounds, edgePush, edgePushAt } from './core/walker';
+import { lastBounds, edgePush, edgePushAt } from './core/walker';
 import { dust } from './core/dust';
 import { beacon } from './core/beacon';
 import { physLists } from './core/phys';
@@ -20,7 +20,7 @@ import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
-import { applyEnvironment, applyShadows, hdSurfaces, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
+import { applyEnvironment, applyShadows, hdSurfaces, MOBILE, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
 import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
 import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
 import { preloadCrowd } from './entities/crowdRig';
@@ -35,7 +35,7 @@ import { paintPalette, paintScene, paintStyle } from './core/paint';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore } from './ui/ui';
+import { titleScreen, mapScreen, showGift, chapterResult, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, memories, setSpeakerResolver, toast, teaserCard, quizScore, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -78,7 +78,8 @@ function safeStep() {
 }
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
-let ratio = Math.min(maxRatio, 1.5);
+// En el móvil se empieza algo más bajo: la pantalla es pequeña y el estilo pintado lo disimula; sube si va sobrado
+let ratio = Math.min(maxRatio, MOBILE ? 1.35 : 1.5);
 renderer.setPixelRatio(ratio);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
@@ -167,8 +168,9 @@ renderer.info.autoReset = false;
 
 // Postproceso de cine (ver core/post.ts): oclusión ambiental, profundidad de campo en los diálogos,
 // bloom, tono y etalonaje por capítulo.
-const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
 const post = new Post(renderer, camera, MOBILE);
+// La oclusión ambiental son varias pasadas a pantalla completa: en el móvil, fuera desde el principio
+if (MOBILE) post.aoEnabled = false;
 juice.fx = post;
 audio.onCue = (c) => juice.cue(c);
 let cine = 0;
@@ -195,25 +197,6 @@ stage.onStart = (sc) => {
   }
 };
 
-// Saltar: botón en pantalla (solo mientras se controla a alguien andando) y tecla J en el ordenador
-const jumpBtn = document.createElement('button');
-jumpBtn.className = 'jump-btn';
-jumpBtn.textContent = 'Saltar';
-jumpBtn.hidden = true;
-jumpBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  requestJump();
-});
-// Soltar pronto = salto corto; mantener = salto entero
-for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) jumpBtn.addEventListener(ev, () => releaseJump());
-uiRoot.append(jumpBtn);
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyJ' && !e.repeat) requestJump();
-});
-window.addEventListener('keyup', (e) => {
-  if (e.code === 'KeyJ') releaseJump();
-});
 let data = load();
 
 let level: Level | null = null;
@@ -286,7 +269,7 @@ const mapOpts = {
   },
 };
 
-/** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo, panel de prueba y botón de saltar. */
+/** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo y panel de prueba. */
 function leaveLevel() {
   stage.end();
   audio.stopTrack();
@@ -306,7 +289,6 @@ function leaveLevel() {
     level = null;
   }
   clearRigPeople();
-  jumpBtn.hidden = true;
   input.reset();
   input.enabled = true;
 }
@@ -408,25 +390,52 @@ function setHd(on: boolean, n = 0) {
 // el público del concierto de Fito lo pone el propio capítulo
 const BEDS: Record<number, Bed> = { 8: 'sea' };
 
+/** Mientras la pantalla de carga tapa el capítulo, se dibuja (para subir texturas y sombras) pero el tiempo no corre. */
+let loadingLevel = false;
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 function startLevel(n: number) {
-  // Los capítulos con personajes glTF esperan a que estén cargados (suele ser al instante)
-  if (HD_CHAPTERS.includes(n) && !hdAssets) {
-    void rigLoading.then(() => startLevel(n));
-    return;
-  }
   // Desde el modo prueba se puede saltar de un capítulo a otro sin pasar por el mapa
   leaveLevel();
   clearScreens();
   tryFullscreen();
   audio.bed(BEDS[n] ?? 'none');
-  if (SONG_OF[n]) audio.playTrack(SONG_OF[n]);
-  // El rótulo tapa la pantalla mientras se monta el capítulo y se compilan sus shaders
-  let ready!: () => void;
-  chapterCard(n, new Promise<void>((r) => (ready = r)));
-  setTimeout(() => buildLevel(n, ready), 60);
+  const card = chapterCard(n);
+  void buildLevel(n, card).catch((e) => {
+    console.warn('[juego] montar capítulo', e);
+    loadingLevel = false;
+    card.done();
+  });
 }
 
-function buildLevel(n: number, ready: () => void) {
+/** Espera a que el capítulo, ya montado detrás del rótulo, se dibuje a buen ritmo unos cuantos fotogramas seguidos. */
+async function settle(maxMs: number) {
+  const t0 = performance.now();
+  let good = 0, last = performance.now();
+  while (performance.now() - t0 < maxMs && good < 8) {
+    await nextFrame();
+    const now = performance.now();
+    good = now - last < 40 ? good + 1 : 0;
+    last = now;
+  }
+}
+
+async function buildLevel(n: number, card: ChapterLoading) {
+  loadingLevel = true;
+  const epochAt = ++buildEpoch;
+  const stale = () => epochAt !== buildEpoch;
+  // Personajes glTF y texturas (suele estar desde la portada)
+  card.progress(0.08, 'Cargando personajes');
+  if (HD_CHAPTERS.includes(n) && !hdAssets) await rigLoading;
+  if (stale()) return;
+  // La canción se descodifica mientras tanto: así suena desde el primer segundo
+  card.progress(0.2, 'Preparando la canción');
+  const song = SONG_OF[n] ? audio.preloadTrack(SONG_OF[n]) : Promise.resolve();
+  await Promise.race([song, pause(5000)]);
+  if (stale()) return;
+  card.progress(0.38, 'Montando el escenario');
+  await pause(40);
   const done = (result?: LevelResult) => {
     // Un capítulo ya cerrado no puede completarse "solo"
     if (level !== me) return;
@@ -465,24 +474,44 @@ function buildLevel(n: number, ready: () => void) {
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
   setHd(HD_CHAPTERS.includes(n), n);
+  const t0 = performance.now();
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
   quizScore.right = quizScore.total = 0;
   extras = new ChapterExtras(n, data, () => save(data));
-  if (paintStyle.value) paintScene(level.threeScene);
-  applyShadows(level.threeScene);
-  levelAt = performance.now();
-  if (TEST) closeDebug = debugPanel(level.debug());
-  if (stats) (window as unknown as { game: Level }).game = level;
+  // Pintado y sombras en el mismo paso: si se dibujara antes sin ellos, cada shader se compilaría dos veces
+  if (paintStyle.value) paintScene(me.threeScene);
+  applyShadows(me.threeScene);
+  console.info(`[juego] capítulo ${n} montado en ${Math.round(performance.now() - t0)} ms`);
+  if (TEST) closeDebug = debugPanel(me.debug());
+  if (stats) (window as unknown as { game: Level }).game = me;
+  card.progress(0.72, 'Preparando luces y sombras');
+  await pause(30);
+  if (level !== me) return;
   // Compila todos los materiales antes de quitar el rótulo: así no hay tirones al empezar a jugar
   // (compileAsync se cuelga con algunos materiales en three r180: mejor el síncrono, que va detrás del rótulo)
   try {
-    renderer.compile(level.threeScene, camera);
+    renderer.compile(me.threeScene, camera);
   } catch (e) {
     console.warn('[gfx] compilar', e);
   }
-  requestAnimationFrame(() => requestAnimationFrame(ready));
+  // Unos fotogramas detrás del rótulo: suben las texturas, se hacen las sombras y se compila el postproceso
+  // (también el desenfoque de los diálogos, que si no daba un tirón la primera vez que alguien hablaba)
+  card.progress(0.86, 'Últimos retoques');
+  post.dofAmount = 1;
+  post.cinematic = 1;
+  warmPost = true;
+  await settle(MOBILE ? 7000 : 4000);
+  warmPost = false;
+  if (level !== me) return;
+  loadingLevel = false;
+  levelAt = performance.now();
+  if (SONG_OF[n]) audio.playTrack(SONG_OF[n]);
+  card.done();
 }
+let buildEpoch = 0;
+/** Durante la carga: fuerza el desenfoque de diálogo para que su shader quede compilado. */
+let warmPost = false;
 
 function tryFullscreen() {
   const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
@@ -499,6 +528,7 @@ function tryFullscreen() {
 const clock = new THREE.Clock();
 let avg = 16;
 let lastAdjust = 0;
+let lastDrop = -100;
 const stats = TEST ? document.createElement('div') : null;
 // Modo prueba: acceso desde la consola para revisar colisiones
 // Captura del lienzo a resolución real (las capturas de pantalla del navegador salen reducidas)
@@ -595,7 +625,7 @@ function frame() {
   const mission = stage.current;
   if (level || mission) {
     const sc = mission ? mission.scene : level!.threeScene;
-    const gdt = juice.scaleDt(dt) * cinema.timeScale;
+    const gdt = loadingLevel ? 1e-4 : juice.scaleDt(dt) * cinema.timeScale;
     dust.attach(sc);
     beacon.attach(sc);
     camWorld.attach(sc);
@@ -607,22 +637,20 @@ function frame() {
     dust.update(gdt);
     updateRigPeople(gdt);
     // Escenas de cine: mandan sobre la cámara que haya puesto el capítulo
-    const filming = cinema.update(camera, dt);
+    const filming = cinema.update(camera, loadingLevel ? 1e-4 : dt);
     if (uiRoot.classList.contains('filming') !== filming) uiRoot.classList.toggle('filming', filming);
     // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
     beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
     // Diálogos en modo cine: bandas, un leve acercamiento y desenfoque del fondo enfocando a quien habla
     const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
-    post.cinematic = cine < 0.01 ? 0 : cine;
+    post.cinematic = warmPost ? 1 : cine < 0.01 ? 0 : cine;
     // Solo se desenfoca el fondo cuando habla alguien que está en escena (el narrador no)
     const speaker = (talking && lastSpeaker.at > performance.now() - 300) || cinema.hasFocus;
     if (cinema.hasFocus) post.focus.copy(cinema.focus);
     else if (speaker) post.focus.copy(lastSpeaker.pos);
-    post.dofAmount += ((speaker ? 1 : 0) - post.dofAmount) * Math.min(1, dt * 4);
+    post.dofAmount = warmPost ? 1 : post.dofAmount + ((speaker ? 1 : 0) - post.dofAmount) * Math.min(1, dt * 4);
     juice.apply(camera, dt, cine * 0.1);
-    const showJump = performance.now() - walkerActiveAt < 250 && !talking;
-    if (jumpBtn.hidden === showJump) jumpBtn.hidden = !showJump;
     // Empujando contra el final del mapa, donde no se ve nada que lo impida: mejor decirlo
     if (!talking && edgePush > 0.45 && performance.now() - edgePushAt < 200 && performance.now() > edgeHintAt) {
       edgeHintAt = performance.now() + 9000;
@@ -657,14 +685,17 @@ function frame() {
   }
   avg = avg * 0.95 + dt * 1000 * 0.05;
   const now = clock.elapsedTime;
-  if (level && !HQ && now - lastAdjust > 2 && performance.now() - levelAt > 4000) {
+  if (level && !loadingLevel && !HQ && now - lastAdjust > 1.2 && performance.now() - levelAt > 2500) {
     lastAdjust = now;
-    if (avg > 24 && ratio > 1) ratio = Math.max(1, ratio - 0.25);
-    else if (avg > 26 && post.aoEnabled) post.aoEnabled = false; // primero fuera la oclusión ambiental
+    // Objetivo: 60 fps (16,7 ms). Se baja enseguida si no llega y solo se vuelve a subir si va sobrado un buen rato
+    if (avg > 19.5 && ratio > 1) {
+      ratio = Math.max(1, ratio - 0.15);
+      lastDrop = now;
+    } else if (avg > 21 && post.aoEnabled) post.aoEnabled = false; // primero fuera la oclusión ambiental
     // Mejor 30 fps con el estilo pintado que 40 sin él: solo se quita si de verdad no llega
     else if (avg > 40 && quality.post) quality.post = false;
     else if (avg > 46 && quality.shadows) dropShadows();
-    else if (avg < 15 && ratio < maxRatio) ratio = Math.min(maxRatio, ratio + 0.25);
+    else if (avg < 17.4 && ratio < Math.min(maxRatio, MOBILE ? 1.5 : 2) && now - lastDrop > 10) ratio = Math.min(maxRatio, ratio + 0.15);
     if (renderer.getPixelRatio() !== ratio) {
       renderer.setPixelRatio(ratio);
       resize();
@@ -707,3 +738,25 @@ titleScreen(
   },
   { done: allLoading, progress: () => Math.min(1, loadedParts / LOAD_PARTS) },
 );
+
+// Instalable (PWA): servido desde su propia dirección, se guarda para abrirse sin conexión. Dentro del artifact
+// (un iframe) no se puede instalar, así que ni se intenta.
+const topLevel = (() => {
+  try {
+    return window.top === window;
+  } catch {
+    return false;
+  }
+})();
+const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+if ('serviceWorker' in navigator && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && topLevel && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[pwa]', e));
+}
+// En el iPhone, desde Safari: cómo ponerlo a pantalla completa
+if (topLevel && !standalone && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+  const tip = document.createElement('p');
+  tip.className = 'fine install-tip';
+  tip.innerHTML = 'Para jugar a pantalla completa: <b>Compartir ⎋ → Añadir a pantalla de inicio</b>';
+  const put = () => document.querySelector('.title-screen')?.append(tip);
+  setTimeout(put, 300);
+}

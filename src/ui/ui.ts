@@ -561,18 +561,50 @@ export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
 
 /** Rótulo de capítulo a pantalla completa que se desvanece (tapa también la carga de la escena). */
 /** Rótulo del capítulo. Tapa la pantalla mientras el capítulo se monta y compila; se va cuando pasan 2 s y está listo. */
-export function chapterCard(n: number, ready: Promise<unknown> = Promise.resolve()) {
+export interface ChapterLoading {
+  /** 0-1 y qué se está preparando. */
+  progress(p: number, label?: string): void;
+  /** Todo listo: el rótulo se va (sin bajar de un mínimo en pantalla, para que se lea). */
+  done(): void;
+}
+
+/**
+ * Rótulo del capítulo y pantalla de carga a la vez: el título y una barra que se llena mientras se monta el
+ * escenario, se descodifica la canción y se preparan los shaders. Se va cuando el capítulo ya corre fluido.
+ */
+export function chapterCard(n: number): ChapterLoading {
   const lv = LEVELS[n - 1];
   const c = el('div', 'chapter-card');
-  c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place));
+  const bar = el('div', 'cc-bar');
+  const fill = el('div', 'cc-fill');
+  bar.append(fill);
+  const label = el('div', 'cc-label', 'Preparando…');
+  const load = el('div', 'cc-load');
+  load.append(bar, label);
+  c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place), load);
   root.append(c);
-  const minTime = new Promise((r) => setTimeout(r, 2100));
-  // Por si algo falla al montar el capítulo, el rótulo nunca se queda más de 8 s
-  const safe = Promise.race([ready.catch(() => {}), new Promise((r) => setTimeout(r, 8000))]);
-  void Promise.all([minTime, safe]).then(() => {
-    c.classList.add('out');
-    setTimeout(() => c.remove(), 900);
-  });
+  const t0 = performance.now();
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    fill.style.transform = 'scaleX(1)';
+    label.textContent = '¡A jugar!';
+    c.classList.add('ready');
+    setTimeout(() => c.classList.add('out'), 260);
+    setTimeout(() => c.remove(), 1000);
+  };
+  // Por si algo falla al montar el capítulo, el rótulo nunca se queda más de 15 s
+  setTimeout(close, 15000);
+  return {
+    progress(p, text) {
+      fill.style.transform = `scaleX(${Math.max(0.04, Math.min(1, p))})`;
+      if (text) label.textContent = text;
+    },
+    done() {
+      setTimeout(close, Math.max(0, 1800 - (performance.now() - t0)));
+    },
+  };
 }
 
 /** Fundido a negro y vuelta (transiciones entre momentos de la historia). */
@@ -652,11 +684,21 @@ export function bark(who: string, text: string) {
 /** Has encontrado un recuerdo: la polaroid cae arriba unos segundos y se va al álbum. El juego sigue. */
 export function keepsakePop(k: Keepsake, found: number, total: number) {
   root.querySelectorAll('.kp-pop').forEach((n) => n.remove());
+  // Un aviso pequeño arriba (se está jugando, a veces conduciendo): la foto entera se ve luego en el álbum
   const o = el('div', 'kp-pop');
-  o.append(el('div', 'kp-title', `🔎 Recuerdo escondido ${found}/${total}`), polaroid({ level: k.chapter, src: k.src, chat: k.chat, caption: k.caption, sticker: k.sticker }, -3));
+  let thumb: HTMLElement;
+  if (k.src && !k.chat) {
+    const img = el('img', 'kp-thumb') as HTMLImageElement;
+    img.src = k.src;
+    img.alt = '';
+    thumb = img;
+  } else thumb = el('div', 'kp-thumb', k.chat ? '💬' : '📷');
+  const txt = el('div', 'kp-text');
+  txt.append(el('b', '', `🔎 Recuerdo ${found}/${total} · al álbum`), el('span', '', k.caption));
+  o.append(thumb, txt);
   root.append(o);
-  setTimeout(() => o.classList.add('out'), 5200);
-  setTimeout(() => o.remove(), 5700);
+  setTimeout(() => o.classList.add('out'), 3600);
+  setTimeout(() => o.remove(), 4100);
 }
 
 let cancelDialogue: (() => void) | null = null;
@@ -1072,22 +1114,60 @@ export interface Hud {
   remove(): void;
 }
 
-/** mission: el HUD de una misión (mientras dura, el del capítulo se esconde). */
+/**
+ * HUD de juego, pensado para el móvil: el objetivo en una píldora translúcida arriba a la izquierda (entera al
+ * cambiar, luego en una línea; se toca para verla otra vez), los contadores en columna a la derecha y un solo
+ * botón de menú con el sonido y la vuelta al mapa. mission: el HUD de una misión (el del capítulo se esconde).
+ */
 export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrastra a la izquierda para andar · a la derecha para girar la cámara', mission = false): Hud {
   const top = el('div', 'hud-top' + (mission ? ' m-hud' : ''));
   const obj = el('div', 'objective');
   const arrow = el('span', 'arrow', '⬆');
-  const objText = el('span');
+  const objText = el('span', 'obj-text');
   obj.append(arrow, objText);
-  const counters = el('div', 'counters');
-  const mute = el('button', 'icon-btn', audio.muted ? '🔇' : '🔊');
-  mute.onclick = () => {
-    audio.setMuted(!audio.muted);
-    mute.textContent = audio.muted ? '🔇' : '🔊';
+  let objTimer = 0;
+  const expand = (ms: number) => {
+    obj.classList.add('open');
+    clearTimeout(objTimer);
+    objTimer = window.setTimeout(() => obj.classList.remove('open'), ms);
   };
-  const menu = el('button', 'icon-btn', '🗺️');
-  menu.onclick = onMenu;
-  top.append(obj, counters, el('div', 'spacer'), mute, menu);
+  obj.onpointerdown = (e) => {
+    e.stopPropagation();
+    expand(4000);
+  };
+  const counters = el('div', 'counters' + (mission ? ' m-hud' : ''));
+  const menuBtn = el('button', 'icon-btn menu-btn', '<i></i><i></i><i></i>');
+  menuBtn.setAttribute('aria-label', 'Menú');
+  const sheet = el('div', 'hud-menu');
+  sheet.hidden = true;
+  const mute = el('button', 'hm-item', '');
+  const paintMute = () => (mute.innerHTML = audio.muted ? '🔇 <span>Sonido apagado</span>' : '🔊 <span>Sonido encendido</span>');
+  paintMute();
+  mute.onclick = (e) => {
+    e.stopPropagation();
+    audio.setMuted(!audio.muted);
+    paintMute();
+  };
+  const toMap = el('button', 'hm-item', '🗺️ <span>Volver al mapa</span>');
+  toMap.onclick = (e) => {
+    e.stopPropagation();
+    sheet.hidden = true;
+    onMenu();
+  };
+  const resume = el('button', 'hm-item hm-resume', '▶ <span>Seguir jugando</span>');
+  resume.onclick = (e) => {
+    e.stopPropagation();
+    sheet.hidden = true;
+  };
+  sheet.append(resume, mute, toMap);
+  menuBtn.onpointerdown = (e) => e.stopPropagation();
+  menuBtn.onclick = (e) => {
+    e.stopPropagation();
+    sheet.hidden = !sheet.hidden;
+  };
+  sheet.onpointerdown = (e) => e.stopPropagation();
+  top.append(obj, el('div', 'spacer'));
+  if (!mission) top.append(menuBtn);
 
   const act = el('button', 'action-btn hidden' + (mission ? ' m-hud' : ''));
   act.onpointerdown = (e) => {
@@ -1096,25 +1176,37 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     onAction();
   };
   const hint = el('div', 'hint-move' + (mission ? ' m-hud' : ''), hintText);
-  setTimeout(() => hint.remove(), 9000);
-  root.append(top, act, hint);
+  setTimeout(() => hint.remove(), 7000);
+  root.append(top, counters, act, hint, sheet);
+  let lastObj = '';
   return {
     root: top,
-    setObjective: (t) => (objText.textContent = t),
+    setObjective: (t) => {
+      if (t === lastObj) return;
+      lastObj = t;
+      objText.textContent = t;
+      obj.classList.toggle('empty', !t);
+      if (t) expand(5500);
+    },
     setArrow: (a) => {
-      arrow.style.visibility = a === null ? 'hidden' : 'visible';
+      arrow.style.display = a === null ? 'none' : '';
       if (a !== null) arrow.style.transform = `rotate(${a}rad)`;
     },
-    setCounters: (h) => (counters.innerHTML = h),
+    setCounters: (h) => {
+      if (counters.innerHTML !== h) counters.innerHTML = h;
+    },
     setAction: (label, pulse) => {
       act.classList.toggle('hidden', !label);
       act.classList.toggle('pulse', !!pulse);
-      if (label) act.textContent = label;
+      if (label && act.textContent !== label) act.textContent = label;
     },
     remove: () => {
+      clearTimeout(objTimer);
       top.remove();
+      counters.remove();
       act.remove();
       hint.remove();
+      sheet.remove();
     },
   };
 }

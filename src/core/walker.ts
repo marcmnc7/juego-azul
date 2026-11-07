@@ -338,11 +338,13 @@ export class Walker implements AirState {
       }
     }
 
-    // Lo que de verdad se ha movido manda: contra una pared la velocidad se pierde
+    // Lo que de verdad se ha movido manda: contra una pared la velocidad se pierde. Pero solo para frenar: si
+    // alguien la empuja fuera de su sitio (Gas pegado a ella al soltar el abrazo en la piscina), ese empujón
+    // no puede convertirse en velocidad (en el agua apenas frena y salía disparada hasta el otro lado)
     const realX = (p.x - sx) / dt;
     const realZ = (p.z - sz) / dt;
-    if (Math.abs(realX - v.x) > 0.01) v.x = realX;
-    if (Math.abs(realZ - v.z) > 0.01) v.z = realZ;
+    if (Math.abs(realX - v.x) > 0.01) v.x = THREE.MathUtils.clamp(realX, Math.min(0, v.x), Math.max(0, v.x));
+    if (Math.abs(realZ - v.z) > 0.01) v.z = THREE.MathUtils.clamp(realZ, Math.min(0, v.z), Math.max(0, v.z));
 
     const moved = Math.hypot(p.x - sx, p.z - sz);
     this.walk += moved / STRIDE;
@@ -422,8 +424,8 @@ export class Walker implements AirState {
     // Encuadre de tercera persona más cercano y bajo: se ve a Azul y el horizonte, no el suelo desde
     // un dron. Los planos muy altos a propósito (pasillos, presentaciones) se respetan.
     if (h < 5) {
-      dist *= 0.86;
-      h = 1.6 + (h - 1.6) * 0.72;
+      dist *= 0.7;
+      h = 1.55 + (h - 1.6) * 0.62;
     }
     const sx = -Math.sin(this.yaw);
     const sz = -Math.cos(this.yaw);

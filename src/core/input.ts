@@ -75,9 +75,11 @@ export class Input {
         dy = (dy / len) * R;
       }
       this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      // Zona muerta pequeña y respuesta suave: un poco de pulgar = andar despacio
-      const m = Math.min(1, len / R);
-      const g = m < 0.12 ? 0 : Math.pow((m - 0.12) / 0.88, 1.3) / (m || 1);
+      // Zona muerta pequeña y velocidad máxima a algo más de media carrera: no hace falta llevar el pulgar al
+      // borde para correr. Por debajo, un poco de pulgar = andar despacio
+      const r = Math.min(1, len / R);
+      const m = Math.min(1, len / (R * 0.58));
+      const g = m < 0.1 ? 0 : Math.pow((m - 0.1) / 0.9, 1.1) / (r || 1);
       this.moveX = (dx / R) * g;
       this.moveY = (-dy / R) * g;
     } else if (e.pointerId === this.camId) {

@@ -6,7 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT } from '../data/story';
 import { FITO_SONG } from '../core/songs';
-import { BeerRun, BEERS_NEED } from './sideGames';
+import { BeerRun, BEERS_NEED, PeeAim, GlassesHunt } from './sideGames';
 import { SIDE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
@@ -25,6 +25,7 @@ import { cinema, headOf, rel } from '../core/cinema';
 import { juice } from '../core/juice';
 import { beacon } from '../core/beacon';
 import { Door } from './door';
+import { Fito } from '../entities/fito';
 
 // Capítulo 4 · Fito en Gran Canaria.
 // Aeropuerto (Azul esquiva maletas camino de la puerta 26, asiento 26D «pasillo») → en el estadio juegas con Gas, que tiene que ir al baño una y
@@ -39,7 +40,7 @@ const TXT = CONCERT as unknown as Record<string, unknown>;
 const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
 const T_AIRPORT_HINT = () => txt<string>('airportHint', 'Esquiva las maletas y llega a la puerta 26 🧳');
 const T_BURGER_HIT = () => txt<string[]>('burgerHit', ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26D: 26 palo, pero D top ✨pasillo✨']);
-const T_WC_AGAIN = () => txt<string[]>('wcAgain', ['🚻 Otra vez a la cola del baño…', '🚻 Y otra vez. Cola eterna', '🚻 La última, lo promete']);
+const T_WC_AGAIN = () => txt<string[]>('wcAgain', ['🕶️ Al baño, a por las gafas de sol', '🚻 Y otra vez. La última, lo promete', '🚻 La última, lo promete']);
 const T_FILM_INTRO = () =>
   txt<Line[]>('filmIntro', [
     { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en el baño.' },
@@ -61,7 +62,7 @@ const T_FOUND = () =>
 const T_GO_AGAIN = () =>
   txt<Line[][]>('goAgain', [
     [],
-    [{ who: 'Narrador', text: 'Dos canciones después, Gas tiene que volver al baño.' }],
+    [{ who: 'Narrador', text: 'Dos canciones después, Gas se toca la cabeza: no lleva las gafas de sol.' }],
     [{ who: 'Narrador', text: 'Y otra vez. La cola, eterna.' }],
   ]);
 const BAR_POS = new THREE.Vector3(-17, 0, -8);
@@ -409,6 +410,9 @@ export class Level3 implements Level {
   private wcLights: THREE.MeshBasicMaterial[] = [];
   /** Puertas de los WC: se abren a quien entra o sale. */
   private beers: BeerRun | null = null;
+  private fito: Fito | null = null;
+  /** Minijuego del baño en pantalla (urinario o cabinas). */
+  private side: PeeAim | GlassesHunt | null = null;
   private gateT = GATE_SECS;
   private gateStage = 0;
   private wcDoors: Door[] = [];
@@ -984,7 +988,8 @@ export class Level3 implements Level {
   private startBeers() {
     this.phase = 'beers';
     this.busy = true;
-    this.beers = new BeerRun(this.scene, this.gas, this.walker, this.fx, new THREE.Vector3(AISLE_X - 1.25, 0, 17), AISLE_X, [-3, 3, 9, 13.5], () => this.updateHud());
+    // Para ella, que espera en su sitio del pasillo; la gente cruza entre ella y la barra
+    this.beers = new BeerRun(this.scene, this.gas, this.walker, this.fx, AZUL_SPOTS[0].clone(), AISLE_X, [-5.2, -1.6, 1.8], () => this.updateHud());
     this.updateHud();
     dialogue(SIDE.beers.intro, () => (this.busy = false));
   }
@@ -1239,10 +1244,9 @@ export class Level3 implements Level {
     });
 
     // Banda
-    const guitarist = makePerson({ skin: 0xe2b08c, shirt: 0x111111, pants: 0x222244, hair: 0x111111, hairStyle: 'cap', male: true });
-    guitarist.root.position.set(0, 1.6, 32.5);
-    guitarist.root.rotation.y = Math.PI;
-    guitarist.body.add(new Merger().add(G.box, 0x9b2335, 0.1, 1.05, 0.28, 0, 0, -0.6, 0.45, 0.9, 0.12).add(G.box, 0x6b4428, -0.35, 1.45, 0.28, 0, 0, -0.6, 0.08, 0.9, 0.06).mesh());
+    // Fito, delante: de negro, con sombrero y su guitarra (ver entities/fito.ts), con un foco que le sigue
+    this.fito = new Fito(sc, 0, 1.6, 32.5);
+    const guitarist = this.fito.person;
     const bassist = makePerson({ skin: 0xd9a27c, shirt: 0x3a3a44, pants: 0x111111, hair: 0x5a3a22, hairStyle: 'long' });
     bassist.root.position.set(-6, 1.6, 33);
     bassist.root.rotation.y = Math.PI;
@@ -1254,7 +1258,7 @@ export class Level3 implements Level {
     drummer.root.position.set(0, 1.6, 36.8);
     drummer.root.rotation.y = Math.PI;
     this.band = [guitarist, bassist, sax, drummer];
-    this.band.forEach((b) => sc.add(b.root));
+    this.band.forEach((b, i) => i > 0 && sc.add(b.root));
 
     // Público (instanciado), con un pasillo a la izquierda por donde llegar hasta Gas
     const looks: PersonLook[] = [
@@ -1727,13 +1731,32 @@ export class Level3 implements Level {
         this.phase = 'film';
         dialogue(T_FILM_INTRO(), () => this.startFilm());
       }), 1100);
+    } else if (this.trip === 2) {
+      // La segunda: ha vuelto a por las gafas de sol, que se ha dejado en una cabina
+      later(() => dialogue(SIDE.glasses.intro, () => {
+        this.side = new GlassesHunt(() => {
+          this.side = null;
+          this.missed++;
+          toast(T_SONG_LOST()[Math.min(this.missed - 1, 2)]);
+          later(() => this.startSeek(), 900);
+        });
+      }), 900);
     } else {
-      later(() => {
+      later(() => dialogue(SIDE.pee.again, () => this.peeThen(1, () => {
         this.missed++;
         toast(T_SONG_LOST()[Math.min(this.missed - 1, 2)]);
-        this.startSeek();
-      }, 1800);
+        later(() => this.startSeek(), 900);
+      })), 900);
     }
+  }
+
+  /** El urinario (Gas), y luego lo que siga. */
+  private peeThen(hard: number, next: () => void) {
+    this.hud.setAction(null);
+    this.side = new PeeAim(hard, () => {
+      this.side = null;
+      next();
+    });
   }
 
   /** Grabar el temón con el móvil: la cámara es el móvil y Fito no para de moverse por el escenario. */
@@ -1766,7 +1789,8 @@ export class Level3 implements Level {
     this.filmT += dt;
     // Fito va y viene por el escenario
     const fito = this.band[0];
-    fito.root.position.x = Math.sin(this.filmT * 0.75) * 7 + Math.sin(this.filmT * 2.3) * 1.6;
+    // (andando: a más de 2 m/s ya no parece una persona)
+    fito.root.position.x = Math.sin(this.filmT * 0.42) * 5.2 + Math.sin(this.filmT * 1.1) * 0.6;
     // El móvil: joystick o arrastrar para apuntar
     const ax = this.input.axes();
     this.filmYaw = THREE.MathUtils.clamp(this.filmYaw - ax.x * 1.6 * dt - this.input.consumeCam() * 0.6, -0.9, 0.9);
@@ -1774,7 +1798,8 @@ export class Level3 implements Level {
     const pp = this.azul.root.position;
     const shake = Math.sin(this.filmT * 23) * 0.006 + Math.sin(this.filmT * 7) * 0.01;
     this.camera.position.set(pp.x + 0.15, 1.75, pp.z + 0.3);
-    this.camera.fov += (34 - this.camera.fov) * Math.min(1, dt * 4);
+    // Con el zoom del móvil: Fito se ve entero y grande, no un muñequito al fondo
+    this.camera.fov += ((this.camera.aspect < 1 ? 21 : 15) - this.camera.fov) * Math.min(1, dt * 4);
     this.camera.updateProjectionMatrix();
     this.tmpV.set(pp.x + Math.sin(this.filmYaw + shake) * 10, 1.75 + Math.tan(this.filmPitch + shake) * 10, pp.z + Math.cos(this.filmYaw + shake) * 10);
     this.camera.lookAt(this.tmpV);
@@ -1812,7 +1837,9 @@ export class Level3 implements Level {
     toast(`${T_FILM_DONE()} · ${this.filmPct()}%`);
     audio.luck();
     this.missed++;
-    this.startSeek();
+    // Mientras tanto, a Gas por fin le ha tocado
+    this.busy = true;
+    later(() => dialogue(SIDE.pee.first, () => this.peeThen(0, () => this.startSeek())), 1200);
   }
 
   private filmPct() {
@@ -1836,6 +1863,7 @@ export class Level3 implements Level {
     this.hemi.intensity = dark ? 0.42 : 1.5;
     this.sun.light.intensity = dark ? 0.3 : 1.6;
     this.spots.forEach((s) => (s.mesh.visible = !dark));
+    if (this.fito) this.fito.spot.visible = !dark;
   }
 
   /** Gas sale del baño: entre canción y canción está oscuro y tiene que encontrar a Azul entre la gente. */
@@ -2102,7 +2130,9 @@ export class Level3 implements Level {
       });
       c.people.commit();
     }
+    this.fito?.update(dt, beat);
     this.band.forEach((b, i) => {
+      if (i === 0) return; // Fito se anima solo
       b.body.position.y = pulse * 0.1;
       b.armR.rotation.x = -0.8 + Math.sin(beat * Math.PI * 2 + i) * 0.5;
       b.armL.rotation.x = -0.9;
@@ -2111,7 +2141,10 @@ export class Level3 implements Level {
       s.mesh.rotation.z = Math.sin(this.t * 0.8 + s.ph) * 0.5;
       s.mesh.rotation.x = -0.7 + Math.cos(this.t * 0.6 + s.ph) * 0.25;
       const hue = (Math.floor(beat / 4) * 0.17 + i * 0.2) % 1;
-      (s.mesh.material as THREE.MeshBasicMaterial).color.setHSL(hue, 0.9, 0.55 + pulse * 0.15);
+      const sm = s.mesh.material as THREE.MeshBasicMaterial;
+      sm.color.setHSL(hue, 0.9, 0.55 + pulse * 0.15);
+      // Con el zoom del móvil los haces llenaban el encuadre y tapaban a Fito: mientras se graba, casi invisibles
+      sm.opacity += ((this.phase === 'film' ? 0.045 : 0.2) - sm.opacity) * Math.min(1, dt * 3);
     });
 
     // Personaje que se lleva (Azul en el aeropuerto, Gas en el estadio)
@@ -2357,6 +2390,8 @@ export class Level3 implements Level {
     const stop = () => {
       this.rhythm?.dispose();
       this.rhythm = null;
+      this.side?.dispose();
+      this.side = null;
       this.busy = false;
       this.input.reset();
       if (this.filmUi) {
@@ -2390,6 +2425,8 @@ export class Level3 implements Level {
 
   dispose() {
     this.beers?.dispose();
+    this.fito?.dispose();
+    this.side?.dispose();
     this.rhythm?.dispose();
     this.filmUi?.remove();
     this.hud.remove();

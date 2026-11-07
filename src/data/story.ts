@@ -654,19 +654,19 @@ export const SIDE = {
   },
   beers: {
     intro: [
-      { who: 'Un amigo', text: 'Gas, ya que estás de pie: tres cervezas. La barra está allí detrás.' },
-      { who: 'Gas', text: 'Por este pasillo no llegan ni dos.' },
-      { who: 'Un amigo', text: 'Con dos me conformo. Yo estoy más adelante, a la izquierda del pasillo.' },
+      { who: 'Margaux', text: 'Antes de que empiece: ¿vas a por cervezas? La barra está ahí detrás.' },
+      { who: 'Gas', text: 'Pido tres, que por este pasillo alguna se cae.' },
+      { who: 'Margaux', text: 'Con que lleguen dos me vale. Te espero aquí.' },
     ] as Line[],
     hintBar: '🍺 Ve a la barra a por las cervezas',
-    hintCarry: '🍺 Llévaselas a tu amigo sin frenazos ni empujones',
+    hintCarry: '🍺 Llévaselas a Azul sin frenazos ni empujones',
     btn: '🍺 Tres, por favor',
     give: '🍺 Toma',
     spilled: ['🍺 ¡Se te ha caído una! Te queda una', '🍺 ¡Se te ha caído una! Te quedan dos'],
     empty: '🍺 ¡Ninguna! Vuelta a la barra',
     bump: '¡Cuidado, que pasan!',
-    few: [{ who: 'Un amigo', text: 'Una sola? Con esto no brindo ni yo. Otra ronda.' }] as Line[],
-    done: (n: number) => [{ who: 'Un amigo', text: n === 3 ? 'Las tres! Y ni una gota. Eres un artista.' : 'Dos de tres. Bueno, me vale.' }] as Line[],
+    few: [{ who: 'Margaux', text: '¿Una? ¿Y la tuya? Anda, otra ronda.' }] as Line[],
+    done: (n: number) => [{ who: 'Margaux', text: n === 3 ? '¡Las tres y sin derramar! Esta de más, para luego.' : 'Dos de tres. Una para cada uno, perfecto.' }] as Line[],
   },
   stones: {
     start: [
@@ -717,5 +717,27 @@ export const SIDE = {
     btn: '🪨 Saltar',
     fall: ['💦 ¡La ola! A la última roca alta', '💦 ¡Otra vez! Espera a que pase', '💦 ¡Que está fría!'],
     end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
+  },
+  pee: {
+    first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con la mosca del urinario mirándole.' }] as Line[],
+    again: [{ who: 'Narrador', text: 'Otra vez el urinario. Y otra cerveza más que la última.' }] as Line[],
+    title: '🎯 Apunta a la mosca',
+    hint: 'Arrastra el dedo para apuntar. Al final pierde fuerza: apunta más arriba',
+    tank: 'Vejiga',
+    great: '🎯 Ni una gota fuera. Así da gusto',
+    ok: '🎯 Casi todo dentro. Nadie tiene que saberlo',
+    bad: '🎯 Uy. Mejor salir rápido de aquí',
+    fly: ' · 🪰 ¡En toda la mosca!',
+  },
+  glasses: {
+    intro: [
+      { who: 'Gas', text: 'Espera. ¿Y mis gafas de sol?' },
+      { who: 'Gas', text: 'Me las he dejado en el baño. Seguro. Ahora vuelvo.' },
+    ] as Line[],
+    title: '🕶️ ¿En qué cabina te las has dejado?',
+    hint: 'Toca las puertas para mirar dentro',
+    broken: 'Averiado. Esta ni se abre',
+    empty: ['Aquí no están', 'Tampoco. Qué asco, por cierto', 'Nada. Solo papel por el suelo'],
+    found: '🕶️ ¡Aquí estaban, encima de la cisterna!',
   },
 };

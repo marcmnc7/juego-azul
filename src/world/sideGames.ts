@@ -495,7 +495,8 @@ export class PinchoGame {
 export const BEERS_NEED = 2;
 
 export class BeerRun {
-  stage: 'toBar' | 'carry' = 'toBar';
+  /** done: ya se las ha dado (a partir de ahí, chocar con alguien no tira nada). */
+  stage: 'toBar' | 'carry' | 'done' = 'toBar';
   private tray = new THREE.Group();
   private cups: THREE.Object3D[] = [];
   cupsLeft = 3;
@@ -507,9 +508,9 @@ export class BeerRun {
   private fill: HTMLElement;
   private cross: { p: Person; z: number; x0: number; x1: number; u: number; v: number; hit: number }[] = [];
   private tilt = new THREE.Vector2();
-  friend: Person;
   rounds = 0;
 
+  /** Las cervezas son para Azul (estaban los dos solos): se las lleva hasta su sitio del pasillo. */
   constructor(sc: THREE.Scene, private gas: Person, private walker: Walker, private fx: Particles, readonly friendAt: THREE.Vector3, aisleX: number, zs: number[], private onChange: () => void) {
     const m = new Merger(false);
     m.add(new THREE.CylinderGeometry(0.2, 0.17, 0.018, 24), 0x2b2f35, 0, 0, 0);
@@ -527,9 +528,6 @@ export class BeerRun {
     }
     this.tray.visible = false;
     sc.add(this.tray);
-    this.friend = makePerson({ skin: 0xe2b08c, shirt: 0x2d6a4f, pants: 0x2d2d3a, hair: 0x2b1d14, hairStyle: 'short', male: true, beard: true });
-    this.friend.root.position.copy(friendAt);
-    sc.add(this.friend.root);
     // Gente que cruza el pasillo: hay que esquivarla
     const looks: PersonLook[] = [
       { skin: 0xf0c8a6, shirt: 0xb4364c, pants: 0x222222, hair: 0x6b3f22, hairStyle: 'straight' },
@@ -624,8 +622,6 @@ export class BeerRun {
         audio.knock(0.4, 240, 0.08);
       }
     }
-    animatePerson(this.friend, dt, this.stage === 'carry' && pp.distanceTo(this.friendAt) < 5 ? 'wave' : 'idle');
-    this.friend.root.rotation.y = Math.atan2(pp.x - this.friendAt.x, pp.z - this.friendAt.z);
     if (this.stage !== 'carry') return;
     // Cuanto más brusco el cambio de velocidad y cuanto más contra la gente, más se mueve el líquido
     const vx = this.walker.vx, vz = this.walker.vz;
@@ -658,8 +654,9 @@ export class BeerRun {
     this.cross.length = 0;
   }
 
-  /** Se queda el amigo; los que cruzan y la bandeja se van. */
+  /** Entregadas: los que cruzan y la bandeja se van, y ya no se puede derramar nada. */
   finish() {
+    this.stage = 'done';
     this.tray.visible = false;
     this.meter.remove();
     if (this.post) rigPost.delete(this.post);
@@ -1560,5 +1557,382 @@ export class RockHop {
     this.root.removeFromParent();
     this.azul.root.removeFromParent();
     this.gas.root.removeFromParent();
+  }
+}
+
+// ---------------- Capítulo 4: apuntar en el urinario ----------------
+
+/**
+ * Primera persona en el urinario del estadio: el chorro va donde apunta el dedo, pero se desvía solo (las
+ * cervezas) y al final pierde fuerza y cae más cerca. Dentro de la taza cuenta; en la mosca, más. Siempre se
+ * acaba (cuando se vacía la vejiga): lo que cambia es el comentario.
+ */
+export class PeeAim {
+  private wrap = el('div', 'pee-game');
+  private cv = document.createElement('canvas');
+  private ctx: CanvasRenderingContext2D;
+  private bg = document.createElement('canvas');
+  private W = 0;
+  private H = 0;
+  private S = 0;
+  private bowl = { x: 0, y: 0, rx: 0, ry: 0 };
+  private fly = { x: 0, y: 0, r: 0 };
+  private floorY = 0;
+  private aim = { x: 0, y: 0 };
+  private drift = { x: 0, y: 0 };
+  private hit = { x: 0, y: 0 };
+  private t = 0;
+  private tank = 1;
+  private inside = 0;
+  private total = 0;
+  private onFly = 0;
+  private drops: { x: number; y: number; vx: number; vy: number; life: number; out: boolean }[] = [];
+  private puddles: { x: number; y: number; r: number }[] = [];
+  private raf = 0;
+  private last = 0;
+  private drag: { id: number; x: number; y: number } | null = null;
+  private fill: HTMLElement;
+  private done = false;
+
+  /** hard: 0 la primera vez, 1 la siguiente (se desvía más). */
+  constructor(private hard: number, private onDone: (q: number) => void) {
+    this.ctx = this.cv.getContext('2d')!;
+    const head = el('div', 'pee-head');
+    head.append(el('div', 'pee-title', SIDE.pee.title));
+    const bar = el('div', 'pee-tank');
+    bar.append(el('span', '', SIDE.pee.tank));
+    const track = el('div', 'pee-track');
+    this.fill = el('div', 'pee-fill');
+    track.append(this.fill);
+    bar.append(track);
+    head.append(bar);
+    this.wrap.append(this.cv, head, el('div', 'pee-hint', SIDE.pee.hint));
+    uiRoot().append(this.wrap);
+    this.layout();
+    this.aim.x = this.bowl.x;
+    this.aim.y = this.bowl.y;
+    this.hit.x = this.aim.x;
+    this.hit.y = this.aim.y;
+    this.cv.addEventListener('pointerdown', this.down);
+    window.addEventListener('pointermove', this.move);
+    window.addEventListener('pointerup', this.up);
+    window.addEventListener('pointercancel', this.up);
+    window.addEventListener('resize', this.layout);
+    this.last = performance.now();
+    this.raf = requestAnimationFrame(this.frame);
+  }
+
+  private down = (e: PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  private move = (e: PointerEvent) => {
+    if (!this.drag || e.pointerId !== this.drag.id) return;
+    this.aim.x += (e.clientX - this.drag.x) * 1.1;
+    this.aim.y += (e.clientY - this.drag.y) * 1.1;
+    this.drag.x = e.clientX;
+    this.drag.y = e.clientY;
+  };
+  private up = (e: PointerEvent) => {
+    if (this.drag && e.pointerId === this.drag.id) this.drag = null;
+  };
+
+  /** Dibuja el fondo una vez (azulejos, urinario, suelo) a la medida de la pantalla. */
+  private layout = () => {
+    const W = (this.W = window.innerWidth), H = (this.H = window.innerHeight);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (const c of [this.cv, this.bg]) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+    }
+    this.cv.style.width = `${W}px`;
+    this.cv.style.height = `${H}px`;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const S = (this.S = Math.min(W * 0.95, H * 0.62));
+    const cx = W / 2;
+    const top = H * 0.2;
+    const uw = S * 0.62, uh = S * 0.92;
+    this.bowl = { x: cx, y: top + uh * 0.56, rx: uw * 0.34, ry: uh * 0.26 };
+    this.fly = { x: cx + uw * 0.06, y: this.bowl.y + this.bowl.ry * 0.38, r: S * 0.028 };
+    this.floorY = Math.min(H * 0.86, top + uh + S * 0.12);
+    const g = this.bg.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Azulejos blancos algo gastados, con su junta
+    g.fillStyle = '#dfe4e6';
+    g.fillRect(0, 0, W, H);
+    const tile = Math.max(26, S * 0.11);
+    for (let y = 0; y < this.floorY; y += tile)
+      for (let x = (Math.floor(y / tile) % 2) * -tile * 0.5; x < W; x += tile) {
+        const v = 226 + ((x * 7 + y * 13) % 17) - 8;
+        g.fillStyle = `rgb(${v},${v + 3},${v + 5})`;
+        g.fillRect(x + 1.5, y + 1.5, tile - 3, tile - 3);
+      }
+    // Suelo de gres oscuro, en perspectiva
+    const fg = g.createLinearGradient(0, this.floorY, 0, H);
+    fg.addColorStop(0, '#6f6a64');
+    fg.addColorStop(1, '#3f3b37');
+    g.fillStyle = fg;
+    g.fillRect(0, this.floorY, W, H - this.floorY);
+    g.strokeStyle = 'rgba(0,0,0,.25)';
+    g.lineWidth = 1;
+    for (let i = -8; i <= 8; i++) {
+      g.beginPath();
+      g.moveTo(cx + i * tile * 0.6, this.floorY);
+      g.lineTo(cx + i * tile * 2.4, H);
+      g.stroke();
+    }
+    // Sombra del urinario en la pared
+    g.fillStyle = 'rgba(40,50,60,.18)';
+    g.beginPath();
+    g.ellipse(cx + S * 0.03, top + uh * 0.5, uw * 0.56, uh * 0.56, 0, 0, Math.PI * 2);
+    g.fill();
+    // Tubo y pulsador
+    g.fillStyle = '#b9c0c4';
+    g.fillRect(cx - S * 0.018, 0, S * 0.036, top + 4);
+    g.fillStyle = '#9aa2a7';
+    g.fillRect(cx - S * 0.03, top - S * 0.05, S * 0.06, S * 0.03);
+    // La porcelana: cuerpo redondeado con un poco de volumen
+    const pg = g.createLinearGradient(cx - uw / 2, 0, cx + uw / 2, 0);
+    pg.addColorStop(0, '#d9dfe2');
+    pg.addColorStop(0.35, '#ffffff');
+    pg.addColorStop(0.8, '#eef2f3');
+    pg.addColorStop(1, '#c6cdd1');
+    g.fillStyle = pg;
+    g.beginPath();
+    g.moveTo(cx - uw * 0.42, top);
+    g.quadraticCurveTo(cx, top - uh * 0.08, cx + uw * 0.42, top);
+    g.bezierCurveTo(cx + uw * 0.56, top + uh * 0.35, cx + uw * 0.55, top + uh * 0.8, cx + uw * 0.3, top + uh);
+    g.quadraticCurveTo(cx, top + uh * 1.07, cx - uw * 0.3, top + uh);
+    g.bezierCurveTo(cx - uw * 0.55, top + uh * 0.8, cx - uw * 0.56, top + uh * 0.35, cx - uw * 0.42, top);
+    g.fill();
+    g.strokeStyle = 'rgba(90,100,110,.35)';
+    g.lineWidth = 2;
+    g.stroke();
+    // La taza: hueco en sombra
+    const b = this.bowl;
+    const bg2 = g.createRadialGradient(b.x, b.y - b.ry * 0.4, b.rx * 0.1, b.x, b.y, b.rx * 1.1);
+    bg2.addColorStop(0, '#f4f7f8');
+    bg2.addColorStop(0.7, '#d4dade');
+    bg2.addColorStop(1, '#aeb6bb');
+    g.fillStyle = bg2;
+    g.beginPath();
+    g.ellipse(b.x, b.y, b.rx, b.ry, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = 'rgba(80,90,100,.4)';
+    g.stroke();
+    // Rejilla del desagüe
+    g.fillStyle = '#8d969c';
+    g.beginPath();
+    g.ellipse(b.x, b.y + b.ry * 0.62, b.rx * 0.22, b.ry * 0.12, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#5f676c';
+    g.lineWidth = 1.2;
+    for (let i = -2; i <= 2; i++) {
+      g.beginPath();
+      g.moveTo(b.x + i * b.rx * 0.07, b.y + b.ry * 0.53);
+      g.lineTo(b.x + i * b.rx * 0.07, b.y + b.ry * 0.71);
+      g.stroke();
+    }
+    // La mosca pintada (la de los urinarios de verdad)
+    const f = this.fly;
+    g.fillStyle = 'rgba(160,190,210,.55)';
+    g.beginPath();
+    g.ellipse(f.x - f.r * 0.6, f.y - f.r * 0.3, f.r * 0.8, f.r * 0.45, -0.5, 0, Math.PI * 2);
+    g.ellipse(f.x + f.r * 0.6, f.y - f.r * 0.3, f.r * 0.8, f.r * 0.45, 0.5, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#1d1f22';
+    g.beginPath();
+    g.ellipse(f.x, f.y, f.r * 0.42, f.r * 0.7, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(f.x, f.y - f.r * 0.75, f.r * 0.3, 0, Math.PI * 2);
+    g.fill();
+  };
+
+  private frame = (now: number) => {
+    if (this.done) return;
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+    this.raf = requestAnimationFrame(this.frame);
+    if (document.hidden) return;
+    this.t += dt;
+    // Se desvía solo: un vaivén y una deriva que cambia de rumbo (más la segunda vez)
+    const k = 1 + this.hard * 0.8;
+    this.drift.x += ((Math.random() - 0.5) * 900 * k - this.drift.x * 1.6) * dt;
+    this.drift.y += ((Math.random() - 0.5) * 520 * k - this.drift.y * 1.6) * dt;
+    this.aim.x += (this.drift.x + Math.sin(this.t * 1.7) * 26 * k) * dt;
+    this.aim.y += (this.drift.y + Math.cos(this.t * 1.3) * 16 * k) * dt;
+    this.aim.x = Math.max(10, Math.min(this.W - 10, this.aim.x));
+    this.aim.y = Math.max(this.H * 0.08, Math.min(this.H - 10, this.aim.y));
+    // Fuerza: al vaciarse cae más cerca (más abajo en pantalla)
+    this.tank = Math.max(0, this.tank - dt / 8.5);
+    const press = Math.min(1, 0.45 + this.tank * 2.2);
+    const ox = this.W / 2 + Math.sin(this.t * 2.1) * 4, oy = this.H + 12;
+    this.hit.x = ox + (this.aim.x - ox) * press;
+    this.hit.y = oy + (this.aim.y - oy) * press;
+    const b = this.bowl;
+    const inBowl = ((this.hit.x - b.x) / b.rx) ** 2 + ((this.hit.y - b.y) / b.ry) ** 2 < 1;
+    const onFly = Math.hypot(this.hit.x - this.fly.x, this.hit.y - this.fly.y) < this.fly.r * 2.2;
+    this.total += dt;
+    if (inBowl) this.inside += dt;
+    if (onFly) this.onFly += dt;
+    // Salpicaduras: en la taza, gotitas que rebotan; fuera, gotas que caen al suelo y hacen charco
+    for (let i = 0; i < 3; i++)
+      this.drops.push({ x: this.hit.x, y: this.hit.y, vx: (Math.random() - 0.5) * 140, vy: -40 - Math.random() * 90, life: 0.35 + Math.random() * 0.25, out: !inBowl });
+    for (const d of this.drops) {
+      d.life -= dt;
+      d.vy += 900 * dt;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      if (d.out && d.y > this.floorY + 8 && d.life > 0) {
+        d.life = 0;
+        if (this.puddles.length < 60 && Math.random() < 0.25) this.puddles.push({ x: d.x, y: this.floorY + 10 + Math.random() * (this.H - this.floorY) * 0.4, r: 4 + Math.random() * 10 });
+      }
+    }
+    this.drops = this.drops.filter((d) => d.life > 0);
+    if (!inBowl && Math.random() < dt * 3) vibrate(8);
+    this.draw(ox, oy, press, inBowl);
+    this.fill.style.transform = `scaleX(${this.tank})`;
+    if (this.tank <= 0) this.finish();
+  };
+
+  private draw(ox: number, oy: number, press: number, inBowl: boolean) {
+    const g = this.ctx;
+    g.clearRect(0, 0, this.W, this.H);
+    g.drawImage(this.bg, 0, 0, this.W, this.H);
+    // Charcos
+    g.fillStyle = 'rgba(232,206,90,.28)';
+    for (const p of this.puddles) {
+      g.beginPath();
+      g.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.5, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    // El chorro: un arco que sale de abajo, más fino cuanto menos fuerza
+    const mx = (ox + this.hit.x) / 2, my = Math.min(oy, this.hit.y) - this.S * 0.1 * press;
+    const wide = 2 + press * 4;
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(236,200,60,.55)';
+    g.lineWidth = wide + 3;
+    g.beginPath();
+    g.moveTo(ox, oy);
+    g.quadraticCurveTo(mx, my, this.hit.x, this.hit.y);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,240,170,.85)';
+    g.lineWidth = Math.max(1, wide * 0.45);
+    g.stroke();
+    // Gotas
+    for (const d of this.drops) {
+      g.fillStyle = d.out ? 'rgba(236,200,60,.8)' : 'rgba(255,248,210,.85)';
+      g.beginPath();
+      g.arc(d.x, d.y, 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
+    // La mira: dónde estás apuntando (y si cae dentro)
+    g.strokeStyle = inBowl ? 'rgba(80,200,120,.9)' : 'rgba(230,80,70,.9)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(this.aim.x, this.aim.y, 13, 0, Math.PI * 2);
+    g.stroke();
+  }
+
+  private finish() {
+    if (this.done) return;
+    this.done = true;
+    cancelAnimationFrame(this.raf);
+    const q = this.total > 0 ? this.inside / this.total : 0;
+    toast((q > 0.85 ? SIDE.pee.great : q > 0.6 ? SIDE.pee.ok : SIDE.pee.bad) + (this.onFly > 1.4 ? SIDE.pee.fly : ''));
+    audio.knock(0.3, 300, 0.2); // la cisterna
+    later(() => {
+      this.dispose();
+      this.onDone(q);
+    }, 900);
+  }
+
+  dispose() {
+    this.done = true;
+    cancelAnimationFrame(this.raf);
+    window.removeEventListener('pointermove', this.move);
+    window.removeEventListener('pointerup', this.up);
+    window.removeEventListener('pointercancel', this.up);
+    window.removeEventListener('resize', this.layout);
+    this.wrap.remove();
+  }
+}
+
+// ---------------- Capítulo 4: las gafas de sol en el baño ----------------
+
+/** Fila de cabinas: se abren tocándolas; dos están averiadas y en una, encima de la cisterna, las gafas. */
+export class GlassesHunt {
+  private wrap = el('div', 'gh-game');
+  private say: HTMLElement;
+  private tries = 0;
+  private done = false;
+  private timers: number[] = [];
+
+  constructor(private onDone: () => void) {
+    const N = 5;
+    const broken = [1, 3];
+    const working = [0, 2, 4];
+    // Nunca en la primera que se mira: se decide al tocar la segunda que funciona
+    let opened = 0;
+    this.wrap.append(el('div', 'gh-title', SIDE.glasses.title), el('div', 'gh-hint', SIDE.glasses.hint));
+    const row = el('div', 'gh-row');
+    for (let i = 0; i < N; i++) {
+      const d = el('button', 'gh-door' + (broken.includes(i) ? ' broken' : ''));
+      const inside = el('div', 'gh-inside');
+      inside.append(el('i', 'gh-cistern'), el('span', 'gh-wc', '🚽'));
+      const panel = el('div', 'gh-panel');
+      panel.append(el('span', 'gh-sign', broken.includes(i) ? 'AVERIADO' : 'WC'), el('i', 'gh-handle'));
+      d.append(inside, panel);
+      d.onpointerdown = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (this.done || d.classList.contains('open')) return;
+        if (broken.includes(i)) {
+          d.classList.remove('shake');
+          void d.offsetWidth;
+          d.classList.add('shake');
+          this.line(SIDE.glasses.broken);
+          audio.knock(0.4, 160, 0.08);
+          return;
+        }
+        d.classList.add('open');
+        audio.knock(0.25, 420, 0.06);
+        opened++;
+        const isIt = opened >= 2 || (opened === 1 && working.length === 1);
+        if (isIt) {
+          inside.append(el('span', 'gh-glasses', '🕶️'));
+          this.found();
+        } else this.line(SIDE.glasses.empty[this.tries++ % SIDE.glasses.empty.length]);
+      };
+      row.append(d);
+    }
+    this.say = el('div', 'gh-say');
+    this.wrap.append(row, this.say);
+    uiRoot().append(this.wrap);
+  }
+
+  private line(t: string) {
+    this.say.textContent = t;
+    this.say.classList.remove('pop');
+    void this.say.offsetWidth;
+    this.say.classList.add('pop');
+  }
+
+  private found() {
+    this.done = true;
+    this.line(SIDE.glasses.found);
+    audio.luck();
+    vibrate([20, 30, 20]);
+    this.timers.push(later(() => {
+      this.dispose();
+      this.onDone();
+    }, 1900));
+  }
+
+  dispose() {
+    this.timers.forEach((t) => clearTimeout(t));
+    this.wrap.remove();
   }
 }
