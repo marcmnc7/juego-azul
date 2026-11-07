@@ -324,6 +324,8 @@ export interface PersonLook {
   beard?: boolean;
   /** Mono de una pieza ajustado y cintura marcada; antebrazos, manos y espinillas al aire. */
   jumpsuit?: boolean;
+  /** Azul: top de punto y vaqueros rectos con tela vaquera de verdad (en el modelo glTF). */
+  jeans?: boolean;
   /** Camiseta a rayas verticales de dos colores (la del Barça). */
   stripes?: [number, number];
   /** Pantalón corto (en la multitud): piernas al aire por debajo de medio muslo. */
@@ -333,6 +335,8 @@ export interface PersonLook {
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
   /** Pelo rizado con volumen arriba (Gas), sobre el pelo corto. */
+  /** Gas: su propio modelo (MakeHuman), con su pelo, bigote y perilla. */
+  gas?: boolean;
   curls?: boolean;
   /** Bigote fino y perilla (Gas). */
   stache?: boolean;

@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
 import { airOf } from '../core/air';
 import type { Person, PersonLook, PersonMode } from './models';
 import womanUrl from '../assets/chars/woman.glb';
 import manUrl from '../assets/chars/man.glb';
+// Gas y el hombre genérico de los secundarios: MakeHuman (CC0), montados con src/demo/mhbuild.ts
+import gasUrl from '../assets/chars/gas_mh.glb';
+import manMhUrl from '../assets/chars/man_mh.glb';
 import animsUrl from '../assets/chars/anims.glb';
 import womanPartsUrl from '../assets/chars/woman_parts.png';
+// Fotos de tela (CC0, de MakeHuman) para la ropa de Azul: vaquero y punto de camiseta
+import denimUrl from '../assets/chars/denim_tile.jpg';
+import knitUrl from '../assets/chars/knit_tile.jpg';
 
 // Personajes de la prueba de concepto: modelos glTF con esqueleto (rig de Mixamo) y animaciones de
 // captura de movimiento (Mixamo), con el mismo retargeting en espacio mundo de la prueba.
@@ -20,8 +25,9 @@ import womanPartsUrl from '../assets/chars/woman_parts.png';
 // fabiol) o el modo no tiene captura (saludar, celebrar, hablar), esa parte del cuerpo copia la
 // articulación invisible, con una transición suave.
 
-export type Kind = 'woman' | 'man';
-const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.78 };
+/** 'oldman': el avatar de antes, solo para la multitud (sus figuras de bajo detalle salen de él). */
+export type Kind = 'woman' | 'man' | 'gas' | 'oldman';
+const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.77, gas: 1.8, oldman: 1.78 };
 
 interface KindData {
   gltf: GLTF;
@@ -462,9 +468,10 @@ function plainTorso(g: THREE.BufferGeometry) {
 
 export function preloadRig() {
   loading ??= (async () => {
-    const [woman, man, anims] = await Promise.all([loadGLB(womanUrl), loadGLB(manUrl), loadGLB(animsUrl)]);
+    const [woman, man, anims, gas, manMh] = await Promise.all([loadGLB(womanUrl), loadGLB(manUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl)]);
     stripFormal(man.scene);
     parts = await loadImageData(womanPartsUrl, 512, 512);
+    [denimPx, knitPx] = await Promise.all([loadImageData(denimUrl, FAB, FAB), loadImageData(knitUrl, FAB, FAB)]);
     const samba = woman.animations.find((c) => c.name === 'SambaDance')!;
     // El baile de Michelle, respecto a su propia T
     const tp = woman.animations.find((c) => c.name === 'TPose');
@@ -481,7 +488,9 @@ export function preloadRig() {
     restoreLocal(wSave);
     data = {};
     data.woman = prepareKind('woman', woman, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.man = prepareKind('man', man, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.oldman = prepareKind('oldman', man, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     ready = true;
   })().catch((e) => {
     failed = true;
@@ -584,8 +593,17 @@ function paintFace(g: CanvasRenderingContext2D, look: PersonLook, M: number) {
 }
 
 /** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
+/** Tejidos para la ropa de Azul (vaquero y punto), en píxeles; se repiten en espejo para que no se vean costuras. */
+let denimPx: Uint8ClampedArray | null = null, knitPx: Uint8ClampedArray | null = null;
+const FAB = 192;
+function mirror(v: number, n: number) {
+  const m = v % (2 * n);
+  return m < n ? m : 2 * n - 1 - m;
+}
+const jeansOn = (look: PersonLook) => !!look.jeans && !look.jumpsuit && !look.shorts && !look.nude;
 function womanTexture(src: THREE.Texture, look: PersonLook) {
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : ''}${look.nude ? 'n' : ''}`;
+  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : jeansOn(look) ? 'J' : ''}${look.nude ? 'n' : ''}`;
+  const jeans = jeansOn(look);
   const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
   let t = texCache.get(k);
   if (t) return t;
@@ -624,6 +642,25 @@ function womanTexture(src: THREE.Texture, look: PersonLook) {
       // rasgos se pintan después. Sin ropa, la piel es lisa: los pliegues y costuras la delatarían
       const f = p === 6 ? Math.min(1, Math.max(0.94, 0.985 + (r - 1) * 0.06)) : look.nude && p !== 2 ? 1 : p === 1 ? Math.min(1.08, Math.max(0.62, r)) : Math.min(1.7, Math.max(0.3, r));
       const col = target[p];
+      if (jeans && p === 3 && knitPx) {
+        // Top de punto: color liso con el relieve de una foto de tela (sin las costuras del top original)
+        const fl = Math.min(1.04, Math.max(0.86, 0.96 + (f - 1) * 0.35));
+        const j = (mirror(y * 3, FAB) * FAB + mirror(x * 3, FAB)) * 4;
+        const k = fl * (0.9 + 0.2 * ((knitPx[j] * 0.3 + knitPx[j + 1] * 0.59 + knitPx[j + 2] * 0.11) / 96 - 0.5));
+        px[i] = Math.min(255, col.r * 255 * k);
+        px[i + 1] = Math.min(255, col.g * 255 * k);
+        px[i + 2] = Math.min(255, col.b * 255 * k);
+        continue;
+      }
+      if (jeans && p === 4 && denimPx) {
+        // Vaquero: foto de tela vaquera con los pliegues del pantalón (sin sus parches)
+        const sh = Math.min(1.15, Math.max(0.78, 1 + (f - 1) * 0.55));
+        const j = (mirror(Math.floor(y * 1.6), FAB) * FAB + mirror(Math.floor(x * 1.6), FAB)) * 4;
+        px[i] = Math.min(255, denimPx[j] * sh);
+        px[i + 1] = Math.min(255, denimPx[j + 1] * sh);
+        px[i + 2] = Math.min(255, denimPx[j + 2] * sh);
+        continue;
+      }
       px[i] = Math.min(255, col.r * 255 * f);
       px[i + 1] = Math.min(255, col.g * 255 * f);
       px[i + 2] = Math.min(255, col.b * 255 * f);
@@ -883,8 +920,9 @@ export function boneFrame(p: Person, bone: string, out: THREE.Quaternion) {
 
 /** Crea un personaje glTF con las mismas articulaciones (invisibles) que el muñeco de siempre. */
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
-  const kind: Kind = look.male || look.beard ? 'man' : 'woman';
+  const kind: Kind = look.gas ? 'gas' : look.male || look.beard ? 'man' : 'woman';
   const D = data[kind]!;
+  const mh = kind === 'man' || kind === 'gas';
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const model = SkeletonUtils.clone(D.gltf.scene);
@@ -901,46 +939,18 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     m.userData.noReceive = true;
     m.frustumCulled = false;
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
-    if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
     m.material = mat;
-    // La parte de arriba del modelo de hombre es una chaqueta con faldones (parecía un chaqué): a él
-    // siempre se le recortan por la cintura y queda una camisa; la de rayas es la camiseta del Barça
-    if ((look.stripes || kind === 'man') && /Outfit_Top/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
-      const tee = teeFor(m as THREE.SkinnedMesh, kind);
-      m.userData.restSrc = m.geometry;
-      m.geometry = tee.geo;
-      if (look.stripes) stripes(mat, tee.axis, tee.period, look.stripes);
+    if (mh) {
+      // MakeHuman: cada pieza se enseña o no según la ropa, y se tiñe con los colores del personaje
+      m.visible = mhPart(kind, m.name, mat, look);
+      return;
     }
-    // Ropa de verano: pantalón corto y manga corta (a ella se lo pinta su textura)
-    if (kind === 'man' && look.shorts && /Outfit_(Bottom|Top)/.test(m.name) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
-      const rest = restHeights(m as THREE.SkinnedMesh, kind, m.userData.restSrc);
-      if (m.geometry.attributes.position === rest.attributes.position) m.geometry = rest;
-      else m.geometry.setAttribute('aRest', rest.attributes.aRest);
-      bareShader(mat, look.skin, /Bottom/.test(m.name) ? 'legs' : 'arms');
-    }
+    if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
     if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
+    else if (kind === 'woman' && jeansOn(look) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = jeansGeometry(m.geometry);
   });
 
   const B = boneMap(model);
-  // Pelo corto del hombre (el avatar viene sin pelo, era para un sombrero): una copia algo
-  // inflada de la parte de arriba de la cabeza, con el mismo esqueleto
-  if (kind === 'man') {
-    let head: THREE.SkinnedMesh | null = null;
-    model.traverse((o) => {
-      if (/Wolf3D_Head/.test(o.name) && (o as THREE.SkinnedMesh).isSkinnedMesh) head = o as THREE.SkinnedMesh;
-    });
-    if (head) {
-      const hm = head as THREE.SkinnedMesh;
-      const hmat = new THREE.MeshStandardMaterial();
-      colorRigMaterial(kind, 'Hair', hmat, look);
-      const hair = new THREE.SkinnedMesh(hairGeometry(hm.geometry), hmat);
-      hair.castShadow = true;
-      hair.frustumCulled = false;
-      hm.parent!.add(hair);
-      hair.bind(hm.skeleton, hm.bindMatrix);
-    }
-  }
-
   // Articulaciones del muñeco (invisibles): las mueve animatePerson y el código de los niveles
   const body = new THREE.Group();
   const headJ = new THREE.Group();
@@ -1021,7 +1031,6 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
   if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
-  if (kind === 'man' && (look.curls || look.stache)) gasFace(p, look);
   people.add(p);
   return p;
 }
@@ -1051,35 +1060,6 @@ function legsMask() {
 }
 
 
-const restCache = new Map<string, THREE.BufferGeometry>();
-/** La geometría con, para cada vértice en la pose de carga, su altura (0 pies … 1 cabeza) y lo lejos que está del centro (los brazos) como atributo aRest. */
-function restHeights(m: THREE.SkinnedMesh, kind: Kind, srcGeo: THREE.BufferGeometry = m.geometry) {
-  const hit = restCache.get(srcGeo.uuid);
-  if (hit) return hit;
-  const src = data[kind]!.gltf.scene;
-  let orig: THREE.SkinnedMesh | null = null;
-  src.traverse((o) => {
-    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === srcGeo) orig = o as THREE.SkinnedMesh;
-  });
-  src.updateWorldMatrix(true, true);
-  const box = new THREE.Box3();
-  src.traverse((q) => {
-    if ((q as THREE.Mesh).isMesh) box.expandByObject(q);
-  });
-  const pos = srcGeo.attributes.position as THREE.BufferAttribute;
-  const r = new Float32Array(pos.count * 2);
-  const v = new THREE.Vector3();
-  const H = box.max.y - box.min.y || 1, cx = (box.max.x + box.min.x) / 2;
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i).applyMatrix4(skinMatrix((orig ?? m) as THREE.SkinnedMesh, i));
-    r[i * 2] = (v.y - box.min.y) / H;
-    r[i * 2 + 1] = Math.abs(v.x - cx) / H;
-  }
-  const geo = srcGeo.clone();
-  geo.setAttribute('aRest', new THREE.BufferAttribute(r, 2));
-  restCache.set(srcGeo.uuid, geo);
-  return geo;
-}
 
 /**
  * Ropa de verano pintada en el shader: pantalón corto (por debajo de medio muslo, piel) o manga corta
@@ -1118,73 +1098,7 @@ export function noTails(mat: THREE.Material) {
 
 // ---------- Camiseta a rayas (la del Barça) ----------
 
-const teeCache = new Map<string, { geo: THREE.BufferGeometry; axis: string; period: number }>();
-/**
- * Camiseta de fútbol sobre la chaqueta del modelo: fuera los faldones (lo que cuelga por debajo de
- * la cintura) y rayas verticales. Medido con el esqueleto del modelo original en su pose de carga.
- */
-function teeFor(m: THREE.SkinnedMesh, kind: Kind) {
-  const src = data[kind]!.gltf.scene;
-  let orig: THREE.SkinnedMesh | null = null;
-  src.traverse((o) => {
-    if ((o as THREE.SkinnedMesh).isSkinnedMesh && (o as THREE.SkinnedMesh).geometry === m.geometry) orig = o as THREE.SkinnedMesh;
-  });
-  let c = teeCache.get(m.geometry.uuid);
-  if (c) return c;
-  const geo0 = m.geometry;
-  const o = (orig ?? m) as THREE.SkinnedMesh;
-  src.updateWorldMatrix(true, true);
-  const pos = geo0.attributes.position as THREE.BufferAttribute;
-  const w = Array.from({ length: pos.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(skinMatrix(o, i)));
-  const box = new THREE.Box3();
-  src.traverse((q) => {
-    if ((q as THREE.Mesh).isMesh) box.expandByObject(q);
-  });
-  const H = box.max.y - box.min.y || 1;
-  const hOf = (v: THREE.Vector3) => (v.y - box.min.y) / H;
-  // Cintura: el borde de abajo de la camiseta
-  const WAIST = 0.505;
-  const index = geo0.index ? Array.from(geo0.index.array) : [...Array(pos.count).keys()];
-  const out: number[] = [];
-  for (let t = 0; t < index.length; t += 3) {
-    const [a, b, cc] = [index[t], index[t + 1], index[t + 2]];
-    if ((hOf(w[a]) + hOf(w[b]) + hOf(w[cc])) / 3 > WAIST) out.push(a, b, cc);
-  }
-  const geo = geo0.clone();
-  geo.setIndex(out);
-  // Eje de lado a lado en el espacio de la geometría: el que más cambia de un hombro al otro
-  // (con un vértice del pecho, que solo mueve la espalda)
-  const cx = (box.max.x + box.min.x) / 2;
-  let chest = 0, best = Infinity;
-  w.forEach((v, i) => {
-    const d = Math.abs(hOf(v) - 0.68) * 4 + Math.abs(v.x - cx) / H;
-    if (d < best) { best = d; chest = i; }
-  });
-  const inv = skinMatrix(o, chest).invert();
-  const l = new THREE.Vector3(1, 0, 0).transformDirection(inv);
-  const ax = Math.abs(l.x) >= Math.abs(l.y) && Math.abs(l.x) >= Math.abs(l.z) ? 'x' : Math.abs(l.y) >= Math.abs(l.z) ? 'y' : 'z';
-  // Ancho de una raya: unos 4,5 cm en metros del mundo, pasado a unidades de la geometría
-  const unit = new THREE.Vector3().setFromMatrixScale(skinMatrix(o, chest)).x || 1;
-  c = { geo, axis: ax, period: 0.09 / unit };
-  teeCache.set(geo0.uuid, c);
-  return c;
-}
 
-/** Rayas verticales de dos colores sobre la camiseta. */
-function stripes(mat: THREE.MeshStandardMaterial, axis: string, period: number, [a, b]: [number, number]) {
-  mat.color.set(0xffffff);
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.stA = { value: new THREE.Color(a) };
-    sh.uniforms.stB = { value: new THREE.Color(b) };
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vStripe;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStripe = position.${axis} / ${period.toFixed(6)};`);
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vStripe;\nuniform vec3 stA;\nuniform vec3 stB;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat sf = fract(vStripe);\ndiffuseColor.rgb *= mix(stA, stB, smoothstep(0.46, 0.54, sf) - smoothstep(0.96, 1.0, sf));');
-  };
-  mat.customProgramCacheKey = () => 'stripes' + a + b + axis;
-}
 
 
 // ---------- Mono corto ----------
@@ -1335,6 +1249,121 @@ function shortSuit() {
   return short;
 }
 
+// ---------- MakeHuman (Gas y los hombres secundarios) ----------
+
+/** Color medio de la piel de la textura del hombre genérico (sRGB): el tono de cada uno se saca respecto a él. */
+const MH_SKIN = new THREE.Color(0xe9bc9e);
+const stripeCache = new Map<string, THREE.Texture>();
+/** La camiseta (blanca) con rayas verticales de dos colores: la del Barça. */
+function stripedMap(src: THREE.Texture, cols: [number, number]) {
+  const k = src.uuid + cols.join(',');
+  let t = stripeCache.get(k);
+  if (t) return t;
+  const img = src.image as HTMLImageElement | ImageBitmap;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'multiply';
+  const n = 26, w = c.width / n;
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = '#' + new THREE.Color(cols[i % 2]).getHexString();
+    g.fillRect(i * w, 0, w + 1, c.height);
+  }
+  t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.flipY = src.flipY;
+  stripeCache.set(k, t);
+  return t;
+}
+/**
+ * Qué piezas lleva cada uno y de qué color. El modelo trae el cuerpo en tres versiones (vestido, con pantalón
+ * corto y sin ropa), la camiseta blanca, el pantalón largo y el corto: según la ropa se enseñan unas u otras.
+ * Gas trae su pelo, su barba y sus vaqueros; al genérico se le tiñen la piel, el pelo y el pantalón.
+ */
+function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look: PersonLook) {
+  const nude = !!look.nude, shorts = !!look.shorts && !nude;
+  const generic = kind === 'man';
+  switch (name) {
+    case 'Body':
+    case 'BodyShort':
+    case 'BodyFull':
+      if (generic) {
+        const s = lin(look.skin).convertLinearToSRGB();
+        mat.color.setRGB(Math.min(1.15, s.r / MH_SKIN.r), Math.min(1.15, s.g / MH_SKIN.g), Math.min(1.15, s.b / MH_SKIN.b), THREE.SRGBColorSpace);
+      }
+      return name === (nude ? 'BodyFull' : shorts ? 'BodyShort' : 'Body');
+    case 'Shirt':
+      if (look.stripes && mat.map) {
+        mat.map = stripedMap(mat.map, look.stripes);
+        mat.color.set(0xffffff);
+      } else mat.color = lin(look.shirt);
+      return !nude;
+    case 'Pants':
+    case 'PantsShort':
+      if (generic) mat.color = lin(look.pants);
+      return name === 'Pants' ? !nude && !shorts : shorts;
+    case 'Shoes':
+      return !nude;
+    case 'MHHair':
+      if (generic) mat.color = lin(look.hair).multiplyScalar(1.15);
+      return true;
+    default:
+      return true;
+  }
+}
+
+// ---------- Vaqueros ----------
+
+const jeansCache = new Map<string, THREE.BufferGeometry>();
+/**
+ * Vaqueros rectos para el pantalón ancho de Michelle: en la malla en reposo (las piernas ya van rectas), cada
+ * pernera, rodaja a rodaja, pasa a ser casi un tubo que se estrecha poco a poco del muslo al bajo, sin el
+ * bajo fruncido. Todo lo que queda bajo la entrepierna y no es piel cuenta como pernera (el mapa de partes
+ * solo marca como pantalón la cadera; el puño del tobillo va marcado como zapato).
+ */
+function jeansGeometry(src: THREE.BufferGeometry) {
+  const hit = jeansCache.get(src.uuid);
+  if (hit) return hit;
+  const uv = src.attributes.uv as THREE.BufferAttribute | undefined;
+  if (!uv || !parts) return src;
+  const pos = src.attributes.position as THREE.BufferAttribute;
+  const pt = (i: number) => {
+    const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
+    const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
+    return Math.round(parts![(y * 512 + x) * 4] / 36);
+  };
+  let y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < pos.count; i++) { y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)); }
+  const H = y1 - y0, TOP = 0.48, LOW = 0.055, SL = 0.02;
+  const hb = (i: number) => (pos.getY(i) - y0) / H;
+  const leg = (i: number) => { const h = hb(i); return h < TOP && h > LOW && pt(i) !== 1 && pt(i) !== 6; };
+  const bk = (i: number) => `${pos.getX(i) > 0 ? 1 : 0}:${Math.floor(hb(i) / SL)}`;
+  const bins = new Map<string, { x: number; z: number; n: number }>();
+  for (let i = 0; i < pos.count; i++) {
+    if (!leg(i)) continue;
+    const b = bins.get(bk(i)) ?? { x: 0, z: 0, n: 0 };
+    b.x += pos.getX(i); b.z += pos.getZ(i); b.n++;
+    bins.set(bk(i), b);
+  }
+  for (const b of bins.values()) { b.x /= b.n; b.z /= b.n; }
+  const out = src.clone();
+  const op = out.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    if (!leg(i)) continue;
+    const h = hb(i), b = bins.get(bk(i))!;
+    const dx = pos.getX(i) - b.x, dz = pos.getZ(i) - b.z, d = Math.max(1e-6, Math.hypot(dx, dz));
+    const target = H * THREE.MathUtils.lerp(0.033, 0.049, THREE.MathUtils.clamp((h - LOW) / (0.45 - LOW), 0, 1));
+    const blend = THREE.MathUtils.smoothstep(TOP - h, 0, 0.035); // sin escalón en la cadera
+    const nd = d + (0.12 * d + 0.88 * target - d) * blend;
+    op.setXYZ(i, b.x + (dx / d) * nd, pos.getY(i), b.z + (dz / d) * nd);
+  }
+  out.computeVertexNormals();
+  jeansCache.set(src.uuid, out);
+  return out;
+}
+
 // ---------- Melena lisa ----------
 
 const noHairCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
@@ -1475,131 +1504,7 @@ function straightHair(p: Person, look: PersonLook) {
   anchor.add(mesh);
 }
 
-/** Vértices de las mallas que cumplen `test`, en el espacio de un ancla de hueso (pose de reposo). */
-function meshPointsIn(p: Person, anchor: THREE.Object3D, bone: string, test: (name: string) => boolean) {
-  const out: THREE.Vector3[] = [];
-  const b = p.rig!.bones.get(bone)!;
-  anchor.updateMatrix();
-  const invA = anchor.matrix.clone().invert();
-  p.rig!.model.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (!m.isSkinnedMesh || !test(m.name)) return;
-    const bi = m.skeleton.bones.indexOf(b as THREE.Bone);
-    if (bi < 0) return;
-    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-    const toBone = m.skeleton.boneInverses[bi].clone().multiply(m.bindMatrix);
-    for (let i = 0; i < pos.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toBone).applyMatrix4(invA));
-  });
-  return out;
-}
 
-/**
- * Gas, sacado de las fotos: rizos castaños con volumen arriba (sobre el pelo corto del modelo) y
- * bigote fino con perilla. Los rizos son bolitas de pelo fusionadas en una sola malla.
- */
-function gasFace(p: Person, look: PersonLook) {
-  const anchor = boneAnchor(p, 'Head');
-  const pts = meshPointsIn(p, anchor, 'Head', (n) => /Wolf3D_Head/.test(n));
-  if (pts.length < 50) return;
-  const box = new THREE.Box3().setFromPoints(pts);
-  const c = box.getCenter(new THREE.Vector3());
-  const sz = box.getSize(new THREE.Vector3());
-  const hair = new THREE.Color(look.hair);
-  const parts: THREE.BufferGeometry[] = [];
-  const ball = (r: number, x: number, y: number, z: number, sx = 1, sy = 1, sz2 = 1, col = hair) => {
-    const g = new THREE.SphereGeometry(r, 9, 7);
-    g.scale(sx, sy, sz2);
-    g.translate(x, y, z);
-    const n = g.attributes.position.count;
-    const cols = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) cols.set([col.r, col.g, col.b], i * 3);
-    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    parts.push(g);
-  };
-  if (look.curls) {
-    // Una sola masa de pelo con relieve de rizos (ruido 3D) y más oscura en los huecos: se lee como
-    // pelo rizado, no como bolitas. Volumen arriba y delante (el tupé de las fotos), lados pegados
-    const rx = sz.x * 0.55, ry = sz.y * 0.5, rz = Math.max(sz.z, sz.x) * 0.56;
-    const cx = c.x, cy = c.y + sz.y * 0.06, cz = c.z - rz * 0.12;
-    const hash = (x: number, y: number, z: number) => {
-      const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-      return h - Math.floor(h);
-    };
-    const vnoise = (x: number, y: number, z: number) => {
-      const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-      const fx = x - ix, fy = y - iy, fz = z - iz;
-      const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
-      const L = (a: number, b: number, t: number) => a + (b - a) * t;
-      return L(
-        L(L(hash(ix, iy, iz), hash(ix + 1, iy, iz), u), L(hash(ix, iy + 1, iz), hash(ix + 1, iy + 1, iz), u), v),
-        L(L(hash(ix, iy, iz + 1), hash(ix + 1, iy, iz + 1), u), L(hash(ix, iy + 1, iz + 1), hash(ix + 1, iy + 1, iz + 1), u), v),
-        w,
-      );
-    };
-    const A = 72, S = 44;
-    const pos: number[] = [], col: number[] = [], idx: number[] = [];
-    const keep: boolean[] = [];
-    const tone = new THREE.Color();
-    for (let j = 0; j <= S; j++) {
-      const phi = (j / S) * Math.PI * 0.72; // de la coronilla hasta algo por debajo del ecuador
-      for (let i = 0; i <= A; i++) {
-        const th = (i / A) * Math.PI * 2; // 0 = delante (+z)
-        const d = new THREE.Vector3(Math.sin(phi) * Math.sin(th), Math.cos(phi), Math.sin(phi) * Math.cos(th));
-        const top = Math.max(0, d.y);
-        const side = Math.abs(d.x) > 0.55 && d.y < 0.5;
-        // Rizos: dos escalas de ruido, en bultos redondeados
-        const n = vnoise(d.x * 11 + 3, d.y * 11, d.z * 11) * 0.62 + vnoise(d.x * 23, d.y * 23 + 7, d.z * 23) * 0.38;
-        const bump = Math.pow(n, 1.6);
-        const lift = (side ? 1.0 : 1.02 + top * top * 0.2 + (d.z > 0.1 && d.y > 0.35 ? 0.07 : 0)) + bump * (side ? 0.06 : 0.16);
-        pos.push(cx + d.x * rx * lift, cy + d.y * ry * lift + 0.006, cz + d.z * rz * lift);
-        tone.copy(hair).multiplyScalar(0.45 + bump * 0.9);
-        col.push(tone.r, tone.g, tone.b);
-        keep.push(!(d.z > 0.3 && d.y < 0.42) && !(d.y < -0.05 && d.z > -0.55));
-      }
-    }
-    for (let j = 0; j < S; j++)
-      for (let i = 0; i < A; i++) {
-        const a = j * (A + 1) + i, b = a + A + 1;
-        if (keep[a] && keep[a + 1] && keep[b] && keep[b + 1]) idx.push(a, a + 1, b, b, a + 1, b + 1);
-      }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    const curls = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
-    curls.castShadow = true;
-    curls.userData.person = true;
-    anchor.add(curls);
-  }
-  if (look.stache) {
-    // Perfil de la cara por el centro: la nariz es lo que más sale; la barbilla, lo más bajo de delante
-    const mid = pts.filter((q) => Math.abs(q.x - c.x) < sz.x * 0.06);
-    const nose = mid.reduce((a, q) => (q.z > a.z ? q : a), mid[0]);
-    const front = mid.filter((q) => q.z > nose.z - sz.z * 0.35);
-    const chin = front.reduce((a, q) => (q.y < a.y ? q : a), front[0]);
-    const faceZ = (y: number) => front.filter((q) => Math.abs(q.y - y) < sz.y * 0.03).reduce((a, q) => Math.max(a, q.z), -Infinity);
-    const dark = hair.clone().multiplyScalar(0.85);
-    // Bigote fino justo encima del labio, casi pegado a la piel
-    const my = nose.y - (nose.y - chin.y) * 0.21;
-    const mz = faceZ(my);
-    if (isFinite(mz)) {
-      ball(0.012, c.x - 0.012, my, mz - 0.003, 1.45, 0.34, 0.4, dark);
-      ball(0.012, c.x + 0.012, my, mz - 0.003, 1.45, 0.34, 0.4, dark);
-    }
-    // Perilla: una mancha corta en la barbilla, sin salir de la cara
-    const gy = chin.y + (nose.y - chin.y) * 0.12;
-    const gz = faceZ(gy);
-    if (isFinite(gz)) ball(0.013, c.x, gy, gz - 0.006, 0.8, 1.0, 0.32, dark);
-  }
-  if (!parts.length) return;
-  const geo = mergeGeometries(parts);
-  if (!geo) return;
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
-  mesh.castShadow = true;
-  mesh.userData.person = true;
-  anchor.add(mesh);
-}
 
 /**
  * Punto pegado a un hueso (Head, Hips, Spine2...) con los ejes del personaje en reposo y en metros:

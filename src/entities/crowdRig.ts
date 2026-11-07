@@ -69,7 +69,8 @@ function tuckBuns(lod: THREE.Object3D) {
 }
 
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
-  const K = rigKind(kind);
+  // (la multitud sale del avatar de antes: sus figuras de bajo detalle tienen su esqueleto y sus piezas)
+  const K = rigKind(kind === 'man' ? 'oldman' : kind);
   if (kind === 'man') stripFormal(lod);
   else tuckBuns(lod);
   const model = lod;

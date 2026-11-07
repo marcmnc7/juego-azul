@@ -232,7 +232,7 @@ export class Level1 implements Level {
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
-    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: MARGAUX_LOOK.shirt } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }); // aquel día, con la del Barça
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: 0x5aa9e6 } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }); // aquel día, con la del Barça
     this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
     this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
