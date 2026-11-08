@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { MOBILE } from '../core/gfx';
 import { loadGLB } from '../core/assets';
-import { rigKind, colorRigMaterial, vatTime, womanPartAt, womanPartsTexture, type Kind } from './rig';
+import { rigKind, colorRigMaterial, vatTime, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
-import womanLodUrl from '../assets/chars/woman_lod.glb';
+import womanLodUrl from '../assets/chars/woman_mh_lod.glb';
 import manLodUrl from '../assets/chars/man_mh_lod.glb';
 
 // Multitud con los mismos personajes glTF y la misma captura de movimiento, pero horneada en
@@ -34,44 +34,9 @@ interface VatKind {
 const kinds: Partial<Record<Kind, VatKind>> = {};
 let baking: Promise<void> | null = null;
 
-/**
- * Las mujeres del público: el modelo trae dos moños enormes, y repetidos por toda la plaza parecían pulpos.
- * Se recogen en una melena corta: todo el pelo se aprieta contra un casquete redondo alrededor del cráneo.
- */
-function tuckBuns(lod: THREE.Object3D) {
-  lod.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (!m.isSkinnedMesh || !m.geometry.attributes.uv) return;
-    const g = m.geometry;
-    const pos = g.attributes.position as THREE.BufferAttribute, uv = g.attributes.uv as THREE.BufferAttribute, nrm = g.attributes.normal as THREE.BufferAttribute;
-    const face = new THREE.Box3();
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) if (womanPartAt(uv.getX(i), uv.getY(i)) === 6) face.expandByPoint(v.fromBufferAttribute(pos, i));
-    if (face.isEmpty()) return;
-    const c = face.getCenter(new THREE.Vector3()), sz = face.getSize(new THREE.Vector3());
-    const R = Math.max(sz.x, sz.y) * 0.6;
-    c.y += sz.y * 0.1;
-    c.z -= sz.z * 0.5;
-    for (let i = 0; i < pos.count; i++) {
-      if (womanPartAt(uv.getX(i), uv.getY(i)) !== 2) continue;
-      v.fromBufferAttribute(pos, i).sub(c);
-      const r = v.length();
-      if (r <= 0.0001) continue;
-      // Por detrás baja un poco más, hasta la nuca, como una melena
-      const lim = v.y < 0 && v.z < 0 ? R * 1.12 : R;
-      if (r > lim) {
-        nrm.setXYZ(i, v.x / r, v.y / r, v.z / r);
-        v.multiplyScalar(lim / r).add(c);
-        pos.setXYZ(i, v.x, v.y, v.z);
-      }
-    }
-  });
-}
-
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
-  // Ellos: el hombre de MakeHuman (el de Gas) en versión ligera, con su mismo esqueleto y sus animaciones
-  const K = rigKind(kind);
-  if (kind === 'woman') tuckBuns(lod);
+  // El hombre y la chica de MakeHuman en versión ligera, con su mismo esqueleto y sus animaciones
+  const K = rigKind(kind === 'woman' ? 'mhwoman' : kind);
   const model = lod;
   model.scale.setScalar(K.scale);
   model.position.y = -K.minY * K.scale;
@@ -134,37 +99,6 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
     }
     return r;
   });
-  // Ella: las perneras anchas del pantalón, ceñidas a la pierna por debajo de medio muslo
-  // (así, con pantalón corto, lo que queda al aire es una pierna y no una campana)
-  if (kind === 'woman') {
-    const HEM = 0.455, BIN = 0.015;
-    const legR = (h: number) => BH * (h > 0.3 ? THREE.MathUtils.lerp(0.034, 0.05, (h - 0.3) / (HEM - 0.3)) : h > 0.17 ? THREE.MathUtils.lerp(0.03, 0.034, (h - 0.17) / 0.13) : THREE.MathUtils.lerp(0.02, 0.03, Math.max(0, h - 0.05) / 0.12));
-    meshes.forEach((m, mi) => {
-      const uv = m.geometry.attributes.uv as THREE.BufferAttribute | undefined;
-      if (!uv) return;
-      const { P } = binds[mi];
-      const hr = rests[mi];
-      const h = new Float32Array(hr.length / 2).map((_, i) => hr[i * 2]);
-      const legs: number[] = [];
-      for (let i = 0; i < h.length; i++) if (h[i] < HEM + 0.03 && womanPartAt(uv.getX(i), uv.getY(i)) === 4) legs.push(i);
-      const stat = new Map<string, { x: number; z: number; n: number }>();
-      const key = (i: number) => `${P[i * 3] > cx ? 1 : 0}:${Math.floor(h[i] / BIN)}`;
-      for (const i of legs) {
-        const st = stat.get(key(i)) ?? { x: 0, z: 0, n: 0 };
-        st.x += P[i * 3]; st.z += P[i * 3 + 2]; st.n++;
-        stat.set(key(i), st);
-      }
-      for (const i of legs) {
-        const st = stat.get(key(i))!;
-        const ax = st.x / st.n, az = st.z / st.n;
-        const dx = P[i * 3] - ax, dz = P[i * 3 + 2] - az, d = Math.hypot(dx, dz) || 1;
-        const r = Math.min(d, legR(h[i]));
-        const k = 1 - THREE.MathUtils.smoothstep(h[i], HEM - 0.03, HEM + 0.03);
-        P[i * 3] = THREE.MathUtils.lerp(P[i * 3], ax + (dx / d) * r, k);
-        P[i * 3 + 2] = THREE.MathUtils.lerp(P[i * 3 + 2], az + (dz / d) * r, k);
-      }
-    });
-  }
   for (const c of CLIPS) {
     const action = mixer.clipAction(K.clips[c]).play();
     const { start, frames } = clips[c];
@@ -296,6 +230,7 @@ const NEUTRAL = 0x9a9a9a;
 // El hombre de MakeHuman de la multitud viene con camiseta blanca, pantalón gris claro y pelo gris claro
 const MH_TOP = 0xf2f2f2, MH_BOT = 0xd1d1d1, MH_HAIR = 0xd8d8d8, MH_SKIN = 0xe9bc9e;
 const MH_HAIRS = ['MHHair', 'MHHair_short01', 'MHHair_short04'];
+const MH_HAIRS_W = ['MHHair', 'MHHair_bob02'];
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const HAIRS = [0x2b1d14, 0x3b2618, 0x5a3b22, 0x7a5434, 0x2a1c14, 0x33231a, 0xb08a52, 0xd8bb7e, 0x8a3b1e];
 // De fiesta en verano: mucho blanco (en el jaleo se va de blanco) y colores vivos
@@ -314,30 +249,6 @@ function ratio(to: number, from: number, out: Float32Array, i: number) {
   out[i + 2] = Math.min(12, _c.b / Math.max(0.004, _n.b));
 }
 
-/** En ella todo es una malla con una textura: la máscara de partes dice qué color lleva cada trozo. */
-function varyWoman(mat: THREE.Material, look: PersonLook) {
-  const prev = mat.onBeforeCompile;
-  const prevKey = mat.customProgramCacheKey;
-  const mask = womanPartsTexture(look);
-  if (!mask) return;
-  mat.onBeforeCompile = (sh, r) => {
-    prev.call(mat, sh, r);
-    sh.uniforms.crowdParts = { value: mask };
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 iHair, iTop, iBot, iSkin;\nvarying vec3 vHair, vTop, vBot, vSkin;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvHair = iHair; vTop = iTop; vBot = iBot; vSkin = iSkin;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D crowdParts;\nvarying vec3 vHair, vTop, vBot, vSkin;')
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-        float cPart = floor(texture2D(crowdParts, vMapUv).r * 255.0 / 36.0 + 0.5);
-        diffuseColor.rgb *= cPart == 2.0 ? vHair : cPart == 3.0 ? vTop : cPart == 4.0 ? vBot : (cPart == 1.0 || cPart == 6.0) ? vSkin : vec3(1.0);`,
-      );
-  };
-  mat.customProgramCacheKey = () => prevKey.call(mat) + '|vary';
-}
-
 /** Gente de la multitud con modelo glTF: misma forma de usar que CrowdPeople. */
 export class RigCrowd {
   readonly group = new THREE.Group();
@@ -352,8 +263,9 @@ export class RigCrowd {
     const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
     const hair = new Float32Array(count * 3), top = new Float32Array(count * 3), bot = new Float32Array(count * 3), skin = new Float32Array(count * 3);
     this.size = new Float32Array(count * 2);
-    // (él, el de MakeHuman: camiseta blanca, pantalón gris claro, pelo gris claro y su piel: se tiñe respecto a eso)
-    const man = kind === 'man';
+    // (MakeHuman: camiseta blanca, pantalón gris claro, pelo gris claro y su piel: se tiñe respecto a eso)
+    const man = true;
+    const HAIRS_K = kind === 'man' ? MH_HAIRS : MH_HAIRS_W;
     this.hv = new Uint8Array(count);
     for (let i = 0; i < count; i++) {
       const own = Math.random() < 0.33;
@@ -361,21 +273,16 @@ export class RigCrowd {
       ratio(own ? look.shirt : pick(TOPS), man ? MH_TOP : NEUTRAL, top, i * 3);
       ratio(own ? look.pants : pick(BOTTOMS), man ? MH_BOT : NEUTRAL, bot, i * 3);
       ratio(own ? look.skin : pick(SKINS), man ? MH_SKIN : look.skin, skin, i * 3);
-      this.hv[i] = Math.floor(Math.random() * MH_HAIRS.length);
+      this.hv[i] = Math.floor(Math.random() * HAIRS_K.length);
       this.size[i * 2] = 0.92 + Math.random() * 0.15;
       this.size[i * 2 + 1] = 0.93 + Math.random() * 0.14;
     }
     const neutral: PersonLook = { ...look, hair: NEUTRAL, shirt: NEUTRAL, pants: NEUTRAL };
-    const attrs = {
-      iHair: new THREE.InstancedBufferAttribute(hair, 3),
-      iTop: new THREE.InstancedBufferAttribute(top, 3),
-      iBot: new THREE.InstancedBufferAttribute(bot, 3),
-      iSkin: new THREE.InstancedBufferAttribute(skin, 3),
-    };
     const a = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
       const r = Math.random();
-      const c: Clip = dance ? 'dance' : r < 0.62 ? 'idle' : r < 0.9 ? 'agree' : 'headShake';
+      // (charlando: la mayoría asiente o niega mientras habla; pocos se quedan solo de pie)
+      const c: Clip = dance ? 'dance' : r < 0.35 ? 'idle' : r < 0.8 ? 'agree' : 'headShake';
       a.set([K.clips[c].start, K.clips[c].frames, Math.random() * 20, 0.85 + Math.random() * 0.3], i * 4);
     }
     this.anim = new THREE.InstancedBufferAttribute(a, 4);
@@ -394,13 +301,9 @@ export class RigCrowd {
       if (man) mat.color.set(0xffffff);
       else colorRigMaterial(kind, part.name, mat, neutral);
       vatify(mat, part);
-      if (kind === 'woman') {
-        for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a);
-        varyWoman(mat, look);
-      }
       const im = new THREE.InstancedMesh(g, mat, count);
       // Él va por piezas: cada pieza se tiñe entera con el color de esa persona
-      const tint = man ? (/^MHHair/.test(part.name) ? hair : part.name === 'Shirt' ? top : /^Pants/.test(part.name) ? bot : /^Body/.test(part.name) ? skin : null) : null;
+      const tint = (/^MHHair/.test(part.name) ? hair : part.name === 'Shirt' ? top : /^Pants/.test(part.name) ? bot : /^Body/.test(part.name) ? skin : null);
       if (tint) {
         for (let i = 0; i < count; i++) im.setColorAt(i, _c.setRGB(tint[i * 3], tint[i * 3 + 1], tint[i * 3 + 2]));
       }
@@ -416,7 +319,7 @@ export class RigCrowd {
       // proyectándose en el mapa de sombras costaba tanto como dibujarla
       if (/Eye/.test(part.name) || MOBILE) im.userData.noCast = true;
       // peinado: cada hombre lleva uno de los tres (los demás, a escala cero)
-      const hi = man ? MH_HAIRS.indexOf(part.name) : -1;
+      const hi = HAIRS_K.indexOf(part.name);
       if (hi >= 0) im.userData.hairVariant = hi;
       this.meshes.push(im);
       this.group.add(im);

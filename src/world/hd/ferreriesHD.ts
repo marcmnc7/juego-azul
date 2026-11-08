@@ -140,34 +140,35 @@ export class FerreriesHD {
   }
 
   /** Barra de bar de verbena: madera, sobre de marès, botellas y vasos de cristal a tamaño real. */
-  bar(x: number, z: number, facing: 1 | -1) {
+  bar(x: number, z: number, rot: number) {
     const { b, M } = this;
-    b.box(M.wood, [x, 0.53, z], [4, 1.06, 0.8], { tile: 1.2 });
-    b.box(M.mares, [x, 1.1, z], [4.2, 0.08, 1], { tile: 1.5 });
-    const bz = z - facing * 0.25;
+    // en el espacio del bar (la barra mira a +z), girado `rot` alrededor de (x, z)
+    const P = new THREE.Matrix4().makeRotationY(rot).setPosition(x, 0, z);
+    b.box(M.wood, [0, 0.53, 0], [4, 1.06, 0.8], { tile: 1.2, parent: P });
+    b.box(M.mares, [0, 1.1, 0], [4.2, 0.08, 1], { tile: 1.5, parent: P });
     for (let i = 0; i < 9; i++) {
       const g = M.glass[i % 3];
-      const bx = x - 1.7 + i * 0.32;
-      b.cyl(g, [bx, 1.14 + 0.11, bz], 0.04, 0.04, 0.22, { seg: 14 });
-      b.cyl(g, [bx, 1.14 + 0.25, bz], 0.014, 0.04, 0.06, { seg: 10 });
-      b.cyl(g, [bx, 1.14 + 0.32, bz], 0.014, 0.014, 0.09, { seg: 8 });
+      const bx = -1.7 + i * 0.32;
+      b.cyl(g, [bx, 1.14 + 0.11, -0.25], 0.04, 0.04, 0.22, { seg: 14, parent: P });
+      b.cyl(g, [bx, 1.14 + 0.25, -0.25], 0.014, 0.04, 0.06, { seg: 10, parent: P });
+      b.cyl(g, [bx, 1.14 + 0.32, -0.25], 0.014, 0.014, 0.09, { seg: 8, parent: P });
     }
     for (let i = 0; i < 6; i++) {
-      const gx = x - 1.2 + i * 0.36;
-      b.cyl(M.cup, [gx, 1.14 + 0.055, z + facing * 0.22], 0.038, 0.032, 0.11, { seg: 14 });
-      b.cyl(M.lemonade, [gx, 1.14 + 0.04, z + facing * 0.22], 0.034, 0.03, 0.07, { seg: 14 });
+      const gx = -1.2 + i * 0.36;
+      b.cyl(M.cup, [gx, 1.14 + 0.055, 0.22], 0.038, 0.032, 0.11, { seg: 14, parent: P });
+      b.cyl(M.lemonade, [gx, 1.14 + 0.04, 0.22], 0.034, 0.03, 0.07, { seg: 14, parent: P });
     }
     // Garrafa de gin de Menorca, con su asa
-    const gz = z + facing * 0.15;
-    b.cyl(M.gin, [x + 1.6, 1.14 + 0.17, gz], 0.1, 0.11, 0.34, { seg: 18 });
-    b.cyl(M.gin, [x + 1.6, 1.14 + 0.38, gz], 0.03, 0.1, 0.08, { seg: 14 });
-    b.cyl(M.gin, [x + 1.6, 1.14 + 0.45, gz], 0.03, 0.03, 0.07, { seg: 10 });
+    b.cyl(M.gin, [1.6, 1.14 + 0.17, 0.15], 0.1, 0.11, 0.34, { seg: 18, parent: P });
+    b.cyl(M.gin, [1.6, 1.14 + 0.38, 0.15], 0.03, 0.1, 0.08, { seg: 14, parent: P });
+    b.cyl(M.gin, [1.6, 1.14 + 0.45, 0.15], 0.03, 0.03, 0.07, { seg: 10, parent: P });
     const handle = new THREE.TorusGeometry(0.07, 0.014, 6, 12, Math.PI);
-    b.add(handle, M.gin, new THREE.Matrix4().makeRotationZ(-Math.PI / 2).setPosition(x + 1.7, 1.14 + 0.26, gz));
-    b.box(M.label, [x + 1.6, 1.14 + 0.18, gz + facing * 0.105], [0.11, 0.12, 0.004], { ry: facing < 0 ? Math.PI : 0 });
+    b.add(handle, M.gin, new THREE.Matrix4().makeRotationZ(-Math.PI / 2).setPosition(1.7, 1.14 + 0.26, 0.15).premultiply(P));
+    b.box(M.label, [1.6, 1.14 + 0.18, 0.255], [0.11, 0.12, 0.004], { parent: P });
     // Barril
-    b.cyl(M.wood, [x + 2.6, 0.5, z], 0.36, 0.4, 1, { seg: 16, tile: 0.8 });
+    b.cyl(M.wood, [2.6, 0.5, 0], 0.36, 0.4, 1, { seg: 16, tile: 0.8, parent: P });
   }
+
 
   /** Suelo de losas de piedra (calle y plaza). */
   ground(size: number) {

@@ -165,6 +165,8 @@ export class Level1 implements Level {
   private kissLight: THREE.PointLight | null = null;
   private pomadaCount = 0;
   private luckCount = 0;
+  /** Caricia al burro en curso: se gira hacia él y le da unas palmaditas en el cuello; él cabecea contento. */
+  private pet: { s: DonkeyState; t: number } | null = null;
   private perfects = 0;
   private hits = 0;
   private playTime = 0;
@@ -176,7 +178,7 @@ export class Level1 implements Level {
   private fabiolera: Person;
   private fireworks = new Fireworks();
   // Es jaleo: confeti en el aire, purpurina y pistolas de agua entre la gente
-  private glitter = new Glitter();
+  private glitter = new Glitter(130);
   private shooters: { p: Person; gun: THREE.Group; yaw: number; aim: number; fireT: number; turnT: number }[] = [];
   private noteT = 0;
   private partyColors: Float32Array;
@@ -220,6 +222,7 @@ export class Level1 implements Level {
       ? makePerson({ skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x1f3a6b, hair: 0x6b3f22, hairStyle: 'long', skirt: true, eyes: 0x5a3a22 })
       : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x9a9a9a, hairStyle: 'short', beard: true, shorts: true });
     this.tofol.root.position.copy(this.world.tofolPos);
+    this.tofol.root.rotation.y = -Math.PI / 2; // detrás de la barra, mirando a la plaza
     // Delantal de Tòfol
     if (!V.horses && this.tofol.rig) {
       const apron = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.5, 0.012), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2a7a50), roughness: 0.85 }));
@@ -632,6 +635,8 @@ export class Level1 implements Level {
     s.touched = true;
     s.ring.visible = false;
     this.luckCount++;
+    this.pet = { s, t: 1.1 };
+    later(() => this.fx.burst(this.v1.copy(s.d.root.position).setY(2.1), '💕', 4, 1.6, 0.9), 350);
     const at = this.v1.copy(s.d.root.position).setY(2.4);
     if (perfect) {
       this.perfects++;
@@ -717,6 +722,8 @@ export class Level1 implements Level {
     this.t += dt;
     const ending = this.stage === 'ending' || this.stage === 'done';
     const close0 = this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'pairDance' || this.stage === 'kiss' || this.stage === 'kissing';
+    // (en la primera mirada y el beso, quietos de verdad: nada de asentir)
+    for (const p of [this.player, this.marc]) if (p.rig) p.rig.noFidget = close0 || !!this.kiss;
     this.clearR += ((close0 ? 4.2 : 0) - this.clearR) * Math.min(1, dt * 1.5);
     const cm = this.v1.copy(this.player.root.position).lerp(this.marc.root.position, 0.5);
     Object.assign(this.clear, { x: cm.x, z: cm.z, r: this.clearR });
@@ -776,6 +783,20 @@ export class Level1 implements Level {
     const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount - this.spilled : 0;
     this.inHand.forEach((c, i) => (c.visible = i < held));
     if (held > 0) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+    // Caricia: de cara al burro, el brazo derecho adelantado dándole palmaditas (y él, cabeceando)
+    if (this.pet) {
+      const P = this.pet;
+      P.t -= dt;
+      const dp = this.v2.subVectors(P.s.d.root.position, this.player.root.position);
+      this.player.root.rotation.y = Math.atan2(dp.x, dp.z);
+      const w = Math.min(1, P.t / 0.25, (1.1 - P.t) / 0.2);
+      this.player.armR.rotation.x = THREE.MathUtils.lerp(this.player.armR.rotation.x, -1.3 + Math.sin(P.t * 17) * 0.16, w);
+      this.player.elbowR.rotation.x = THREE.MathUtils.lerp(this.player.elbowR.rotation.x, -0.45 + Math.sin(P.t * 17) * 0.2, w);
+      if (P.t <= 0) {
+        P.s.d.head.rotation.z = 0;
+        this.pet = null;
+      }
+    }
     if (held > 1) this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
     if (this.water) {
       this.water.update(dt, this.busy);
@@ -864,6 +885,12 @@ export class Level1 implements Level {
     }
 
     const rearingNear = this.updateDonkeys(dt);
+    if (this.pet) {
+      // (después de mover a los burros: si no, su paso le borraba el cabeceo)
+      const w = Math.min(1, this.pet.t / 0.25, (1.1 - this.pet.t) / 0.2);
+      this.pet.s.d.head.rotation.x += Math.sin(this.pet.t * 9) * 0.22 * w;
+      this.pet.s.d.head.rotation.z = Math.sin(this.pet.t * 6) * 0.12 * w;
+    }
 
     // Pomadas
     if (this.stage === 'collect') {
@@ -1343,7 +1370,7 @@ export class Level1 implements Level {
       this.updateHud();
     };
     return [
-      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => tp(9, 9.6)) },
+      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => tp(8.2, 9)) },
       {
         label: '2 · Pomadas y ases',
         run: go('collect', () => {
@@ -1353,7 +1380,7 @@ export class Level1 implements Level {
           tp(0, 6);
         }),
       },
-      { label: `3 · Volver a ${this.V.guide}`, run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(9, 9.6); }) },
+      { label: `3 · Volver a ${this.V.guide}`, run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(8.2, 9); }) },
       { label: '4 · Ir al bar', run: go('findMarc', () => tp(this.world.marcPos.x + 2.2, this.world.marcPos.z - 1.4)) },
       {
         label: '5 · Ver el final',

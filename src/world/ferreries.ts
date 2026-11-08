@@ -234,46 +234,60 @@ function house(m: Merger, cx: number, cz: number, w: number, d: number, floors: 
 
 const darken = (c: number) => new THREE.Color(c).multiplyScalar(0.8).getHex();
 
-function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, colliders: Box2[], name: string, signs: THREE.Object3D[], hdb: FerreriesHD | null) {
+/** Bar con su barra, toldo, altavoz y letrero. Se monta en su espacio (la barra mira a +z) y se gira `rot` alrededor de (x, z). */
+function bar(m: Merger, x: number, z: number, rot: number, awning: number, colliders: Box2[], name: string, signs: THREE.Object3D[], hdb: FerreriesHD | null) {
+  const c = Math.cos(rot), sn = Math.sin(rot);
+  const wx = (lx: number, lz: number) => x + lx * c + lz * sn;
+  const wz = (lx: number, lz: number) => z - lx * sn + lz * c;
+  const qR = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+  const eu = new THREE.Euler();
+  const q = new THREE.Quaternion();
+  const put = (geo: THREE.BufferGeometry, col: number, lx: number, ly: number, lz: number, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
+    q.setFromEuler(eu.set(rx, ry, rz)).premultiply(qR);
+    eu.setFromQuaternion(q, 'XYZ');
+    m.add(geo, col, wx(lx, lz), ly, wz(lx, lz), eu.x, eu.y, eu.z, sx, sy, sz);
+  };
+  // caja del mundo que envuelve un rectángulo del espacio del bar
+  const col = (x0: number, x1: number, z0: number, z1: number) => {
+    const xs = [wx(x0, z0), wx(x1, z0), wx(x0, z1), wx(x1, z1)], zs = [wz(x0, z0), wz(x1, z0), wz(x0, z1), wz(x1, z1)];
+    colliders.push({ minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) });
+  };
   // Toldo a rayas con faldón ondulado
   for (let i = 0; i < 7; i++) {
-    const c = i % 2 ? 0xffffff : awning;
-    m.add(G.box, c, x - 3 + i + 0.5, 3.25, z - facing * 0.3, facing * 0.3, 0, 0, 1, 0.07, 2.4);
-    m.add(G.cyl, c, x - 3 + i + 0.5, 2.85, z + facing * 0.85, Math.PI / 2, 0, 0, 1, 0.07, 0.5);
+    const cc = i % 2 ? 0xffffff : awning;
+    put(G.box, cc, -3 + i + 0.5, 3.25, -0.3, 0.3, 0, 0, 1, 0.07, 2.4);
+    put(G.cyl, cc, -3 + i + 0.5, 2.85, 0.85, Math.PI / 2, 0, 0, 1, 0.07, 0.5);
   }
-  for (const sx of [-3, 3]) m.add(G.cyl, 0x444444, x + sx, 1.5, z + facing * 0.85, 0, 0, 0, 0.08, 3, 0.08);
+  for (const sx of [-3, 3]) put(G.cyl, 0x444444, sx, 1.5, 0.85, 0, 0, 0, 0.08, 3, 0.08);
   // Barra
-  if (hdb) hdb.bar(x, z, facing);
+  if (hdb) hdb.bar(x, z, rot);
   else {
-    m.add(G.rbox, 0x8a5a36, x, 0.55, z, 0, 0, 0, 4, 1.1, 0.8);
-    m.add(G.box, 0xd9c7a5, x, 1.13, z, 0, 0, 0, 4.2, 0.06, 1);
+    put(G.rbox, 0x8a5a36, 0, 0.55, 0, 0, 0, 0, 4, 1.1, 0.8);
+    put(G.box, 0xd9c7a5, 0, 1.13, 0, 0, 0, 0, 4.2, 0.06, 1);
   }
-  colliders.push({ minX: x - 2, maxX: x + 3.05, minZ: z - 0.45, maxZ: z + 0.45 });
+  col(-2, 3.05, -0.45, 0.45);
   // Postes del toldo
-  for (const sx of [-3, 3]) colliders.push({ minX: x + sx - 0.12, maxX: x + sx + 0.12, minZ: z + facing * 0.85 - 0.12, maxZ: z + facing * 0.85 + 0.12 });
-  // Botellas y vasos
-  if (!hdb) for (let i = 0; i < 7; i++) m.add(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], x - 1.6 + i * 0.52, 1.36, z - facing * 0.25, 0, 0, 0, 0.11, 0.42, 0.11);
-  if (!hdb) for (let i = 0; i < 4; i++) m.add(G.cyl, 0xfff4b0, x - 1 + i * 0.6, 1.24, z + facing * 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
-  // Botella de gin de Menorca con su asa, para las pomadas
+  for (const sx of [-3, 3]) col(sx - 0.12, sx + 0.12, 0.73, 0.97);
   if (!hdb) {
-    m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.45, z + facing * 0.15, 0, 0, 0, 0.26, 0.6, 0.26);
-    m.add(G.cyl, 0x9fc9b0, x + 1.6, 1.85, z + facing * 0.15, 0, 0, 0, 0.1, 0.25, 0.1);
-    m.add(G.smile, 0x9fc9b0, x + 1.75, 1.6, z + facing * 0.15, 0, 0, Math.PI / 2, 0.22, 0.22, 0.3);
-    m.add(G.box, 0xf4efe2, x + 1.6, 1.45, z + facing * 0.29, 0, 0, 0, 0.18, 0.2, 0.01);
+    for (let i = 0; i < 7; i++) put(G.cyl, [0x2f7d4a, 0x9fd3e8, 0xe9e2b8][i % 3], -1.6 + i * 0.52, 1.36, -0.25, 0, 0, 0, 0.11, 0.42, 0.11);
+    for (let i = 0; i < 4; i++) put(G.cyl, 0xfff4b0, -1 + i * 0.6, 1.24, 0.2, 0, 0, 0, 0.12, 0.18, 0.12);
+    put(G.cyl, 0x9fc9b0, 1.6, 1.45, 0.15, 0, 0, 0, 0.26, 0.6, 0.26);
+    put(G.cyl, 0x9fc9b0, 1.6, 1.85, 0.15, 0, 0, 0, 0.1, 0.25, 0.1);
+    put(G.smile, 0x9fc9b0, 1.75, 1.6, 0.15, 0, 0, Math.PI / 2, 0.22, 0.22, 0.3);
+    put(G.box, 0xf4efe2, 1.6, 1.45, 0.29, 0, 0, 0, 0.18, 0.2, 0.01);
+    put(G.cyl, 0x7a4a2a, 2.6, 0.5, 0, 0, 0, 0, 0.8, 1, 0.8);
   }
   // Altavoz para la música del bar
-  m.add(G.box, 0x222228, x - 3.6, 0.7, z, 0, 0, 0, 0.7, 1.4, 0.6);
-  m.add(G.cyl, 0x555560, x - 3.6, 0.9, z + facing * 0.31, Math.PI / 2, 0, 0, 0.45, 0.02, 0.45);
-  m.add(G.cyl, 0x555560, x - 3.6, 0.4, z + facing * 0.31, Math.PI / 2, 0, 0, 0.25, 0.02, 0.25);
-  colliders.push({ minX: x - 3.95, maxX: x - 3.25, minZ: z - 0.3, maxZ: z + 0.3 });
-  // Barril
-  if (!hdb) m.add(G.cyl, 0x7a4a2a, x + 2.6, 0.5, z, 0, 0, 0, 0.8, 1, 0.8);
+  put(G.box, 0x222228, -3.6, 0.7, 0, 0, 0, 0, 0.7, 1.4, 0.6);
+  put(G.cyl, 0x555560, -3.6, 0.9, 0.31, Math.PI / 2, 0, 0, 0.45, 0.02, 0.45);
+  put(G.cyl, 0x555560, -3.6, 0.4, 0.31, Math.PI / 2, 0, 0, 0.25, 0.02, 0.25);
+  col(-3.95, -3.25, -0.3, 0.3);
   // Letrero
   const tex = (() => {
-    const c = document.createElement('canvas');
-    c.width = 256;
-    c.height = 64;
-    const ctx = c.getContext('2d')!;
+    const cv = document.createElement('canvas');
+    cv.width = 256;
+    cv.height = 64;
+    const ctx = cv.getContext('2d')!;
     ctx.fillStyle = '#' + new THREE.Color(awning).getHexString();
     ctx.fillRect(0, 0, 256, 64);
     ctx.fillStyle = '#fff';
@@ -281,21 +295,18 @@ function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, co
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(name, 128, 34);
-    const t = new THREE.CanvasTexture(c);
+    const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
-  // Un tablero de verdad (con canto), apoyado sobre el borde alto del toldo con dos patas: antes era un plano
-  // de pie en el borde de delante, sin nada que lo aguantara, y parecía flotar
+  // Un tablero de verdad (con canto) sobre la parte de delante del toldo, con dos patas
   const edge = new THREE.MeshLambertMaterial({ color: darken(awning) });
   const face = new THREE.MeshBasicMaterial({ map: tex });
   const sign = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 0.07), [edge, edge, edge, edge, face, face]);
-  // (sobre la parte de delante del toldo: más atrás chocaba con el balcón del primer piso)
-  const sz = z + facing * 0.45;
-  sign.position.set(x, 3.47, sz);
-  if (facing < 0) sign.rotation.y = Math.PI;
+  sign.position.set(wx(0, 0.45), 3.47, wz(0, 0.45));
+  sign.rotation.y = rot;
   signs.push(sign);
-  for (const sx of [-0.9, 0.9]) m.add(G.box, 0x333333, x + sx, 3.1, sz, 0, 0, 0, 0.05, 0.16, 0.05);
+  for (const sx of [-0.9, 0.9]) put(G.box, 0x333333, sx, 3.1, 0.45, 0, 0, 0, 0.05, 0.16, 0.05);
 }
 
 function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => number) {
@@ -480,11 +491,18 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
 
   // Bares
-  bar(m, 9, 8, 1, 0x2a7a50, colliders, town?.bars?.[0] ?? 'Bar Es Pla', signs, hdb);
-  bar(m, -28, -3.6, 1, 0xc23b3b, colliders, town?.bars?.[1] ?? 'Cas Ferrer', signs, hdb);
-  bar(m, 30, 3.6, -1, 0x2f5fb3, colliders, town?.bars?.[2] ?? 'Sa Penya', signs, hdb);
-  bar(m, -7.5, 24.2, -1, 0x7a3fa0, colliders, town?.bars?.[3] ?? 'Bar Sa Font', signs, hdb);
-  const barFronts = [new THREE.Vector3(9, 0, 10.2), new THREE.Vector3(-28, 0, -1.6), new THREE.Vector3(30, 0, 1.6), new THREE.Vector3(-7.5, 0, 22.2)];
+  // (el Bar Es Pla, de lado contra la pared de la casa de la esquina, con Tòfol entre la barra y la pared; antes
+  // estaba suelto en medio de la entrada de la plaza)
+  const BARS: [number, number, number, number, string][] = [
+    [10.1, 9, -Math.PI / 2, 0x2a7a50, town?.bars?.[0] ?? 'Bar Es Pla'],
+    [-28, -3.6, 0, 0xc23b3b, town?.bars?.[1] ?? 'Cas Ferrer'],
+    [30, 3.6, Math.PI, 0x2f5fb3, town?.bars?.[2] ?? 'Sa Penya'],
+    [-7.5, 24.2, Math.PI, 0x7a3fa0, town?.bars?.[3] ?? 'Bar Sa Font'],
+  ];
+  for (const [bx, bz, brot, aw, bn] of BARS) bar(m, bx, bz, brot, aw, colliders, bn, signs, hdb);
+  // delante de cada barra (a 2,2 m de la barra, en su espacio) y su orientación
+  const barFronts = BARS.map(([bx, bz, brot]) => new THREE.Vector3(bx + 2.2 * Math.sin(brot), 0, bz + 2.2 * Math.cos(brot)));
+  const barRot = BARS.map((b) => b[2]);
   const tables: [number, number][] = [[7.5, 18], [-6, 18], [-24, -1.5], [33, 1.2], [-9, 7], [-31, -1.4], [27, 1.3]];
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
 
@@ -498,6 +516,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
   for (const bz of [9.5, 15]) {
     for (const sx of [-1, 1]) {
+      if (sx > 0 && bz < 12) continue; // ahí está ahora el Bar Es Pla
       const bx = sx * 11.2;
       m.add(G.box, 0x8a5a36, bx, 0.45, bz, 0, 0, 0, 0.5, 0.08, 2);
       m.add(G.box, 0x8a5a36, bx + sx * 0.22, 0.75, bz, 0, 0, 0, 0.06, 0.5, 2);
@@ -519,12 +538,13 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const flagColors = [0xd7263d, 0xf4d35e, 0x1b998b, 0xffffff, 0x2e86ab];
   const lightPts: number[] = [];
   const strings: [number, number, number, number][] = [];
-  for (let sx = -40; sx <= 40; sx += 8) if (Math.abs(sx) > 12) strings.push([sx, -5, sx, 5]);
+  // (una guirnalda cada 12 m, no cada 8: la calle se veía cargada)
+  for (let sx = -42; sx <= 42; sx += 12) if (Math.abs(sx) > 12) strings.push([sx, -5, sx, 5]);
   for (let sz = 8; sz <= 22; sz += 7) strings.push([-12, sz, 12, sz]);
   strings.push([-12, 4, 12, 24], [12, 4, -12, 24]);
   for (const [x1, z1, x2, z2] of strings) {
     const len = Math.hypot(x2 - x1, z2 - z1);
-    const n = Math.floor(len / 0.7);
+    const n = Math.floor(len / 0.85);
     for (let i = 1; i < n; i++) {
       const t = i / n;
       const px = x1 + (x2 - x1) * t;
@@ -646,10 +666,11 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const pc: number[] = [];
   const col = new THREE.Color();
   barFronts.forEach((b, bi) => {
-    const facing = bi === 0 || bi === 1 ? 1 : -1;
-    const bz = b.z - facing * 1.25; // borde del toldo
+    // a lo largo del borde del toldo (0,95 m por delante de la barra), en el espacio de cada bar
+    const ro = barRot[bi], cx = b.x - 2.2 * Math.sin(ro), cz = b.z - 2.2 * Math.cos(ro);
     for (let i = 0; i <= 14; i++) {
-      pp.push(b.x - 3.2 + i * (6.4 / 14), 2.7 - Math.sin((i / 14) * Math.PI) * 0.25, bz);
+      const lx = -3.2 + i * (6.4 / 14), lz = 0.95;
+      pp.push(cx + lx * Math.cos(ro) + lz * Math.sin(ro), 2.7 - Math.sin((i / 14) * Math.PI) * 0.25, cz - lx * Math.sin(ro) + lz * Math.cos(ro));
       col.setHSL((i * 0.13 + bi * 0.3) % 1, 0.95, 0.6);
       pc.push(col.r, col.g, col.b);
     }
@@ -671,7 +692,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   ];
   const spots: { x: number; z: number; ry: number }[] = [];
   const near = (px: number, pz: number, cx: number, cz: number, rr: number) => Math.hypot(px - cx, pz - cz) < rr;
-  for (let i = 0; i < 600 && spots.length < 90; i++) {
+  // (algo menos de gente en las aceras: envolvente sin agobiar, y más ligero en el móvil)
+  for (let i = 0; i < 600 && spots.length < 68; i++) {
     let px: number, pz: number;
     if (r() < 0.55) {
       const a = r() * Math.PI * 2;
@@ -702,15 +724,16 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const dancers: { x: number; z: number; ry: number }[] = [];
   const pomadaAt = [[-24, -1.5], [33, 1.2], [-6, 18]];
   barFronts.forEach((b, bi) => {
-    const facing = bi === 0 || bi === 1 ? 1 : -1;
+    const ro = barRot[bi];
     for (let i = 0; i < 80 && dancers.filter((d) => near(d.x, d.z, b.x, b.z, 4)).length < 11; i++) {
-      const px = b.x + (r() - 0.5) * 6.5;
-      const pz = b.z + facing * (r() * 2.6 - 0.2);
+      const lx = (r() - 0.5) * 6.5, lz = r() * 2.6 - 0.2;
+      const px = b.x + lx * Math.cos(ro) + lz * Math.sin(ro);
+      const pz = b.z - lx * Math.sin(ro) + lz * Math.cos(ro);
       const bad =
         colliders.some((c) => px > c.minX - 0.5 && px < c.maxX + 0.5 && pz > c.minZ - 0.5 && pz < c.maxZ + 0.5) ||
         near(px, pz, MARC.x, MARC.z, 1.4) ||
         (bi === 3 && px > MARC.x - 0.6) ||
-        near(px, pz, 9, 7, 2) ||
+        near(px, pz, 11.1, 9, 2) ||
         pomadaAt.some(([qx, qz]) => near(px, pz, qx, qz, 2.2)) ||
         pz < -4.3 || pz > 24.5 ||
         [...spots, ...dancers].some((s) => near(px, pz, s.x, s.z, 0.95));
@@ -742,7 +765,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     bounds: { minX: -45, maxX: 45, minZ: -4.6, maxZ: 25 },
     spawn: new THREE.Vector3(-38, 0, 0),
     pomadaSpots: [new THREE.Vector3(-24, 0.82, -1.5), new THREE.Vector3(33, 0.82, 1.2), new THREE.Vector3(-6, 0.82, 18)],
-    tofolPos: new THREE.Vector3(9, 0, 7),
+    tofolPos: new THREE.Vector3(11.1, 0, 9),
     marcPos: MARC.clone(),
     plazaCenter: new THREE.Vector3(0, 0, 14),
     crowds,

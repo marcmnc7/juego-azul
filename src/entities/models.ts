@@ -337,6 +337,10 @@ export interface PersonLook {
   /** Pelo rizado con volumen arriba (Gas), sobre el pelo corto. */
   /** Gas: su propio modelo (MakeHuman), con su pelo, bigote y perilla. */
   gas?: boolean;
+  /** Azul: su propio modelo (el de antes, el de su cara y su cuerpo); las demás chicas, la chica de MakeHuman. */
+  azul?: boolean;
+  /** Niño o niña de unos 8 años (modelo de niño de MakeHuman). */
+  kid?: boolean;
   curls?: boolean;
   /** Bigote fino y perilla (Gas). */
   stache?: boolean;

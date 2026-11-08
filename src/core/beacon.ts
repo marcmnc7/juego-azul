@@ -29,7 +29,8 @@ class Beacon {
     // (en el cilindro, la UV vertical va de 0 abajo a 1 arriba: la luz se deshace hacia el cielo)
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe4a0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     this.ring.position.y = 0.04;
-    this.group.add(this.pillar, this.ring);
+    // (sin la columna de luz: Marc la quitó; el objetivo lo marca el aro en el suelo)
+    this.group.add(this.ring);
     this.group.visible = false;
     this.group.renderOrder = 3;
   }

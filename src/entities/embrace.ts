@@ -93,7 +93,14 @@ export function sideNames(p: Person) {
  * y sube e.k. Los modelos se adelantan dentro de su raíz lo justo para tocarse.
  */
 export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
-  const e: Embrace = { k: 0, stop: () => rigPost.delete(tick) };
+  const e: Embrace = {
+    k: 0,
+    stop: () => {
+      rigPost.delete(tick);
+      if (her.rig) her.rig.noFidget = false;
+      if (him.rig) him.rig.noFidget = false;
+    },
+  };
   if (!her.rig || !him.rig) {
     // Muñecos sin esqueleto (modo ligero): se inclinan el uno hacia el otro
     const lite = (dt: number) => {
@@ -110,13 +117,19 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
     e.stop = () => rigPost.delete(lite);
     return e;
   }
+  // (sin gestos sueltos mientras dura: moverían la cabeza y los brazos que coloca el abrazo)
+  her.rig.noFidget = him.rig.noFidget = true;
   const sides = new Map([her, him].map((p) => [p, sideNames(p)]));
   const base = new Map([her, him].map((p) => [p, p.rig!.model.position.z]));
   let push = 0;
   let trim = 0; // lo que aún falta para que las bocas se toquen, medido en la pose final del fotograma anterior
+  // Dónde están los labios respecto al hueso de la cabeza, medido en los modelos (la punta de la nariz menos
+  // 1,5 cm): Azul 0,113 m, MakeHuman (Gas) 0,139 m. Con la medida de antes (0,105 para los dos) los labios
+  // «tocaban» 4 cm dentro de la cara del otro y las caras se fundían
+  const lipsFwd = new Map([her, him].map((p) => [p, p.rig!.model.getObjectByName('MHHair') ? 0.139 : 0.113]));
   const lipsOf = (p: Person, out: THREE.Vector3) => {
     boneFrame(p, 'Head', _fr);
-    return bone(p, 'Head').getWorldPosition(out).addScaledVector(_d.copy(Z).applyQuaternion(_fr), 0.105).addScaledVector(_d.set(0, 1, 0).applyQuaternion(_fr), 0.045);
+    return bone(p, 'Head').getWorldPosition(out).addScaledVector(_d.copy(Z).applyQuaternion(_fr), lipsFwd.get(p)!).addScaledVector(_d.set(0, 1, 0).applyQuaternion(_fr), 0.045);
   };
   const tick = (dt: number) => {
     if (e.to !== undefined) {
@@ -163,7 +176,7 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
       }
       const to = target.sub(head.getWorldPosition(_a)).normalize();
       // Ladeo (ella a un lado, él al otro, para no chocar de narices)
-      const tilt = new THREE.Quaternion().setFromAxisAngle(to, kind === 'kiss' ? (p === her ? 0.32 : -0.32) : 0.12);
+      const tilt = new THREE.Quaternion().setFromAxisAngle(to, kind === 'kiss' ? (p === her ? 0.4 : -0.4) : 0.12);
       boneFrame(p, 'Head', _fr);
       const aim = new THREE.Quaternion().setFromUnitVectors(_d.copy(Z).applyQuaternion(_fr), to);
       rotateWorld(bone(p, 'Neck'), aim.clone().slerp(new THREE.Quaternion(), 0.6), k);
@@ -175,7 +188,8 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
     if (kind === 'kiss' && e.k > 0.8) {
       const a = lipsOf(her, new THREE.Vector3()), b = lipsOf(him, new THREE.Vector3());
       const ff = _c.set(0, 0, 1).applyQuaternion(her.root.getWorldQuaternion(_q));
-      const res = (b.x - a.x) * ff.x + (b.z - a.z) * ff.z - 0.004;
+      // (se tocan, sin fundirse: medio centímetro entre los dos puntos de los labios)
+      const res = (b.x - a.x) * ff.x + (b.z - a.z) * ff.z - 0.005;
       trim = THREE.MathUtils.clamp(trim + res * Math.min(1, dt * 6), -0.15, 0.3);
     }
 

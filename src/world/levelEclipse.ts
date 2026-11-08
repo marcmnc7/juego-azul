@@ -304,7 +304,7 @@ export class LevelEclipse implements Level {
     const mom = makePerson(MOM_LOOK);
     dad.root.position.set(-1.25, 0, 1.3);
     mom.root.position.set(1.05, 0, 1.3);
-    const eric = makePerson(ERIC_LOOK, 0.55);
+    const eric = makePerson({ ...ERIC_LOOK, kid: true }, 0.85);
     eric.root.position.set(1.4, 0, 1.6);
     // Joy espera dentro de casa: saldrá por la puerta cuando lleguéis
     const joy = makeDog();

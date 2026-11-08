@@ -116,6 +116,8 @@ async function texture(file: string, edit?: (d: Uint8ClampedArray, w: number, h:
 
 export interface MHOpts {
   female?: boolean;
+  /** niño o niña de unos 8 años (los ajustes de edad 'child' de MakeHuman) */
+  child?: boolean;
   shirt: number; jeansDark: number; hair: string; hairVolume: number; hairColor: number; mullet: number; quiff: number;
   /** Peinados de más, como mallas aparte (MHHair_<nombre>): el juego elige uno para cada hombre. */
   hairs?: string[];
@@ -123,7 +125,7 @@ export interface MHOpts {
   /** bigote y perilla pintados */
   facialHair?: boolean;
   /** 'gas' (Gas, con su pelo y su barba) o 'man' (hombre genérico para los secundarios: todo se tiñe en el juego) */
-  tag?: 'gas' | 'man';
+  tag?: 'gas' | 'man' | 'woman' | 'kid';
   /** pantalón gris liso para teñir (hombre genérico) en vez de vaquero */
   pantsGrey?: boolean;
   /** iris: centro, medio, borde */
@@ -134,8 +136,9 @@ export async function buildMH(o: MHOpts) {
   const base = parseObj(await txt('base.obj'));
   const V = base.v.map((p) => p.slice());
   const sex = o.female ? 'female' : 'male';
-  applyTarget(V, await txt(`universal-${sex}-young-averagemuscle-averageweight.target`));
-  applyTarget(V, await txt(`caucasian-${sex}-young.target`));
+  const age = o.child ? 'child' : 'young';
+  applyTarget(V, await txt(`universal-${sex}-${age}-averagemuscle-averageweight.target`));
+  applyTarget(V, await txt(`caucasian-${sex}-${age}.target`));
   const SUIT = o.female ? 'female_casualsuit01' : 'male_casualsuit06';
 
   // ---------- Esqueleto (MPFB, nombres de Mixamo) ----------
@@ -293,6 +296,17 @@ export async function buildMH(o: MHOpts) {
   const mouth = mean([...(cubes.get('joint-mouth') ?? [])]);
   mouth[1] += +(new URLSearchParams(location.search).get('my') ?? -0.24);
   const skinTex = await texture(`young_lightskinned_${sex}_diffuse.png`, (d, w, h) => {
+    // la textura trae la ropa interior pintada en blanco: con pantalón corto asomaba por debajo como una franja.
+    // Lo blanquecino (poco saturado y claro) pasa a ser piel, con el tono medio de la piel
+    let sr = 0, sg = 0, sb = 0, sn = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+      if (mx > 90 && (mx - mn) / mx > 0.2) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; sn++; }
+    }
+    for (let i = 0; i < d.length; i += 4) {
+      const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+      if (mx > 130 && (mx - mn) / mx < 0.2 && sn) { d[i] = sr / sn; d[i + 1] = sg / sn; d[i + 2] = sb / sn; }
+    }
     for (let i = 0; i < d.length; i += 4) { d[i] *= o.skinTone[0]; d[i + 1] *= o.skinTone[1]; d[i + 2] *= o.skinTone[2]; }
     if (o.facialHair !== false && !o.female) paintFacialHair(d, w, h, base, V, mouth, o.hairColor);
   }, 1024);
@@ -324,13 +338,27 @@ export async function buildMH(o: MHOpts) {
     }
     const m = g.getImageData(0, 0, w, h).data;
     shirtUV = { m, w, h };
+    // y las piezas del pantalón, que mandan sobre la máscara de la camiseta (si no, el borde de la camiseta,
+    // trazado grueso, se comía trozos del pantalón y salían manchas blancas)
+    g.clearRect(0, 0, w, h);
+    for (const f of suitObj.f) {
+      if (shirtRoot.has(find(f.v[0]))) continue;
+      g.beginPath();
+      f.t.forEach((ti, k) => { const t = suitObj.vt[ti]; const x = t[0] * w, y = (1 - t[1]) * h; if (k) g.lineTo(x, y); else g.moveTo(x, y); });
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+    const pm = g.getImageData(0, 0, w, h).data;
     for (let i = 0; i < d.length; i += 4) {
       const lum = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255;
-      if (m[i] > 128) {
+      if (m[i] > 128 && !(o.pantsGrey && pm[i] > 128)) {
         // blanco casi liso (sin el logo del pecho), con un poco del relieve del punto
         const v = Math.min(255, 255 * (0.95 + (lum - 0.75) * 0.12));
         d[i] = d[i + 1] = d[i + 2] = v;
       } else if (o.pantsGrey) {
+        // (opaco: las rotas del vaquero son agujeros transparentes y salían blancas)
+        d[i + 3] = 255;
         // gris claro casi liso: el color lo pone el juego (sin las rotas del vaquero, que en pantalón de color
         // salían como manchas de piel)
         const v = 255 * (0.82 + Math.max(-0.03, Math.min(0.03, (lum - 0.45) * 0.3)));
@@ -381,7 +409,8 @@ export async function buildMH(o: MHOpts) {
   mkMesh('Pants', S.pos, S.ob.vt, S.ob.f, S.wOf, pantsMat, (f) => !isShirt(f));
   // Pantalón corto (la playa): el mismo pantalón cortado un poco por encima de la rodilla, con el bajo recto
   const kneeY = heads.get('mixamorig:LeftLeg')![1];
-  const hemY = kneeY + (hipsY - kneeY) * 0.3;
+  // (algo por encima de la rodilla y por debajo de donde acaba la ropa interior pintada en la piel)
+  const hemY = kneeY + (hipsY - kneeY) * 0.22;
   const posShort = S.pos.map((p) => p.slice());
   const pantsVerts = new Set<number>();
   for (const f of S.ob.f) if (!isShirt(f)) for (const vi of f.v) pantsVerts.add(vi);
@@ -405,7 +434,8 @@ export async function buildMH(o: MHOpts) {
   mkMesh('Body', V, base.vt, base.f, bodyW, skinMat, (f) => body(f, hiddenAll));
   const clothPts: number[][] = [];
   { const used = new Set<number>(); for (const f of S.ob.f) if (isShirt(f) || keepShort.get(f)) for (const vi of f.v) used.add(vi); for (const vi of used) clothPts.push(keepShort.size && pantsVerts.has(vi) ? posShort[vi] : S.pos[vi]); }
-  const covered = (vi: number) => { const p = V[vi]; for (const q of clothPts) if ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2 < 0.0144) return true; return false; };
+  // (la piel justo en el bajo del pantalón se queda: si no, quedaba un hueco por el que se veía el fondo)
+  const covered = (vi: number) => { const p = V[vi]; if (p[1] < hemY + 0.25) return false; for (const q of clothPts) if ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2 < 0.0144) return true; return false; };
   const hiddenShort = new Set([...[...S.del].filter(covered), ...shoes.del]);
   mkMesh('BodyShort', V, base.vt, base.f, bodyW, skinMat, (f) => body(f, hiddenShort));
   mkMesh('BodyFull', V, base.vt, base.f, bodyW, skinMat, (f) => f.g === 'body');
@@ -593,6 +623,11 @@ export function lightSkinned(m: THREE.SkinnedMesh, keep: number) {
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
   g.computeVertexNormals();
+  // la ropa, un poco hacia fuera: al simplificar cuerpo y ropa por separado, la piel asomaba a manchas
+  if (/^(Shirt|Pants|PantsShort)$/.test(m.name)) {
+    const n = g.attributes.normal as THREE.BufferAttribute;
+    for (let i = 0; i < p2.count; i++) p2.setXYZ(i, p2.getX(i) + n.getX(i) * 0.012, p2.getY(i) + n.getY(i) * 0.012, p2.getZ(i) + n.getZ(i) * 0.012);
+  }
   const out = new THREE.SkinnedMesh(g, m.material);
   out.name = m.name;
   m.parent!.add(out);

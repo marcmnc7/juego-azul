@@ -6,7 +6,8 @@ import { airOf } from '../core/air';
 import { comic } from '../core/comic';
 import type { Person, PersonLook, PersonMode } from './models';
 import womanUrl from '../assets/chars/woman.glb';
-import manUrl from '../assets/chars/man.glb';
+import womanMhUrl from '../assets/chars/woman_mh.glb';
+import kidMhUrl from '../assets/chars/kid_mh.glb';
 // Gas y el hombre genérico de los secundarios: MakeHuman (CC0), montados con src/demo/mhbuild.ts
 import gasUrl from '../assets/chars/gas_mh.glb';
 import manMhUrl from '../assets/chars/man_mh.glb';
@@ -26,9 +27,9 @@ import knitUrl from '../assets/chars/knit_tile.jpg';
 // fabiol) o el modo no tiene captura (saludar, celebrar, hablar), esa parte del cuerpo copia la
 // articulación invisible, con una transición suave.
 
-/** 'oldman': el avatar de antes, solo para la multitud (sus figuras de bajo detalle salen de él). */
-export type Kind = 'woman' | 'man' | 'gas' | 'oldman';
-const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.77, gas: 1.8, oldman: 1.78 };
+/** woman: Azul (su modelo); mhwoman: las demás chicas; man: los demás hombres; kid: los niños (MakeHuman). */
+export type Kind = 'woman' | 'man' | 'gas' | 'mhwoman' | 'kid';
+const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.77, gas: 1.8, mhwoman: 1.64, kid: 1.3 };
 
 interface KindData {
   gltf: GLTF;
@@ -260,7 +261,7 @@ function cleanWeights(root: THREE.Object3D) {
 
 function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }): KindData {
   const model = gltf.scene;
-  if (kind === 'gas' || kind === 'man') cleanWeights(model);
+  if (kind !== 'woman') cleanWeights(model);
   // Medir siempre en la misma pose: la T limpia
   const tpose = gltf.animations.find((c) => c.name === 'TPose');
   if (tpose) {
@@ -296,204 +297,11 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
 }
 
 /** Carga los modelos y prepara las animaciones (una vez). */
-/**
- * El modelo de hombre viene de esmoquin: la pajarita y el pañuelo del bolsillo son piezas sueltas de la
- * chaqueta. Se quitan de la malla, en todos: nadie va con pajarita a unas fiestas ni a un concierto.
- */
-export function stripFormal(scene: THREE.Object3D) {
-  scene.traverse((o) => {
-    const m = o as THREE.Mesh;
-    // La piel que queda debajo de la camisa, fuera: por la espalda asomaba por encima del cinturón
-    if (m.isMesh && /Wolf3D_Body/.test(m.name) && m.geometry.index) {
-      const g = m.geometry, pos = g.attributes.position as THREE.BufferAttribute, idx = g.index!;
-      const under = (i: number) => pos.getY(i) > 0.86 && pos.getY(i) < 1.5 && Math.abs(pos.getX(i)) < 0.24;
-      const keep: number[] = [];
-      for (let t = 0; t < idx.count; t += 3) {
-        const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
-        if (!(under(a) && under(b) && under(c))) keep.push(a, b, c);
-      }
-      g.setIndex(keep);
-      return;
-    }
-    if (!m.isMesh || !/Outfit_Top/.test(m.name) || !m.geometry.index) return;
-    const g = m.geometry, pos = g.attributes.position, idx = g.index!, N = pos.count;
-    const p = new Int32Array(N).map((_, i) => i);
-    const find = (i: number) => {
-      while (p[i] !== i) i = p[i] = p[p[i]];
-      return i;
-    };
-    for (let i = 0; i < idx.count; i += 3) {
-      const a = find(idx.getX(i));
-      p[find(idx.getX(i + 1))] = a;
-      p[find(idx.getX(i + 2))] = a;
-    }
-    const seen = new Map<string, number>();
-    for (let i = 0; i < N; i++) {
-      const key = `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
-      const j = seen.get(key);
-      if (j === undefined) seen.set(key, i);
-      else p[find(i)] = find(j);
-    }
-    const box = new Map<number, THREE.Box3>();
-    const v = new THREE.Vector3();
-    for (let i = 0; i < N; i++) {
-      const r = find(i);
-      let b = box.get(r);
-      if (!b) box.set(r, (b = new THREE.Box3()));
-      b.expandByPoint(v.fromBufferAttribute(pos, i));
-    }
-    const drop = new Set<number>();
-    for (const [r, b] of box) {
-      const bow = b.min.y > 1.47 && b.max.y < 1.6 && Math.abs(b.min.x) < 0.08 && Math.abs(b.max.x) < 0.08 && b.min.z > 0.03;
-      const pocket = (b.max.x < -0.08 || b.min.x > 0.08) && b.min.y > 1.33 && b.max.y < 1.5 && b.min.z > 0.03;
-      if (bow || pocket) drop.add(r);
-    }
-    if (drop.size) {
-      const keep: number[] = [];
-      for (let i = 0; i < idx.count; i += 3) if (!drop.has(find(idx.getX(i)))) keep.push(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
-      g.setIndex(keep);
-    }
-    plainTorso(g);
-  });
-}
 
-/**
- * Del esmoquin a una camisa: el modelo solo trae chaqueta, chaleco y solapas. Se quita todo lo que cubre el torso
- * (mangas, hombros y cuello se quedan) y se pone en su sitio una sola pieza lisa: un tubo que sigue la forma del
- * cuerpo, atado a los mismos huesos, con el bajo recto a la altura de la cintura. Se acabaron la abertura en V,
- * los botones y los faldones.
- */
-function plainTorso(g: THREE.BufferGeometry) {
-  const pos = g.attributes.position as THREE.BufferAttribute;
-  const idx = g.index!;
-  const Y0 = 0.9, Y1 = 1.62, STEP = 0.02, N = Math.ceil((Y1 - Y0) / STEP) + 1;
-  const maxX = new Float32Array(N), minZ = new Float32Array(N).fill(Infinity), maxZ = new Float32Array(N).fill(-Infinity);
-  const used = new Uint8Array(pos.count);
-  for (let t = 0; t < idx.count; t++) used[idx.getX(t)] = 1;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i), x = Math.abs(pos.getX(i));
-    if (!used[i] || y < Y0 || y > Y1 || x > 0.2) continue;
-    const k = Math.floor((y - Y0) / STEP);
-    maxX[k] = Math.max(maxX[k], x);
-    minZ[k] = Math.min(minZ[k], pos.getZ(i));
-    maxZ[k] = Math.max(maxZ[k], pos.getZ(i));
-  }
-  // Se rellenan los huecos y se suaviza el perfil de abajo arriba
-  for (let k = 1; k < N; k++) if (!isFinite(minZ[k])) { minZ[k] = minZ[k - 1]; maxZ[k] = maxZ[k - 1]; maxX[k] = maxX[k - 1]; }
-  for (let k = N - 2; k >= 0; k--) if (!isFinite(minZ[k])) { minZ[k] = minZ[k + 1]; maxZ[k] = maxZ[k + 1]; maxX[k] = maxX[k + 1]; }
-  const smooth = (a: Float32Array) => {
-    let cur = Float32Array.from(a);
-    for (let pass = 0; pass < 6; pass++) {
-      const nx = Float32Array.from(cur);
-      for (let k = 1; k < N - 1; k++) nx[k] = (cur[k - 1] + cur[k] * 2 + cur[k + 1]) / 4;
-      cur = nx;
-    }
-    return cur;
-  };
-  const AX = smooth(maxX), Z0 = smooth(minZ), Z1 = smooth(maxZ);
-  const prof = (y: number) => {
-    const f = Math.max(0, Math.min(N - 1.001, (y - Y0) / STEP)), k = Math.floor(f), u = f - k;
-    const l = (a: Float32Array) => a[k] + (a[k + 1] - a[k]) * u;
-    return { a: l(AX), z0: l(Z0), z1: l(Z1) };
-  };
-  // Lo que queda debajo se quita: todo el torso, hasta los hombros
-  const HEM = 1.0, TOP = 1.555, NECK = 1.6; // (el bajo, metido por dentro del pantalón: asomaba por las caderas)
-  const zone = (i: number) => {
-    const y = pos.getY(i), x = Math.abs(pos.getX(i));
-    return (y < 1.548 && x < 0.1) || (y < 1.515 && x < 0.16) || (y < 1.17 && x < 0.3);
-  };
-  const kept: number[] = [];
-  for (let t = 0; t < idx.count; t += 3) {
-    const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2);
-    // (los faldones, enteros: basta con que un vértice cuelgue por debajo de la cintura)
-    const tail = (i: number) => pos.getY(i) < 1.03 && Math.abs(pos.getX(i)) < 0.345;
-    if (!(zone(a) && zone(b) && zone(c)) && !(tail(a) || tail(b) || tail(c))) kept.push(a, b, c);
-  }
-  // Los anillos del tubo: del bajo a los hombros y, ya cerrándose, hasta el cuello (por debajo de la solapa del cuello)
-  const rings: { y: number; a: number; b: number; bk: number; cz: number }[] = [];
-  const J = 28;
-  for (let j = 0; j <= J; j++) {
-    const y = HEM + ((TOP - HEM) * j) / J;
-    const p = prof(y);
-    // Sin el bulto de las solapas por delante, y con un poco de caída en el bajo
-    // (en la sisa, algo más ancho: que monte sobre las mangas y no quede un hueco)
-    const arm = THREE.MathUtils.smoothstep(y, 1.26, 1.36) * (1 - THREE.MathUtils.smoothstep(y, 1.44, 1.5));
-    const cz = (p.z0 + p.z1) / 2;
-    // Por delante, sin el bulto de las solapas; por detrás, algo holgada: la espalda no asoma por debajo de la tela
-    // (y sin barriga: por delante, lo mismo que por detrás; en la cintura, algo por fuera del pantalón)
-    const low = 1 - THREE.MathUtils.smoothstep(y, 1.0, 1.1);
-    const back = Math.max((cz - p.z0) * 1.04 + 0.014, 0.112 * arm);
-    rings.push({ y, a: Math.max(p.a * 0.985 * (1 - low * 0.1), 0.235 * arm), b: Math.min(Math.max((p.z1 - cz) * 0.92, 0.105 * arm), back * 1.04), bk: back, cz });
-  }
-  const top = rings[J];
-  for (let j = 1; j <= 3; j++) {
-    const u = j / 3;
-    rings.push({ y: TOP + (NECK - TOP) * u, a: THREE.MathUtils.lerp(top.a, 0.062, u), b: THREE.MathUtils.lerp(top.b, 0.058, u), bk: THREE.MathUtils.lerp(top.bk, 0.058, u), cz: top.cz });
-  }
-  // Lo que queda de la chaqueta pegado al torso (costuras, solapas de los lados), por debajo del tubo
-  {
-    const ringAt = (y: number) => {
-      const k = Math.max(0, Math.min(rings.length - 1, Math.round(((y - HEM) / (TOP - HEM)) * J)));
-      return rings[k];
-    };
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i), x = pos.getX(i), z = pos.getZ(i);
-      if (!used[i] || y < HEM || y > 1.52 || Math.abs(x) > 0.25) continue;
-      const r = ringAt(y);
-      const rho = Math.hypot(x / r.a, (z - r.cz) / (z > r.cz ? r.b : r.bk));
-      if (rho > 0.97 && rho < 1.25) pos.setXYZ(i, (x / rho) * 0.97, y, r.cz + ((z - r.cz) / rho) * 0.97);
-    }
-  }
-  const S = 40, n0 = pos.count, nNew = rings.length * (S + 1);
-  // Candidatos para copiar los pesos de los huesos: los vértices del propio torso
-  const cand: number[] = [];
-  for (let i = 0; i < n0; i++) if (used[i] && pos.getY(i) > HEM - 0.1 && pos.getY(i) < NECK + 0.04 && Math.abs(pos.getX(i)) < 0.24) cand.push(i);
-  const srcOf = new Int32Array(nNew);
-  const newPos = new Float32Array(nNew * 3), newNrm = new Float32Array(nNew * 3);
-  let v = 0;
-  for (let j = 0; j < rings.length; j++) {
-    const r = rings[j];
-    for (let i = 0; i <= S; i++, v++) {
-      const th = (i / S) * Math.PI * 2;
-      const rz = Math.sin(th) > 0 ? r.b : r.bk;
-      const x = r.a * Math.cos(th), z = r.cz + rz * Math.sin(th);
-      newPos.set([x, r.y, z], v * 3);
-      const nx = Math.cos(th) / r.a, nz = Math.sin(th) / rz, nl = Math.hypot(nx, nz) || 1;
-      newNrm.set([nx / nl, j > J ? 0.5 : 0, nz / nl], v * 3);
-      let best = -1, bd = Infinity;
-      for (const c of cand) {
-        const d = (pos.getX(c) - x) ** 2 + (pos.getY(c) - r.y) ** 2 * 1.5 + (pos.getZ(c) - z) ** 2;
-        if (d < bd) { bd = d; best = c; }
-      }
-      srcOf[v] = best < 0 ? 0 : best;
-    }
-  }
-  for (let j = 0; j + 1 < rings.length; j++)
-    for (let i = 0; i < S; i++) {
-      const a = n0 + j * (S + 1) + i, b = a + 1, c = a + S + 1, d = c + 1;
-      kept.push(a, c, b, b, c, d);
-    }
-  // Se añaden al final de todos los atributos; lo que no es forma, copiado del vértice más cercano
-  const grow = (at: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, own?: Float32Array) => {
-    const it = at.itemSize;
-    const Arr = (at.array as Float32Array).constructor as Float32ArrayConstructor;
-    const out = new Arr((n0 + nNew) * it);
-    for (let i = 0; i < n0; i++) for (let c = 0; c < it; c++) out[i * it + c] = at.getComponent(i, c);
-    for (let i = 0; i < nNew; i++) for (let c = 0; c < it; c++) out[(n0 + i) * it + c] = own ? own[i * it + c] : at.getComponent(srcOf[i], c);
-    return new THREE.BufferAttribute(out, it, at.normalized);
-  };
-  for (const name of Object.keys(g.attributes)) g.setAttribute(name, grow(g.attributes[name] as THREE.BufferAttribute, name === 'position' ? newPos : name === 'normal' ? newNrm : undefined));
-  const morphs = g.morphAttributes as Record<string, THREE.BufferAttribute[]>;
-  for (const name of Object.keys(morphs)) morphs[name] = morphs[name].map((m) => grow(m, new Float32Array(nNew * m.itemSize)));
-  g.setIndex(kept);
-  g.computeBoundingBox();
-  g.computeBoundingSphere();
-}
 
 export function preloadRig() {
   loading ??= (async () => {
-    const [woman, man, anims, gas, manMh] = await Promise.all([loadGLB(womanUrl), loadGLB(manUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl)]);
-    stripFormal(man.scene);
+    const [woman, anims, gas, manMh, womanMh, kidMh] = await Promise.all([loadGLB(womanUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl), loadGLB(womanMhUrl), loadGLB(kidMhUrl)]);
     parts = await loadImageData(womanPartsUrl, 512, 512);
     [denimPx, knitPx] = await Promise.all([loadImageData(denimUrl, FAB, FAB), loadImageData(knitUrl, FAB, FAB)]);
     const samba = woman.animations.find((c) => c.name === 'SambaDance')!;
@@ -512,7 +320,8 @@ export function preloadRig() {
     restoreLocal(wSave);
     data = {};
     data.woman = prepareKind('woman', woman, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.oldman = prepareKind('oldman', man, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.mhwoman = prepareKind('mhwoman', womanMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     ready = true;
@@ -941,6 +750,11 @@ export interface Rig {
   speed: number;
   /** Partes del cuerpo que mandan siempre las articulaciones del muñeco (p. ej. un jinete sentado). */
   force?: Partial<Record<Group, number>>;
+  /** Gestos sueltos de pie (asentir, hablar con las manos): cuándo toca el próximo y cuánto le queda al de ahora. */
+  fidNext?: number;
+  fidLeft?: number;
+  /** Sin gestos sueltos (en un abrazo o un beso, que mueven la cabeza y los brazos a mano). */
+  noFidget?: boolean;
   /** Altura de la cadera en reposo, en metros (sin la escala del personaje). */
   hipsHeight: number;
   /** Inclinación de cintura para arriba (ver leanTorso). */
@@ -964,9 +778,9 @@ export function boneFrame(p: Person, bone: string, out: THREE.Quaternion) {
 
 /** Crea un personaje glTF con las mismas articulaciones (invisibles) que el muñeco de siempre. */
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
-  const kind: Kind = look.gas ? 'gas' : look.male || look.beard ? 'man' : 'woman';
+  const kind: Kind = look.gas ? 'gas' : look.kid ? 'kid' : look.male || look.beard ? 'man' : look.azul ? 'woman' : 'mhwoman';
   const D = data[kind]!;
-  const mh = kind === 'man' || kind === 'gas';
+  const mh = kind !== 'woman';
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const model = SkeletonUtils.clone(D.gltf.scene);
@@ -1358,15 +1172,18 @@ function stripedMap(src: THREE.Texture, cols: [number, number]) {
  * Gas trae su pelo, su barba y sus vaqueros; al genérico se le tiñen la piel, el pelo y el pantalón.
  */
 /** Peinado de cada hombre secundario: sale de su aspecto, así el mismo personaje lleva siempre el mismo. */
-export function mhHairFor(look: PersonLook) {
-  const H = ['MHHair', 'MHHair_short01', 'MHHair_short03', 'MHHair_short04'];
+export function mhHairFor(look: PersonLook, kind: Kind = 'man') {
   const k = (look.hair * 7 + look.shirt * 3 + look.skin) >>> 0;
+  const longish = look.hairStyle === 'long' || look.hairStyle === 'straight' || look.hairStyle === 'pony' || look.hairStyle === 'bun' || !!look.skirt;
+  if (kind === 'mhwoman') return look.hairStyle === 'long' || look.hairStyle === 'straight' ? 'MHHair' : k % 5 === 0 ? 'MHHair_afro01' : 'MHHair_bob02';
+  if (kind === 'kid') return longish ? 'MHHair_bob02' : k % 2 ? 'MHHair' : 'MHHair_short04';
+  const H = ['MHHair', 'MHHair_short01', 'MHHair_short03', 'MHHair_short04'];
   return H[k % H.length];
 }
 
 function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look: PersonLook) {
-  const nude = !!look.nude, shorts = !!look.shorts && !nude;
-  const generic = kind === 'man';
+  const nude = !!look.nude, shorts = (!!look.shorts || !!look.jumpsuit) && !nude;
+  const generic = kind !== 'gas';
   switch (name) {
     case 'Body':
     case 'BodyShort':
@@ -1392,8 +1209,10 @@ function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look:
     case 'MHHair_short01':
     case 'MHHair_short03':
     case 'MHHair_short04':
+    case 'MHHair_bob02':
+    case 'MHHair_afro01':
       if (generic) mat.color = lin(look.hair).multiplyScalar(1.15);
-      return !generic || name === mhHairFor(look);
+      return !generic || name === mhHairFor(look, kind);
     default:
       return true;
   }
@@ -1665,6 +1484,23 @@ function updateOne(p: Person, dt: number) {
     tw.idle = 1 - moving;
     tw.walk = moving * (1 - wr);
     tw.run = moving * wr;
+    // Nadie está quieto del todo: de pie, de vez en cuando asiente y habla con las manos, como charlando
+    if (r.mode === 'idle' && !r.noFidget) {
+      r.fidNext ??= 1 + Math.random() * 6;
+      r.fidNext -= dt;
+      if (r.fidNext <= 0 && !(r.fidLeft! > 0) && moving < 0.1) {
+        r.fidLeft = D.clips.agree.duration * (0.8 + Math.random() * 0.8);
+        r.act.agree.time = Math.random() * D.clips.agree.duration * 0.3;
+        r.act.agree.timeScale = 0.75 + Math.random() * 0.4;
+        r.fidNext = 2.5 + Math.random() * 5;
+      }
+      if (r.fidLeft! > 0) {
+        r.fidLeft! -= dt;
+        const f = 0.8 * Math.min(1, r.fidLeft! / 0.4) * tw.idle;
+        tw.agree = f;
+        tw.idle -= f;
+      }
+    }
   }
   const k = 1 - Math.exp(-10 * dt);
   for (const n in tw) {

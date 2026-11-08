@@ -109,7 +109,8 @@ export class WaterFight {
     this.gun.position.set(0, -0.05, 0.05);
     player.handR.add(this.gun);
     KIDS.forEach((look, i) => {
-      const p = makePerson(look, 0.68);
+      // (un niño de verdad, no un adulto encogido)
+      const p = makePerson({ ...look, kid: true });
       const x = zone.minX + ((i + 0.5) / KIDS.length) * (zone.maxX - zone.minX);
       p.root.position.set(x, 0, (i % 2 ? 1 : -1) * 1.4);
       const g = toyGun(i % 2 ? 0xe2547a : 0x3b7bd8);

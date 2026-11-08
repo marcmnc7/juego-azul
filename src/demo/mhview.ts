@@ -34,10 +34,14 @@ void (async () => {
     // ?p=man: hombre genérico para los secundarios (sin barba, todo blanco/gris para teñir); si no, Gas
     const P = params.get('p');
     // man: hombre genérico para los secundarios, con varios peinados; manlod: el mismo, ligero, para la multitud
-    man = P === 'man' || P === 'manlod'
+    man = P === 'woman' || P === 'womanlod'
+      ? await buildMH({ tag: 'woman', female: true, shirt: 0xffffff, jeansDark: 1, pantsGrey: true, hair: 'long01', hairVolume: 1.0, hairColor: 0xd8d8d8, mullet: 0, quiff: 0, skinTone: [1, 1, 1], facialHair: false, hairs: P === 'womanlod' ? ['bob02'] : ['bob02', 'afro01'] })
+      : P === 'kid'
+      ? await buildMH({ tag: 'kid', child: true, shirt: 0xffffff, jeansDark: 1, pantsGrey: true, hair: 'short02', hairVolume: 1.0, hairColor: 0xd8d8d8, mullet: 0, quiff: 0, skinTone: [1, 1, 1], facialHair: false, hairs: ['bob02', 'short04'] })
+      : P === 'man' || P === 'manlod'
       ? await buildMH({ tag: 'man', shirt: 0xffffff, jeansDark: 1, pantsGrey: true, hair: 'short02', hairVolume: 1.0, hairColor: 0xd8d8d8, mullet: 0, quiff: 0, skinTone: [1, 1, 1], facialHair: false, hairs: P === 'manlod' ? ['short01', 'short04'] : ['short01', 'short03', 'short04'] })
       : await buildMH({ tag: 'gas', shirt: 0xffffff, jeansDark: 1.0, hair: params.get('h') ?? 'short02', hairVolume: +(params.get('hv') ?? 1.05), hairColor: 0x84593a, mullet: +(params.get('mu') ?? 0.75), quiff: +(params.get('qu') ?? 0.32), skinTone: [0.97, 0.86, 0.74] });
-    if (P === 'manlod') {
+    if (P === 'manlod' || P === 'womanlod') {
       // la multitud: sin cejas, pestañas ni cuerpo desnudo, y todo mucho más ligero
       const all: THREE.SkinnedMesh[] = [];
       man.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) all.push(o as THREE.SkinnedMesh); });
@@ -90,7 +94,7 @@ Object.assign(window, {
       if (/^(Shirt|Pants|PantsShort)$/.test(m.name)) (m.material as THREE.MeshStandardMaterial).color.set(0xffffff);
     });
     const buf = await exportGLB(man!);
-    const r = await fetch('http://127.0.0.1:8097/' + (params.get('p') === 'man' ? 'man_mh.glb' : params.get('p') === 'manlod' ? 'man_mh_lod.glb' : 'gas_mh.glb'), { method: 'POST', body: 'data:application/octet-stream;base64,' + btoa(Array.from(new Uint8Array(buf), (c) => String.fromCharCode(c)).join('')) });
+    const r = await fetch('http://127.0.0.1:8097/' + (params.get('p') ? `${params.get('p')!.replace('lod', '')}_mh${params.get('p')!.endsWith('lod') ? '_lod' : ''}.glb` : 'gas_mh.glb'), { method: 'POST', body: 'data:application/octet-stream;base64,' + btoa(Array.from(new Uint8Array(buf), (c) => String.fromCharCode(c)).join('')) });
     return [buf.byteLength, await r.text()];
   },
 });
