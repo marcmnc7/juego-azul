@@ -1,5 +1,7 @@
 # Plan: personajes de VRoid para todo el juego
 
+Ver también `docs/REVISION-animaciones.md` (qué falla en las animaciones y cómo mejorarlas).
+
 Documento para otra IA (o persona) que vaya a encargarse de los personajes de **Para Margaux** (este repo). Está escrito para poder trabajar sin más contexto: qué hay, qué falta, cómo hacerlo, en qué orden y cómo comprobar cada paso. La parte final es el **reparto por capítulo**.
 
 > Fecha de corte: 8 de noviembre de 2026. Los capítulos se abren uno al día **del 20 al 28 de noviembre** (el 1 el día 20). El capítulo 1 tiene que estar terminado y publicado antes del 20.
