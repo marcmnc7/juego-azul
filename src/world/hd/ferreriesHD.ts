@@ -53,7 +53,8 @@ export class FerreriesHD {
       const half = d / 2 + 0.25;
       const slope = Math.atan2(rise, half);
       const len = Math.hypot(rise, half) + 0.1;
-      for (const s of [1, -1]) b.box(M.roof, [0, h + rise / 2, (s * half) / 2], [w + 0.3, 0.12, len], { parent: P, rx: -s * slope, tile: 2 });
+      // (cada faldón baja hacia su fachada: con el giro al revés salía un tejado en V que apuntaba al cielo)
+      for (const s of [1, -1]) b.box(M.roof, [0, h + rise / 2, (s * half) / 2], [w + 0.3, 0.12, len], { parent: P, rx: s * slope, tile: 2 });
       for (const sx of [-1, 1]) {
         const GP = P.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3((sx * w) / 2, h, 0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), sx > 0 ? 0 : Math.PI), new THREE.Vector3(1, 1, 1)));
         b.gable(wall, d, rise, GP);

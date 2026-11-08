@@ -28,7 +28,7 @@ const texCache = new Map<string, THREE.Texture>();
 /** Qué dibujo de tebeo sustituye a cada foto en el estilo cómic (ver core/comicTiles.ts). */
 const COMIC_KIND = new Map<string, string>([
   [slabsC, 'slabs'], [maresC, 'mares'], [roofMC, 'roof'], [roofC, 'roofGrey'],
-  [whitewashC, 'wash'], [plasterC, 'wash'], [woodC, 'wood'],
+  [whitewashC, 'wash'], [plasterC, 'wash'], [woodC, 'wood'], [doorsC, 'doors'],
 ]);
 function tex(url: string, color: boolean) {
   let t = texCache.get(url);

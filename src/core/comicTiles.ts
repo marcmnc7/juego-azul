@@ -193,6 +193,137 @@ function wood(g: CanvasRenderingContext2D, base: THREE.Color, seed: number) {
   }
 }
 
+/**
+ * Atlas de puertas y ventanas dibujado (mismas posiciones que la foto de Sponza, ver builder.ts): puerta de
+ * arco con su montante de rejilla, ventana de palacio con persianas y ventana de rejas. Marco de piedra,
+ * madera verde menorquina, hierro negro, todo con tinta.
+ */
+function doors(g: CanvasRenderingContext2D) {
+  const k = S / 1024;
+  const stone = '#e6d7b4', stoneDark = '#c9b48a', wood = '#2f6b52', woodDark = '#214c3a', woodLight = '#3f8a6a', iron = '#16141a', glass = '#33424e';
+  g.fillStyle = '#ddd6c8';
+  g.fillRect(0, 0, S, S);
+  g.lineJoin = 'round';
+  const ink = (w = 3) => {
+    g.strokeStyle = INK;
+    g.lineWidth = w * k * 2;
+    g.stroke();
+  };
+  const rect = (x0: number, y0: number, x1: number, y1: number, fill: string, w = 3) => {
+    g.beginPath();
+    g.rect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k);
+    g.fillStyle = fill;
+    g.fill();
+    ink(w);
+  };
+  // --- Puerta de arco (4,62)-(505,1000) ---
+  {
+    const x0 = 4, x1 = 505, y0 = 62, y1 = 1000, cx = (x0 + x1) / 2, r = (x1 - x0) / 2;
+    g.beginPath();
+    g.moveTo(x0 * k, y1 * k);
+    g.lineTo(x0 * k, (y0 + r) * k);
+    g.arc(cx * k, (y0 + r) * k, r * k, Math.PI, 0);
+    g.lineTo(x1 * k, y1 * k);
+    g.closePath();
+    g.fillStyle = stone;
+    g.fill();
+    ink(4);
+    // dovelas del arco
+    for (let a = 0; a <= 8; a++) {
+      const t = Math.PI + (a / 8) * Math.PI;
+      g.beginPath();
+      g.moveTo((cx + Math.cos(t) * (r - 52)) * k, (y0 + r + Math.sin(t) * (r - 52)) * k);
+      g.lineTo((cx + Math.cos(t) * r) * k, (y0 + r + Math.sin(t) * r) * k);
+      ink(2);
+    }
+    // montante (media luna de cristal con rejilla)
+    const ir = r - 52, top = y0 + r;
+    g.beginPath();
+    g.arc(cx * k, top * k, ir * k, Math.PI, 0);
+    g.closePath();
+    g.fillStyle = glass;
+    g.fill();
+    ink(3);
+    g.save();
+    g.clip();
+    g.strokeStyle = iron;
+    g.lineWidth = 7 * k;
+    for (let i = -4; i <= 4; i++) {
+      g.beginPath();
+      g.moveTo(cx * k, top * k);
+      g.lineTo((cx + Math.sin(i * 0.36) * ir * 1.2) * k, (top - Math.cos(i * 0.36) * ir * 1.2) * k);
+      g.stroke();
+    }
+    g.beginPath();
+    g.arc(cx * k, top * k, ir * 0.45 * k, Math.PI, 0);
+    g.stroke();
+    g.restore();
+    // hojas de la puerta
+    const dx0 = x0 + 52, dx1 = x1 - 52, dy0 = top + 14, dy1 = y1;
+    rect(dx0, dy0, dx1, dy1, wood, 4);
+    const mid = (dx0 + dx1) / 2;
+    g.beginPath();
+    g.moveTo(mid * k, dy0 * k);
+    g.lineTo(mid * k, dy1 * k);
+    ink(3);
+    for (const [a, b] of [[dx0, mid], [mid, dx1]])
+      for (const [p, q] of [[dy0 + 40, dy0 + (dy1 - dy0) * 0.45], [dy0 + (dy1 - dy0) * 0.52, dy1 - 50]]) {
+        rect(a + 32, p, b - 32, q, woodDark, 2.5);
+        g.fillStyle = woodLight;
+        g.fillRect((a + 32) * k, p * k, (b - a - 64) * k, 10 * k);
+      }
+    // aldaba
+    g.beginPath();
+    g.arc((mid + 40) * k, (dy0 + (dy1 - dy0) * 0.48) * k, 16 * k, 0, Math.PI * 2);
+    g.fillStyle = '#c9a24a';
+    g.fill();
+    ink(2);
+  }
+  // --- Ventana de palacio (510,6)-(928,588) ---
+  {
+    const x0 = 510, x1 = 928, y0 = 6, y1 = 588;
+    rect(x0, y0 + 40, x1, y1, stone, 4);
+    rect(x0 - 2, y0, x1 + 2, y0 + 56, stoneDark, 3); // cornisa
+    const ix0 = x0 + 50, ix1 = x1 - 50, iy0 = y0 + 100, iy1 = y1 - 40;
+    rect(ix0, iy0, ix1, iy1, wood, 4);
+    const mid = (ix0 + ix1) / 2;
+    g.beginPath();
+    g.moveTo(mid * k, iy0 * k);
+    g.lineTo(mid * k, iy1 * k);
+    ink(3);
+    // lamas de persiana mallorquina
+    for (let y = iy0 + 24; y < iy1 - 10; y += 26) {
+      for (const [a, b] of [[ix0, mid], [mid, ix1]]) {
+        g.fillStyle = woodLight;
+        g.fillRect((a + 16) * k, y * k, (b - a - 32) * k, 9 * k);
+        g.fillStyle = woodDark;
+        g.fillRect((a + 16) * k, (y + 9) * k, (b - a - 32) * k, 6 * k);
+      }
+    }
+    rect(x0 - 10, y1 - 40, x1 + 10, y1, stoneDark, 3); // alféizar
+  }
+  // --- Ventana de rejas (507,600)-(870,1012) ---
+  {
+    const x0 = 507, x1 = 870, y0 = 600, y1 = 1012;
+    rect(x0, y0, x1, y1, stone, 4);
+    const ix0 = x0 + 46, ix1 = x1 - 46, iy0 = y0 + 46, iy1 = y1 - 56;
+    rect(ix0, iy0, ix1, iy1, glass, 3);
+    // un poco de reflejo en el cristal, en diagonal
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.beginPath();
+    g.moveTo((ix0 + 30) * k, iy1 * k);
+    g.lineTo((ix0 + 120) * k, iy1 * k);
+    g.lineTo((ix1 - 30) * k, (iy0 + 60) * k);
+    g.lineTo((ix1 - 30) * k, iy0 * k);
+    g.closePath();
+    g.fill();
+    g.fillStyle = iron;
+    for (let x = ix0 + 22; x < ix1 - 10; x += 38) g.fillRect(x * k, (iy0 - 6) * k, 10 * k, (iy1 - iy0 + 12) * k);
+    for (const y of [iy0 + (iy1 - iy0) * 0.33, iy0 + (iy1 - iy0) * 0.66]) g.fillRect((ix0 - 6) * k, y * k, (ix1 - ix0 + 12) * k, 10 * k);
+    rect(x0 - 10, y1 - 56, x1 + 10, y1 - 20, stoneDark, 3);
+  }
+}
+
 let bulb: THREE.CanvasTexture | null = null;
 /** Bombilla de tebeo: círculo de color con su aro de tinta y un brillo, en vez de un halo borroso. */
 export function comicBulbTexture() {
@@ -300,6 +431,7 @@ export function comicTile(kind: string): THREE.CanvasTexture | null {
     case 'roofGrey': tiles(g, new THREE.Color(0x9a9088), 37); break;
     case 'wash': wash(g, new THREE.Color(0xffffff), 41); break;
     case 'wood': wood(g, new THREE.Color(0xc08a55), 53); break;
+    case 'doors': doors(g); break;
     default: return null;
   }
   const t = new THREE.CanvasTexture(cv);

@@ -188,8 +188,9 @@ const flats = new Map<string, THREE.Texture | null>();
  * camiseta, grano del vaquero, poros) y respeta lo que tiene contraste fuerte (cejas, labios, costuras, logotipos,
  * el borde de la ropa). undefined mientras carga.
  */
-function flatMap(t: THREE.Texture) {
-  if (flats.has(t.uuid)) return flats.get(t.uuid)!;
+function flatMap(t: THREE.Texture, cloth = false) {
+  const key = t.uuid + (cloth ? 'c' : '');
+  if (flats.has(key)) return flats.get(key)!;
   if (!ready(t)) return undefined;
   let out: THREE.Texture | null = null;
   try {
@@ -202,6 +203,9 @@ function flatMap(t: THREE.Texture) {
     const fine = boxBlur(col, w, h, 3, 1);
     const R = Math.max(3, Math.round(w / 110));
     const broad = boxBlur(boxBlur(fine, w, h, 3, R), w, h, 3, R);
+    // ropa: también fuera el sombreado grande que trae pintado (pliegues, desgaste del vaquero): color liso
+    const wide = cloth ? boxBlur(boxBlur(broad, w, h, 3, R * 4), w, h, 3, R * 4) : null;
+    if (wide) for (let i = 0; i < N * 3; i++) broad[i] = wide[i] + (broad[i] - wide[i]) * 0.3;
     for (let i = 0; i < N; i++) {
       const dl = 0.3 * (fine[i * 3] - broad[i * 3]) + 0.59 * (fine[i * 3 + 1] - broad[i * 3 + 1]) + 0.11 * (fine[i * 3 + 2] - broad[i * 3 + 2]);
       const a = Math.abs(dl);
@@ -222,7 +226,7 @@ function flatMap(t: THREE.Texture) {
   } catch {
     out = null;
   }
-  flats.set(t.uuid, out);
+  flats.set(key, out);
   return out;
 }
 
@@ -240,17 +244,20 @@ const converted = new WeakMap<THREE.Material, THREE.Material>();
 const isToon = new WeakSet<THREE.Material>();
 const baseCompile = THREE.Material.prototype.onBeforeCompile;
 
-function toToon(src: THREE.Material, person = false): THREE.Material {
+function toToon(src: THREE.Material, person = false, cloth = false): THREE.Material {
   if (isToon.has(src)) return src;
   const hit = converted.get(src);
   if (hit) return hit;
   const s = src as THREE.MeshStandardMaterial;
-  // Solo los materiales normales con luz; los que llevan sombreador propio, tal cual
+  // Todo material con luz pasa a cómic. Si lleva sombreador propio: el del grano y la foto de superficie se
+  // tira (es justo lo que no queremos); los demás (la animación de la multitud, la ropa de verano pintada, el
+  // corte del pelo) tocan trozos que el material de cómic también tiene, y se le pasan tal cual
   const lit = s.isMeshStandardMaterial || (src as THREE.MeshLambertMaterial).isMeshLambertMaterial || (src as THREE.MeshPhongMaterial).isMeshPhongMaterial;
-  if (!lit || src.onBeforeCompile !== baseCompile) {
+  if (!lit) {
     converted.set(src, src);
     return src;
   }
+  const carry = src.onBeforeCompile !== baseCompile && !src.userData.grain;
   // Las texturas que se repiten (paredes, suelo, tejados: fotos de material) se suavizan: queda el dibujo de las
   // losas o las tejas, pero flojo, como trazo; si no se pueden leer, su color medio. Las que son un dibujo suelto
   // (carteles, pancartas, caras, ropa) se quedan
@@ -262,7 +269,7 @@ function toToon(src: THREE.Material, person = false): THREE.Material {
   if (tiled && soft === null) color.multiply(meanColor(s.map!));
   // la piel y la ropa de los personajes, sin el detalle flojo de la foto
   // (las que el juego ya pinta en un lienzo, como la de Azul, salen lisas de origen en el cómic)
-  const flat = person && s.map && !tiled && !(s.map as THREE.CanvasTexture).isCanvasTexture ? flatMap(s.map) : null;
+  const flat = person && s.map && !tiled && !(s.map as THREE.CanvasTexture).isCanvasTexture ? flatMap(s.map, cloth) : null;
   const t = new THREE.MeshToonMaterial({
     color,
     // textura que aún no ha llegado: la original mientras tanto, y se cambia cuando se pueda leer
@@ -285,6 +292,12 @@ function toToon(src: THREE.Material, person = false): THREE.Material {
   t.polygonOffset = s.polygonOffset;
   t.polygonOffsetFactor = s.polygonOffsetFactor;
   t.polygonOffsetUnits = s.polygonOffsetUnits;
+  if (carry) {
+    t.onBeforeCompile = src.onBeforeCompile;
+    t.customProgramCacheKey = src.customProgramCacheKey;
+    // (con sombreador propio, el contorno 3D no seguiría la forma: la multitud lleva su propio casco de tinta)
+    t.userData.ownShader = true;
+  }
   isToon.add(t);
   converted.set(src, t);
   if (tiled && soft === undefined) {
@@ -303,7 +316,7 @@ function toToon(src: THREE.Material, person = false): THREE.Material {
   if (flat === undefined) {
     const map = s.map!;
     pending.add(() => {
-      const r = flatMap(map);
+      const r = flatMap(map, cloth);
       if (r === undefined) return false;
       if (r) t.map = r;
       return true;
@@ -324,9 +337,9 @@ function settlePending() {
  * zapatos de MakeHuman), que con el contorno sacaban picos.
  */
 function ink(m: THREE.Material, person: boolean, name: string) {
-  if (m.userData.outlineParameters) return;
+  // (se decide siempre de nuevo: los materiales clonados, como los de la multitud, traían el del modelo)
   // (los zapatos sí: los picos eran de los pesos de piel, ya corregidos)
-  const cut = (m.alphaTest > 0 && name !== 'Shoes') || m.transparent;
+  const cut = (m.alphaTest > 0 && name !== 'Shoes') || m.transparent || !!m.userData.ownShader;
   // (el mundo lleva la tinta de la pasada de tebeo; el contorno 3D es solo para los personajes)
   if (!person || m.side === THREE.BackSide || !(m as THREE.MeshToonMaterial).isMeshToonMaterial || cut) {
     m.userData.outlineParameters = { visible: false };
@@ -342,14 +355,16 @@ function ink(m: THREE.Material, person: boolean, name: string) {
 function handOffset(p: THREE.Vector3, out: THREE.Vector3) {
   const { x, y, z } = p;
   if (y <= 0.02) return out.set(0, 0, 0);
-  const lean = 0.024 * y;
+  const lean = 0.03 * y;
   const nx = Math.sin(x * 0.37 + z * 0.21 + 1.3) * Math.cos(z * 0.29 - x * 0.13 + 0.4);
   const nz = Math.sin(z * 0.33 - x * 0.19 + 2.1) * Math.cos(x * 0.27 + z * 0.11 + 1.7);
-  const bow = 0.055 * THREE.MathUtils.smoothstep(y, 0, 1.4);
+  const bow = 0.075 * THREE.MathUtils.smoothstep(y, 0, 1.4);
   const sag = THREE.MathUtils.smoothstep(y, 3, 6);
+  // (y las líneas horizontales, cornisas, alféizares, aleros, ondulan un poco: nada queda a regla)
+  const wave = 0.05 * THREE.MathUtils.smoothstep(y, 0.4, 2) * Math.sin(x * 1.1 + z * 0.9 + 0.7);
   return out.set(
     lean * nx + bow * Math.sin(y * 0.9 + z * 0.55 + x * 0.1),
-    -0.09 * sag * Math.pow(Math.sin(x * 0.8 + 0.3) * Math.sin(z * 0.7 + 1.1), 2),
+    wave - 0.12 * sag * Math.pow(Math.sin(x * 0.8 + 0.3) * Math.sin(z * 0.7 + 1.1), 2),
     lean * nz + bow * Math.sin(y * 0.8 + x * 0.6 - z * 0.1),
   );
 }
@@ -412,9 +427,15 @@ export function comicScene(scene: THREE.Object3D) {
       }
       return;
     }
-    if (!m.isMesh || o.userData.noComic) return;
-    const person = !!(o as THREE.SkinnedMesh).isSkinnedMesh;
-    m.material = Array.isArray(m.material) ? m.material.map((x) => toToon(x, person)) : toToon(m.material, person);
+    if (!m.isMesh) return;
+    if (o.userData.noComic) {
+      // lo que se queda como está, tampoco lleva el contorno 3D (solo es para los personajes)
+      for (const x of Array.isArray(m.material) ? m.material : [m.material]) x.userData.outlineParameters ??= { visible: false };
+      return;
+    }
+    const person = !!(o as THREE.SkinnedMesh).isSkinnedMesh || (!!(o as THREE.InstancedMesh).isInstancedMesh && !!o.userData.person);
+    const cloth = person && /^(Shirt|Pants|PantsShort|Shoes)$/.test(o.name);
+    m.material = Array.isArray(m.material) ? m.material.map((x) => toToon(x, person, cloth)) : toToon(m.material, person, cloth);
     (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => ink(x, person, o.name));
   });
   settlePending();
@@ -437,7 +458,8 @@ export function comicScene(scene: THREE.Object3D) {
       l.intensity = Math.min(l.intensity, 2.1);
     });
     if (!sc.userData.comicHemi) {
-      sc.add(new THREE.HemisphereLight(0xdff2ff, 0xb59c84, 0.8));
+      // (fuerte: en la sombra de la pared, la gente proyectaba una silueta casi negra que parecía un fantasma)
+      sc.add(new THREE.HemisphereLight(0xdff2ff, 0xb59c84, 1.35));
       sc.userData.comicHemi = true;
     }
   }
@@ -459,6 +481,12 @@ uniform vec2 texel;
 uniform float near, far, linePx, dotPx, action, seed;
 varying vec2 vUv;
 float rawD(vec2 uv) { return texture2D(tDepth, uv).x; }
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 float linD(float d) { float z = d * 2.0 - 1.0; return 2.0 * near * far / (far + near - z * (far - near)); }
 void main() {
   vec4 c = texture2D(tColor, vUv);
@@ -468,11 +496,18 @@ void main() {
   float dc = rawD(vUv);
   if (dc < 1.0) {
     // ---- tinta ----
+    // trazo a mano: la línea ondula un poco (el punto donde se mira la profundidad se desplaza con un ruido
+    // suave) y cambia de grosor como con la presión del plumín
+    vec2 px = gl_FragCoord.xy / linePx;
+    vec2 wob = (vec2(vnoise(px * 0.045), vnoise(px * 0.045 + 17.3)) - 0.5) * texel * linePx * 2.6;
+    float pressure = 0.7 + 0.6 * vnoise(px * 0.03 + 5.1);
+    vec2 uv = vUv + wob;
+    dc = rawD(uv);
     float zc = linD(dc);
     // la línea adelgaza con la distancia, como la de un dibujante (lejos, gruesa, emborronaba a la gente)
-    vec2 o = texel * max(1.0, linePx * mix(1.0, 0.45, smoothstep(5.0, 22.0, zc)));
-    float dl = rawD(vUv - vec2(o.x, 0.0)), dr = rawD(vUv + vec2(o.x, 0.0));
-    float du = rawD(vUv + vec2(0.0, o.y)), dd = rawD(vUv - vec2(0.0, o.y));
+    vec2 o = texel * max(1.0, linePx * pressure * mix(1.0, 0.45, smoothstep(5.0, 22.0, zc)));
+    float dl = rawD(uv - vec2(o.x, 0.0)), dr = rawD(uv + vec2(o.x, 0.0));
+    float du = rawD(uv + vec2(0.0, o.y)), dd = rawD(uv - vec2(0.0, o.y));
     // silueta: algún vecino mucho más lejos (la línea queda del lado del objeto de delante)
     float far4 = max(max(linD(dl), linD(dr)), max(linD(du), linD(dd)));
     float sil = smoothstep(0.035, 0.07, (far4 - zc) / zc);

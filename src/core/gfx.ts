@@ -73,6 +73,8 @@ export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: 
  * que ninguna superficie sea un color plano: paredes con manchas, suelo con desgaste, ropa con textura.
  */
 export function addGrain(m: THREE.Material, amount = 0.14) {
+  // (el estilo cómic los convierte igual: este sombreador solo añade el grano y la foto de la superficie)
+  m.userData.grain = true;
   m.onBeforeCompile = (sh) => {
     if (!quality.grain) return;
     const leafy = !!m.userData.leafy;
