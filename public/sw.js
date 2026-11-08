@@ -1,8 +1,9 @@
-// Para Margaux sin conexión: la primera vez se guarda el juego entero (es un solo archivo grande) y después
-// se abre desde el móvil al momento. Cada versión publicada cambia VERSION y se descarga una vez.
+// Para Margaux sin conexión: la primera vez se guarda el juego entero (el HTML y los archivos de assets/:
+// modelos, música, fotos) y después se abre desde el móvil al momento. Cada versión publicada cambia VERSION
+// y se descarga una vez. La lista de assets la rellena la compilación (vite.config.ts).
 const VERSION = '__VERSION__';
 const CACHE = 'margaux-' + VERSION;
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', '__ASSETS__'].filter((f) => f !== '__ASSETS__');
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

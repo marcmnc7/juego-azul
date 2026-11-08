@@ -45,7 +45,7 @@ Se abren uno al día, del 20 al 28 de noviembre (el último, el día del cumplea
 
 Guiños: Azul y Gas, los "Buu", el inglés de Gas (ahora B2 y con 🥴), dejar de fumar, Joy, "need esos ojos", "ya sabes dónde se quedó mi corazón", el flash en el concierto, "silencio full que duermen mis padres", Interstellar sin terminar.
 
-Fotos del chat: al acabar cada capítulo caen sus polaroids («Recuerdo desbloqueado») y quedan en **📷 Nuestro álbum** del mapa; la carta final lleva tres fotos (la primera noche, Gran Canaria y Sant Joan). También hay algunos stickers nuestros (el oso bailando en la portada, «Escuchamos y juzgamos» en el crucigrama). Están en `src/assets/recuerdos/`, comprimidas para que el HTML único no pese.
+Fotos del chat: al acabar cada capítulo caen sus polaroids («Recuerdo desbloqueado») y quedan en **📷 Nuestro álbum** del mapa; la carta final lleva tres fotos (la primera noche, Gran Canaria y Sant Joan). También hay algunos stickers nuestros (el oso bailando en la portada, «Escuchamos y juzgamos» en el crucigrama). Están en `src/assets/recuerdos/`, comprimidas para que la primera descarga no pese.
 
 ## Carga y lugares reales
 - La portada no deja empezar hasta que todo está cargado (el botón va mostrando el porcentaje), y cada capítulo compila sus materiales detrás del rótulo, así abre sin tirones.
@@ -63,4 +63,9 @@ Abrir el enlace añadiendo `#test` al final. Todo está desbloqueado, hay un bot
 - Aspecto de Azul y Gas: `src/data/characters.ts`
 
 ## Compilar
-`npm install && npm run build` genera `dist/index.html`, un único archivo que funciona sin servidor.
+`npm install && npm run build` genera la carpeta `dist/`: `index.html` (el código, unos 5 MB) y `dist/assets/` con los archivos grandes (modelos, personajes de VRoid, música, fotos y cielos). Así ningún archivo se acerca al límite de 100 MB de GitHub.
+
+Para publicar en GitHub Pages hay que subir **la carpeta `dist/` entera** (con `assets/`), no solo el HTML. Necesita servirse por HTTP: abierto como archivo suelto (`file://`) no carga los assets. La primera vez que se abre por HTTPS, el modo sin conexión (`sw.js`) guarda todos los archivos de `assets/` en el móvil.
+
+## Personajes de VRoid
+Los personajes de VRoid Studio (VRM 1.0) van en `src/assets/vrm/` y se registran en `VRM_FILES` de `src/data/characters.ts` con su altura; un personaje los usa con `vrm: <url>` en su look. Se animan con las mismas capturas que los demás (`src/entities/vrm.ts` renombra sus huesos a los de Mixamo) y tienen parpadeo, sonrisa al bailar, boca al hablar y pelo con física.

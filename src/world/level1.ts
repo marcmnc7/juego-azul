@@ -13,7 +13,7 @@ import { boneAnchor, rigPost } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM } from '../data/characters';
 import { hud, dialogue, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
 import { embrace, hugFor, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
@@ -214,7 +214,8 @@ export class Level1 implements Level {
 
     // Esa noche, Margaux y Carme van con un mono negro de una pieza, ajustado
     const MONO = { shirt: 0x141418, pants: 0x141418, shoes: 0x111111, skirt: false, jumpsuit: true };
-    this.player = makePerson({ ...MARGAUX_LOOK, ...(V.outfit ?? MONO) });
+    // Con el mono, su modelo de VRoid (si otra variante le cambia la ropa, el de antes)
+    this.player = makePerson({ ...MARGAUX_LOOK, ...(V.outfit ?? { ...MONO, vrm: AZUL_VRM.ferreries }) });
     this.player.root.position.copy(this.world.spawn);
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);

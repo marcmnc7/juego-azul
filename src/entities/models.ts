@@ -344,6 +344,8 @@ export interface PersonLook {
   curls?: boolean;
   /** Bigote fino y perilla (Gas). */
   stache?: boolean;
+  /** Modelo de VRoid (.vrm, de VRM_FILES en data/characters.ts): si está, se usa en vez del de siempre. */
+  vrm?: string;
 }
 
 export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';

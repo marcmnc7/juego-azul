@@ -16,6 +16,9 @@ import womanPartsUrl from '../assets/chars/woman_parts.png';
 // Fotos de tela (CC0, de MakeHuman) para la ropa de Azul: vaquero y punto de camiseta
 import denimUrl from '../assets/chars/denim_tile.jpg';
 import knitUrl from '../assets/chars/knit_tile.jpg';
+import type { VRM } from '@pixiv/three-vrm';
+import { loadVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
+import { VRM_FILES } from '../data/characters';
 
 // Personajes de la prueba de concepto: modelos glTF con esqueleto (rig de Mixamo) y animaciones de
 // captura de movimiento (Mixamo), con el mismo retargeting en espacio mundo de la prueba.
@@ -42,7 +45,12 @@ interface KindData {
   minY: number;
 }
 
-let data: Partial<Record<Kind, KindData>> = {};
+/** Los modelos de MakeHuman/Mixamo por tipo y, aparte, cada VRM de VRoid por su archivo ("vrm:<url>"). */
+type DataKey = Kind | `vrm:${string}`;
+let data: Partial<Record<DataKey, KindData>> = {};
+/** VRM cargados (uno por archivo; el modelo no se clona: lo usa un personaje cada vez). */
+const vrms = new Map<string, LoadedVRM>();
+const vrmOwner = new Map<string, Person>();
 let parts: Uint8ClampedArray | null = null;
 /** Parte del cuerpo de la mujer en una coordenada de textura (1 piel, 2 pelo, 3 top, 4 pantalón, 5 zapatos, 6 cara). */
 export const womanPartAt = (u: number, v: number) => {
@@ -259,9 +267,9 @@ function cleanWeights(root: THREE.Object3D) {
   });
 }
 
-function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }): KindData {
+function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }, height = HEIGHT[kind]): KindData {
   const model = gltf.scene;
-  if (kind !== 'woman') cleanWeights(model);
+  if (kind !== 'woman' && !model.userData.vrmOrig) cleanWeights(model);
   // Medir siempre en la misma pose: la T limpia
   const tpose = gltf.animations.find((c) => c.name === 'TPose');
   if (tpose) {
@@ -280,7 +288,7 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
   model.updateWorldMatrix(true, true);
   const soleY = new THREE.Box3().setFromObject(model, true).min.y;
   // De la planta del pie a la coronilla (el último hueso de la cabeza queda algo por debajo)
-  const scale = HEIGHT[kind] / ((box.max.y - box.min.y) * 1.04);
+  const scale = height / ((box.max.y - box.min.y) * 1.04);
   restoreLocal(animsBind);
   setPose(anims.scene, false);
   const srcRest = worldPose(anims.scene);
@@ -327,6 +335,16 @@ export function preloadRig() {
     data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
     data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    // Personajes de VRoid: si alguno no carga, ese personaje sale con su modelo de antes
+    for (const [url, height] of VRM_FILES) {
+      try {
+        const v = await loadVRM(url);
+        vrms.set(url, v);
+        data[`vrm:${url}`] = prepareKind('woman', v.gltf, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, height);
+      } catch (e) {
+        console.warn('[rig] VRM no cargado', e);
+      }
+    }
     ready = true;
   })().catch((e) => {
     failed = true;
@@ -737,7 +755,10 @@ function hairNormal() {
 type Group = 'body' | 'head' | 'armL' | 'armR' | 'legL' | 'legR';
 
 export interface Rig {
-  kind: Kind;
+  kind: DataKey;
+  /** Personaje de VRoid: su cara (expresiones) y la física del pelo se actualizan aparte. */
+  vrm?: VRM;
+  face?: VRMFace;
   model: THREE.Object3D;
   mixer: THREE.AnimationMixer;
   act: Record<string, THREE.AnimationAction>;
@@ -781,12 +802,17 @@ export function boneFrame(p: Person, bone: string, out: THREE.Quaternion) {
 
 /** Crea un personaje glTF con las mismas articulaciones (invisibles) que el muñeco de siempre. */
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
-  const kind: Kind = look.gas ? 'gas' : look.kid ? 'kid' : look.male || look.beard ? 'man' : look.azul ? 'woman' : 'mhwoman';
+  // Con su VRM de VRoid si lo tiene, está cargado y no lo lleva ya otro personaje de la escena
+  const owner = look.vrm ? vrmOwner.get(look.vrm) : undefined;
+  const vrmFree = !owner || !people.has(owner) || !owner.root.parent;
+  const loaded = look.vrm && vrmFree ? vrms.get(look.vrm) : undefined;
+  const kind: DataKey = loaded ? `vrm:${look.vrm}` : look.gas ? 'gas' : look.kid ? 'kid' : look.male || look.beard ? 'man' : look.azul ? 'woman' : 'mhwoman';
   const D = data[kind]!;
   const mh = kind !== 'woman';
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
-  const model = SkeletonUtils.clone(D.gltf.scene);
+  if (loaded) resetVRM(loaded);
+  const model = loaded ? loaded.vrm.scene : SkeletonUtils.clone(D.gltf.scene);
   model.scale.setScalar(D.scale);
   model.position.y = -D.minY * D.scale;
   root.add(model);
@@ -794,7 +820,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
   const extra: [THREE.SkinnedMesh, THREE.SkinnedMesh][] = [];
   model.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
-    if (!m.isMesh) return;
+    if (!m.isMesh || loaded) return;
     m.castShadow = true;
     // Sin sombra propia: en los primeros planos, la del pelo y la nariz les manchaba la cara de gris
     m.receiveShadow = false;
@@ -804,10 +830,10 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     m.material = mat;
     if (mh) {
       // MakeHuman: cada pieza se enseña o no según la ropa, y se tiñe con los colores del personaje
-      m.visible = mhPart(kind, m.name, mat, look);
+      m.visible = mhPart(kind as Kind, m.name, mat, look);
       return;
     }
-    if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
+    if (colorRigMaterial(kind as Kind, m.name, mat, look) === false) m.visible = false;
     if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
       const sm = m as THREE.SkinnedMesh;
       const src = sm.geometry;
@@ -903,6 +929,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     gw: { body: 0, head: 0, armL: 0, armR: 0, legL: 0, legR: 0 },
     bones: B, map, hipsY: B.get('Hips')!.position.y, last: new THREE.Vector3(NaN, 0, 0), speed: 0, torso: new THREE.Euler(0, 0, 0, 'YXZ'),
     hipsHeight: B.get('Hips')!.getWorldPosition(new THREE.Vector3()).y / scale,
+    vrm: loaded?.vrm, face: loaded ? newFace() : undefined,
   };
   const p: Person = {
     root, body, head: headJ, eyes, legL, legR, armL, armR, handR,
@@ -910,6 +937,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
   if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
+  if (loaded) vrmOwner.set(look.vrm!, p);
   people.add(p);
   return p;
 }
@@ -1733,6 +1761,11 @@ export function updateRigPeople(dt: number) {
     updateOne(p, dt);
   }
   for (const f of rigPost) f(dt);
+  // Cara y pelo de los VRM al final, con la pose ya terminada (también abrazos y besos)
+  for (const p of people) {
+    const r = p.rig!;
+    if (r.vrm && p.root.parent) tickVRM(r.vrm, r.face!, r.mode, dt);
+  }
 }
 
 /** Al salir de un capítulo. */
@@ -1743,6 +1776,7 @@ export function clearRigPeople() {
       (o as THREE.SkinnedMesh).skeleton?.dispose();
     });
   people.clear();
+  vrmOwner.clear();
   rigTickers.clear();
   rigPost.clear();
 }
