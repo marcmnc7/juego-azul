@@ -371,8 +371,11 @@ const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const HD_DAY_CHAPTERS = [3, 5, 6, 8];
 // Estilo pintado en todos los capítulos. ?estilo=antes lo quita para comparar con el aspecto anterior
 const ESTILO = new URLSearchParams(location.search).get('estilo');
-/** Estilo cómic (el elegido): de momento en Ferreries (capítulos 1 y 9) para probarlo; ?estilo=pintado lo quita. */
-const COMIC_CHAPTERS = ESTILO === 'antes' || ESTILO === 'pintado' ? [] : [1, 9];
+/**
+ * Estilo cómic (el elegido): de momento en Ferreries (capítulos 1 y 9); ?estilo=pintado lo quita.
+ * ?estilo=comic lo pone en todos los capítulos, para ir migrándolos y comparar (ver docs/PLAN-estilo-comic.md).
+ */
+const COMIC_CHAPTERS = ESTILO === 'antes' || ESTILO === 'pintado' ? [] : ESTILO === 'comic' ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : [1, 9];
 const PAINT_CHAPTERS = ESTILO === 'antes' ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((n) => !COMIC_CHAPTERS.includes(n));
 /** Luz pintada de cada capítulo: tinte de las sombras, de lo que da el sol (o la luna) y del perfil de los personajes. */
 const PAINT_LIGHT: Record<number, [number, number, number]> = {
