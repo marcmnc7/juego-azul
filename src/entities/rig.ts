@@ -1867,7 +1867,10 @@ function updateOne(p: Person, dt: number) {
   // Partes del cuerpo que mandan las articulaciones del muñeco (saludar: solo el brazo que saluda)
   const forcedR = r.mode === 'wave' || (r.mode === 'talk' && !r.act.talk);
   const want: Record<Group, number> = {
-    body: changed(r, p.body) || Math.abs(p.body.position.y - r.snapBodyY) > 1e-4 ? 1 : 0,
+    // (bajar el cuerpo de verdad, como al sentarse, sí cuenta; unos centímetros no: el nivel 1 pone la altura
+    // del muñeco a 0 después de animarlo, eso solo quitaba el bote de la marcha y hacía que la cadera de la
+    // captura se sustituyera por la del muñeco, recta: corría tiesa y "sentada")
+    body: changed(r, p.body) || Math.abs(p.body.position.y - r.snapBodyY) > 0.1 ? 1 : 0,
     head: changed(r, p.head) ? 1 : 0,
     armL: changed(r, p.armL) || changed(r, p.elbowL) ? 1 : 0,
     armR: forcedR || changed(r, p.armR) || changed(r, p.elbowR) ? 1 : 0,

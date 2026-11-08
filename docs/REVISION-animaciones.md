@@ -134,5 +134,6 @@ Con los clips CC0 de Quaternius (`src/assets/chars/anims_ual.glb` y `anims_ual_2
 - **P7 Baile:** cada persona baila la samba o el segundo baile, al azar.
 - **P9 Reposo:** gestos sueltos variados (asentir, decir que sí).
 - **Arreglo de paso:** el bombín de la fabiolera flotaba 4–5 cm sobre la cabeza.
+- **Correr "sentada" (arreglado después):** el capítulo 1 pone la altura del muñeco a 0 tras animarlo, y `rig.ts` lo tomaba como "el nivel coloca el cuerpo": sustituía la cadera de la captura por la del muñeco, recta. La inclinación al correr bajaba de 34° a 12° y corría tiesa, como sentada; también afectaba al andar y al reposo. Ahora solo cuenta bajar el cuerpo de verdad (más de 10 cm, como al sentarse).
 
 **Pendiente:** saludar, celebrar, más bailes y bailar en pareja (no hay clips libres en estas librerías: harían falta de Mixamo); sentarse, conducir y nadar con clips (los clips ya están cargados: `sit`, `sitTalk`, `drive`, `swim`, `swimIdle`; falta usarlos en cada nivel, y esos niveles son de los capítulos 2 en adelante); multitud horneada con los clips nuevos; botón de saltar si se quiere.
