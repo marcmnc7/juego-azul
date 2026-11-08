@@ -1723,6 +1723,11 @@ const _target = new THREE.Quaternion();
 const _parent = new THREE.Quaternion();
 const _local = new THREE.Quaternion();
 
+/** Cuánto sprint como máximo en la mezcla de la marcha (el resto, trote): menos zancada y menos braceo. */
+const SPRINT_MAX = 0.55;
+/** Tronco algo más erguido al esprintar (radianes con el sprint entero): el clip se inclina ~34°. */
+const SPRINT_UPRIGHT = 0.3;
+
 /** Pesos de andar/trotar/esprintar para una velocidad: entre los dos clips cuya velocidad la rodea. */
 function locoWeights(L: KindData['loco'], sp: number) {
   const w = L.map(() => 0);
@@ -1738,6 +1743,11 @@ function locoWeights(L: KindData['loco'], sp: number) {
         w[i + 1] = f;
         break;
       }
+  // Carrera más suave: el sprint de la librería es de atleta; como mucho SPRINT_MAX de él y el resto, trote
+  if (L.length >= 3 && w[L.length - 1] > SPRINT_MAX) {
+    w[L.length - 2] += w[L.length - 1] - SPRINT_MAX;
+    w[L.length - 1] = SPRINT_MAX;
+  }
   return w;
 }
 
@@ -1887,7 +1897,8 @@ function updateOne(p: Person, dt: number) {
     if (r.gw[gk] > 0) any = true;
   }
   const t = r.torso;
-  const lf = r.lean.fwd, ls = r.lean.side;
+  // (con algo de sprint en la mezcla, el tronco un poco más erguido: ver SPRINT_UPRIGHT)
+  const lf = r.lean.fwd - (L.length >= 3 ? SPRINT_UPRIGHT * r.w[L[L.length - 1].clip] : 0), ls = r.lean.side;
   const lean = t.x !== 0 || t.y !== 0 || t.z !== 0 || Math.abs(lf) > 1e-4 || Math.abs(ls) > 1e-4;
   const carrying = r.carry.R > 0.01 || r.carry.L > 0.01;
   if (!any && !lean && !carrying) return;
