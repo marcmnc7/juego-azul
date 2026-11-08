@@ -369,9 +369,12 @@ export async function buildMH(o: MHOpts) {
     }
   });
   const hc = new THREE.Color(o.hairColor).convertLinearToSRGB();
+  // Pelo de color liso (el del casquete de debajo: así, entre mechón y mechón no se nota nada); Gas, con su
+  // tono y sus brillos de siempre
+  const flatHair = o.tag !== 'gas';
   const hairTexOf = (h: string, size: number) => texture(h === 'afro01' ? 'afro_diffuse.png' : h + '_diffuse.png', (d) => {
     for (let i = 0; i < d.length; i += 4) {
-      const l = (d[i] + d[i + 1] + d[i + 2]) / 765;
+      const l = flatHair ? 0.32 : (d[i] + d[i + 1] + d[i + 2]) / 765;
       d[i] = Math.min(255, hc.r * 255 * (0.55 + l * 1.4));
       d[i + 1] = Math.min(255, hc.g * 255 * (0.55 + l * 1.4));
       d[i + 2] = Math.min(255, hc.b * 255 * (0.55 + l * 1.4));
@@ -655,6 +658,228 @@ export function lightSkinned(m: THREE.SkinnedMesh, keep: number) {
   m.parent!.add(out);
   out.bind(m.skeleton, m.bindMatrix);
   m.removeFromParent();
+  return out;
+}
+
+
+/** Zonas del cuerpo único de la multitud (en el canal rojo del color de vértice, valor / 8). */
+export const ZONE = { skin: 1, hair: 2, shirt: 3, legs: 4, shoes: 5, hips: 6 } as const;
+
+/**
+ * Cuerpo único para la multitud: UNA superficie cerrada (el cuerpo de MakeHuman), sin ropa ni pelo encima. Cada
+ * vértice sabe de qué zona es (piel, pelo, camiseta, cadera/muslo, pierna del pantalón largo, zapatillas) según la
+ * prenda que tenía más cerca, y las zonas de ropa y pelo se hinchan unos milímetros para tener volumen. Sin capas
+ * no hay nada que atraviese ni asome; sin transparencias, no hay huecos; y al simplificar una superficie cerrada
+ * (juntando por posición) no se rasga.
+ */
+export function fuseCrowd(root: THREE.Object3D, female: boolean, keep: number) {
+  const by = (n: string) => root.getObjectByName(n) as THREE.SkinnedMesh | undefined;
+  const body = by('BodyFull')!;
+  const sk = body.skeleton;
+  const bonePos = (re: RegExp) => {
+    const j = sk.bones.findIndex((b) => re.test(b.name));
+    return new THREE.Vector3().setFromMatrixPosition(sk.boneInverses[j].clone().invert());
+  };
+  const head = bonePos(/Head$/), neck = bonePos(/Neck$/);
+  const eyesM = by('Eyes');
+  eyesM?.geometry.computeBoundingBox();
+  const eyeTop = eyesM ? eyesM.geometry.boundingBox!.max.y : head.y + 0.08;
+  const ptsOf = (m?: THREE.Mesh) => {
+    const out: THREE.Vector3[] = [];
+    if (!m) return out;
+    const a = m.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < a.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld));
+    return out;
+  };
+  root.updateMatrixWorld(true);
+  // rejilla de 3 cm para buscar la prenda más cercana deprisa
+  const grid = (pts: THREE.Vector3[]) => {
+    const G = new Map<string, THREE.Vector3[]>();
+    for (const p of pts) {
+      const k = `${Math.floor(p.x / 0.03)},${Math.floor(p.y / 0.03)},${Math.floor(p.z / 0.03)}`;
+      (G.get(k) ?? G.set(k, []).get(k)!).push(p);
+    }
+    return (p: THREE.Vector3) => {
+      let best = Infinity;
+      const cx = Math.floor(p.x / 0.03), cy = Math.floor(p.y / 0.03), cz = Math.floor(p.z / 0.03);
+      for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) for (let z = cz - 1; z <= cz + 1; z++)
+        for (const q of G.get(`${x},${y},${z}`) ?? []) best = Math.min(best, q.distanceToSquared(p));
+      return Math.sqrt(best);
+    };
+  };
+  const dShirt = grid(ptsOf(by('Shirt'))), dHips = grid(ptsOf(by('PantsShort'))), dLegs = grid(ptsOf(by('Pants')));
+  const dShoes = grid(ptsOf(by('Shoes'))), dHair = grid(ptsOf(by('MHHair'))), dScalp = grid(ptsOf(by('MHScalp'))), dBrow = grid(ptsOf(by('Eyebrows')));
+  // Línea del pelo: por delante, bien por encima de las cejas; por los lados, por encima de las orejas; por detrás,
+  // hasta la nuca (y con melena, hasta los hombros)
+  const hairline = (q: THREE.Vector3) => {
+    const front = (q.z - head.z) > 0.035;
+    if (front) return q.y > eyeTop + 0.045;
+    if (q.z > head.z - 0.025) return q.y > eyeTop + 0.035;
+    return q.y > neck.y + 0.02;
+  };
+  const g0 = body.geometry;
+  const pos = g0.attributes.position as THREE.BufferAttribute;
+  const n = pos.count;
+  // 1. zona de cada vértice (en su sitio, sin hinchar)
+  const P = new Float32Array(n * 3), C = new Float32Array(n * 3);
+  const p = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    p.fromBufferAttribute(pos, i).applyMatrix4(body.matrixWorld);
+    let z: number = ZONE.skin;
+    if (dShoes(p) < 0.025) z = ZONE.shoes;
+    else if (dBrow(p) < 0.005 && p.y > eyeTop + 0.004) z = ZONE.hair;
+    else if (hairline(p) && (dScalp(p) < 0.012 || dHair(p) < 0.02)) z = ZONE.hair;
+    else if (dShirt(p) < 0.035) z = ZONE.shirt;
+    else if (dHips(p) < 0.035) z = ZONE.hips;
+    else if (dLegs(p) < 0.035) z = ZONE.legs;
+    P.set([p.x, p.y, p.z], i * 3);
+    C.set([z / 8, 0, 0], i * 3);
+  }
+  // 2. superficie cerrada: se juntan los vértices de las costuras de UV
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  g.setIndex(g0.index);
+  const merged = mergeVertices(g, 1e-5);
+  const mp = merged.attributes.position as THREE.BufferAttribute, mc = merged.attributes.color as THREE.BufferAttribute;
+  const mi = merged.index!.array;
+  const nb: number[][] = Array.from({ length: mp.count }, () => []);
+  for (let t = 0; t < mi.length; t += 3) for (let k = 0; k < 3; k++) { const a = mi[t + k], b = mi[t + ((k + 1) % 3)]; nb[a].push(b); nb[b].push(a); }
+  // 3. zonas sin calvas: cada vértice toma la zona de la mayoría de sus vecinos (si la ropa tiene agujeros, como
+  // las rotas del vaquero, quedaban manchas de piel hundidas dentro del pantalón)
+  let zone = Array.from({ length: mp.count }, (_, i) => Math.round(mc.getX(i) * 8));
+  for (let pass = 0; pass < 4; pass++) {
+    const next = zone.slice();
+    for (let i = 0; i < zone.length; i++) {
+      const cnt = new Map<number, number>();
+      for (const j of nb[i]) cnt.set(zone[j], (cnt.get(zone[j]) ?? 0) + 1);
+      let best = zone[i], bc = (cnt.get(zone[i]) ?? 0) + 0.5;
+      for (const [z, c] of cnt) if (c > bc) { best = z; bc = c; }
+      next[i] = best;
+    }
+    zone = next;
+  }
+  // 4. volumen: la ropa unos milímetros, el pelo más (y más arriba, y la melena por detrás), con las normales de
+  // la superficie cerrada (sin escalones en las costuras)
+  merged.computeVertexNormals();
+  const mn = merged.attributes.normal as THREE.BufferAttribute;
+  const off = zone.map((z, i) => {
+    p.fromBufferAttribute(mp, i);
+    if (z === ZONE.shirt) return 0.01;
+    if (z === ZONE.hips || z === ZONE.legs || z === ZONE.shoes) return 0.008;
+    if (z === ZONE.hair && p.y > eyeTop + 0.03) return 0.012 + 0.016 * THREE.MathUtils.smoothstep(p.y, head.y + 0.02, head.y + 0.12) + (female && p.z < head.z - 0.02 ? 0.03 : 0);
+    return 0;
+  });
+  // (el grosor, suavizado entre vecinos: así el borde de la ropa es un escalón limpio y no dientes)
+  const off2 = off.map((o, i) => (o * 2 + nb[i].reduce((s2, j) => s2 + off[j], 0) / Math.max(1, nb[i].length)) / 3);
+  for (let i = 0; i < mp.count; i++) {
+    mp.setXYZ(i, mp.getX(i) + mn.getX(i) * off2[i], mp.getY(i) + mn.getY(i) * off2[i], mp.getZ(i) + mn.getZ(i) * off2[i]);
+    mc.setX(i, zone[i] / 8);
+  }
+  merged.deleteAttribute('normal');
+  // para recuperar piel y textura de cada vértice que quede: de su posición nueva a su vértice original
+  const mergedOf = new Map<string, number>();
+  const uvsOf = new Map<number, [number, number][]>();
+  {
+    const key0 = (x: number, y: number, z: number) => `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+    const firstOf = new Map<string, number>();
+    for (let i = 0; i < n; i++) { const k0 = key0(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); if (!firstOf.has(k0)) firstOf.set(k0, i); }
+    for (let i = 0; i < n; i++) void i;
+    // (mergeVertices conserva el orden de aparición: el vértice juntado i viene del primero con esa posición)
+    let mIdx = 0;
+    const seen = new Map<string, number>();
+    const uvA = g0.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < n; i++) {
+      const k0 = key0(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]) + '|' + C[i * 3].toFixed(3);
+      let m = seen.get(k0);
+      if (m === undefined) {
+        m = mIdx++;
+        seen.set(k0, m);
+        mergedOf.set(`${mp.getX(m).toFixed(4)},${mp.getY(m).toFixed(4)},${mp.getZ(m).toFixed(4)}`, i);
+        uvsOf.set(i, []);
+      }
+      // todas las coordenadas de textura de ese punto (en una costura de la textura hay dos)
+      const list = uvsOf.get(mergedOf.get(`${mp.getX(m).toFixed(4)},${mp.getY(m).toFixed(4)},${mp.getZ(m).toFixed(4)}`)!)!;
+      const u = uvA.getX(i), v = uvA.getY(i);
+      if (!list.some((q) => Math.abs(q[0] - u) < 1e-4 && Math.abs(q[1] - v) < 1e-4)) list.push([u, v]);
+    }
+  }
+  const simp = new SimplifyModifier().modify(merged, Math.floor(merged.attributes.position.count * (1 - keep)));
+  const si = g0.attributes.skinIndex as THREE.BufferAttribute, sw = g0.attributes.skinWeight as THREE.BufferAttribute;
+  const at = mergedOf;
+  const key = (x: number, y: number, z: number) => `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+  const p2 = simp.attributes.position as THREE.BufferAttribute;
+  const SI = new Uint16Array(p2.count * 4), SW = new Float32Array(p2.count * 4), UV = new Float32Array(p2.count * 2);
+  const uv0 = g0.attributes.uv as THREE.BufferAttribute;
+  for (let i = 0; i < p2.count; i++) {
+    const j = at.get(key(p2.getX(i), p2.getY(i), p2.getZ(i))) ?? 0;
+    for (let k = 0; k < 4; k++) { SI[i * 4 + k] = si.getComponent(j, k); SW[i * 4 + k] = sw.getComponent(j, k); }
+    // y la textura de la piel (la cara, con sus cejas y labios): la del vértice original
+    UV[i * 2] = uv0.getX(j);
+    UV[i * 2 + 1] = uv0.getY(j);
+  }
+  simp.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
+  simp.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+  simp.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+  // Costuras de la textura: un triángulo que cruza la costura tendría un vértice en cada lado de la imagen y
+  // estiraría una franja de textura por todo el triángulo. A esos vértices se les hace una copia (misma posición
+  // y misma piel) con la coordenada del otro lado: la superficie sigue cerrada y la textura, sin estirar
+  {
+    const origOf: number[] = [];
+    for (let i = 0; i < p2.count; i++) origOf.push(at.get(key(p2.getX(i), p2.getY(i), p2.getZ(i))) ?? -1);
+    const idx = Array.from(simp.index!.array);
+    const extra: { from: number; uv: [number, number] }[] = [];
+    const dup = new Map<string, number>();
+    const uvAt = (i: number): [number, number] => (i < p2.count ? [UV[i * 2], UV[i * 2 + 1]] : extra[i - p2.count].uv);
+    for (let t = 0; t < idx.length; t += 3) {
+      const tri = [idx[t], idx[t + 1], idx[t + 2]];
+      const base = uvAt(tri[0]);
+      for (let k = 1; k < 3; k++) {
+        const cur = uvAt(tri[k]);
+        if (Math.hypot(cur[0] - base[0], cur[1] - base[1]) < 0.15) continue;
+        const cands = uvsOf.get(origOf[tri[k]]) ?? [];
+        let best = cur, bd = Math.hypot(cur[0] - base[0], cur[1] - base[1]);
+        for (const c of cands) { const d = Math.hypot(c[0] - base[0], c[1] - base[1]); if (d < bd) { bd = d; best = c; } }
+        if (best === cur) continue;
+        const dk = tri[k] + ':' + best[0].toFixed(4) + ',' + best[1].toFixed(4);
+        let ni = dup.get(dk);
+        if (ni === undefined) { ni = p2.count + extra.length; extra.push({ from: tri[k], uv: best }); dup.set(dk, ni); }
+        idx[t + k] = ni;
+      }
+    }
+    if (extra.length) {
+      const N2 = p2.count + extra.length;
+      const grow = (src: ArrayLike<number>, size: number, fill: (i: number, out: number[]) => void) => {
+        const out: number[] = Array.from(src);
+        for (let e = 0; e < extra.length; e++) { const tmp: number[] = []; fill(e, tmp); out.push(...tmp); }
+        return out.length === N2 * size ? out : out;
+      };
+      const PA = grow(p2.array, 3, (e, o) => o.push(p2.getX(extra[e].from), p2.getY(extra[e].from), p2.getZ(extra[e].from)));
+      const CA = simp.attributes.color as THREE.BufferAttribute;
+      const CC = grow(CA.array, 3, (e, o) => o.push(CA.getX(extra[e].from), CA.getY(extra[e].from), CA.getZ(extra[e].from)));
+      const SIx = grow(SI, 4, (e, o) => { for (let k = 0; k < 4; k++) o.push(SI[extra[e].from * 4 + k]); });
+      const SWx = grow(SW, 4, (e, o) => { for (let k = 0; k < 4; k++) o.push(SW[extra[e].from * 4 + k]); });
+      const UVx = grow(UV, 2, (e, o) => o.push(extra[e].uv[0], extra[e].uv[1]));
+      simp.setAttribute('position', new THREE.Float32BufferAttribute(PA, 3));
+      simp.setAttribute('color', new THREE.Float32BufferAttribute(CC, 3));
+      simp.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SIx, 4));
+      simp.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SWx, 4));
+      simp.setAttribute('uv', new THREE.Float32BufferAttribute(UVx, 2));
+      simp.setIndex(idx);
+    }
+  }
+  simp.computeVertexNormals();
+  // del modelo de antes de los ojos se queda una versión ligera; lo demás se va
+  const eyes = by('Eyes');
+  const parent = body.parent!;
+  const out = new THREE.SkinnedMesh(simp, new THREE.MeshStandardMaterial({ color: 0xffffff, map: (body.material as THREE.MeshStandardMaterial).map, roughness: 0.9 }));
+  out.name = 'Body';
+  parent.add(out);
+  out.bind(sk, body.bindMatrix);
+  const all: THREE.SkinnedMesh[] = [];
+  root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh && o !== out && o !== eyes) all.push(o as THREE.SkinnedMesh); });
+  for (const m of all) m.removeFromParent();
+  if (eyes) lightSkinned(eyes, 0.25);
   return out;
 }
 

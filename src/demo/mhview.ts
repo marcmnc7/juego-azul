@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import quarryHdr from '../assets/env/quarry.hdr';
-import { buildMH, exportGLB, lightSkinned } from './mhbuild';
+import { buildMH, exportGLB, fuseCrowd } from './mhbuild';
 
 // EJEMPLO: el hombre de MakeHuman montado, en reposo, para revisarlo (?v=1 cara) y exportarlo (window.__export).
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -42,14 +42,8 @@ void (async () => {
       ? await buildMH({ tag: 'man', shirt: 0xffffff, jeansDark: 1, pantsGrey: true, hair: 'short02', hairVolume: 1.0, hairColor: 0xd8d8d8, mullet: 0, quiff: 0, skinTone: [1, 1, 1], facialHair: false, hairs: P === 'manlod' ? ['short01', 'short04'] : ['short01', 'short03', 'short04'] })
       : await buildMH({ tag: 'gas', shirt: 0xffffff, jeansDark: 1.0, hair: params.get('h') ?? 'short02', hairVolume: +(params.get('hv') ?? 1.05), hairColor: 0x84593a, mullet: +(params.get('mu') ?? 0.75), quiff: +(params.get('qu') ?? 0.32), skinTone: [0.97, 0.86, 0.74] });
     if (P === 'manlod' || P === 'womanlod') {
-      // la multitud: sin cejas, pestañas ni cuerpo desnudo, y todo mucho más ligero
-      const all: THREE.SkinnedMesh[] = [];
-      man.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) all.push(o as THREE.SkinnedMesh); });
-      const KEEP: Record<string, number> = { Body: 0.13, BodyShort: 0.13, Shirt: 0.3, Pants: 0.35, PantsShort: 0.35, Shoes: 0.22, Eyes: 0.2 };
-      for (const m of all) {
-        if (/^(Eyebrows|Eyelashes|BodyFull)$/.test(m.name)) { m.removeFromParent(); continue; }
-        lightSkinned(m, KEEP[m.name] ?? 0.3);
-      }
+      // la multitud: un cuerpo único por zonas (ver fuseCrowd)
+      fuseCrowd(man, P === 'womanlod', 0.5);
     }
     // vista previa: la ropa normal, con el color de cada uno
     man.traverse((o) => {
