@@ -1270,6 +1270,10 @@ function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look:
       return name === 'Pants' ? !nude && !shorts : shorts;
     case 'Shoes':
       return !nude;
+    case 'MHScalp':
+      // el casquete bajo el pelo, del color del pelo
+      mat.color = lin(look.hair).multiplyScalar(generic ? 1.0 : 0.85);
+      return true;
     case 'MHHair':
     case 'MHHair_short01':
     case 'MHHair_short03':

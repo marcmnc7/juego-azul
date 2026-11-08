@@ -418,7 +418,27 @@ export async function buildMH(o: MHOpts) {
   for (const vi of pantsVerts) if (posShort[vi][1] < hemY) posShort[vi][1] = hemY;
   mkMesh('PantsShort', posShort, S.ob.vt, S.ob.f, S.wOf, pantsMat, (f) => keepShort.get(f)!);
   const shoes = await proxy('Shoes', 'shoes02.obj', 'shoes02.mhclo', shoeMat);
-  await proxy('MHHair', o.hair + '.obj', o.hair + '.mhclo', hairMat, o.hairVolume, (pos) => styleHair(pos, o));
+  const hairFit = await fitProxy(o.hair + '.obj', o.hair + '.mhclo', o.hairVolume, (pos) => styleHair(pos, o));
+  mkMesh('MHHair', hairFit.pos, hairFit.ob.vt, hairFit.ob.f, hairFit.wOf, hairMat);
+  // Casquete bajo el pelo: la piel de la cabeza que tapa el peinado, en color liso (el juego le pone el del pelo).
+  // Entre mechón y mechón se veía la piel, a manchas naranjas
+  {
+    const headC = heads.get('mixamorig:Head')!;
+    const hp = hairFit.pos;
+    const near = (p: number[]) => { for (const q of hp) if ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2 < 0.09) return true; return false; };
+    const capV = V.map((p) => {
+      const d = [p[0] - headC[0], p[1] - headC[1], p[2] - headC[2]], l = Math.hypot(d[0], d[1], d[2]) || 1;
+      return [p[0] + (d[0] / l) * 0.035, p[1] + (d[1] / l) * 0.035, p[2] + (d[2] / l) * 0.035];
+    });
+    const inCap = new Map<number, boolean>();
+    const isCap = (vi: number) => {
+      let c = inCap.get(vi);
+      if (c === undefined) { c = V[vi][1] > headC[1] - 0.6 && near(V[vi]); inCap.set(vi, c); }
+      return c;
+    };
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+    mkMesh('MHScalp', capV, base.vt, base.f, bodyW, capMat, (f) => f.g === 'body' && f.v.every(isCap));
+  }
   for (const h of o.hairs ?? []) {
     const m = new THREE.MeshStandardMaterial({ map: await hairTexOf(h, 512), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85 });
     await proxy('MHHair_' + h, h + '.obj', h + '.mhclo', m, o.hairVolume);

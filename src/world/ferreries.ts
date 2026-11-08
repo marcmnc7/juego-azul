@@ -28,7 +28,7 @@ export interface Box2 {
 
 export interface Crowd {
   people: CrowdLike;
-  base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk }[];
+  base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk; turnT?: number }[];
   /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
   dance?: boolean;
   /** Chicas (para que, al hablarles, digan un nombre de chica). */
@@ -798,7 +798,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
         near(px, pz, 11.1, 9, 2) ||
         pomadaAt.some(([qx, qz]) => near(px, pz, qx, qz, 2.2)) ||
         pz < -4.3 || pz > 24.5 ||
-        [...spots, ...dancers].some((s) => near(px, pz, s.x, s.z, 0.95));
+        [...spots, ...dancers].some((s) => near(px, pz, s.x, s.z, 1.25));
       if (!bad) dancers.push({ x: px, z: pz, ry: r() * Math.PI * 2 });
     }
   });
@@ -864,16 +864,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
         const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 0.01;
         if (d < a.r) { tx += (dx / d) * (a.r - d); tz += (dz / d) * (a.r - d); }
       }
-      if (b.walk) {
-        // se aparta de lado (no hacia atrás) de quien tenga delante, con 0,75 m de hueco
-        for (const o of _all) {
-          const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz);
-          if (d < 0.01 || d > 0.75) continue;
-          const push = 0.75 - d;
-          if (b.walk.ax === 'x') tz += (dz >= 0 ? 1 : -1) * push * 1.6;
-          else tx += (dx >= 0 ? 1 : -1) * push * 1.6;
-        }
-      }
+
       const bb = b as typeof b & { ox?: number; oz?: number };
       bb.ox = (bb.ox ?? 0) + (tx - (bb.ox ?? 0)) * k;
       bb.oz = (bb.oz ?? 0) + (tz - (bb.oz ?? 0)) * k;
@@ -882,6 +873,23 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
         const w = b.walk;
         const cur = w.ax === 'x' ? b.x : b.z;
         let nx = cur + w.dir * WALK_SPEED * dt;
+        // si tiene a alguien delante (a menos de 0,9 m en su camino), da media vuelta: nada de empujar ni
+        // de atravesar a nadie (empujar de lado hacía temblar a los dos)
+        const ox0 = bb.ox ?? 0, oz0 = bb.oz ?? 0;
+        const px = (w.ax === 'x' ? nx : b.x) + ox0, pz = (w.ax === 'x' ? b.z : nx) + oz0;
+        const blocked = _all.some((o) => {
+          const ox = o.x - (b.x + ox0), oz = o.z - (b.z + oz0);
+          const ahead = (w.ax === 'x' ? ox : oz) * w.dir;
+          const side = Math.abs(w.ax === 'x' ? oz : ox);
+          return ahead > 0.05 && ahead < 0.9 && side < 0.55 && Math.hypot(o.x - px, o.z - pz) > 0.01;
+        });
+        if (blocked && (b.turnT ?? 0) <= 0) {
+          w.dir = (-w.dir) as 1 | -1;
+          b.turnT = 1.2;
+          nx = cur;
+        }
+        b.turnT = Math.max(0, (b.turnT ?? 0) - dt);
+        if (blocked) nx = cur;
         if (nx > w.a1 || nx < w.a0) {
           w.dir = (-w.dir) as 1 | -1;
           nx = THREE.MathUtils.clamp(nx, w.a0, w.a1);

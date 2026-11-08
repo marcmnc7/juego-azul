@@ -62,6 +62,40 @@ function poseArm(model: THREE.Object3D, c: 'drink' | 'phone', u: number) {
   }
   twoBone(up, lo, hand, t, pole, 1);
   model.updateWorldMatrix(true, true);
+  curlFingers(model, c === 'drink' ? 1 : 0.6);
+}
+
+/** Cierra los dedos de la mano derecha hacia la palma (alrededor del vaso o del móvil). */
+function curlFingers(model: THREE.Object3D, k: number) {
+  const hand = boneOf(model, 'RightHand');
+  const i1 = boneOf(model, 'RightHandIndex1'), p1 = boneOf(model, 'RightHandPinky1'), m1 = boneOf(model, 'RightHandMiddle1');
+  if (!i1 || !p1 || !m1) return;
+  const palm = palmNormal(hand, i1, p1, m1);
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), ax = new THREE.Vector3(), q = new THREE.Quaternion();
+  for (const f of ['Index', 'Middle', 'Ring', 'Pinky', 'Thumb']) {
+    const ang = f === 'Thumb' ? [0.35, 0.35, 0.25] : [1.0, 1.15, 0.7];
+    for (let j = 1; j <= 3; j++) {
+      const b = boneOf(model, `RightHand${f}${j}`);
+      const ch = boneOf(model, `RightHand${f}${j + 1}`) ?? (b?.children[0] as THREE.Object3D | undefined);
+      if (!b || !ch) continue;
+      b.getWorldPosition(A);
+      ch.getWorldPosition(B);
+      // eje: perpendicular al hueso y a la normal de la palma, para que la punta vaya hacia la palma
+      ax.crossVectors(B.sub(A).normalize(), palm).normalize();
+      if (ax.lengthSq() < 1e-6) continue;
+      rotateWorld(b, q.setFromAxisAngle(ax, ang[j - 1] * k), 1);
+    }
+  }
+  model.updateWorldMatrix(true, true);
+}
+
+/** Normal de la palma de la mano derecha (hacia donde se cierran los dedos), en mundo. */
+function palmNormal(hand: THREE.Object3D, i1: THREE.Object3D, p1: THREE.Object3D, m1: THREE.Object3D) {
+  const h = hand.getWorldPosition(new THREE.Vector3());
+  const fing = m1.getWorldPosition(new THREE.Vector3()).sub(h).normalize();
+  const across = i1.getWorldPosition(new THREE.Vector3()).sub(p1.getWorldPosition(new THREE.Vector3())).normalize();
+  // mano derecha: dedos × (meñique→índice) apunta al dorso; la palma, al revés
+  return new THREE.Vector3().crossVectors(fing, across).normalize().negate();
 }
 
 /** Vaso de plástico y móvil, como mallas con piel pegadas del todo a la mano derecha (pose de enlace). */
@@ -73,10 +107,24 @@ function addProps(meshes: THREE.SkinnedMesh[]) {
   const handBind = sk.boneInverses[hi].clone().invert();
   const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
   handBind.decompose(pos, q, sc);
+  // Dentro de la mano, en la pose de enlace: a la altura de los nudillos y por delante de la palma; el vaso con
+  // su eje a lo largo de los nudillos (de meñique a índice), así queda de pie con el pulgar arriba
+  const bindPos = (re: RegExp) => {
+    const j = sk.bones.findIndex((b) => re.test(b.name));
+    return j < 0 ? null : new THREE.Vector3().setFromMatrixPosition(sk.boneInverses[j].clone().invert());
+  };
+  const hP = pos.clone(), iP = bindPos(/RightHandIndex1$/), pP = bindPos(/RightHandPinky1$/), mP = bindPos(/RightHandMiddle1$/);
+  const fing = mP ? mP.clone().sub(hP).normalize() : new THREE.Vector3(-1, 0, 0).applyQuaternion(q);
+  const across = iP && pP ? iP.clone().sub(pP).normalize() : new THREE.Vector3(0, 0, 1);
+  const palm = new THREE.Vector3().crossVectors(fing, across).normalize().negate();
+  const grip = (mP ?? hP).clone().lerp(hP, 0.25);
   const make = (name: string, g: THREE.BufferGeometry, local: THREE.Vector3, keepUpright: boolean) => {
-    // en el espacio de la mano: desplazado hacia la palma; el vaso, de pie en el mundo
-    const off = local.clone().applyQuaternion(q);
-    const m = new THREE.Matrix4().compose(pos.clone().add(off), keepUpright ? new THREE.Quaternion() : q, new THREE.Vector3(1, 1, 1));
+    void keepUpright;
+    // ejes del objeto: y a lo largo de los nudillos, z hacia fuera de la palma
+    const basis = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(across, palm), across, palm);
+    const rq = new THREE.Quaternion().setFromRotationMatrix(basis);
+    const center = grip.clone().addScaledVector(palm, local.z).addScaledVector(fing, local.x);
+    const m = new THREE.Matrix4().compose(center, rq, new THREE.Vector3(1, 1, 1));
     g.applyMatrix4(m).applyMatrix4(body.bindMatrixInverse);
     const n = g.attributes.position.count;
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, i) => (i % 4 === 0 ? hi : 0)), 4));
@@ -87,8 +135,8 @@ function addProps(meshes: THREE.SkinnedMesh[]) {
     sm.bind(sk, body.bindMatrix);
     meshes.push(sm);
   };
-  make('Cup', new THREE.CylinderGeometry(0.036, 0.029, 0.105, 12), new THREE.Vector3(0, 0.07, 0.04), true);
-  make('Phone', new THREE.BoxGeometry(0.07, 0.145, 0.009), new THREE.Vector3(0, 0.08, 0.03), false);
+  make('Cup', new THREE.CylinderGeometry(0.036, 0.029, 0.105, 12), new THREE.Vector3(0, 0, 0.038), true);
+  make('Phone', new THREE.BoxGeometry(0.07, 0.145, 0.009).rotateZ(Math.PI / 2), new THREE.Vector3(0.01, 0, 0.012), false);
 }
 
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
@@ -374,13 +422,15 @@ export class RigCrowd {
       // (por las dos caras: al simplificar la versión ligera quedaba algún triángulo del revés y se veía a través)
       if (!prop) mat.side = THREE.DoubleSide;
       if (/^MHHair/.test(part.name)) mat.alphaTest = 0.2;
+      // zapatillas de un color (la textura recortada, simplificada, salía en picos blancos en los tobillos)
+      if (part.name === 'Shoes') { mat.map = null; mat.alphaTest = 0; mat.color.set(0x2c2824); }
       // Pantalón corto: a ella se lo pinta su textura (como el mono de Margaux); él lleva su pieza corta
       if (man) mat.color.set(0xffffff);
       else colorRigMaterial(kind, part.name, mat, neutral);
       vatify(mat, part);
       const im = new THREE.InstancedMesh(g, mat, count);
       // Él va por piezas: cada pieza se tiñe entera con el color de esa persona
-      const tint = (/^MHHair/.test(part.name) ? hair : part.name === 'Shirt' ? top : /^Pants/.test(part.name) ? bot : /^Body/.test(part.name) ? skin : null);
+      const tint = (/^(MHHair|MHScalp)/.test(part.name) ? hair : part.name === 'Shirt' ? top : /^Pants/.test(part.name) ? bot : /^Body/.test(part.name) ? skin : null);
       if (tint) {
         for (let i = 0; i < count; i++) im.setColorAt(i, _c.setRGB(tint[i * 3], tint[i * 3 + 1], tint[i * 3 + 2]));
       }
