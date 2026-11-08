@@ -1,5 +1,6 @@
 import { comic } from '../core/comic';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Surf } from '../core/surfaces';
 import { buildSurroundings, collidersBox } from './surround';
 import { POT_CORE, G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
@@ -30,6 +31,8 @@ export interface Crowd {
   base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk }[];
   /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
   dance?: boolean;
+  /** Chicas (para que, al hablarles, digan un nombre de chica). */
+  female?: boolean;
 }
 
 /** Paseo de ida y vuelta por un tramo de calle (a lo largo de x en la calle, de z en la plaza). */
@@ -62,6 +65,8 @@ export interface FerreriesWorld {
   spawn: THREE.Vector3;
   pomadaSpots: THREE.Vector3[];
   tofolPos: THREE.Vector3;
+  /** Sillas de las terrazas: dónde sentarse y hacia dónde mirar (hacia la mesa). */
+  chairs: { x: number; z: number; ry: number }[];
   marcPos: THREE.Vector3;
   plazaCenter: THREE.Vector3;
   crowds: Crowd[];
@@ -516,7 +521,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   tables.forEach(([tx, tz]) => table(m, tx, tz, colliders, r));
 
   // Pinos en la plaza y bancos
-  for (const [px, pz] of [[-10.6, 20.4], [8.5, 23]]) {
+  // (lejos de las fachadas de los lados, que tienen puertas a 12 m del centro)
+  for (const [px, pz] of [[-8.2, 20.4], [8.5, 22.4]]) {
     m.add(G.cyl, 0x6b4a30, px, 1.8, pz, 0, 0, 0.05, 0.5, 3.6, 0.5);
     m.add(G.sphere, 0x3d6b3a, px, 4.5, pz, 0, 0, 0, 4.4, 2.2, 4.4);
     m.add(G.sphere, 0x4a7d44, px + 0.6, 5.3, pz - 0.4, 0, 0, 0, 3, 1.6, 3);
@@ -526,7 +532,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   for (const bz of [9.5, 15]) {
     for (const sx of [-1, 1]) {
       if (sx > 0 && bz < 12) continue; // ahí está ahora el Bar Es Pla
-      const bx = sx * 11.2;
+      // (de espaldas a la plaza, no delante de las puertas de las casas de los lados)
+      const bx = sx * 9.6;
       m.add(G.box, 0x8a5a36, bx, 0.45, bz, 0, 0, 0, 0.5, 0.08, 2);
       m.add(G.box, 0x8a5a36, bx + sx * 0.22, 0.75, bz, 0, 0, 0, 0.06, 0.5, 2);
       m.add(G.box, 0x333333, bx, 0.22, bz - 0.8, 0, 0, 0, 0.45, 0.45, 0.06);
@@ -564,6 +571,21 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     }
   }
   for (const l of lamps) lightPts.push(l.p.x, l.p.y, l.p.z);
+  // El hilo del que cuelgan banderines y bombillas (antes flotaban en el aire)
+  {
+    const tubes: THREE.BufferGeometry[] = [];
+    for (const [x1, z1, x2, z2] of strings) {
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        pts.push(new THREE.Vector3(x1 + (x2 - x1) * t, 6.2 - Math.sin(t * Math.PI) * 1.3, z1 + (z2 - z1) * t));
+      }
+      tubes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.014, 4, false));
+    }
+    const wire = new THREE.Mesh(mergeGeometries(tubes), new THREE.MeshBasicMaterial({ color: 0x2e2620 }));
+    wire.userData.noCast = true;
+    group.add(wire);
+  }
 
   // ---- Ambiente de Sant Bartomeu ----
   // Banderas de Menorca y senyeres colgando de los balcones
@@ -757,7 +779,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     const mine = sp.filter((_, i) => i % looks.length === li);
     const people = makeCrowd(look, mine.length, false, mine.map((s) => s.behave ?? 'idle'));
     group.add(people.group);
-    return { people, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
+    return { people, female: !(look.male || look.beard || look.hairStyle === 'short' || look.hairStyle === 'cap'), base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
   });
 
   // Gente bailando delante de cada bar (alternan brazos arriba y abajo al ritmo)
@@ -790,7 +812,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     if (!mine.length) return;
     const people = makeCrowd(look, mine.length, true);
     group.add(people.group);
-    crowds.push({ people, dance: true, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
+    crowds.push({ people, dance: true, female: !(look.male || look.beard || look.hairStyle === 'short' || look.hairStyle === 'cap'), base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 9 + r() * 3 })) });
   });
 
   // Fuera del centro, el pueblo sigue: manzanas de casas, y al fondo las lomas (no un suelo infinito)
@@ -814,6 +836,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     lights,
     partyLights,
     bars: barFronts,
+    chairs: tables.flatMap(([tx, tz]) => [0, Math.PI].map((a) => ({ x: tx + Math.cos(a) * 0.95, z: tz + Math.sin(a) * 0.95, ry: Math.atan2(-Math.cos(a), -Math.sin(a)) }))),
     fabioleraPos: new THREE.Vector3(3.6, 0, 23.4),
     sky,
     sun,
@@ -823,8 +846,15 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
 const tq = new THREE.Quaternion();
 const up = new THREE.Vector3(0, 1, 0);
 const pose = newCrowdPose();
+const _all: { x: number; z: number; w: boolean }[] = [];
 export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }, dt = 1 / 60, avoid: readonly { x: number; z: number; r: number }[] = []) {
   const k = Math.min(1, dt * 5);
+  // dónde está cada uno ahora: los que pasean esquivan a los demás (antes se atravesaban)
+  _all.length = 0;
+  for (const c of crowds) for (const b of c.base) {
+    const bb = b as typeof b & { ox?: number; oz?: number };
+    _all.push({ x: b.x + (bb.ox ?? 0), z: b.z + (bb.oz ?? 0), w: !!b.walk });
+  }
   for (const c of crowds) {
     c.base.forEach((b, i) => {
       // La gente se aparta: para dejar un claro (p. ej. alrededor de una pareja) y para dejar pasar
@@ -833,6 +863,16 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
       for (const a of clear && clear.r > 0 ? [clear, ...avoid] : avoid) {
         const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz) || 0.01;
         if (d < a.r) { tx += (dx / d) * (a.r - d); tz += (dz / d) * (a.r - d); }
+      }
+      if (b.walk) {
+        // se aparta de lado (no hacia atrás) de quien tenga delante, con 0,75 m de hueco
+        for (const o of _all) {
+          const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz);
+          if (d < 0.01 || d > 0.75) continue;
+          const push = 0.75 - d;
+          if (b.walk.ax === 'x') tz += (dz >= 0 ? 1 : -1) * push * 1.6;
+          else tx += (dx >= 0 ? 1 : -1) * push * 1.6;
+        }
       }
       const bb = b as typeof b & { ox?: number; oz?: number };
       bb.ox = (bb.ox ?? 0) + (tx - (bb.ox ?? 0)) * k;

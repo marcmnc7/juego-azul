@@ -624,9 +624,11 @@ export function lightSkinned(m: THREE.SkinnedMesh, keep: number) {
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
   g.computeVertexNormals();
   // la ropa, un poco hacia fuera: al simplificar cuerpo y ropa por separado, la piel asomaba a manchas
-  if (/^(Shirt|Pants|PantsShort)$/.test(m.name)) {
+  // (la camiseta, por fuera del pantalón: con el mismo grosor se peleaban y salían trozos de una en la otra)
+  const inflate = m.name === 'Shirt' ? 0.02 : /^(Pants|PantsShort)$/.test(m.name) ? 0.011 : 0;
+  if (inflate) {
     const n = g.attributes.normal as THREE.BufferAttribute;
-    for (let i = 0; i < p2.count; i++) p2.setXYZ(i, p2.getX(i) + n.getX(i) * 0.012, p2.getY(i) + n.getY(i) * 0.012, p2.getZ(i) + n.getZ(i) * 0.012);
+    for (let i = 0; i < p2.count; i++) p2.setXYZ(i, p2.getX(i) + n.getX(i) * inflate, p2.getY(i) + n.getY(i) * inflate, p2.getZ(i) + n.getZ(i) * inflate);
   }
   const out = new THREE.SkinnedMesh(g, m.material);
   out.name = m.name;

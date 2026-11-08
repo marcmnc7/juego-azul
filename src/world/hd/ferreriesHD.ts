@@ -130,8 +130,11 @@ export class FerreriesHD {
         m.add(G.sphere, k % 2 ? 0xd6338a : 0x3e7a3a, pp.x, 1 + r() * 2.5, pp.z, 0, ry, 0, 0.9, 0.7, 0.4);
       }
     }
-    if (r() < 0.5) {
-      const lx = (r() < 0.5 ? -1 : 1) * (w / 2 - 0.8);
+    // (la maceta, nunca delante de la puerta)
+    const doorX = -w / 2 + (w / cols) * (Math.floor(cols / 2) + 0.5);
+    const potX = [-(w / 2 - 0.8), w / 2 - 0.8].filter((v) => Math.abs(v - doorX) > 1.4);
+    if (r() < 0.5 && potX.length) {
+      const lx = potX[Math.floor(r() * potX.length)];
       const pp = world(lx, 0, fz + 0.4);
       m.add(G.cyl, 0xb5603b, pp.x, 0.3, pp.z, 0, 0, 0, 0.6, 0.6, 0.6);
       m.add(G.sphere, 0x3e7a3a, pp.x, 0.9, pp.z, 0, 0, 0, 0.9, 0.9, 0.9);

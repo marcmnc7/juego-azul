@@ -528,7 +528,8 @@ void main() {
     float dist = length(fract(r) - 0.5);
     float rad = 0.5 * sqrt(amt);
     float dotm = (1.0 - smoothstep(rad - 0.07, rad + 0.07, dist)) * step(0.02, amt);
-    c.rgb *= 1.0 - dotm * 0.3;
+    // (sin trama de puntos: se veía como un filtro de cuadraditos en todo el juego)
+    c.rgb *= 1.0 - dotm * 0.0;
     // ---- color de imprenta ----
     float l2 = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
     c.rgb = max(mix(vec3(l2), c.rgb, 1.18), 0.0);
@@ -540,7 +541,7 @@ void main() {
     vec2 r = vec2(g.x + g.y, g.y - g.x) * 0.7071;
     float dist = length(fract(r) - 0.5);
     float rad = 0.5 * sqrt(amt);
-    c.rgb *= 1.0 - (1.0 - smoothstep(rad - 0.07, rad + 0.07, dist)) * step(0.02, amt) * 0.16;
+    c.rgb *= 1.0;
   }
   // líneas de acción: rayas radiales desde el borde, al dar un golpe o al ir deprisa
   if (action > 0.01) {

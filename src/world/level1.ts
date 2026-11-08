@@ -167,6 +167,10 @@ export class Level1 implements Level {
   private luckCount = 0;
   /** Caricia al burro en curso: se gira hacia él y le da unas palmaditas en el cuello; él cabecea contento. */
   private pet: { s: DonkeyState; t: number } | null = null;
+  /** Sentada en una silla de terraza (se levanta al moverse). */
+  private sit: { x: number; z: number; ry: number; fx: number; fz: number } | null = null;
+  /** Gente con la que ya ha hablado (para no repetir siempre lo mismo). */
+  private chats = 0;
   private perfects = 0;
   private hits = 0;
   private playTime = 0;
@@ -439,7 +443,8 @@ export class Level1 implements Level {
   }
 
   private updateHud() {
-    const h = this.hud;
+    // (sin el objetivo escrito arriba: lo que hay que hacer se descubre hablando con la gente; quedan los contadores)
+    const h = { setObjective: (_t: string) => this.hud.setObjective(''), setCounters: (c: string) => this.hud.setCounters(c) };
     const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
     switch (this.stage) {
       case 'water':
@@ -627,6 +632,53 @@ export class Level1 implements Level {
     return rearingNear;
   }
 
+  /** La persona del público más cercana (a menos de 1,6 m), si hay. */
+  private nearestLocal(pp: THREE.Vector3) {
+    let best: { b: { x: number; z: number; ry: number; ox?: number; oz?: number; walk?: unknown }; female: boolean } | null = null;
+    let bd = 1.6;
+    for (const c of this.world.crowds) {
+      if (c.dance) continue;
+      for (const b of c.base as { x: number; z: number; ry: number; ox?: number; oz?: number; walk?: unknown }[]) {
+        const d = Math.hypot(b.x + (b.ox ?? 0) - pp.x, b.z + (b.oz ?? 0) - pp.z);
+        if (d < bd) { bd = d; best = { b, female: !!c.female }; }
+      }
+    }
+    return best;
+  }
+
+  /** Charla con alguien del público: se gira hacia ella y dice algo (a veces, lo que toca hacer). */
+  private chatWith(w: { b: { x: number; z: number; ry: number; walk?: unknown }; female: boolean }) {
+    const pp = this.player.root.position;
+    if (!w.b.walk) w.b.ry = Math.atan2(pp.x - w.b.x, pp.z - w.b.z);
+    const names = w.female ? ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia'] : ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel'];
+    const name = names[Math.floor(Math.random() * names.length)];
+    const g = this.V.guide;
+    const hint: Record<string, string[]> = {
+      talkTofol: [`¿Buscas a ${g}? Siempre está detrás de la barra del Bar Es Pla, en la plaza.`, `${g} andaba preguntando por ti. Está en el Es Pla, el de la plaza de la iglesia.`],
+      collect: ['Dicen que si acaricias a un ase justo cuando se para, da suerte todo el año.', 'Las pomadas las ponen en las barras de los bares. Hay tres bares por aquí.', 'Cuidado con los burros, que cuando se encabritan empujan. Espera a que se paren.'],
+      returnTofol: [`${g} estaba esperando sus pomadas, ¿no?`],
+      findMarc: ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
+    };
+    const chatter = [
+      '¡Qué calor! Pero el jaleo no me lo pierdo por nada.',
+      'Mi abuelo dice que antes los caballos saltaban más alto. Lo dice cada año.',
+      '¿Has probado la pomada? Gin de Menorca con limonada. Peligrosa.',
+      'Esta noche hay fuegos artificiales en la plaza. No te los pierdas.',
+      'Llevo desde las nueve aquí. Me duelen los pies, pero vale la pena.',
+      '¿De dónde eres? Se te nota que no eres de Ferreries… ¡Bienvenida!',
+      'Este año hay más gente que nunca. Medio Menorca está aquí.',
+      'Me han mojado tres veces ya. Los críos con las pistolas son lo peor.',
+      'Sant Bartomeu es lo mejor del verano. Luego ya empieza septiembre.',
+      '¡Ep! ¿Bailamos luego en el Cas Ferrer? Ponen buena música.',
+    ];
+    const pool = hint[this.stage];
+    const useHint = pool && (this.chats % 2 === 0 || Math.random() < 0.5);
+    const text = useHint ? pool[Math.floor(Math.random() * pool.length)] : chatter[(this.chats * 7 + Math.floor(Math.random() * 3)) % chatter.length];
+    this.chats++;
+    this.busy = true;
+    dialogue([{ who: name, text }], () => (this.busy = false));
+  }
+
   private touchDonkey(s: DonkeyState) {
     const k = Math.sin(Math.min(1, 1 - s.rearT / REAR) * Math.PI);
     const perfect = k > 0.85;
@@ -756,7 +808,16 @@ export class Level1 implements Level {
     const pp = this.player.root.position;
     this.walker.turn(this.input.consumeCam());
     const locked = this.busy || ending || close0 || this.stage === 'barDance';
-    const ax = locked ? { x: 0, y: 0 } : this.input.axes();
+    let ax = locked ? { x: 0, y: 0 } : this.input.axes();
+    if (this.sit) {
+      // sentada: al empujar el joystick se levanta; mientras, quieta en la silla
+      if (Math.hypot(ax.x, ax.y) > 0.35) {
+        // se levanta donde estaba antes de sentarse (la silla queda dentro del hueco de la mesa)
+        this.player.root.position.set(this.sit.fx, 0, this.sit.fz);
+        this.sit = null;
+      }
+      else ax = { x: 0, y: 0 };
+    }
     this.walker.canJump = !locked;
     // Obstáculos redondos: el público y los ases (dos círculos a lo largo del cuerpo)
     this.solids.length = this.world.people.length;
@@ -777,6 +838,18 @@ export class Level1 implements Level {
     if (ending || this.stage === 'barDance' || this.stage === 'pairDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
     else if (this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
     else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
+    if (this.sit) {
+      // en la silla, de cara a la mesa: muslos hacia delante, rodillas dobladas y la cadera a la altura del asiento
+      const P = this.player;
+      P.root.position.set(this.sit.x, 0, this.sit.z);
+      P.root.rotation.y = this.walker.facing = this.sit.ry;
+      P.legL.rotation.x = P.legR.rotation.x = -1.45;
+      P.kneeL.rotation.x = P.kneeR.rotation.x = 1.45;
+      P.footL.rotation.x = P.footR.rotation.x = 0;
+      P.body.position.y = -0.4;
+      P.armL.rotation.x = P.armR.rotation.x = -0.35;
+      P.elbowL.rotation.x = P.elbowR.rotation.x = -0.6;
+    } else this.player.body.position.y = 0;
     // Las pomadas se llevan a Tòfol: con una, un brazo adelantado; con dos o tres, los dos. Entregadas, las manos libres
     const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount - this.spilled : 0;
     this.inHand.forEach((c, i) => (c.visible = i < held));
@@ -946,6 +1019,20 @@ export class Level1 implements Level {
           this.busy = true;
           dialogue(this.T.carme, () => (this.busy = false));
         };
+      } else if (this.stage !== 'water' && !this.sit) {
+        // Con cualquiera de la gente: una charla corta (y, a veces, una pista de lo que toca)
+        const who = this.nearestLocal(pp);
+        const chair = this.world.chairs.find((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 0.85);
+        if (who) {
+          label = 'Hablar';
+          this.pendingAction = () => this.chatWith(who);
+        } else if (chair) {
+          label = 'Sentarse';
+          this.pendingAction = () => {
+            this.sit = { ...chair, fx: pp.x, fz: pp.z };
+            this.input.reset();
+          };
+        }
       }
     }
     this.hud.setAction(label, pulse);
@@ -953,14 +1040,13 @@ export class Level1 implements Level {
 
     // Marcador de objetivo
     const tgt = this.target();
-    this.marker.visible = !!tgt && !this.busy;
+    // (sin pistas: ni flecha encima del objetivo ni flecha en pantalla; se descubre hablando y explorando)
+    this.marker.visible = false;
     if (tgt) {
       this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 0.7 : 2.6) + Math.sin(this.t * 3) * 0.1, tgt.z);
       this.marker.rotation.y += dt * 2;
-      const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
-      const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
-      this.hud.setArrow(pp.distanceTo(tgt) < 3 ? null : -rel);
-      beacon.at(pp.distanceTo(tgt) < 3 ? null : tgt);
+      this.hud.setArrow(null);
+      beacon.at(null);
     } else {
       this.hud.setArrow(null);
       beacon.at(null);
@@ -1010,7 +1096,7 @@ export class Level1 implements Level {
     if (this.stage === 'eyes') {
       // (la mueve eyesCamera al principio del fotograma)
     } else if (this.stage === 'kiss' || this.stage === 'kissing') this.kissCamera(dt);
-    else this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 7.5, close ? 2.3 : ending ? 4.2 : intro ? 6 : 3.8);
+    else this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 5.4, close ? 2.3 : ending ? 4.2 : intro ? 6 : 2.9);
     this.world.sun.follow(pp);
     this.world.sky.update(this.camera, dt);
   }

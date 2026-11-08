@@ -373,6 +373,7 @@ export class RigCrowd {
       const mat = prop ? new THREE.MeshStandardMaterial({ color: prop === 1 ? 0xf3ead2 : 0x1c1c24, roughness: 0.5 }) : part.base.clone();
       // (por las dos caras: al simplificar la versión ligera quedaba algún triángulo del revés y se veía a través)
       if (!prop) mat.side = THREE.DoubleSide;
+      if (/^MHHair/.test(part.name)) mat.alphaTest = 0.2;
       // Pantalón corto: a ella se lo pinta su textura (como el mono de Margaux); él lleva su pieza corta
       if (man) mat.color.set(0xffffff);
       else colorRigMaterial(kind, part.name, mat, neutral);

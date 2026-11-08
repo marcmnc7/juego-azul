@@ -276,6 +276,9 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
   const dstRest = worldPose(model);
   const box = new THREE.Box3();
   for (const p of dstRest.p.values()) box.expandByPoint(p);
+  // La suela, no el hueso del pie: el último hueso queda por encima de la suela y los pies se hundían en el suelo
+  model.updateWorldMatrix(true, true);
+  const soleY = new THREE.Box3().setFromObject(model, true).min.y;
   // De la planta del pie a la coronilla (el último hueso de la cabeza queda algo por debajo)
   const scale = HEIGHT[kind] / ((box.max.y - box.min.y) * 1.04);
   restoreLocal(animsBind);
@@ -290,7 +293,7 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
   const down = worldPose(model).q;
   restoreLocal(bind);
   return {
-    gltf, clips, down, scale, minY: box.min.y,
+    gltf, clips, down, scale, minY: Math.min(box.min.y, soleY),
     walkSpeed: strideSpeed(model, clips.walk, scale) || 1.4,
     runSpeed: strideSpeed(model, clips.run, scale) || 4.5,
   };
@@ -1274,6 +1277,8 @@ function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look:
     case 'MHHair_bob02':
     case 'MHHair_afro01':
       if (generic) mat.color = lin(look.hair).multiplyScalar(1.15);
+      // (más tupido: con el recorte de antes se veía la piel de la cabeza a manchas naranjas)
+      mat.alphaTest = 0.2;
       return !generic || name === mhHairFor(look, kind);
     default:
       return true;
@@ -1338,6 +1343,28 @@ function jeansGeometry(src: THREE.BufferGeometry, bare = false, skel?: THREE.Ske
     bins.set(bk(i), b);
   }
   for (const b of bins.values()) { b.x /= b.n; b.z /= b.n; }
+  // con esqueleto, el eje de la pierna de verdad (cadera, rodilla, tobillo): el centro de la pernera ancha
+  // no lo es, y la pierna salía torcida y con bultos
+  if (skel) {
+    const at = (re: RegExp) => {
+      const j = skel.bones.findIndex((b) => re.test(b.name));
+      return j < 0 ? null : new THREE.Vector3().setFromMatrixPosition(skel.boneInverses[j].clone().invert());
+    };
+    for (const side of ['L', 'R'] as const) {
+      const n = side === 'L' ? 'Left' : 'Right';
+      const pts = [at(new RegExp(n + 'Foot$')), at(new RegExp(n + 'Leg$')), at(new RegExp(n + 'UpLeg$'))].filter(Boolean) as THREE.Vector3[];
+      if (pts.length < 3) continue;
+      pts.sort((a, b) => a.y - b.y);
+      for (const [k, b] of bins) {
+        if (!k.startsWith(side + ':')) continue;
+        const y = y0 + (Number(k.split(':')[1]) + 0.5) * SL * H;
+        const [p0, p1] = y < pts[1].y ? [pts[0], pts[1]] : [pts[1], pts[2]];
+        const u = THREE.MathUtils.clamp((y - p0.y) / (p1.y - p0.y), 0, 1);
+        b.x = THREE.MathUtils.lerp(p0.x, p1.x, u);
+        b.z = THREE.MathUtils.lerp(p0.z, p1.z, u) + 0.006;
+      }
+    }
+  }
   const out = src.clone();
   const op = out.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
