@@ -501,7 +501,7 @@ void main() {
     dc = rawD(uv);
     float zc = linD(dc);
     // la línea adelgaza con la distancia, como la de un dibujante (lejos, gruesa, emborronaba a la gente)
-    vec2 o = texel * max(1.0, linePx * pressure * mix(1.0, 0.45, smoothstep(5.0, 22.0, zc)));
+    vec2 o = texel * max(1.0, linePx * pressure * mix(1.0, 0.4, smoothstep(4.0, 16.0, zc)));
     float dl = rawD(uv - vec2(o.x, 0.0)), dr = rawD(uv + vec2(o.x, 0.0));
     float du = rawD(uv + vec2(0.0, o.y)), dd = rawD(uv - vec2(0.0, o.y));
     // silueta: algún vecino mucho más lejos (la línea queda del lado del objeto de delante)
@@ -517,7 +517,8 @@ void main() {
     // superficie: sin esto la gente llevaba un halo negro gordo)
     float near4 = min(min(linD(dl), linD(dr)), min(linD(du), linD(dd)));
     crease *= 1.0 - smoothstep(0.02, 0.04, (zc - near4) / zc);
-    float ink = max(sil, crease);
+    // (de base algo más suave, y más aún a lo lejos, donde las líneas se amontonan)
+    float ink = max(sil, crease * 0.8) * mix(1.0, 0.6, smoothstep(10.0, 30.0, zc));
     // ---- trama ----
     float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
     float pl = pow(max(l, 0.0), 1.0 / 2.2);
@@ -620,7 +621,7 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   const pc = camera as THREE.PerspectiveCamera;
   u.near.value = pc.near ?? 0.1;
   u.far.value = pc.far ?? 1000;
-  u.linePx.value = Math.max(1.5, pr * 1.35);
+  u.linePx.value = Math.max(1.3, pr * 1.12);
   u.dotPx.value = 4.2 * pr;
   // líneas de velocidad: a partir de ~5 m/s de cámara (en burro, en moto, en coche); más el golpe que se apaga
   const now = performance.now() / 1000;
