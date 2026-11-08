@@ -1105,40 +1105,6 @@ function legsMask() {
 
 
 
-/**
- * Ropa de verano pintada en el shader: pantalón corto (por debajo de medio muslo, piel) o manga corta
- * (en los brazos, lejos del cuerpo, piel; y sin faldones de chaqueta). Necesita el atributo aRest (altura, distancia al centro).
- */
-export function bareShader(mat: THREE.Material, skin: number, part: 'legs' | 'arms') {
-  const prev = mat.onBeforeCompile;
-  const prevKey = mat.customProgramCacheKey.bind(mat);
-  const cond = part === 'legs' ? 'vRest.x < 0.37' : 'vRest.y > 0.15';
-  mat.onBeforeCompile = (sh, r) => {
-    prev?.call(mat, sh, r);
-    sh.uniforms.bareSkin = { value: lin(skin) };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRest;\nvarying vec2 vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 bareSkin;\nvarying vec2 vRest;')
-      .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>\n${part === 'arms' ? 'if (vRest.x < 0.505) discard;' : ''}\nif (${cond}) diffuseColor.rgb = bareSkin * 0.92;`);
-  };
-  mat.customProgramCacheKey = () => prevKey() + '|bare-' + part;
-}
-
-/** Sin los faldones de la chaqueta del modelo de hombre (lo de debajo de la cintura): una camisa normal. */
-export function noTails(mat: THREE.Material) {
-  const prev = mat.onBeforeCompile;
-  const prevKey = mat.customProgramCacheKey.bind(mat);
-  mat.onBeforeCompile = (sh, r) => {
-    prev?.call(mat, sh, r);
-    if (sh.fragmentShader.includes('varying vec2 vRest;')) {
-      sh.fragmentShader = sh.fragmentShader.replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\nif (vRest.x < 0.505) discard;');
-      return;
-    }
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aRest;\nvarying vec2 vRest;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvRest = aRest;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vRest;').replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\nif (vRest.x < 0.505) discard;');
-  };
-  mat.customProgramCacheKey = () => prevKey() + '|notails';
-}
 
 // ---------- Camiseta a rayas (la del Barça) ----------
 
@@ -1391,6 +1357,13 @@ function stripedMap(src: THREE.Texture, cols: [number, number]) {
  * corto y sin ropa), la camiseta blanca, el pantalón largo y el corto: según la ropa se enseñan unas u otras.
  * Gas trae su pelo, su barba y sus vaqueros; al genérico se le tiñen la piel, el pelo y el pantalón.
  */
+/** Peinado de cada hombre secundario: sale de su aspecto, así el mismo personaje lleva siempre el mismo. */
+export function mhHairFor(look: PersonLook) {
+  const H = ['MHHair', 'MHHair_short01', 'MHHair_short03', 'MHHair_short04'];
+  const k = (look.hair * 7 + look.shirt * 3 + look.skin) >>> 0;
+  return H[k % H.length];
+}
+
 function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look: PersonLook) {
   const nude = !!look.nude, shorts = !!look.shorts && !nude;
   const generic = kind === 'man';
@@ -1416,8 +1389,11 @@ function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look:
     case 'Shoes':
       return !nude;
     case 'MHHair':
+    case 'MHHair_short01':
+    case 'MHHair_short03':
+    case 'MHHair_short04':
       if (generic) mat.color = lin(look.hair).multiplyScalar(1.15);
-      return true;
+      return !generic || name === mhHairFor(look);
     default:
       return true;
   }

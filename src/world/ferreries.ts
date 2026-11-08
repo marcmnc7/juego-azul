@@ -285,10 +285,17 @@ function bar(m: Merger, x: number, z: number, facing: 1 | -1, awning: number, co
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
-  sign.position.set(x, 3.75, z + facing * 0.9);
+  // Un tablero de verdad (con canto), apoyado sobre el borde alto del toldo con dos patas: antes era un plano
+  // de pie en el borde de delante, sin nada que lo aguantara, y parecía flotar
+  const edge = new THREE.MeshLambertMaterial({ color: darken(awning) });
+  const face = new THREE.MeshBasicMaterial({ map: tex });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 0.07), [edge, edge, edge, edge, face, face]);
+  // (sobre la parte de delante del toldo: más atrás chocaba con el balcón del primer piso)
+  const sz = z + facing * 0.45;
+  sign.position.set(x, 3.47, sz);
   if (facing < 0) sign.rotation.y = Math.PI;
   signs.push(sign);
+  for (const sx of [-0.9, 0.9]) m.add(G.box, 0x333333, x + sx, 3.1, sz, 0, 0, 0, 0.05, 0.16, 0.05);
 }
 
 function table(m: Merger, x: number, z: number, colliders: Box2[], r: () => number) {
@@ -378,7 +385,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
   // Laterales de la plaza (fachadas mirando al centro)
   for (const side of [-1, 1] as const) {
-    let z = 13;
+    // (a la derecha, el Ayuntamiento ocupa de z 13 a 21,2: sus casas empiezan detrás; antes se metían en sus soportales)
+    let z = side > 0 ? 21.2 : 13;
     while (z < 26) {
       const dd = Math.min(5 + Math.floor(r() * 3), 26 - z);
       const cx = side * 16;
@@ -547,13 +555,23 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   // Pancartas de las fiestas cruzando la calle y a la entrada del Pla de l'Església
   const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "Jaleo d'Ases · 23, 24 i 25 d'agost")) });
   const banners: Parameters<typeof mergedPlanes>[0] = [];
+  const cables: [number, number, number, number, number, number][] = [];
   for (const bx of [-34, 22]) {
     banners.push({ w: 8, h: 2, x: bx, y: 5.3, z: 0, ry: -Math.PI / 2 }, { w: 8, h: 2, x: bx + 0.03, y: 5.3, z: 0, ry: Math.PI / 2 });
-    m.add(G.box, 0x6b5a4a, bx, 6.35, 0, 0, 0, 0, 0.04, 0.04, 10);
+    cables.push([bx, 6.35, 0, 0.03, 0.03, 10]);
   }
   banners.push({ w: 9, h: 2.25, x: 0, y: 5.6, z: 5.4, ry: Math.PI }, { w: 9, h: 2.25, x: 0, y: 5.6, z: 5.43, ry: 0 });
-  m.add(G.box, 0x6b5a4a, 0, 6.75, 5.4, 0, 0, 0, 24, 0.04, 0.04);
+  cables.push([0, 6.75, 5.4, 24, 0.03, 0.03]);
   group.add(mergedPlanes(banners, bannerMat));
+  // Los cables de las pancartas, finos, oscuros y sin sombra (su sombra y su brillo eran rayas raras en las paredes)
+  const cableMat = new THREE.MeshBasicMaterial({ color: 0x2e2620 });
+  for (const [cx2, cy2, cz2, sx, sy, sz] of cables) {
+    const c = new THREE.Mesh(G.box, cableMat);
+    c.position.set(cx2, cy2, cz2);
+    c.scale.set(sx, sy, sz);
+    c.userData.noCast = true;
+    group.add(c);
+  }
 
   // Placas de calle
   const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu') }));
@@ -572,11 +590,14 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const AX = 11.7;
   const AJ = 0xefe4cc, AJ_STONE = 0xd8c39a, AJ_GREEN = 0x2f6b46;
   const PORCH = 1.6; // fondo de los soportales
-  m.add(G.box, AJ, AX + PORCH + 2.9, 4.1, 18, 0, 0, 0, 5.8, 8.2, 6.4); // cuerpo, detrás del porche
-  m.add(ROOF_GEO, 0xb8603c, AX + 3.7, 8.2, 18, 0, Math.PI / 2, 0, 6.8, 1.6, 7.8); // tejado a dos aguas, cumbrera paralela a la fachada
+  m.add(G.box, AJ, (AX + PORCH + 20) / 2, 4.1, 17.1, 0, 0, 0, 20 - AX - PORCH, 8.2, 8.2); // cuerpo, detrás del porche, hasta la manzana de atrás
+  m.add(G.box, AJ, AX + PORCH / 2, 4.1, 13.9, 0, 0, 0, PORCH, 8.2, 1.8); // ala de la esquina, a ras de fachada
+  m.add(G.box, AJ_STONE, AX + 0.02, 1.45, 13.9, 0, 0, 0, 0.12, 2.9, 1.0); // con su puerta de servicio
+  m.add(G.box, 0x6b4428, AX - 0.02, 1.25, 13.9, 0, 0, 0, 0.08, 2.4, 0.8);
+  m.add(ROOF_GEO, 0xb8603c, (AX + 20) / 2, 8.2, 17.1, 0, Math.PI / 2, 0, 8.6, 1.8, 20 - AX + 0.4); // tejado a dos aguas, cumbrera paralela a la fachada
   m.add(G.box, AJ, AX + PORCH / 2, 5.55, 18, 0, 0, 0, PORCH, 5.3, 6.4); // planta de arriba, sobre el porche
   m.add(G.box, AJ_STONE, AX + 0.6, 2.95, 18, 0, 0, 0, 1.25, 0.18, 6.6); // imposta sobre los arcos
-  m.add(G.box, AJ_STONE, AX + 0.6, 8.3, 18, 0, 0, 0, 1.35, 0.3, 6.9); // cornisa
+  m.add(G.box, AJ_STONE, AX + 0.6, 8.3, 17.1, 0, 0, 0, 1.35, 0.3, 8.6); // cornisa
   m.add(ROOF_GEO, AJ_STONE, AX + 0.15, 8.45, 18, 0, 0, 0, 0.4, 1.2, 3); // frontón con el reloj (el triángulo mira a la plaza)
   m.add(G.cyl, 0xfbf7ee, AX - 0.06, 8.95, 18, 0, 0, Math.PI / 2, 0.75, 0.1, 0.75);
   m.add(G.box, 0x2a1d16, AX - 0.13, 9.05, 18, 0, 0, 0, 0.04, 0.32, 0.05);
@@ -601,7 +622,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   m.add(G.box, 0xe9dcc2, AX - 0.5, 4.2, 18, 0, 0, 0, 0.9, 0.14, 6); // balcón corrido
   for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.05, 0.6, 0.05);
   m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.07, 0.07, 6);
-  colliders.push({ minX: AX - 0.2, maxX: AX + 0.5, minZ: 14.8, maxZ: 21.2 });
+  colliders.push({ minX: AX - 0.2, maxX: 20, minZ: 13, maxZ: 21.2 });
   const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture(town ? 'AJUNTAMENT DE CIUTADELLA' : 'AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
   ajLetters.position.set(AX - 0.1, 7.3, 18);
   ajLetters.rotation.y = -Math.PI / 2;

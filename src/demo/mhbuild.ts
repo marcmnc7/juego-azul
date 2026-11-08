@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // HERRAMIENTA (no entra en el juego): monta a Gas y al hombre genérico de los secundarios con MakeHuman (CC0)
 // y los exporta como GLB a src/assets/chars (gas_mh.glb, man_mh.glb). Se abre en el servidor de desarrollo:
@@ -115,6 +117,8 @@ async function texture(file: string, edit?: (d: Uint8ClampedArray, w: number, h:
 export interface MHOpts {
   female?: boolean;
   shirt: number; jeansDark: number; hair: string; hairVolume: number; hairColor: number; mullet: number; quiff: number;
+  /** Peinados de más, como mallas aparte (MHHair_<nombre>): el juego elige uno para cada hombre. */
+  hairs?: string[];
   skinTone: [number, number, number];
   /** bigote y perilla pintados */
   facialHair?: boolean;
@@ -327,8 +331,9 @@ export async function buildMH(o: MHOpts) {
         const v = Math.min(255, 255 * (0.95 + (lum - 0.75) * 0.12));
         d[i] = d[i + 1] = d[i + 2] = v;
       } else if (o.pantsGrey) {
-        // gris claro con el tejido del pantalón: el color lo pone el juego
-        const v = Math.min(255, 255 * (0.82 + (lum - 0.45) * 0.55));
+        // gris claro casi liso: el color lo pone el juego (sin las rotas del vaquero, que en pantalón de color
+        // salían como manchas de piel)
+        const v = 255 * (0.82 + Math.max(-0.03, Math.min(0.03, (lum - 0.45) * 0.3)));
         d[i] = d[i + 1] = d[i + 2] = v;
       } else {
         d[i] *= o.jeansDark; d[i + 1] *= o.jeansDark; d[i + 2] *= o.jeansDark * 1.05;
@@ -336,14 +341,15 @@ export async function buildMH(o: MHOpts) {
     }
   });
   const hc = new THREE.Color(o.hairColor).convertLinearToSRGB();
-  const hairTex = await texture(o.hair === 'afro01' ? 'afro_diffuse.png' : o.hair + '_diffuse.png', (d) => {
+  const hairTexOf = (h: string, size: number) => texture(h === 'afro01' ? 'afro_diffuse.png' : h + '_diffuse.png', (d) => {
     for (let i = 0; i < d.length; i += 4) {
       const l = (d[i] + d[i + 1] + d[i + 2]) / 765;
       d[i] = Math.min(255, hc.r * 255 * (0.55 + l * 1.4));
       d[i + 1] = Math.min(255, hc.g * 255 * (0.55 + l * 1.4));
       d[i + 2] = Math.min(255, hc.b * 255 * (0.55 + l * 1.4));
     }
-  }, 1024);
+  }, size);
+  const hairTex = await hairTexOf(o.hair, 1024);
 
   // (las texturas sin transparencia van en JPEG dentro del GLB: ocupan mucho menos)
   skinTex.userData.mimeType = clothesTex.userData.mimeType = 'image/jpeg';
@@ -384,6 +390,10 @@ export async function buildMH(o: MHOpts) {
   mkMesh('PantsShort', posShort, S.ob.vt, S.ob.f, S.wOf, pantsMat, (f) => keepShort.get(f)!);
   const shoes = await proxy('Shoes', 'shoes02.obj', 'shoes02.mhclo', shoeMat);
   await proxy('MHHair', o.hair + '.obj', o.hair + '.mhclo', hairMat, o.hairVolume, (pos) => styleHair(pos, o));
+  for (const h of o.hairs ?? []) {
+    const m = new THREE.MeshStandardMaterial({ map: await hairTexOf(h, 512), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85 });
+    await proxy('MHHair_' + h, h + '.obj', h + '.mhclo', m, o.hairVolume);
+  }
   const brow = o.female ? 'eyebrow006' : 'eyebrow001', lash = o.female ? 'eyelashes02' : 'eyelashes01';
   await proxy('Eyebrows', brow + '.obj', brow + '.mhclo', browMat);
   await proxy('Eyelashes', lash + '.obj', lash + '.mhclo', lashMat);
@@ -558,6 +568,37 @@ function eyeTexture(iris: [string, string, string] = ['#8a5a34', '#6b4226', '#4a
   t.colorSpace = THREE.SRGBColorSpace;
   t.flipY = false;
   return t;
+}
+
+/**
+ * Versión ligera de una malla con piel (para la multitud): se simplifica la geometría y cada vértice que queda
+ * (el simplificador solo junta vértices: los que quedan son de los de antes) recupera sus pesos de piel.
+ */
+export function lightSkinned(m: THREE.SkinnedMesh, keep: number) {
+  const src = m.geometry;
+  const pos = src.attributes.position as THREE.BufferAttribute;
+  const si = src.attributes.skinIndex as THREE.BufferAttribute, sw = src.attributes.skinWeight as THREE.BufferAttribute;
+  const key = (x: number, y: number, z: number) => `${x.toFixed(5)},${y.toFixed(5)},${z.toFixed(5)}`;
+  const at = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) at.set(key(pos.getX(i), pos.getY(i), pos.getZ(i)), i);
+  const merged = mergeVertices(src.clone());
+  const n = merged.attributes.position.count;
+  const g = new SimplifyModifier().modify(merged, Math.floor(n * (1 - keep)));
+  const p2 = g.attributes.position as THREE.BufferAttribute;
+  const SI = new Uint16Array(p2.count * 4), SW = new Float32Array(p2.count * 4);
+  for (let i = 0; i < p2.count; i++) {
+    const j = at.get(key(p2.getX(i), p2.getY(i), p2.getZ(i))) ?? 0;
+    for (let k = 0; k < 4; k++) { SI[i * 4 + k] = si.getComponent(j, k); SW[i * 4 + k] = sw.getComponent(j, k); }
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+  g.computeVertexNormals();
+  const out = new THREE.SkinnedMesh(g, m.material);
+  out.name = m.name;
+  m.parent!.add(out);
+  out.bind(m.skeleton, m.bindMatrix);
+  m.removeFromParent();
+  return out;
 }
 
 export async function exportGLB(obj: THREE.Object3D) {
