@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { MOBILE } from '../core/gfx';
-import { comic } from '../core/comic';
 import { loadGLB } from '../core/assets';
 import { stripFormal, rigKind, colorRigMaterial, hairGeometry, vatTime, womanPartAt, bareShader, noTails, womanPartsTexture, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
@@ -300,39 +299,6 @@ function vatify(mat: THREE.Material, part: VatPart) {
   mat.customProgramCacheKey = () => 'vat';
 }
 
-/**
- * Cómic: casco de tinta de una pieza de la multitud. Es la misma pieza con la misma animación, inflada a lo
- * largo de su normal y vista por detrás, en negro: el contorno grueso de los personajes (el de los
- * protagonistas no sirve aquí porque no sabe de la animación en la GPU). Sin los faldones de la chaqueta.
- */
-function vatHull(part: VatPart, cutTails: boolean) {
-  const m = new THREE.MeshBasicMaterial({ color: 0x0b0810, side: THREE.BackSide });
-  // (el contorno 3D del cómic no sabe de la animación: dibujaba el casco en la pose de reposo, un fantasma en cruz)
-  m.userData.outlineParameters = { visible: false };
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.vatPos = { value: part.pos };
-    sh.uniforms.vatNrm = { value: part.nrm };
-    sh.uniforms.vatV = { value: part.V };
-    sh.uniforms.vatTime = vatTime;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\n' + VAT_COMMON + (cutTails ? '\nattribute vec2 aRest;\nvarying vec2 vRest;' : ''))
-      .replace(
-        '#include <begin_vertex>',
-        `float vp0, vp1, vpa;
-        vatFrame(vp0, vp1, vpa);
-        vec3 transformed = mix(vatFetch(vatPos, vp0), vatFetch(vatPos, vp1), vpa);
-        transformed += normalize(mix(vatFetch(vatNrm, vp0), vatFetch(vatNrm, vp1), vpa)) * 0.016;
-        ${cutTails ? 'vRest = aRest;' : ''}`,
-      );
-    if (cutTails)
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vRest;')
-        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vRest.x < 0.505) discard;');
-  };
-  m.customProgramCacheKey = () => 'vathull' + (cutTails ? 't' : '');
-  return m;
-}
-
 // ---------- Que no sean clones ----------
 // Cada persona de la multitud lleva sus propios colores de pelo, camiseta, pantalón y piel, y su
 // altura y complexión. El modelo se tiñe de un gris neutro y cada instancia multiplica por su color
@@ -454,16 +420,6 @@ export class RigCrowd {
       if (/Eye/.test(part.name) || MOBILE) im.userData.noCast = true;
       this.meshes.push(im);
       this.group.add(im);
-      // Cómic: su contorno de tinta (comparte geometría y matrices con la pieza; los ojos no lo necesitan)
-      if (comic.on && !/Eye|Teeth/.test(part.name)) {
-        const hull = new THREE.InstancedMesh(g, vatHull(part, kind === 'man' && /Outfit_Top/.test(part.name)), count);
-        hull.instanceMatrix = im.instanceMatrix;
-        hull.frustumCulled = false;
-        hull.userData.noComic = true;
-        hull.userData.noCast = true;
-        hull.userData.noReceive = true;
-        this.group.add(hull);
-      }
     }
   }
   /** Coloca a la persona i en (x, z) mirando según q, con el balanceo de su postura. */

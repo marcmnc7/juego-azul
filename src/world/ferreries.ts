@@ -83,6 +83,24 @@ const ROOF = 0xc0653d;
 const MARES = 0xd8c39a; // piedra de marès de las esquinas
 const FLOWERS = [0xe0245e, 0xff5a7a, 0xd7263d, 0xf28f3b];
 
+/**
+ * Arco de los soportales: el macizo de encima de un hueco de ancho 2r, con el medio punto recortado; de `h` de
+ * alto sobre el arranque y `depth` de fondo (hacia +x desde x=0), centrado en z.
+ */
+function archGeo(r: number, h: number, depth: number) {
+  const sh = new THREE.Shape();
+  sh.moveTo(-r, 0);
+  sh.lineTo(-r, h);
+  sh.lineTo(r, h);
+  sh.lineTo(r, 0);
+  sh.absarc(0, 0, r * 0.98, 0, Math.PI, false);
+  sh.lineTo(-r, 0);
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: false, curveSegments: 16 });
+  // la forma está en el plano (z, y) del mundo y el fondo va hacia +x
+  g.rotateY(Math.PI / 2);
+  return g;
+}
+
 export function rand(seed: number) {
   let s = seed;
   return () => {
@@ -549,21 +567,40 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   group.add(sign1, sign2, sign3);
 
   // Ajuntament de Ferreries en el lateral derecho de la plaza: soportales, balcón, banderas y reloj
+  // Es un edificio entero (no una fachada suelta): cuerpo con fondo y tejado, soportales de verdad con sus
+  // pilares y arcos, las puertas al fondo del porche, y ventanas con marco, alféizar y persianas en relieve.
   const AX = 11.7;
-  m.add(G.box, 0xefe4cc, AX + 0.2, 4.1, 18, 0, 0, 0, 0.5, 8.2, 6.4);
-  m.add(G.box, 0xd8c39a, AX - 0.06, 8.25, 18, 0, 0, 0, 0.6, 0.3, 6.8);
-  m.add(ROOF_GEO, 0xd8c39a, AX, 8.4, 18, 0, Math.PI / 2, 0, 3, 1.2, 0.4); // frontón con el reloj
-  m.add(G.cyl, 0xfbf7ee, AX - 0.08, 8.9, 18, 0, 0, Math.PI / 2, 0.75, 0.06, 0.75);
-  m.add(G.box, 0x2a1d16, AX - 0.13, 9.0, 18, 0, 0, 0, 0.03, 0.3, 0.04);
+  const AJ = 0xefe4cc, AJ_STONE = 0xd8c39a, AJ_GREEN = 0x2f6b46;
+  const PORCH = 1.6; // fondo de los soportales
+  m.add(G.box, AJ, AX + PORCH + 2.9, 4.1, 18, 0, 0, 0, 5.8, 8.2, 6.4); // cuerpo, detrás del porche
+  m.add(ROOF_GEO, 0xb8603c, AX + 3.7, 8.2, 18, 0, Math.PI / 2, 0, 6.8, 1.6, 7.8); // tejado a dos aguas, cumbrera paralela a la fachada
+  m.add(G.box, AJ, AX + PORCH / 2, 5.55, 18, 0, 0, 0, PORCH, 5.3, 6.4); // planta de arriba, sobre el porche
+  m.add(G.box, AJ_STONE, AX + 0.6, 2.95, 18, 0, 0, 0, 1.25, 0.18, 6.6); // imposta sobre los arcos
+  m.add(G.box, AJ_STONE, AX + 0.6, 8.3, 18, 0, 0, 0, 1.35, 0.3, 6.9); // cornisa
+  m.add(ROOF_GEO, AJ_STONE, AX + 0.15, 8.45, 18, 0, 0, 0, 0.4, 1.2, 3); // frontón con el reloj (el triángulo mira a la plaza)
+  m.add(G.cyl, 0xfbf7ee, AX - 0.06, 8.95, 18, 0, 0, Math.PI / 2, 0.75, 0.1, 0.75);
+  m.add(G.box, 0x2a1d16, AX - 0.13, 9.05, 18, 0, 0, 0, 0.04, 0.32, 0.05);
+  m.add(G.box, 0x2a1d16, AX - 0.13, 8.95, 18.1, 0, 0, 0, 0.04, 0.05, 0.24);
+  // Soportales: pilares entre los arcos, con el arco recortado encima de cada hueco
+  const ARCH = archGeo(0.7, 0.8, PORCH);
+  const piers: [number, number][] = [[14.8, 15.1], [16.5, 17.3], [18.7, 19.5], [20.9, 21.2]];
+  for (const [z0, z1] of piers) m.add(G.box, AJ, AX + PORCH / 2, 1.1, (z0 + z1) / 2, 0, 0, 0, PORCH, 2.2, z1 - z0);
   for (const az of [15.8, 18, 20.2]) {
-    m.add(G.box, 0x3a2a20, AX - 0.06, 1.3, az, 0, 0, 0, 0.06, 2.6, 1.4); // arcos de los soportales
-    m.add(G.cyl, 0x3a2a20, AX - 0.06, 2.6, az, 0, 0, Math.PI / 2, 1.4, 0.06, 1.4);
-    m.add(G.box, 0xffffff, AX - 0.08, 5.3, az, 0, 0, 0, 0.06, 1.7, 1.2);
-    m.add(G.box, 0x2f6b46, AX - 0.11, 5.3, az, 0, 0, 0, 0.04, 1.55, 1.05);
+    m.add(ARCH, AJ, AX, 2.2, az, 0, 0, 0, 1, 1, 1);
+    // al fondo del porche: puerta de madera con su marco
+    m.add(G.box, AJ_STONE, AX + PORCH - 0.02, 1.15, az, 0, 0, 0, 0.06, 2.3, 1.15);
+    m.add(G.box, 0x6b4428, AX + PORCH - 0.05, 1.05, az - 0.24, 0, 0, 0, 0.06, 2.05, 0.46);
+    m.add(G.box, 0x6b4428, AX + PORCH - 0.05, 1.05, az + 0.24, 0, 0, 0, 0.06, 2.05, 0.46);
+    // ventana de arriba: marco de piedra que sale, persianas verdes en relieve, alféizar y guardapolvo
+    m.add(G.box, AJ_STONE, AX - 0.05, 5.6, az, 0, 0, 0, 0.14, 2.05, 1.45);
+    m.add(G.box, 0x223a2e, AX - 0.08, 5.6, az, 0, 0, 0, 0.1, 1.8, 1.15);
+    for (const s of [-1, 1]) m.add(G.box, AJ_GREEN, AX - 0.16, 5.6, az + s * 0.29, 0, s * 0.18, 0, 0.06, 1.72, 0.55);
+    m.add(G.box, AJ_STONE, AX - 0.12, 4.52, az, 0, 0, 0, 0.3, 0.1, 1.6);
+    m.add(G.box, AJ_STONE, AX - 0.12, 6.72, az, 0, 0, 0, 0.3, 0.14, 1.65);
   }
-  m.add(G.box, 0xe9dcc2, AX - 0.5, 4.2, 18, 0, 0, 0, 0.9, 0.12, 6); // balcón corrido
-  for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.03, 0.6, 0.03);
-  m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.04, 0.04, 6);
+  m.add(G.box, 0xe9dcc2, AX - 0.5, 4.2, 18, 0, 0, 0, 0.9, 0.14, 6); // balcón corrido
+  for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.05, 0.6, 0.05);
+  m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.07, 0.07, 6);
   colliders.push({ minX: AX - 0.2, maxX: AX + 0.5, minZ: 14.8, maxZ: 21.2 });
   const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture(town ? 'AJUNTAMENT DE CIUTADELLA' : 'AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
   ajLetters.position.set(AX - 0.1, 7.3, 18);

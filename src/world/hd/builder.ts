@@ -8,6 +8,12 @@ import { comic } from '../../core/comic';
 
 export type V3 = [number, number, number];
 
+/**
+ * Trozos en que se parte una cara en el estilo cómic (uno cada ~0,6 m), para que se doble suave a mano alzada.
+ * Con trozos grandes, los quiebros entre ellos se entintaban como rayas en las paredes.
+ */
+const segs = (v: number) => Math.min(20, Math.max(1, Math.round(v / 0.6)));
+
 export class Builder {
   private parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
   private m4 = new THREE.Matrix4();
@@ -31,7 +37,7 @@ export class Builder {
     // pegadas delante, y al engordarlas las tapaban)
     const thin = s0.filter((v) => v < 0.2).length >= 2;
     const s: V3 = comic.on && thin ? (s0.map((v) => (v < 0.2 ? Math.max(v * 1.5, v + 0.03) : v)) as V3) : s0;
-    const seg = s.map((v) => (comic.on ? Math.min(8, Math.max(1, Math.round(v / 1.2))) : 1));
+    const seg = s.map((v) => (comic.on ? segs(v) : 1));
     const g = new THREE.BoxGeometry(s[0], s[1], s[2], seg[0], seg[1], seg[2]);
     const tile = o.tile ?? 2.5;
     const uv = g.attributes.uv as THREE.BufferAttribute;
@@ -52,7 +58,7 @@ export class Builder {
     // (cómic: barrotes y postes finos, más gruesos)
     const fat = (r: number) => (comic.on && r < 0.06 ? r * 1.6 : r);
     const rTop = fat(rTop0), rBot = fat(rBot0);
-    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12, comic.on ? Math.min(8, Math.max(1, Math.round(h / 1.2))) : 1);
+    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12, comic.on ? segs(h) : 1);
     const tile = o.tile ?? 1;
     const uv = g.attributes.uv as THREE.BufferAttribute;
     const circ = Math.PI * 2 * Math.max(rTop, rBot);
@@ -64,10 +70,11 @@ export class Builder {
 
   /** Plano con un recorte del atlas (u0,v0,u1,v1 en 0..1), o la textura entera. */
   decal(mat: THREE.Material, c: V3, w: number, h: number, rect: [number, number, number, number] | null, parent: THREE.Matrix4) {
-    const g = new THREE.PlaneGeometry(w, h);
+    // (en el cómic, partido como las paredes: si no, al doblarse la pared tapaba media puerta)
+    const g = new THREE.PlaneGeometry(w, h, comic.on ? segs(w) : 1, comic.on ? segs(h) : 1);
     if (rect) {
       const uv = g.attributes.uv as THREE.BufferAttribute;
-      for (let i = 0; i < 4; i++) uv.setXY(i, rect[0] + uv.getX(i) * (rect[2] - rect[0]), rect[1] + uv.getY(i) * (rect[3] - rect[1]));
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, rect[0] + uv.getX(i) * (rect[2] - rect[0]), rect[1] + uv.getY(i) * (rect[3] - rect[1]));
     }
     this.add(g, mat, this.m4.makeTranslation(...c).premultiply(parent));
   }

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { comicBulbTexture, comicTile } from './comicTiles';
 
 // Estilo cómic (cel-shading): la luz en tres tonos planos en vez de en degradado y un contorno de tinta
@@ -292,11 +291,17 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
   t.polygonOffset = s.polygonOffset;
   t.polygonOffsetFactor = s.polygonOffsetFactor;
   t.polygonOffsetUnits = s.polygonOffsetUnits;
-  if (carry) {
-    t.onBeforeCompile = src.onBeforeCompile;
-    t.customProgramCacheKey = src.customProgramCacheKey;
-    // (con sombreador propio, el contorno 3D no seguiría la forma: la multitud lleva su propio casco de tinta)
-    t.userData.ownShader = true;
+  // Los personajes se marcan en el canal alfa de la imagen (0.5): la pasada de tebeo no les pone ni tinta de
+  // aristas ni trama (en las caras eran manchas y rayas); su línea es solo su contorno, fino
+  const mark = person && !t.transparent;
+  if (carry || mark) {
+    const prev = carry ? src.onBeforeCompile : null;
+    const prevKey = carry ? src.customProgramCacheKey.bind(src) : () => '';
+    t.onBeforeCompile = (sh, r) => {
+      prev?.call(src, sh, r);
+      if (mark) sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = 0.5;');
+    };
+    t.customProgramCacheKey = () => prevKey() + (mark ? '|pmask' : '');
   }
   isToon.add(t);
   converted.set(src, t);
@@ -329,21 +334,6 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
 const pending = new Set<() => boolean>();
 function settlePending() {
   for (const p of pending) if (p()) pending.delete(p);
-}
-
-/**
- * Grosor del contorno de tinta: los personajes, más marcado; sin contorno el cielo (cúpula vista por dentro), lo
- * que no lleva luz (brillos, sprites, fondos) y las piezas recortadas por transparencia (pelo, cordones,
- * zapatos de MakeHuman), que con el contorno sacaban picos.
- */
-function ink(m: THREE.Material, person: boolean, name: string) {
-  // (se decide siempre de nuevo: los materiales clonados, como los de la multitud, traían el del modelo)
-  // (los zapatos sí: los picos eran de los pesos de piel, ya corregidos)
-  const cut = (m.alphaTest > 0 && name !== 'Shoes') || m.transparent || !!m.userData.ownShader;
-  // (el mundo lleva la tinta de la pasada de tebeo; el contorno 3D es solo para los personajes)
-  if (!person || m.side === THREE.BackSide || !(m as THREE.MeshToonMaterial).isMeshToonMaterial || cut) {
-    m.userData.outlineParameters = { visible: false };
-  } else if (person) m.userData.outlineParameters = { thickness: 0.0075 };
 }
 
 /**
@@ -428,15 +418,10 @@ export function comicScene(scene: THREE.Object3D) {
       return;
     }
     if (!m.isMesh) return;
-    if (o.userData.noComic) {
-      // lo que se queda como está, tampoco lleva el contorno 3D (solo es para los personajes)
-      for (const x of Array.isArray(m.material) ? m.material : [m.material]) x.userData.outlineParameters ??= { visible: false };
-      return;
-    }
+    if (o.userData.noComic) return;
     const person = !!(o as THREE.SkinnedMesh).isSkinnedMesh || (!!(o as THREE.InstancedMesh).isInstancedMesh && !!o.userData.person);
     const cloth = person && /^(Shirt|Pants|PantsShort|Shoes)$/.test(o.name);
     m.material = Array.isArray(m.material) ? m.material.map((x) => toToon(x, person, cloth)) : toToon(m.material, person, cloth);
-    (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => ink(x, person, o.name));
   });
   settlePending();
   // Sin reflejo del cielo (los materiales de cómic no lo usan): una luz de cielo y suelo hace de ambiente
@@ -494,7 +479,18 @@ void main() {
   c.rgb = toneMapping(c.rgb);
   #endif
   float dc = rawD(vUv);
-  if (dc < 1.0) {
+  // personaje (marcado en el alfa): sin tinta de aristas ni trama, solo el color de imprenta
+  bool person = c.a < 0.75;
+  if (dc < 1.0 && person) {
+    float lp = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+    c.rgb = max(mix(vec3(lp), c.rgb, 1.12), 0.0);
+    // su línea: solo la silueta (donde detrás hay algo lejos), fina; nada por dentro de la cara ni de la ropa
+    float zp = linD(dc);
+    vec2 op = texel * max(1.0, linePx * 0.75 * mix(1.0, 0.6, smoothstep(4.0, 18.0, zp)));
+    float fp = max(max(linD(rawD(vUv - vec2(op.x, 0.0))), linD(rawD(vUv + vec2(op.x, 0.0)))), max(linD(rawD(vUv + vec2(0.0, op.y))), linD(rawD(vUv - vec2(0.0, op.y)))));
+    float silp = smoothstep(0.06, 0.12, (fp - zp) / zp);
+    c.rgb = mix(c.rgb, vec3(0.045, 0.035, 0.055), silp * 0.9);
+  } else if (dc < 1.0) {
     // ---- tinta ----
     // trazo a mano: la línea ondula un poco (el punto donde se mira la profundidad se desplaza con un ruido
     // suave) y cambia de grosor como con la presión del plumín
@@ -517,6 +513,10 @@ void main() {
     float grad = abs(dr - dl) + abs(du - dd);
     // (umbral alto: las superficies curvas, como un cuerpo, también tienen algo de laplaciano y se llenaban de rayas)
     float crease = smoothstep(0.8, 1.3, lap / (grad + 1e-6)) * step(1e-6, lap) * (1.0 - smoothstep(22.0, 40.0, zc));
+    // (al lado de algo que está delante, como una persona, el salto de profundidad no es una arista de esta
+    // superficie: sin esto la gente llevaba un halo negro gordo)
+    float near4 = min(min(linD(dl), linD(dr)), min(linD(du), linD(dd)));
+    crease *= 1.0 - smoothstep(0.02, 0.04, (zc - near4) / zc);
     float ink = max(sil, crease);
     // ---- trama ----
     float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -609,11 +609,8 @@ const lastCam = new THREE.Vector3();
 let lastT = 0;
 let speedAmt = 0;
 
-let outline: OutlineEffect | null = null;
 /** Dibuja en estilo cómic (sustituye al postproceso en los capítulos de cómic). */
 export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
-  // contorno 3D solo en los personajes (más grueso que la tinta de las aristas); el resto, en la pasada
-  outline ??= new OutlineEffect(renderer, { defaultThickness: 0.0045, defaultColor: [0.012, 0.009, 0.014], defaultAlpha: 1 });
   pass ??= makePass(renderer);
   renderer.getDrawingBufferSize(size);
   if (pass.rt.width !== size.x || pass.rt.height !== size.y) pass.rt.setSize(size.x, size.y);
@@ -640,7 +637,7 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   u.seed.value = burst > speedAmt ? burstSeed * 7 : Math.floor(now * 8);
   renderer.autoClear = true;
   renderer.setRenderTarget(pass.rt);
-  outline.render(scene, camera);
+  renderer.render(scene, camera);
   renderer.setRenderTarget(null);
   renderer.render(pass.quad, pass.cam);
 }
