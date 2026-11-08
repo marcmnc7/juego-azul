@@ -584,7 +584,7 @@ export class BeerRun {
     this.stage = 'toBar';
     this.tray.visible = false;
     this.meter.hidden = true;
-    this.walker.speed = 5.2;
+    this.walker.speed = 4.0; // la velocidad normal del jugador (core/walker.ts)
   }
 
   private spill() {
@@ -664,7 +664,7 @@ export class BeerRun {
     this.post = null;
     for (const c of this.cross) c.p.root.removeFromParent();
     this.cross.length = 0;
-    this.walker.speed = 5.2;
+    this.walker.speed = 4.0; // la velocidad normal del jugador (core/walker.ts)
   }
 }
 

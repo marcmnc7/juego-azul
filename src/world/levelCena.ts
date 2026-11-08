@@ -672,7 +672,7 @@ export class LevelCena implements Level {
     if (this.phase === 'alarm') this.updateAlarm(dt);
     this.tableGame?.update(this.camera);
     // Mientras hay susto, corre: el coche no espera
-    this.walker.speed = this.phase === 'alarm' ? 5.8 : 5.2;
+    this.walker.speed = this.phase === 'alarm' ? 4.5 : 4.0;
     this.walker.turn(this.input.consumeCam());
     if (free) {
       const move = this.walker.move(dt, this.input.axes(), this.colliders, GARDEN, [{ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 }]);

@@ -1385,7 +1385,7 @@ export class LevelSantJoan implements Level {
       fadeFlash(() => {
         // Del todo fuera de la plaza: los que quedan se van a la escena de casa
         this.pair?.stop();
-        this.walker.speed = 5.2;
+        this.walker.speed = 4.0;
         this.ride = new TaxiRide();
         this.phase = 'ride';
         this.updateHud();
