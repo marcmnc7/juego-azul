@@ -9,7 +9,7 @@ import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, Glitter, toon, vibrate } from '../core/gfx';
 import { FERRERIES, FERRERIES_MEET } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
-import { boneAnchor, rigPost } from '../entities/rig';
+import { boneAnchor, rigPost, carryHand } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
@@ -260,9 +260,10 @@ export class Level1 implements Level {
       const hat = new THREE.Group();
       const crown = new THREE.Mesh(new THREE.SphereGeometry(0.115, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x111111, 0.55));
       crown.scale.y = 1.3;
-      crown.position.y = 0.235;
+      // (la coronilla queda a ~0,19 m del hueso de la cabeza: el ala, algo por debajo, encajada; a 0,235 flotaba)
+      crown.position.y = 0.15;
       const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.012, 24), mat(0x111111, 0.55));
-      brim.position.y = 0.235;
+      brim.position.y = 0.15;
       hat.add(crown, brim);
       boneAnchor(this.fabiolera, 'Head').add(hat);
       // El fabiol sale de la boca hacia abajo y adelante
@@ -854,7 +855,11 @@ export class Level1 implements Level {
     // Las pomadas se llevan a Tòfol: con una, un brazo adelantado; con dos o tres, los dos. Entregadas, las manos libres
     const held = !this.cupsGiven && (this.stage === 'collect' || this.stage === 'returnTofol') ? this.pomadaCount - this.spilled : 0;
     this.inHand.forEach((c, i) => (c.visible = i < held));
-    if (held > 0) this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+    // (con esqueleto, la mano va delante con IK y el brazo sigue balanceándose; el muñeco, adelantando el brazo)
+    if (held > 0 && !this.pet) {
+      if (this.player.rig) carryHand(this.player, 'R');
+      else this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
+    }
     // Caricia: de cara al burro, el brazo derecho adelantado dándole palmaditas (y él, cabeceando)
     if (this.pet) {
       const P = this.pet;
@@ -869,7 +874,10 @@ export class Level1 implements Level {
         this.pet = null;
       }
     }
-    if (held > 1) this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
+    if (held > 1) {
+      if (this.player.rig) carryHand(this.player, 'L');
+      else this.player.armL.rotation.x = -0.7 + this.player.armL.rotation.x * 0.3;
+    }
     if (this.water) {
       this.water.update(dt, this.busy);
       this.water?.pose(dt);

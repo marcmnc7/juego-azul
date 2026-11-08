@@ -12,6 +12,11 @@ import kidMhUrl from '../assets/chars/kid_mh.glb';
 import gasUrl from '../assets/chars/gas_mh.glb';
 import manMhUrl from '../assets/chars/man_mh.glb';
 import animsUrl from '../assets/chars/anims.glb';
+// Universal Animation Library de Quaternius (CC0), con los huesos renombrados a Mixamo (scripts/anims_ual.mjs):
+// trote, sprint, salto, hablar, sentarse, conducir, nadar, otro baile, sí/no, beber…
+import animsUalUrl from '../assets/chars/anims_ual.glb';
+import animsUal2Url from '../assets/chars/anims_ual_2.glb';
+import { twoBone } from './embrace';
 import womanPartsUrl from '../assets/chars/woman_parts.png';
 // Fotos de tela (CC0, de MakeHuman) para la ropa de Azul: vaquero y punto de camiseta
 import denimUrl from '../assets/chars/denim_tile.jpg';
@@ -43,7 +48,17 @@ interface KindData {
   runSpeed: number;
   scale: number;
   minY: number;
+  /**
+   * Desplazamiento de las personas: andar, trotar y esprintar, de más lenta a más rápida, con la velocidad a la
+   * que cada clip pisa sin patinar y la fase en que el pie izquierdo va más adelantado (para sincronizarlos).
+   */
+  loco: { clip: string; speed: number; phase: number }[];
+  /** Instante del aterrizaje en jumpLand (la cadera más baja). */
+  landAt: number;
 }
+
+/** Clips extra (de otros esqueletos ya renombrados a Mixamo), con su pose en T. */
+interface ExtraSource { root: THREE.Object3D; rest: Pose; clips: THREE.AnimationClip[] }
 
 /** Los modelos de MakeHuman/Mixamo por tipo y, aparte, cada VRM de VRoid por su archivo ("vrm:<url>"). */
 type DataKey = Kind | `vrm:${string}`;
@@ -267,7 +282,38 @@ function cleanWeights(root: THREE.Object3D) {
   });
 }
 
-function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }, height = HEIGHT[kind]): KindData {
+/** Fase (0…1) del ciclo en que el pie izquierdo va más adelantado: para que andar, trotar y correr pisen a la vez. */
+function footPhase(root: THREE.Object3D, clip: THREE.AnimationClip) {
+  const mixer = new THREE.AnimationMixer(root);
+  const a = mixer.clipAction(clip).play();
+  const foot = boneMap(root).get('LeftFoot'), hips = boneMap(root).get('Hips');
+  let best = 0, bz = -Infinity;
+  if (foot && hips)
+    for (let i = 0; i < 40; i++) {
+      a.time = (clip.duration * i) / 40;
+      mixer.update(0);
+      root.updateWorldMatrix(true, true);
+      const z = foot.getWorldPosition(_v1).z - hips.getWorldPosition(_v2).z;
+      if (z > bz) { bz = z; best = i / 40; }
+    }
+  a.stop();
+  mixer.uncacheRoot(root);
+  return best;
+}
+
+/** Corrección de la zancada a velocidad real por tipo de marcha (ver prepareKind). */
+const STRIDE_FACTOR: Record<string, number> = { walk: 1, walk2: 1, jog: 1.26, sprint: 1.52, run: 1.3 };
+
+/** Instante de un clip en que la cadera está más baja (el golpe del aterrizaje). */
+function lowestHips(clip: THREE.AnimationClip | undefined) {
+  const tr = clip?.tracks.find((t) => /Hips/.test(t.name) && t.name.endsWith('.position'));
+  if (!tr) return 0;
+  let best = 0, by = Infinity;
+  for (let i = 0; i < tr.times.length; i++) if (tr.values[i * 3 + 1] < by) { by = tr.values[i * 3 + 1]; best = tr.times[i]; }
+  return best;
+}
+
+function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }, height = HEIGHT[kind], extras: ExtraSource[] = []): KindData {
   const model = gltf.scene;
   if (kind !== 'woman' && !model.userData.vrmOrig) cleanWeights(model);
   // Medir siempre en la misma pose: la T limpia
@@ -297,14 +343,32 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
   restoreLocal(bind);
   if (dance) clips.dance = dance.root === model ? dance.clip : retargetClip(dance.root, dance.rest, dance.clip, model, dstRest);
   restoreLocal(bind);
+  for (const ex of extras)
+    for (const c of ex.clips) {
+      clips[c.name] = retargetClip(ex.root, ex.rest, c, model, dstRest);
+      restoreLocal(bind);
+    }
   setPose(model, true);
   const down = worldPose(model).q;
   restoreLocal(bind);
-  return {
-    gltf, clips, down, scale, minY: Math.min(box.min.y, soleY),
-    walkSpeed: strideSpeed(model, clips.walk, scale) || 1.4,
-    runSpeed: strideSpeed(model, clips.run, scale) || 4.5,
-  };
+  const walkSpeed = strideSpeed(model, clips.walk, scale) || 1.4;
+  const runSpeed = strideSpeed(model, clips.run, scale) || 4.5;
+  // Andar, trotar y esprintar (los de la librería si están: son del mismo "actor" y casan entre sí)
+  const loco: KindData['loco'] = [];
+  for (const [name, fb] of [['walk2', 'walk'], ['jog', 'run'], ['sprint', '']] as const) {
+    const n = clips[name] ? name : fb;
+    if (!n || !clips[n] || loco.some((l) => l.clip === n)) continue;
+    // Velocidad natural de cada clip: zancada (recorrido del pie respecto a la cadera) × un factor por tipo de
+    // marcha. Andando el pie está apoyado medio ciclo y basta la zancada (coincide con medir el pie apoyado);
+    // corriendo hay fase de vuelo y la zancada se queda corta. Los factores salen de medir los clips de la
+    // librería en el juego (trote ≈ 3,2 m/s y sprint ≈ 5 m/s en Azul): así a la velocidad del jugador
+    // (5,2 m/s) el sprint va a su ritmo natural, ~185 pasos por minuto, y no acelerado.
+    const speed = strideSpeed(model, clips[n], scale) * (STRIDE_FACTOR[n] ?? 1);
+    if (speed > 0.3) loco.push({ clip: n, speed, phase: footPhase(model, clips[n]) });
+  }
+  restoreLocal(bind);
+  loco.sort((a, b) => a.speed - b.speed);
+  return { gltf, clips, down, scale, minY: Math.min(box.min.y, soleY), walkSpeed, runSpeed, loco, landAt: lowestHips(clips.jumpLand) };
 }
 
 /** Carga los modelos y prepara las animaciones (una vez). */
@@ -312,7 +376,20 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
 
 export function preloadRig() {
   loading ??= (async () => {
-    const [woman, anims, gas, manMh, womanMh, kidMh] = await Promise.all([loadGLB(womanUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl), loadGLB(womanMhUrl), loadGLB(kidMhUrl)]);
+    const [woman, anims, gas, manMh, womanMh, kidMh, ual1, ual2] = await Promise.all([
+      loadGLB(womanUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl), loadGLB(womanMhUrl), loadGLB(kidMhUrl),
+      loadGLB(animsUalUrl).catch(() => null), loadGLB(animsUal2Url).catch(() => null),
+    ]);
+    const t0 = performance.now();
+    // Clips de la librería: cada esqueleto en su T (sus huesos ya tienen los nombres de Mixamo)
+    const SKIP = /^(pickUp|jumpStart2|jumpLoop2|jumpLand2|phoneTalk)$/;
+    const extras: ExtraSource[] = [];
+    for (const g of [ual1, ual2]) {
+      if (!g) continue;
+      const root = g.scene;
+      setPose(root, false);
+      extras.push({ root, rest: worldPose(root), clips: g.animations.filter((c) => !SKIP.test(c.name)) });
+    }
     parts = await loadImageData(womanPartsUrl, 512, 512);
     [denimPx, knitPx] = await Promise.all([loadImageData(denimUrl, FAB, FAB), loadImageData(knitUrl, FAB, FAB)]);
     const samba = woman.animations.find((c) => c.name === 'SambaDance')!;
@@ -330,21 +407,24 @@ export function preloadRig() {
     const wRest = worldPose(woman.scene);
     restoreLocal(wSave);
     data = {};
-    data.woman = prepareKind('woman', woman, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.mhwoman = prepareKind('mhwoman', womanMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
-    data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene });
+    data.woman = prepareKind('woman', woman, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
+    data.mhwoman = prepareKind('mhwoman', womanMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
+    data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
+    data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
+    data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
     // Personajes de VRoid: si alguno no carga, ese personaje sale con su modelo de antes
     for (const [url, height] of VRM_FILES) {
       try {
         const v = await loadVRM(url);
         vrms.set(url, v);
-        data[`vrm:${url}`] = prepareKind('woman', v.gltf, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, height);
+        data[`vrm:${url}`] = prepareKind('woman', v.gltf, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, height, extras);
       } catch (e) {
         console.warn('[rig] VRM no cargado', e);
       }
     }
+    console.info(`[rig] personajes y animaciones preparados en ${Math.round(performance.now() - t0)} ms`);
+    // (modo prueba: datos de animación a mano desde la consola, para medir y ajustar)
+    if (location.hash === '#test') (globalThis as unknown as { __rigData: typeof data }).__rigData = data;
     ready = true;
   })().catch((e) => {
     failed = true;
@@ -777,12 +857,29 @@ export interface Rig {
   /** Gestos sueltos de pie (asentir, hablar con las manos): cuándo toca el próximo y cuánto le queda al de ahora. */
   fidNext?: number;
   fidLeft?: number;
+  /** Qué gesto suelto está haciendo (agree, yes, no). */
+  fidKey?: string;
   /** Sin gestos sueltos (en un abrazo o un beso, que mueven la cabeza y los brazos a mano). */
   noFidget?: boolean;
   /** Altura de la cadera en reposo, en metros (sin la escala del personaje). */
   hipsHeight: number;
   /** Inclinación de cintura para arriba (ver leanTorso). */
   torso: THREE.Euler;
+  /** Inclinación por la marcha (adelante al acelerar, hacia dentro en las curvas): la pone animatePerson. */
+  lean: { fwd: 0 | number; side: number };
+  /** Manos que llevan algo delante (0…1, la pone el nivel cada fotograma con carryHand). */
+  carry: { R: number; L: number };
+  /** Lado del modelo ('Left'/'Right') que hace de brazo derecho e izquierdo del muñeco. */
+  sideR: string;
+  sideL: string;
+  /** Baila con el segundo baile en vez de la samba. */
+  danceAlt: boolean;
+  wasAir: boolean;
+  /** Tiempo que le queda al aterrizaje. */
+  landT: number;
+  yawPrev: number;
+  /** Peso de los pasitos al girar sin avanzar. */
+  turnStep: number;
 }
 
 const people = new Set<Person>();
@@ -913,16 +1010,27 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
 
   const mixer = new THREE.AnimationMixer(model);
   const act: Record<string, THREE.AnimationAction> = {};
-  for (const n of ['idle', 'walk', 'run', 'dance', 'agree']) act[n] = mixer.clipAction(D.clips[n]).play();
-  const air = mixer.clipAction(D.clips.run.clone());
-  air.play();
-  air.time = D.clips.run.duration * 0.3;
-  air.timeScale = 0;
-  act.air = air;
-  const w: Record<string, number> = { idle: 1, walk: 0, run: 0, dance: 0, agree: 0, air: 0 };
-  for (const k in act) act[k].setEffectiveWeight(w[k]);
+  // Básicos y, si están, los de la librería (desplazamiento, salto, hablar, otro baile, sí y no)
+  const names = ['idle', 'walk', 'run', 'dance', 'agree', ...D.loco.map((l) => l.clip), 'dance2', 'talk', 'yes', 'no', 'jumpLand'];
+  for (const n of names) if (D.clips[n] && !act[n]) act[n] = mixer.clipAction(D.clips[n]).play();
+  if (D.clips.jumpLoop) act.air = mixer.clipAction(D.clips.jumpLoop).play();
+  else {
+    // sin clip de salto: la pose de correr congelada
+    const air = mixer.clipAction(D.clips.run.clone());
+    air.play();
+    air.time = D.clips.run.duration * 0.3;
+    air.timeScale = 0;
+    act.air = air;
+  }
+  if (act.jumpLand) act.jumpLand.setLoop(THREE.LoopOnce, 1).clampWhenFinished = true;
+  const w: Record<string, number> = {};
+  for (const k in act) {
+    w[k] = k === 'idle' ? 1 : 0;
+    act[k].setEffectiveWeight(w[k]);
+  }
   act.idle.time = Math.random() * D.clips.idle.duration;
   act.dance.time = Math.random() * D.clips.dance.duration;
+  if (act.talk) act.talk.time = Math.random() * act.talk.getClip().duration;
 
   const rig: Rig = {
     kind, model, mixer, act, w, mode: 'idle', snap: new Map(), snapBodyY: 0,
@@ -930,6 +1038,8 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     bones: B, map, hipsY: B.get('Hips')!.position.y, last: new THREE.Vector3(NaN, 0, 0), speed: 0, torso: new THREE.Euler(0, 0, 0, 'YXZ'),
     hipsHeight: B.get('Hips')!.getWorldPosition(new THREE.Vector3()).y / scale,
     vrm: loaded?.vrm, face: loaded ? newFace() : undefined,
+    lean: { fwd: 0, side: 0 }, carry: { R: 0, L: 0 }, sideR: pos, sideL: neg,
+    danceAlt: !!act.dance2 && Math.random() < 0.5, wasAir: false, landT: 0, yawPrev: NaN, turnStep: 0,
   };
   const p: Person = {
     root, body, head: headJ, eyes, legL, legR, armL, armR, handR,
@@ -1613,6 +1723,38 @@ const _target = new THREE.Quaternion();
 const _parent = new THREE.Quaternion();
 const _local = new THREE.Quaternion();
 
+/** Pesos de andar/trotar/esprintar para una velocidad: entre los dos clips cuya velocidad la rodea. */
+function locoWeights(L: KindData['loco'], sp: number) {
+  const w = L.map(() => 0);
+  if (!L.length) return w;
+  if (sp <= L[0].speed) w[0] = 1;
+  else if (sp >= L[L.length - 1].speed) w[L.length - 1] = 1;
+  else
+    for (let i = 0; i < L.length - 1; i++)
+      if (sp < L[i + 1].speed) {
+        // lineal: así la zancada mezclada coincide con la velocidad real y los clips van a su ritmo natural
+        const f = (sp - L[i].speed) / (L[i + 1].speed - L[i].speed);
+        w[i] = 1 - f;
+        w[i + 1] = f;
+        break;
+      }
+  return w;
+}
+
+const _fwd = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _ca = new THREE.Vector3();
+const _cc = new THREE.Vector3();
+const _ch = new THREE.Vector3();
+const _ct = new THREE.Vector3();
+const _cp = new THREE.Vector3();
+const _co = new THREE.Vector3();
+
+/** El nivel la llama cada fotograma mientras la persona lleva algo en esa mano (brazo del muñeco: 'R' o 'L'). */
+export function carryHand(p: Person, side: 'R' | 'L', w = 1) {
+  if (p.rig) p.rig.carry[side] = Math.max(p.rig.carry[side], w);
+}
+
 function updateOne(p: Person, dt: number) {
   const r = p.rig!;
   const D = data[r.kind]!;
@@ -1625,61 +1767,110 @@ function updateOne(p: Person, dt: number) {
   const v = dt > 0 && d < 2 ? d / dt / sc : 0;
   r.speed += (v - r.speed) * Math.min(1, dt * 10);
   const sp = r.speed;
+  // Cuánto gira sobre sí mismo (para dar pasitos en vez de patinar)
+  const yaw = p.root.rotation.y;
+  const yawRate = !Number.isNaN(r.yawPrev) && dt > 0 ? Math.atan2(Math.sin(yaw - r.yawPrev), Math.cos(yaw - r.yawPrev)) / dt : 0;
+  r.yawPrev = yaw;
 
   const airS = airOf.get(p.root.position);
   const inAir = !!airS && airS.hop > 0.05;
-  const tw: Record<string, number> = { idle: 0, walk: 0, run: 0, dance: 0, agree: 0, air: 0 };
+  // Aterrizaje: el golpe del clip (rodillas que ceden) justo al tocar el suelo
+  if (r.wasAir && !inAir && r.act.jumpLand) {
+    r.landT = 0.5;
+    const a = r.act.jumpLand;
+    a.reset();
+    a.time = Math.max(0, D.landAt - 0.1);
+    a.timeScale = 1.2;
+    a.play();
+  }
+  r.wasAir = inAir;
+  r.landT = Math.max(0, r.landT - dt);
+
+  const L = D.loco;
+  const tw: Record<string, number> = {};
+  for (const n in r.act) tw[n] = 0;
   if (inAir) tw.air = 1;
-  else if (r.mode === 'dance' || r.mode === 'cheer') tw.dance = 1;
+  else if (r.mode === 'dance' || r.mode === 'cheer') tw[r.danceAlt ? 'dance2' : 'dance'] = 1;
   else {
-    const wr = THREE.MathUtils.smoothstep(sp, D.walkSpeed * 1.1, D.runSpeed * 0.8);
-    const moving = r.mode === 'walk' ? THREE.MathUtils.smoothstep(sp, 0.05, 0.6) : 0;
-    tw.idle = 1 - moving;
-    tw.walk = moving * (1 - wr);
-    tw.run = moving * wr;
-    // Nadie está quieto del todo: de pie, de vez en cuando asiente y habla con las manos, como charlando
+    const moving = r.mode === 'walk' ? THREE.MathUtils.smoothstep(sp, 0.05, 0.5) : 0;
+    locoWeights(L, sp).forEach((w, i) => (tw[L[i].clip] += moving * w));
+    let rest = 1 - moving;
+    // Girando sin avanzar: pasitos (el clip de andar, despacio) en vez de pivotar con los pies clavados
+    const turnWant = rest > 0.5 && Math.abs(yawRate) > 1.2 ? Math.min(0.75, 0.35 + (Math.abs(yawRate) - 1.2) * 0.35) : 0;
+    r.turnStep += (turnWant - r.turnStep) * Math.min(1, dt * 8);
+    if (r.turnStep > 0.01 && L.length) {
+      tw[L[0].clip] += r.turnStep * rest;
+      rest *= 1 - r.turnStep;
+    }
+    // Hablando: el clip de hablar gesticulando (si no lo hay, el muñeco mueve el brazo)
+    const still = r.mode === 'talk' && r.act.talk ? 'talk' : 'idle';
+    tw[still] += rest;
+    // Nadie está quieto del todo: de pie, de vez en cuando asiente, dice que sí o que no, como charlando
     if (r.mode === 'idle' && !r.noFidget) {
       r.fidNext ??= 1 + Math.random() * 6;
       r.fidNext -= dt;
       if (r.fidNext <= 0 && !(r.fidLeft! > 0) && moving < 0.1) {
-        r.fidLeft = D.clips.agree.duration * (0.8 + Math.random() * 0.8);
-        r.act.agree.time = Math.random() * D.clips.agree.duration * 0.3;
-        r.act.agree.timeScale = 0.75 + Math.random() * 0.4;
+        const opts = ['agree', 'agree', 'yes'].filter((n) => r.act[n]);
+        r.fidKey = opts[Math.floor(Math.random() * opts.length)];
+        const a = r.act[r.fidKey];
+        const du = a.getClip().duration;
+        r.fidLeft = Math.min(du, 2.2) * (0.8 + Math.random() * 0.5);
+        a.time = Math.random() * du * 0.3;
+        a.timeScale = 0.8 + Math.random() * 0.35;
         r.fidNext = 2.5 + Math.random() * 5;
       }
-      if (r.fidLeft! > 0) {
+      if (r.fidLeft! > 0 && r.fidKey) {
         r.fidLeft! -= dt;
         const f = 0.8 * Math.min(1, r.fidLeft! / 0.4) * tw.idle;
-        tw.agree = f;
+        tw[r.fidKey] += f;
         tw.idle -= f;
       }
+    }
+    // Recién aterrizada: encima de lo demás (menos si ya va corriendo)
+    if (r.landT > 0 && r.act.jumpLand) {
+      const f = Math.min(1, r.landT / 0.2) * (moving > 0.5 ? 0.4 : 0.85);
+      for (const n in tw) tw[n] *= 1 - f;
+      tw.jumpLand = f;
     }
   }
   const k = 1 - Math.exp(-10 * dt);
   for (const n in tw) {
     r.w[n] += (tw[n] - r.w[n]) * k;
+    if (r.w[n] < 1e-3) r.w[n] = 0;
     r.act[n].setEffectiveWeight(r.w[n]);
   }
-  const walk = r.act.walk, run = r.act.run;
-  walk.timeScale = THREE.MathUtils.clamp(sp / D.walkSpeed, 0.5, 2.2);
-  run.timeScale = THREE.MathUtils.clamp(sp / D.runSpeed, 0.6, 1.6);
-  if (r.w.walk > 0.05 && r.w.run > 0.05) {
-    const ph = walk.time / walk.getClip().duration;
-    run.time = ph * run.getClip().duration;
-    const blend = r.w.run / (r.w.run + r.w.walk);
-    const rate = THREE.MathUtils.lerp(sp / D.walkSpeed / walk.getClip().duration, sp / D.runSpeed / run.getClip().duration, blend);
-    walk.timeScale = rate * walk.getClip().duration;
-    run.timeScale = rate * run.getClip().duration;
+  // Cadencia: todos los clips de marcha al mismo ritmo y en la misma fase, para que el pie apoyado no patine
+  let lead: KindData['loco'][number] | null = null, lw = 0, wsum = 0, dist = 0;
+  for (const l of L) {
+    const ww = r.w[l.clip];
+    if (ww > lw) { lw = ww; lead = l; }
+    wsum += ww;
+    dist += ww * l.speed * r.act[l.clip].getClip().duration;
+  }
+  if (lead && wsum > 0.01) {
+    dist /= wsum;
+    const effSp = Math.max(sp, r.turnStep > 0.05 ? L[0].speed * 0.55 : 0);
+    const leadDur = r.act[lead.clip].getClip().duration;
+    // ciclos por segundo, sin pasarse de lo que el clip aguanta sin verse acelerado o a cámara lenta
+    const rate = THREE.MathUtils.clamp(effSp / dist, 0.55 / leadDur, 1.3 / leadDur);
+    const la = r.act[lead.clip];
+    const ph = (la.time / leadDur - lead.phase + 1) % 1;
+    for (const l of L) {
+      const a = r.act[l.clip];
+      const du = a.getClip().duration;
+      a.timeScale = rate * du;
+      if (l !== lead) a.time = ((ph + l.phase) % 1) * du;
+    }
   }
   r.mixer.update(dt);
 
-  // Partes del cuerpo que mandan las articulaciones del muñeco
-  const forced = r.mode === 'wave' || r.mode === 'talk';
+  // Partes del cuerpo que mandan las articulaciones del muñeco (saludar: solo el brazo que saluda)
+  const forcedR = r.mode === 'wave' || (r.mode === 'talk' && !r.act.talk);
   const want: Record<Group, number> = {
     body: changed(r, p.body) || Math.abs(p.body.position.y - r.snapBodyY) > 1e-4 ? 1 : 0,
     head: changed(r, p.head) ? 1 : 0,
-    armL: forced || changed(r, p.armL) || changed(r, p.elbowL) ? 1 : 0,
-    armR: forced || changed(r, p.armR) || changed(r, p.elbowR) ? 1 : 0,
+    armL: changed(r, p.armL) || changed(r, p.elbowL) ? 1 : 0,
+    armR: forcedR || changed(r, p.armR) || changed(r, p.elbowR) ? 1 : 0,
     legL: changed(r, p.legL) || changed(r, p.kneeL) || changed(r, p.footL) ? 1 : 0,
     legR: changed(r, p.legR) || changed(r, p.kneeR) || changed(r, p.footR) ? 1 : 0,
   };
@@ -1693,8 +1884,10 @@ function updateOne(p: Person, dt: number) {
     if (r.gw[gk] > 0) any = true;
   }
   const t = r.torso;
-  const lean = t.x !== 0 || t.y !== 0 || t.z !== 0;
-  if (!any && !lean) return;
+  const lf = r.lean.fwd, ls = r.lean.side;
+  const lean = t.x !== 0 || t.y !== 0 || t.z !== 0 || Math.abs(lf) > 1e-4 || Math.abs(ls) > 1e-4;
+  const carrying = r.carry.R > 0.01 || r.carry.L > 0.01;
+  if (!any && !lean && !carrying) return;
   p.root.updateWorldMatrix(true, true);
   p.root.getWorldQuaternion(_rootQ);
   const rootInv = _rootQ.clone().invert();
@@ -1713,21 +1906,54 @@ function updateOne(p: Person, dt: number) {
       b.quaternion.slerp(_local, wgt);
       b.updateWorldMatrix(false, true);
     }
+  const turn = (b: THREE.Object3D | undefined, x: number, y: number, z: number) => {
+    if (!b) return;
+    _torsoE.set(x, y, z, 'YXZ');
+    _torsoQ.setFromEuler(_torsoE);
+    // Giro en los ejes del personaje, pasado a mundo y aplicado encima de la pose del hueso
+    _torsoW.copy(_rootQ).multiply(_torsoQ).multiply(rootInv);
+    b.getWorldQuaternion(_target).premultiply(_torsoW);
+    b.parent!.getWorldQuaternion(_parent);
+    b.quaternion.copy(_parent.invert()).multiply(_target);
+    b.updateWorldMatrix(false, true);
+  };
   if (lean) {
+    // La marcha: hacia dentro en las curvas con todo el cuerpo (desde la cadera); adelante, con la columna
+    if (Math.abs(ls) > 1e-4) turn(r.bones.get('Hips'), 0, 0, ls * 0.7);
     // De cintura para arriba: la columna reparte el giro y caderas y piernas no se enteran
-    for (const [bn, w] of TORSO) {
-      const b = r.bones.get(bn);
-      if (!b) continue;
-      _torsoE.set(t.x * w, t.y * w, t.z * w, 'YXZ');
-      _torsoQ.setFromEuler(_torsoE);
-      // Giro en los ejes del personaje, pasado a mundo y aplicado encima de la pose del hueso
-      _torsoW.copy(_rootQ).multiply(_torsoQ).multiply(rootInv);
-      b.getWorldQuaternion(_target).premultiply(_torsoW);
-      b.parent!.getWorldQuaternion(_parent);
-      b.quaternion.copy(_parent.invert()).multiply(_target);
-      b.updateWorldMatrix(false, true);
+    for (const [bn, w] of TORSO) turn(r.bones.get(bn), (t.x + lf) * w, t.y * w, (t.z + ls * 0.3) * w);
+  }
+  if (carrying) {
+    // Llevar algo delante sin congelar el brazo: la mano va hacia un punto delante del pecho (con algo del
+    // balanceo de la animación) y el codo se dobla solo (IK); la mano, recta, para que el vaso no se vuelque
+    const chest = r.bones.get('Spine2') ?? r.bones.get('Spine1');
+    _fwd.set(0, 0, 1).applyQuaternion(_rootQ);
+    for (const side of ['R', 'L'] as const) {
+      const w = r.carry[side];
+      if (w < 0.01 || !chest) continue;
+      const S = side === 'R' ? r.sideR : r.sideL;
+      const up = r.bones.get(S + 'Arm'), lo = r.bones.get(S + 'ForeArm'), hand = r.bones.get(S + 'Hand');
+      if (!up || !lo || !hand) continue;
+      const wsc = p.root.getWorldScale(_co).x;
+      chest.getWorldPosition(_cc);
+      up.getWorldPosition(_ca);
+      hand.getWorldPosition(_ch);
+      const out = _co.subVectors(_ca, _cc).projectOnPlane(_up).normalize();
+      _ct.copy(_cc).addScaledVector(_fwd, 0.27 * wsc).addScaledVector(out, 0.13 * wsc).addScaledVector(_up, -0.13 * wsc);
+      _ct.lerp(_ch, 0.2);
+      _cp.copy(_ca).addScaledVector(_up, -0.3 * wsc).addScaledVector(out, 0.3 * wsc).addScaledVector(_fwd, -0.15 * wsc);
+      twoBone(up, lo, hand, _ct, _cp, w);
+      const down = D.down.get(S + 'Hand');
+      if (down) {
+        _target.copy(_rootQ).multiply(down);
+        hand.parent!.getWorldQuaternion(_parent);
+        _local.copy(_parent.invert()).multiply(_target);
+        hand.quaternion.slerp(_local, w * 0.85);
+        hand.updateWorldMatrix(false, true);
+      }
     }
   }
+  r.carry.R = r.carry.L = 0;
 }
 
 /** Pone un hueso en su pose de reposo respecto al personaje (p. ej. el pie plano, tras un IK de la pierna). */

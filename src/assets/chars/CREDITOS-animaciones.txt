@@ -1,0 +1,7 @@
+anims_ual.glb y anims_ual_2.glb
+-------------------------------
+Clips de la "Universal Animation Library" y la "Universal Animation Library 2" (versiones Standard), de Quaternius.
+Licencia: CC0 1.0 Universal (dominio público) — https://creativecommons.org/publicdomain/zero/1.0/
+Origen: https://quaternius.com/packs/universalanimationlibrary.html (copia en OpenGameArt:
+https://opengameart.org/content/universal-animation-library y .../universal-animation-library-2).
+Convertidos con scripts/anims_ual.mjs: solo esqueleto y animaciones, huesos renombrados a los de Mixamo.

@@ -118,3 +118,21 @@ Lista mínima para cubrir P1–P9 (~30 clips): trote, correr, sprint, salto (3),
 Para el capítulo 1 (se abre el 20 de noviembre) bastan 1–4 y el baile de pareja de P7.
 
 **Cómo comprobar cada cambio:** en `?hq#test`, `__dbg.go(1)`, correr en línea recta por la calle de salida y medir: `rig.act.run.timeScale` (debería quedar ≤ 1,2), velocidad del pie apoyado (≈ 0) y capturas de perfil a 4 fotogramas por ciclo. Ver la técnica de capturas en `docs/PLAN-personajes.md` (sección 2).
+
+---
+
+## 5. Aplicado (8 de noviembre de 2026)
+
+Con los clips CC0 de Quaternius (`src/assets/chars/anims_ual.glb` y `anims_ual_2.glb`, 0,8 MB; ver `CREDITOS-animaciones.txt` y `scripts/anims_ual.mjs`), adaptados a todos los personajes con el mismo retargeting:
+
+- **P1 Correr:** andar, trote y sprint mezclados por velocidad, con pesos lineales y los tres clips sincronizados en fase (pie izquierdo adelantado a la vez). Velocidad natural de cada clip = zancada × factor por tipo de marcha (`STRIDE_FACTOR` en `rig.ts`: los clips de la librería apenas apoyan el pie, así que medir "el pie apoyado" no sirve). Resultado en Azul: andar 1,0 m/s, trote 3,2, sprint 5,0; a 5,2 m/s el sprint va a ~1,05× (antes, el trote de Mixamo a 1,6× y con tope). Ritmo límite por clip 0,55×–1,3×.
+- **P1.3 Llevar cosas:** `carryHand(persona, 'R'|'L')` (rig.ts) lleva la mano con IK delante del pecho, con algo del balanceo, y la mantiene recta; el resto del cuerpo sigue la carrera. Usado con las pomadas del capítulo 1.
+- **P2 Inclinación:** `animatePerson` ya no pone la inclinación en el muñeco para personajes con esqueleto: va a `rig.lean` y `rig.ts` la aplica (adelante con la columna, hacia dentro en curvas desde la cadera).
+- **P3 Salto:** en el aire, el clip `jumpLoop`; al tocar suelo, `jumpLand` desde el golpe (cadera más baja). Ojo: **el jugador no tiene botón de saltar** (`requestJump` no se llama en ningún sitio); esto solo se ve cuando el juego levanta a alguien del suelo.
+- **P4 Girar parado:** pasitos con el clip de andar cuando gira sin avanzar (antes pivotaba con los pies clavados).
+- **P5 Hablar:** el modo `talk` usa el clip de hablar gesticulando; los brazos solo los manda el código si el nivel los coloca (p. ej. la fabiolera tocando). Saludar solo fuerza el brazo que saluda.
+- **P7 Baile:** cada persona baila la samba o el segundo baile, al azar.
+- **P9 Reposo:** gestos sueltos variados (asentir, decir que sí).
+- **Arreglo de paso:** el bombín de la fabiolera flotaba 4–5 cm sobre la cabeza.
+
+**Pendiente:** saludar, celebrar, más bailes y bailar en pareja (no hay clips libres en estas librerías: harían falta de Mixamo); sentarse, conducir y nadar con clips (los clips ya están cargados: `sit`, `sitTalk`, `drive`, `swim`, `swimIdle`; falta usarlos en cada nivel, y esos niveles son de los capítulos 2 en adelante); multitud horneada con los clips nuevos; botón de saltar si se quiere.

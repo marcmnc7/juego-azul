@@ -748,7 +748,12 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
       p.head.rotation.x = Math.sin(t * 0.7) * 0.03;
     }
   }
-  if (lean) {
+  if (p.rig) {
+    // Con esqueleto: la inclinación la aplica rig.ts encima de la captura (columna y cadera). Si se pusiera en el
+    // muñeco, se perdería: rig.ts solo copia lo que cambia después de esta función.
+    p.rig.lean.fwd = lean?.leanFwd ?? 0;
+    p.rig.lean.side = lean?.leanSide ?? 0;
+  } else if (lean) {
     p.body.rotation.x += lean.leanFwd;
     p.body.rotation.z += lean.leanSide;
   }
