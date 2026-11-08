@@ -706,7 +706,7 @@ function frame() {
     // Empujando contra el final del mapa, donde no se ve nada que lo impida: mejor decirlo
     if (!talking && edgePush > 0.45 && performance.now() - edgePushAt < 200 && performance.now() > edgeHintAt) {
       edgeHintAt = performance.now() + 9000;
-      toast(beacon.want > 0 ? 'Por aquí no hay paso: sigue la luz' : 'Por aquí no hay paso');
+      toast(beacon.want > 0 ? 'Por aquí no hay paso: sigue la flecha' : 'Por aquí no hay paso');
     }
     // Solo en pruebas: ?cam=x,y,z,lx,ly,lz fija la cámara para revisar un lugar
     const camQ = TEST ? ((window as unknown as { __cam?: string }).__cam ?? new URLSearchParams(location.search).get('cam')) : null;

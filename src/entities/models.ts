@@ -4,7 +4,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { makeHelmet } from './helmet';
 import { toon, addOutline, hdSurfaces } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
-import { RigCrowd, crowdReady } from './crowdRig';
+import { RigCrowd, crowdReady, type Behave } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
 import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
@@ -848,8 +848,8 @@ export interface CrowdLike {
 }
 
 /** Multitud: con personajes glTF horneados en los capítulos con la calidad de la prueba. */
-export function makeCrowd(look: PersonLook, count: number, dance = false): CrowdLike {
-  if (hdSurfaces.value && crowdReady()) return new RigCrowd(look, count, dance);
+export function makeCrowd(look: PersonLook, count: number, dance = false, behave?: readonly Behave[]): CrowdLike {
+  if (hdSurfaces.value && crowdReady()) return new RigCrowd(look, count, dance, behave);
   return new CrowdPeople(look, count);
 }
 

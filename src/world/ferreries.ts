@@ -8,6 +8,7 @@ import { paintStyle } from '../core/paint';
 import dayHdr from '../assets/env/quarry.hdr';
 import { FerreriesHD, CHURCH_STEP_Z } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
+import { WALK_SPEED, type Behave } from '../entities/crowdRig';
 import { menorcaFlagTexture, senyeraTexture, bannerTexture, streetSignTexture, letteringTexture, mergedPlanes } from './deco';
 
 // Ferreries en fiestas, a las 11 de la mañana del 25 de agosto (jaleo d’ases en el Pla de l’Església): calle mayor de este a oeste, plaza con la iglesia al norte,
@@ -26,9 +27,17 @@ export interface Box2 {
 
 export interface Crowd {
   people: CrowdLike;
-  base: { x: number; z: number; ry: number; phase: number; speed: number }[];
+  base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk }[];
   /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
   dance?: boolean;
+}
+
+/** Paseo de ida y vuelta por un tramo de calle (a lo largo de x en la calle, de z en la plaza). */
+interface Walk {
+  ax: 'x' | 'z';
+  a0: number;
+  a1: number;
+  dir: 1 | -1;
 }
 
 /** Sitio de un balcón donde colgar una bandera. */
@@ -713,9 +722,40 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
       spots.some((s) => near(px, pz, s.x, s.z, 1.0));
     if (!bad) spots.push({ x: px, z: pz, ry: pz > 5 ? Math.atan2(0 - px, 14 - pz) : (pz < 0 ? 0 : Math.PI) + (r() - 0.5) });
   }
+  // Qué hace cada uno: los que están cerca, de dos en dos, charlando de cara; los demás pasean, beben de su
+  // vaso o miran el móvil (nadie plantado sin más)
+  type Spot = (typeof spots)[number] & { behave?: Behave; walk?: Walk };
+  const sp = spots as Spot[];
+  for (const a of sp) {
+    if (a.behave) continue;
+    let best: Spot | null = null, bd = 1.9;
+    for (const b of sp) if (b !== a && !b.behave && near(a.x, a.z, b.x, b.z, bd)) { bd = Math.hypot(a.x - b.x, a.z - b.z); best = b; }
+    if (best && r() < 0.75) {
+      a.behave = best.behave = 'talk';
+      a.ry = Math.atan2(best.x - a.x, best.z - a.z);
+      best.ry = a.ry + Math.PI;
+      continue;
+    }
+    const k = r();
+    if (k < 0.5) {
+      // Paseo: el tramo más largo libre de obstáculos alrededor de su sitio (hasta 9 m a cada lado)
+      const ax: 'x' | 'z' = Math.abs(a.z) < 5.5 ? 'x' : 'z';
+      const free = (x: number, z: number) => !colliders.some((c) => x > c.minX - 0.45 && x < c.maxX + 0.45 && z > c.minZ - 0.45 && z < c.maxZ + 0.45) && Math.abs(x) < 45 && z > -4.6 && z < 24.5;
+      const base = ax === 'x' ? a.x : a.z;
+      let a0 = base, a1 = base;
+      while (a0 > base - 9 && free(ax === 'x' ? a0 - 0.4 : a.x, ax === 'x' ? a.z : a0 - 0.4)) a0 -= 0.4;
+      while (a1 < base + 9 && free(ax === 'x' ? a1 + 0.4 : a.x, ax === 'x' ? a.z : a1 + 0.4)) a1 += 0.4;
+      if (a1 - a0 > 3) {
+        a.behave = 'walk';
+        a.walk = { ax, a0, a1, dir: r() < 0.5 ? 1 : -1 };
+        continue;
+      }
+    }
+    a.behave = k < 0.75 ? 'drink' : 'phone';
+  }
   const crowds: Crowd[] = looks.map((look, li) => {
-    const mine = spots.filter((_, i) => i % looks.length === li);
-    const people = makeCrowd(look, mine.length);
+    const mine = sp.filter((_, i) => i % looks.length === li);
+    const people = makeCrowd(look, mine.length, false, mine.map((s) => s.behave ?? 'idle'));
     group.add(people.group);
     return { people, base: mine.map((s) => ({ ...s, phase: r() * 6, speed: 6 + r() * 4 })) };
   });
@@ -769,7 +809,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     marcPos: MARC.clone(),
     plazaCenter: new THREE.Vector3(0, 0, 14),
     crowds,
-    people: [...spots, ...dancers].map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
+    // (los que pasean no: se mueven; con ellos no se choca)
+    people: [...(spots as { x: number; z: number; walk?: Walk }[]).filter((s) => !s.walk), ...dancers].map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
     lights,
     partyLights,
     bars: barFronts,
@@ -796,6 +837,24 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
       const bb = b as typeof b & { ox?: number; oz?: number };
       bb.ox = (bb.ox ?? 0) + (tx - (bb.ox ?? 0)) * k;
       bb.oz = (bb.oz ?? 0) + (tz - (bb.oz ?? 0)) * k;
+      if (b.walk) {
+        // Paseando: avanza por su tramo y da media vuelta al final (girando, no de golpe)
+        const w = b.walk;
+        const cur = w.ax === 'x' ? b.x : b.z;
+        let nx = cur + w.dir * WALK_SPEED * dt;
+        if (nx > w.a1 || nx < w.a0) {
+          w.dir = (-w.dir) as 1 | -1;
+          nx = THREE.MathUtils.clamp(nx, w.a0, w.a1);
+        }
+        if (w.ax === 'x') b.x = nx;
+        else b.z = nx;
+        const want = w.ax === 'x' ? (w.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : w.dir > 0 ? 0 : Math.PI;
+        b.ry += Math.atan2(Math.sin(want - b.ry), Math.cos(want - b.ry)) * Math.min(1, dt * 5);
+        pose.sway = pose.twist = pose.shift = 0;
+        tq.setFromAxisAngle(up, b.ry);
+        c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose);
+        return;
+      }
       // De pie, gesticulando; los bailarines con más energía y girando un poco sobre sí mismos
       crowdPose(pose, t, b.phase, c.dance ? 0.55 + energy * 0.35 : energy * 0.45);
       if (c.dance) {

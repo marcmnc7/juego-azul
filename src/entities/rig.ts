@@ -788,6 +788,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
   model.position.y = -D.minY * D.scale;
   root.add(model);
 
+  const extra: [THREE.SkinnedMesh, THREE.SkinnedMesh][] = [];
   model.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
     if (!m.isMesh) return;
@@ -804,10 +805,27 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
       return;
     }
     if (colorRigMaterial(kind, m.name, mat, look) === false) m.visible = false;
-    if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = shortSuit().geo.get(m.geometry.uuid) ?? m.geometry;
+    if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
+      const sm = m as THREE.SkinnedMesh;
+      const src = sm.geometry;
+      sm.geometry = jeansGeometry(shortSuit().geo.get(src.uuid) ?? src, true, sm.skeleton);
+      // y encima, el pantalón corto de verdad (del color del pantalón: negro con el mono)
+      const sg = shortSuit().shell.get(src.uuid);
+      if (sg && sg.attributes.position.count) {
+        const shorts = new THREE.SkinnedMesh(sg, new THREE.MeshStandardMaterial({ color: lin(look.pants), roughness: 0.85, side: THREE.DoubleSide }));
+        shorts.name = 'Shorts';
+        shorts.frustumCulled = false;
+        shorts.castShadow = true;
+        extra.push([sm, shorts]);
+      }
+    }
     else if (kind === 'woman' && jeansOn(look) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = jeansGeometry(m.geometry);
   });
 
+  for (const [m, shorts] of extra) {
+    m.parent!.add(shorts);
+    shorts.bind(m.skeleton, m.bindMatrix);
+  }
   const B = boneMap(model);
   // Articulaciones del muñeco (invisibles): las mueve animatePerson y el código de los niveles
   const body = new THREE.Group();
@@ -927,7 +945,7 @@ function legsMask() {
 
 // ---------- Mono corto ----------
 
-let short: { mask: Uint8Array; geo: Map<string, THREE.BufferGeometry> } | null = null;
+let short: { mask: Uint8Array; geo: Map<string, THREE.BufferGeometry>; shell: Map<string, THREE.BufferGeometry> } | null = null;
 /**
  * Mono negro corto (Ferreries): tapa la barriga que deja ver el top de Michelle y deja las piernas
  * al aire desde medio muslo. Las perneras anchas del pantalón se ciñen a la forma de la pierna y su
@@ -937,7 +955,8 @@ function shortSuit() {
   if (short) return short;
   const mask = new Uint8Array(512 * 512);
   const geo = new Map<string, THREE.BufferGeometry>();
-  short = { mask, geo };
+  const shell = new Map<string, THREE.BufferGeometry>();
+  short = { mask, geo, shell };
   const scene = data.woman?.gltf.scene;
   if (!scene || !parts) return short;
   const cv = document.createElement('canvas');
@@ -1030,12 +1049,14 @@ function shortSuit() {
       g.fill();
       g.stroke();
     }
+    // (también el puño del pantalón, que en la máscara va con los zapatos: si no, la pierna se abría en el tobillo)
+    const isLeg = (i: number) => pt[i] === 4 || (pt[i] === 5 && hOf(w[i]) > 0.075);
     // Perneras ceñidas: cada vértice del pantalón bajo el dobladillo se acerca al eje de su pierna
     const BIN = 0.015;
     const stat = new Map<string, { x: number; z: number; n: number; r: number }>();
     const key = (v: THREE.Vector3) => `${v.x > cx ? 1 : 0}:${Math.floor(hOf(v) / BIN)}`;
     for (let i = 0; i < pos.count; i++) {
-      if (pt[i] !== 4 || hOf(w[i]) >= HEM + 0.03) continue;
+      if (!isLeg(i) || hOf(w[i]) >= HEM + 0.03) continue;
       const k = key(w[i]);
       const st = stat.get(k) ?? { x: 0, z: 0, n: 0, r: 0 };
       st.x += w[i].x; st.z += w[i].z; st.n++;
@@ -1043,26 +1064,67 @@ function shortSuit() {
     }
     for (const st of stat.values()) { st.x /= st.n; st.z /= st.n; }
     for (let i = 0; i < pos.count; i++) {
-      if (pt[i] !== 4 || hOf(w[i]) >= HEM + 0.03) continue;
+      if (!isLeg(i) || hOf(w[i]) >= HEM + 0.03) continue;
       const st = stat.get(key(w[i]))!;
       st.r = Math.max(st.r, Math.hypot(w[i].x - st.x, w[i].z - st.z));
     }
     const out = src.clone();
     const op = out.attributes.position as THREE.BufferAttribute;
     const v = new THREE.Vector3();
+    const W2 = w.map((q) => q.clone()); // posiciones en reposo después de ceñir las perneras
     for (let i = 0; i < pos.count; i++) {
-      if (pt[i] !== 4) continue;
+      if (!isLeg(i)) continue;
       const h = hOf(w[i]);
       if (h >= HEM + 0.03) continue;
       const st = stat.get(key(w[i]))!;
       const k = Math.min(1, legR(Math.min(h, HEM)) / Math.max(1e-4, st.r));
       const blend = THREE.MathUtils.smoothstep(HEM + 0.03 - h, 0, 0.03); // sin escalón en el dobladillo
       const f = 1 + (k - 1) * blend;
-      v.set(st.x + (w[i].x - st.x) * f, w[i].y, st.z + (w[i].z - st.z) * f).applyMatrix4(MS[mi][i].clone().invert());
+      W2[i].set(st.x + (w[i].x - st.x) * f, w[i].y, st.z + (w[i].z - st.z) * f);
+      v.copy(W2[i]).applyMatrix4(MS[mi][i].clone().invert());
       op.setXYZ(i, v.x, v.y, v.z);
     }
     out.computeVertexNormals();
     geo.set(src.uuid, out);
+    // Pantalón corto de verdad: una prenda aparte, con grosor, por encima de la piel de cintura a medio muslo,
+    // con el bajo recto y un poco acampanado (antes solo estaba pintado sobre la pierna)
+    {
+      const wg = new THREE.BufferGeometry();
+      wg.setAttribute('position', new THREE.Float32BufferAttribute(W2.flatMap((q) => [q.x, q.y, q.z]), 3));
+      wg.setIndex(index);
+      wg.computeVertexNormals();
+      const wn = wg.attributes.normal as THREE.BufferAttribute;
+      const si = src.attributes.skinIndex as THREE.BufferAttribute, sw = src.attributes.skinWeight as THREE.BufferAttribute;
+      const P: number[] = [], N: number[] = [], SI: number[] = [], SW: number[] = [], UV: number[] = [];
+      const n = new THREE.Vector3(), q = new THREE.Vector3();
+      const TOP = 0.615;
+      for (let t = 0; t < index.length; t += 3) {
+        const tri = [index[t], index[t + 1], index[t + 2]];
+        const hs = tri.map((i) => hOf(W2[i]));
+        const hc = (hs[0] + hs[1] + hs[2]) / 3;
+        if (hc < HEM || hc > TOP || !tri.every((i) => pt[i] === 4 || pt[i] === 3 || pt[i] === 0)) continue;
+        for (const i of tri) {
+          const h = Math.max(HEM, hOf(W2[i]));
+          n.fromBufferAttribute(wn, i);
+          // grosor: fino en la cintura, más suelto abajo; el bajo se abre un poco
+          const off = 0.007 + 0.012 * THREE.MathUtils.smoothstep(h, TOP, HEM + 0.04) + 0.012 * THREE.MathUtils.smoothstep(h, HEM + 0.035, HEM);
+          q.copy(W2[i]).addScaledVector(n, off);
+          q.y = box.min.y + h * H;
+          q.applyMatrix4(MS[mi][i].clone().invert());
+          P.push(q.x, q.y, q.z);
+          N.push(n.x, n.y, n.z);
+          UV.push(0.5, 0.5);
+          for (let k = 0; k < 4; k++) { SI.push(si.getComponent(i, k)); SW.push(sw.getComponent(i, k)); }
+        }
+      }
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      sg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
+      sg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+      sg.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
+      sg.computeVertexNormals();
+      shell.set(src.uuid, sg);
+    }
   });
   const px = g.getImageData(0, 0, 512, 512).data;
   const hp = hg.getImageData(0, 0, 512, 512).data;
@@ -1227,8 +1289,9 @@ const jeansCache = new Map<string, THREE.BufferGeometry>();
  * bajo fruncido. Todo lo que queda bajo la entrepierna y no es piel cuenta como pernera (el mapa de partes
  * solo marca como pantalón la cadera; el puño del tobillo va marcado como zapato).
  */
-function jeansGeometry(src: THREE.BufferGeometry) {
-  const hit = jeansCache.get(src.uuid);
+function jeansGeometry(src: THREE.BufferGeometry, bare = false, skel?: THREE.Skeleton) {
+  const ck = src.uuid + (bare ? 'b' : '');
+  const hit = jeansCache.get(ck);
   if (hit) return hit;
   const uv = src.attributes.uv as THREE.BufferAttribute | undefined;
   if (!uv || !parts) return src;
@@ -1240,10 +1303,33 @@ function jeansGeometry(src: THREE.BufferGeometry) {
   };
   let y0 = Infinity, y1 = -Infinity;
   for (let i = 0; i < pos.count; i++) { y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)); }
-  const H = y1 - y0, TOP = 0.48, LOW = 0.055, SL = 0.02;
+  // (con pantalón corto, hasta más arriba: si no, entre los muslos quedaba una telilla bajo el pantalón)
+  const H = y1 - y0, TOP = bare ? 0.52 : 0.48, LOW = 0.055, SL = 0.02;
   const hb = (i: number) => (pos.getY(i) - y0) / H;
   const leg = (i: number) => { const h = hb(i); return h < TOP && h > LOW && pt(i) !== 1 && pt(i) !== 6; };
-  const bk = (i: number) => `${pos.getX(i) > 0 ? 1 : 0}:${Math.floor(hb(i) / SL)}`;
+  // (izquierda y derecha respecto al centro de verdad de las piernas: el modelo no está centrado en x = 0 y las
+  // dos piernas caían en el mismo grupo y se juntaban)
+  let cxs = 0, cxn = 0;
+  for (let i = 0; i < pos.count; i++) if (leg(i)) { cxs += pos.getX(i); cxn++; }
+  const cx0 = cxn ? cxs / cxn : 0;
+  // y mejor aún, por el hueso que la mueve (pierna izquierda o derecha): las costuras de dentro del pantalón
+  // ancho quedan casi en el centro y, por posición, se iban a la otra pierna y estiraban triángulos entre las dos
+  const si = src.attributes.skinIndex as THREE.BufferAttribute | undefined, sw = src.attributes.skinWeight as THREE.BufferAttribute | undefined;
+  const sideOf = (i: number) => {
+    if (skel && si && sw) {
+      let l = 0, r = 0;
+      for (let k = 0; k < 4; k++) {
+        const n = skel.bones[si.getComponent(i, k)]?.name ?? '';
+        if (/Left(UpLeg|Leg|Foot|ToeBase)/.test(n)) l += sw.getComponent(i, k);
+        else if (/Right(UpLeg|Leg|Foot|ToeBase)/.test(n)) r += sw.getComponent(i, k);
+      }
+      if (l + r > 0.2) return l > r ? 'L' : 'R';
+    }
+    return pos.getX(i) > cx0 ? 'L' : 'R';
+  };
+  const sides = new Array<string>(pos.count);
+  for (let i = 0; i < pos.count; i++) sides[i] = sideOf(i);
+  const bk = (i: number) => `${sides[i]}:${Math.floor(hb(i) / SL)}`;
   const bins = new Map<string, { x: number; z: number; n: number }>();
   for (let i = 0; i < pos.count; i++) {
     if (!leg(i)) continue;
@@ -1258,14 +1344,22 @@ function jeansGeometry(src: THREE.BufferGeometry) {
     if (!leg(i)) continue;
     const h = hb(i), b = bins.get(bk(i))!;
     const dx = pos.getX(i) - b.x, dz = pos.getZ(i) - b.z, d = Math.max(1e-6, Math.hypot(dx, dz));
-    const target = H * THREE.MathUtils.lerp(0.033, 0.049, THREE.MathUtils.clamp((h - LOW) / (0.45 - LOW), 0, 1));
+    // con pantalón corto, la pierna desnuda: muslo, rodilla, gemelo y tobillo de una pierna de verdad
+    const target = bare ? H * legBare(h) : H * THREE.MathUtils.lerp(0.033, 0.049, THREE.MathUtils.clamp((h - LOW) / (0.45 - LOW), 0, 1));
     const blend = THREE.MathUtils.smoothstep(TOP - h, 0, 0.035); // sin escalón en la cadera
-    const nd = d + (0.12 * d + 0.88 * target - d) * blend;
+    const nd = bare ? d + (target - d) * blend : d + (0.12 * d + 0.88 * target - d) * blend;
     op.setXYZ(i, b.x + (dx / d) * nd, pos.getY(i), b.z + (dz / d) * nd);
   }
   out.computeVertexNormals();
-  jeansCache.set(src.uuid, out);
+  jeansCache.set(ck, out);
   return out;
+}
+
+/** Radio de la pierna desnuda (respecto a la altura) según la altura: tobillo, gemelo, rodilla y muslo. */
+function legBare(h: number) {
+  const K: [number, number][] = [[0.055, 0.018], [0.12, 0.022], [0.2, 0.029], [0.27, 0.025], [0.33, 0.03], [0.45, 0.041], [0.52, 0.047]];
+  for (let k = 1; k < K.length; k++) if (h <= K[k][0]) return THREE.MathUtils.lerp(K[k - 1][1], K[k][1], (h - K[k - 1][0]) / (K[k][0] - K[k - 1][0]));
+  return K[K.length - 1][1];
 }
 
 // ---------- Melena lisa ----------

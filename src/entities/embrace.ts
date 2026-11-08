@@ -35,7 +35,7 @@ const bone = (p: Person, n: string) => p.rig!.bones.get(n)!;
 const wpos = (p: Person, n: string, out: THREE.Vector3) => bone(p, n).getWorldPosition(out);
 
 /** Gira un hueso en mundo (rot por delante de su rotación actual), mezclado con w. */
-function rotateWorld(b: THREE.Object3D, rot: THREE.Quaternion, w: number) {
+export function rotateWorld(b: THREE.Object3D, rot: THREE.Quaternion, w: number) {
   b.getWorldQuaternion(_q2);
   const target = _q3.copy(rot).multiply(_q2);
   b.parent!.getWorldQuaternion(_q2).invert();

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MOBILE } from '../core/gfx';
+import { rotateWorld, twoBone } from './embrace';
 import { loadGLB } from '../core/assets';
 import { rigKind, colorRigMaterial, vatTime, type Kind } from './rig';
 import type { CrowdPose, PersonLook } from './models';
@@ -14,7 +15,8 @@ import manLodUrl from '../assets/chars/man_mh_lod.glb';
 const FPS = 15;
 const H = THREE.DataUtils.toHalfFloat;
 const W = 2048; // ancho de las texturas de animación
-const CLIPS = ['idle', 'agree', 'headShake', 'dance'] as const;
+// (drink y phone: de pie bebiendo del vaso o mirando el móvil; se hornean sobre el idle con el brazo puesto a mano)
+const CLIPS = ['idle', 'agree', 'headShake', 'dance', 'walk', 'drink', 'phone'] as const;
 type Clip = (typeof CLIPS)[number];
 
 interface VatPart {
@@ -33,6 +35,61 @@ interface VatKind {
 
 const kinds: Partial<Record<Kind, VatKind>> = {};
 let baking: Promise<void> | null = null;
+
+
+const boneOf = (root: THREE.Object3D, n: string) => root.getObjectByName('mixamorig' + n) as THREE.Bone;
+/**
+ * De pie con el vaso o el móvil: el brazo derecho colocado con IK encima del idle. Bebiendo, el vaso sube a la
+ * boca de vez en cuando (y la cabeza se echa un poco atrás); con el móvil, delante del pecho y mirándolo.
+ */
+function poseArm(model: THREE.Object3D, c: 'drink' | 'phone', u: number) {
+  const S = boneOf(model, 'Spine2').getWorldPosition(new THREE.Vector3());
+  const head = boneOf(model, 'Head');
+  const Hp = head.getWorldPosition(new THREE.Vector3());
+  const up = boneOf(model, 'RightArm'), lo = boneOf(model, 'RightForeArm'), hand = boneOf(model, 'RightHand');
+  // (el personaje mira a +z; su derecha es -x)
+  const pole = new THREE.Vector3(S.x - 0.45, S.y - 0.45, S.z - 0.1);
+  let t: THREE.Vector3;
+  if (c === 'phone') {
+    t = new THREE.Vector3(S.x - 0.05, S.y - 0.02, S.z + 0.27);
+    rotateWorld(head, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42), 1);
+  } else {
+    const sip = THREE.MathUtils.smoothstep(u, 0.5, 0.62) * (1 - THREE.MathUtils.smoothstep(u, 0.8, 0.92));
+    const rest = new THREE.Vector3(S.x - 0.13, S.y - 0.2, S.z + 0.2);
+    const mouth = new THREE.Vector3(Hp.x - 0.04, Hp.y + 0.0, Hp.z + 0.15);
+    t = rest.lerp(mouth, sip);
+    rotateWorld(head, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.22 * sip), 1);
+  }
+  twoBone(up, lo, hand, t, pole, 1);
+  model.updateWorldMatrix(true, true);
+}
+
+/** Vaso de plástico y móvil, como mallas con piel pegadas del todo a la mano derecha (pose de enlace). */
+function addProps(meshes: THREE.SkinnedMesh[]) {
+  const body = meshes.find((m) => /^Body/.test(m.name)) ?? meshes[0];
+  const sk = body.skeleton;
+  const hi = sk.bones.findIndex((b) => /RightHand$/.test(b.name));
+  if (hi < 0) return;
+  const handBind = sk.boneInverses[hi].clone().invert();
+  const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  handBind.decompose(pos, q, sc);
+  const make = (name: string, g: THREE.BufferGeometry, local: THREE.Vector3, keepUpright: boolean) => {
+    // en el espacio de la mano: desplazado hacia la palma; el vaso, de pie en el mundo
+    const off = local.clone().applyQuaternion(q);
+    const m = new THREE.Matrix4().compose(pos.clone().add(off), keepUpright ? new THREE.Quaternion() : q, new THREE.Vector3(1, 1, 1));
+    g.applyMatrix4(m).applyMatrix4(body.bindMatrixInverse);
+    const n = g.attributes.position.count;
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, i) => (i % 4 === 0 ? hi : 0)), 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(n * 4).map((_, i) => (i % 4 === 0 ? 1 : 0)), 4));
+    const sm = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial());
+    sm.name = name;
+    body.parent!.add(sm);
+    sm.bind(sk, body.bindMatrix);
+    meshes.push(sm);
+  };
+  make('Cup', new THREE.CylinderGeometry(0.036, 0.029, 0.105, 12), new THREE.Vector3(0, 0.07, 0.04), true);
+  make('Phone', new THREE.BoxGeometry(0.07, 0.145, 0.009), new THREE.Vector3(0, 0.08, 0.03), false);
+}
 
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
   // El hombre y la chica de MakeHuman en versión ligera, con su mismo esqueleto y sus animaciones
@@ -55,8 +112,12 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
   const mixer = new THREE.AnimationMixer(model);
   const clips = {} as VatKind['clips'];
   let total = 0;
+  const srcClip = (c: Clip) => K.clips[c === 'drink' || c === 'phone' ? 'idle' : c];
+  const dur = (c: Clip) => (c === 'drink' ? 4.4 : c === 'phone' ? 3.6 : srcClip(c).duration);
+  // El vaso y el móvil: piezas pegadas a la mano derecha (cada persona enseña el suyo o ninguno)
+  addProps(meshes);
   for (const c of CLIPS) {
-    const frames = Math.max(2, Math.round(K.clips[c].duration * FPS));
+    const frames = Math.max(2, Math.round(dur(c) * FPS));
     clips[c] = { start: total, frames };
     total += frames;
   }
@@ -100,12 +161,14 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
     return r;
   });
   for (const c of CLIPS) {
-    const action = mixer.clipAction(K.clips[c]).play();
+    const action = mixer.clipAction(srcClip(c)).play();
     const { start, frames } = clips[c];
     for (let f = 0; f < frames; f++) {
-      action.time = (f / frames) * K.clips[c].duration;
+      const tt = (f / frames) * dur(c);
+      action.time = tt % srcClip(c).duration;
       mixer.update(0);
       model.updateWorldMatrix(true, true);
+      if (c === 'drink' || c === 'phone') poseArm(model, c, tt / dur(c));
       meshes.forEach((m, mi) => {
         m.skeleton.update();
         const B = m.skeleton.boneMatrices;
@@ -232,6 +295,10 @@ const MH_TOP = 0xf2f2f2, MH_BOT = 0xd1d1d1, MH_HAIR = 0xd8d8d8, MH_SKIN = 0xe9bc
 const MH_HAIRS = ['MHHair', 'MHHair_short01', 'MHHair_short04'];
 const MH_HAIRS_W = ['MHHair', 'MHHair_bob02'];
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+/** Qué hace cada persona de la multitud. */
+export type Behave = 'idle' | 'talk' | 'walk' | 'drink' | 'phone';
+/** A qué velocidad pasean (m/s). */
+export const WALK_SPEED = 1.1;
 const HAIRS = [0x2b1d14, 0x3b2618, 0x5a3b22, 0x7a5434, 0x2a1c14, 0x33231a, 0xb08a52, 0xd8bb7e, 0x8a3b1e];
 // De fiesta en verano: mucho blanco (en el jaleo se va de blanco) y colores vivos
 const TOPS = [0xf6f3ec, 0xf6f3ec, 0xf6f3ec, 0xffffff, 0xe94f4f, 0x2f6fb5, 0x3fa37a, 0xf2c14e, 0xf08cae, 0x1d1d22, 0x7a5cc4, 0x9fd3e6, 0xf28f3b];
@@ -256,7 +323,7 @@ export class RigCrowd {
   private anim: THREE.InstancedBufferAttribute;
   /** Altura y anchura de cada persona. */
   private size: Float32Array;
-  constructor(look: PersonLook, count: number, dance = false) {
+  constructor(look: PersonLook, count: number, dance = false, behave?: readonly Behave[]) {
     const kind: Kind = look.male || look.beard || look.hairStyle === 'short' || look.hairStyle === 'cap' ? 'man' : 'woman';
     const K = kinds[kind]!;
     // Colores de cada uno: un tercio va como lo pensó el capítulo, el resto, a su aire
@@ -267,6 +334,9 @@ export class RigCrowd {
     const man = true;
     const HAIRS_K = kind === 'man' ? MH_HAIRS : MH_HAIRS_W;
     this.hv = new Uint8Array(count);
+    this.prop = new Uint8Array(count);
+    // paso de los que pasean, para que los pies no patinen
+    const ws = rigKind(kind === 'woman' ? 'mhwoman' : kind).walkSpeed || 1.5;
     for (let i = 0; i < count; i++) {
       const own = Math.random() < 0.33;
       ratio(own ? look.hair : pick(HAIRS), man ? MH_HAIR : NEUTRAL, hair, i * 3);
@@ -274,6 +344,7 @@ export class RigCrowd {
       ratio(own ? look.pants : pick(BOTTOMS), man ? MH_BOT : NEUTRAL, bot, i * 3);
       ratio(own ? look.skin : pick(SKINS), man ? MH_SKIN : look.skin, skin, i * 3);
       this.hv[i] = Math.floor(Math.random() * HAIRS_K.length);
+      this.prop[i] = behave?.[i] === 'drink' ? 1 : behave?.[i] === 'phone' ? 2 : 0;
       this.size[i * 2] = 0.92 + Math.random() * 0.15;
       this.size[i * 2 + 1] = 0.93 + Math.random() * 0.14;
     }
@@ -282,8 +353,9 @@ export class RigCrowd {
     for (let i = 0; i < count; i++) {
       const r = Math.random();
       // (charlando: la mayoría asiente o niega mientras habla; pocos se quedan solo de pie)
-      const c: Clip = dance ? 'dance' : r < 0.35 ? 'idle' : r < 0.8 ? 'agree' : 'headShake';
-      a.set([K.clips[c].start, K.clips[c].frames, Math.random() * 20, 0.85 + Math.random() * 0.3], i * 4);
+      const b = behave?.[i];
+      const c: Clip = dance ? 'dance' : b === 'walk' ? 'walk' : b === 'drink' ? 'drink' : b === 'phone' ? 'phone' : b === 'talk' ? (r < 0.6 ? 'agree' : 'headShake') : r < 0.35 ? 'idle' : r < 0.8 ? 'agree' : 'headShake';
+      a.set([K.clips[c].start, K.clips[c].frames, Math.random() * 20, c === 'walk' ? WALK_SPEED / ws : 0.85 + Math.random() * 0.3], i * 4);
     }
     this.anim = new THREE.InstancedBufferAttribute(a, 4);
     for (const part of K.parts) {
@@ -296,7 +368,11 @@ export class RigCrowd {
       for (const k in part.geo.attributes) g.setAttribute(k, part.geo.attributes[k]);
       g.setAttribute('iAnim', this.anim);
       g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.2);
-      const mat = part.base.clone();
+      const prop = part.name === 'Cup' ? 1 : part.name === 'Phone' ? 2 : 0;
+      if (prop && !behave?.some((b) => (prop === 1 ? b === 'drink' : b === 'phone'))) continue;
+      const mat = prop ? new THREE.MeshStandardMaterial({ color: prop === 1 ? 0xf3ead2 : 0x1c1c24, roughness: 0.5 }) : part.base.clone();
+      // (por las dos caras: al simplificar la versión ligera quedaba algún triángulo del revés y se veía a través)
+      if (!prop) mat.side = THREE.DoubleSide;
       // Pantalón corto: a ella se lo pinta su textura (como el mono de Margaux); él lleva su pieza corta
       if (man) mat.color.set(0xffffff);
       else colorRigMaterial(kind, part.name, mat, neutral);
@@ -321,6 +397,7 @@ export class RigCrowd {
       // peinado: cada hombre lleva uno de los tres (los demás, a escala cero)
       const hi = HAIRS_K.indexOf(part.name);
       if (hi >= 0) im.userData.hairVariant = hi;
+      if (prop) im.userData.propVariant = prop;
       this.meshes.push(im);
       this.group.add(im);
     }
@@ -331,10 +408,16 @@ export class RigCrowd {
     _v.set(p.shift * 0.5, 0, 0).applyQuaternion(q);
     _s.set(this.size[i * 2 + 1], this.size[i * 2], this.size[i * 2 + 1]);
     _m.compose(_v.set(x + _v.x, y, z + _v.z), _q, _s);
-    for (const im of this.meshes) im.setMatrixAt(i, im.userData.hairVariant === undefined || im.userData.hairVariant === this.hv[i] ? _m : ZERO);
+    for (const im of this.meshes) {
+      const u = im.userData;
+      const show = (u.hairVariant === undefined || u.hairVariant === this.hv[i]) && (u.propVariant === undefined || u.propVariant === this.prop[i]);
+      im.setMatrixAt(i, show ? _m : ZERO);
+    }
   }
   /** Peinado de cada uno (índice en MH_HAIRS). */
   private hv: Uint8Array;
+  /** Qué lleva en la mano: 0 nada, 1 vaso, 2 móvil. */
+  private prop: Uint8Array;
   commit() {
     for (const im of this.meshes) im.instanceMatrix.needsUpdate = true;
     // Las piezas comparten matrices: una esfera para todas, recalculada de vez en cuando (apenas se mueven)

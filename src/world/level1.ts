@@ -328,7 +328,7 @@ export class Level1 implements Level {
       if (i === 3) d.root.position.set(-20, 0, 0);
     }
 
-    // Pomadas: vaso con limonada y rodaja de limón, con un haz de luz para verlas de lejos
+    // Pomadas: vaso con limonada y rodaja de limón
     const glassGeo = V.horses
       ? // Bolsita de avellanes: papel de estraza abierto con avellanes asomando
         new Merger()
@@ -343,16 +343,12 @@ export class Level1 implements Level {
           .add(G.cyl, 0x7fd36b, -0.05, 0.42, 0, 0.3, 0, 0.2, 0.03, 0.35, 0.03)
           .build();
     const glassMat = toon({ vertexColors: true, emissive: 0x4a3a00 });
-    const beamGeo = new THREE.CylinderGeometry(0.35, 0.5, 7, 16, 1, true).translate(0, 3.5, 0);
-    const beamMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     for (const home of this.world.pomadaSpots) {
       const g = new THREE.Group();
       const cup = new THREE.Mesh(glassGeo, glassMat);
       cup.scale.setScalar(0.62); // (algo más grande que de verdad, para verlo entre la gente)
       g.add(cup);
-      const glow = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.6, depthWrite: false }));
-      glow.position.y = 0.02;
-      g.add(glow, new THREE.Mesh(beamGeo, beamMat));
+      // (sin haz de luz ni aro: el objetivo lo marca solo la flecha)
       g.position.copy(home);
       g.visible = false;
       this.scene.add(g);
@@ -390,6 +386,8 @@ export class Level1 implements Level {
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 16).rotateX(Math.PI), arrowMat);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 12).translate(0, 0.45, 0), arrowMat);
     this.marker.add(cone, stem);
+    // pequeña: una pista, no un letrero
+    this.marker.scale.setScalar(0.45);
     this.scene.add(this.marker);
 
     this.confetti.mesh.visible = false;
@@ -957,7 +955,7 @@ export class Level1 implements Level {
     const tgt = this.target();
     this.marker.visible = !!tgt && !this.busy;
     if (tgt) {
-      this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 1.0 : 3.9) + Math.sin(this.t * 3) * 0.18, tgt.z);
+      this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 0.7 : 2.6) + Math.sin(this.t * 3) * 0.1, tgt.z);
       this.marker.rotation.y += dt * 2;
       const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
