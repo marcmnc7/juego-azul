@@ -176,10 +176,8 @@ export class Level1 implements Level {
   private fabiolera: Person;
   private fireworks = new Fireworks();
   // Es jaleo: confeti en el aire, purpurina y pistolas de agua entre la gente
-  private airConfetti = new Confetti(110, 9, 7);
   private glitter = new Glitter();
   private shooters: { p: Person; gun: THREE.Group; yaw: number; aim: number; fireT: number; turnT: number }[] = [];
-  private tossT = 2;
   private noteT = 0;
   private partyColors: Float32Array;
   private hue = 0;
@@ -285,7 +283,8 @@ export class Level1 implements Level {
     this.scene.add(this.fabiolera.root);
     this.world.colliders.push({ minX: this.world.fabioleraPos.x - 0.4, maxX: this.world.fabioleraPos.x + 0.4, minZ: this.world.fabioleraPos.z - 0.4, maxZ: this.world.fabioleraPos.z + 0.4 });
     this.scene.add(this.fireworks.points);
-    this.scene.add(this.airConfetti.mesh, this.glitter.points);
+    // (sin confeti cayendo: Marc lo pidió fuera; queda la purpurina)
+    this.scene.add(this.glitter.points);
     this.partyColors = this.world.partyLights.geometry.attributes.color.array as Float32Array;
     for (const p of [this.world.tofolPos, this.world.marcPos]) {
       this.world.colliders.push({ minX: p.x - 0.35, maxX: p.x + 0.35, minZ: p.z - 0.35, maxZ: p.z + 0.35 });
@@ -1243,23 +1242,11 @@ export class Level1 implements Level {
     }
   }
 
-  /** Ambiente del jaleo: confeti y purpurina siempre alrededor; de vez en cuando alguien dispara su pistola de agua o tira un puñado de confeti. */
+  /** Ambiente del jaleo: purpurina alrededor (el confeti que caía, fuera). */
   private jaleoFx(dt: number) {
     const pp = this.player.root.position;
-    this.airConfetti.update(dt, pp, this.t);
     this.glitter.update(dt, pp, this.t);
     if (this.stage === 'eyes' || this.stage === 'ending' || this.stage === 'done') return;
-    const pick = () => {
-      const c = this.world.crowds[Math.floor(Math.random() * this.world.crowds.length)];
-      const b = c.base[Math.floor(Math.random() * c.base.length)] as { x: number; z: number; ox?: number; oz?: number };
-      const x = b.x + (b.ox ?? 0), z = b.z + (b.oz ?? 0);
-      return Math.hypot(x - pp.x, z - pp.z) < 13 ? this.v2.set(x, 0, z) : null;
-    };
-    if ((this.tossT -= dt) < 0) {
-      this.tossT = 1.2 + Math.random() * 2;
-      const at = pick();
-      if (at) this.airConfetti.toss(at.setY(2.4), 18);
-    }
   }
 
   /** Plano de perfil de la pareja, que se acerca poco a poco durante el beso. */
@@ -1338,8 +1325,6 @@ export class Level1 implements Level {
       this.busy = false;
       this.stage = 'ending';
       this.endingT = 0;
-      this.confetti.mesh.visible = true;
-      this.confetti.active = true;
       this.updateHud();
     }
   }
