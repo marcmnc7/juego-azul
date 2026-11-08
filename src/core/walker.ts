@@ -42,7 +42,7 @@ const CUT_GRAVITY = 2.4; // ×gravedad subiendo con el botón suelto
 const FALL_GRAVITY = 1.55; // ×gravedad cayendo
 // Acelerón: con el joystick a fondo y recto un rato, se corre algo más (y se nota en la cámara)
 const SPRINT_AFTER = 1.0; // segundos a fondo antes de acelerar
-const SPRINT = 1.24;
+const SPRINT = 1.15; // acelerón al correr recto un rato (antes 1,24)
 /** La cámara nunca se acerca a la cabeza más que esto (si no cabe, sube en vez de atravesar la pared). */
 const CAM_NEAR = 0.9;
 /** Aire que la cámara deja a su alrededor, y hacia dónde lo mira. */
@@ -83,7 +83,8 @@ export class Walker implements AirState {
   yaw = 0;
   /** Fase del ciclo de paso: avanza con la distancia recorrida, así los pies no patinan. */
   walk = 0;
-  speed = 5.2;
+  /** Velocidad punta normal (m/s). Antes 5,2: corría demasiado; algunos niveles la cambian a su gusto. */
+  speed = 4.0;
   /** Agarre: 1 en suelo; en el agua bajo, para que se deslice y cueste arrancar y frenar. */
   traction = 1;
   knock = new THREE.Vector3();
