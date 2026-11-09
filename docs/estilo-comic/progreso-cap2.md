@@ -102,6 +102,26 @@ Capturas: todas las fases (A Bar Imperi, B Llegar a casa, 1 Ir a la piscina, 2 N
 | Polvo de los pasos | ✓ | Nubecilla plana con aro de tinta (`dust.ts`) |
 | Recuerdos escondidos | ✓ aceptado | Polaroid plana; su halo, luz de tebeo de noche |
 
+## Segunda pasada (9-nov, tarde): que se parezca de verdad al cap. 1
+El dueño vio el cap. 2 «sin parecido» con el 1. Diferencias encontradas en capturas lado a lado y su arreglo:
+
+| Diferencia | Arreglo |
+|---|---|
+| Noche lila y plana: mucha luz de ambiente y la luna floja (1,0), todo del mismo tono | Perfil `noche` nuevo (`LOOK_LIGHT`): ambiente azul oscuro y tope de luna 2,5. En el cap. 2, `hemiScale` 0,14 y luna azul (0xa9bcff) a 2,5 con sombras: cara iluminada fría y clara, sombra azul intenso, como el sol del cap. 1 |
+| Casas de la urbanización = cajas blancas con rectángulos | `world/menorcaHouse.ts`: zócalo, cantoneras y cornisa de marès (`menorcaTrim`) y ventanas con marco y alféizar de marès y persianas de lamas (`menorcaWindow`). Lo usan la calle de casa, los vecinos del jardín y los alrededores (`surround.ts`, también en los caps. 1, 6, 7 y 8) |
+| Ventanas de los padres: cuadrados grises | Marco blanco, alféizar y persianas de lamas blancas |
+| Rayas finas en las paredes largas del pasillo | Acné de la sombra de la luna (va baja): `normalBias` 0,16 y `bias` -0,0012 solo en esta luna |
+| Diana de anillos en la fachada trasera | Luz del porche separada de la pared y más floja; `comicBand` con tres anillos como mucho y tope 1,5 (ya no quema a blanco) |
+| El Born parecía un atardecer naranja | Sus tres luces, al 60 % y con 12 m de alcance |
+| Calle sin luz bajo las farolas | `comicLightPool`: charco plano de dos discos bajo cada farola (malla plana: no cuesta como una luz de verdad); solo de noche (`buildStreet({ night })`) |
+| Coches = bloque de color | Brillo dibujado en la pintura (`COMIC_GLOSS`): mancha blanca donde refleja la luna o el sol y raya clara del horizonte (D6c hecho, sirve para todos los coches) |
+| Explanada del Born de «ladrillitos» de foto | Adoquín a 2,6 m por repetición (antes 1,6) |
+| Grava de ruido de puntitos | Guijarros dibujados con contorno de tinta |
+| Olas de la piscina como manchas blancas borrosas | Cara de la ola un tono más clara y su borde una línea blanca de trazo duro |
+| Halo de la luna: disco gris | Dos aros planos azul pálido |
+
+Comprobado: capturas de todas las fases; cap. 1 sin cambios visibles; caps. 4 y 7 (noche) siguen legibles; consola sin errores (solo el aviso de vibración de la prueba automática).
+
 ## Falta (común a varios capítulos)
-- Brillo dibujado en la pintura de los coches (D6c).
 - fps medidos en el móvil del dueño.
+- Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.

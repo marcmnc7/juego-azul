@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { G, Merger, palmCrown } from '../entities/models';
 import { glowTexture } from '../core/gfx';
 import { ROOF_GEO, rand, type Box2 } from './ferreries';
+import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_BLUE } from './menorcaHouse';
 
 // Alrededores: que ningún nivel acabe en un suelo infinito y un horizonte vacío. Rellena todo lo que
 // rodea la zona jugable con urbanización menorquina (casas encaladas de teja, muros de jardín, pinos,
@@ -41,7 +42,7 @@ export interface SurroundOpts {
 
 const WALLS = [0xfbf7ee, 0xf6f0e3, 0xf3ead8, 0xf1d9a0, 0xfdfaf3];
 const ROOFS = [0xb8623e, 0xc0653d, 0xb5603b];
-const SHUT = [0x2f6b46, 0x2f6b46, 0x24603a, 0x2b5f8a];
+const SHUT = [LOUVRE_GREEN, LOUVRE_GREEN, 0x24603a, LOUVRE_BLUE];
 
 export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
   const r = rand(o.seed ?? 7);
@@ -117,25 +118,31 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
         const ry = r() < 0.5 ? 0 : Math.PI / 2;
         m.add(G.box, wall, px, y0 + h / 2, pz, 0, ry, 0, w, h, d);
         // (cada tejado con su propia pendiente: dos vecinos que se solapan no quedan en el mismo plano)
-        if (o.town || r() < 0.65) m.add(ROOF_GEO, ROOFS[Math.floor(r() * ROOFS.length)], px, y0 + h, pz, 0, ry, 0, w + 0.6, 1.6 + (Math.abs(Math.round(px * 3 + pz * 7)) % 5) * 0.06, d + 0.6);
+        const pitched = o.town || r() < 0.65;
+        if (pitched) m.add(ROOF_GEO, ROOFS[Math.floor(r() * ROOFS.length)], px, y0 + h, pz, 0, ry, 0, w + 0.6, 1.6 + (Math.abs(Math.round(px * 3 + pz * 7)) % 5) * 0.06, d + 0.6);
         else {
           // Azotea con pretil
           m.add(G.box, wall, px, y0 + h + 0.3, pz, 0, ry, 0, w + 0.2, 0.6, d + 0.2);
           m.add(G.box, 0xd9d2c2, px, y0 + h + 0.05, pz, 0, ry, 0, w - 0.3, 0.1, d - 0.3);
         }
-        // Ventanas con persianas en las cuatro caras (luz en algunas, de noche)
+        // Zócalo, cantoneras y cornisa de marès, como las casas del cap. 1
+        const ex = ry ? d : w, ez = ry ? w : d;
+        menorcaTrim(m, px, y0, pz, ex, ez, h, { cornice: pitched });
+        // Ventanas con marco de marès y persianas de lamas en las cuatro caras (luz en algunas, de noche); en las
+        // de dos plantas, también arriba
         const sh = SHUT[Math.floor(r() * SHUT.length)];
-        const along = (s: number, onX: boolean) => {
-          const len = onX ? (ry ? d : w) : ry ? w : d;
-          const half = (onX ? (ry ? w : d) : ry ? d : w) / 2 + 0.03;
-          for (const a of [-len / 4, len / 4]) {
-            const lit = o.night && r() < 0.3;
-            const wx = onX ? px + a : px + s * half;
-            const wz = onX ? pz + s * half : pz + a;
-            const wy = y0 + Math.min(h - 1.2, 1.7);
-            m.add(G.box, lit ? 0xffd9a0 : sh, wx, wy, wz, 0, 0, 0, onX ? 1.0 : 0.06, 1.2, onX ? 0.06 : 1.0);
-            if (lit) lights.push(wx, wy, wz);
-          }
+        const rows = h > 5 ? [1.7, 4.4] : [Math.min(h - 1.2, 1.7)];
+        const along = (s: 1 | -1, onX: boolean) => {
+          const len = onX ? ex : ez;
+          const half = (onX ? ez : ex) / 2;
+          for (const wy of rows)
+            for (const a of [-len / 4, len / 4]) {
+              const lit = !!o.night && r() < 0.3;
+              const wx = onX ? px + a : px + s * half;
+              const wz = onX ? pz + s * half : pz + a;
+              menorcaWindow(m, wx, y0 + wy, wz, 1.0, 1.2, { axis: onX ? 'z' : 'x', s }, { lit, shutter: sh, closed: !lit && r() < 0.35 });
+              if (lit) lights.push(wx + (onX ? 0 : s * 0.1), y0 + wy, wz + (onX ? s * 0.1 : 0));
+            }
         };
         along(1, true);
         along(-1, true);

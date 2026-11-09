@@ -442,9 +442,11 @@ void main() {
   float stroke = on * step(abs(f.y - 0.5), 0.07) * step(abs(f.x - 0.5), len * 0.5);
   stroke *= 1.0 - smoothstep(35.0, 110.0, length(cameraPosition - vW));
   col = mix(col, uNight > 0.5 ? vec3(0.8, 0.86, 1.0) : vec3(1.0), stroke * (uNight > 0.5 ? 0.6 : 0.9));
-  // crestas de las olas de la malla (la piscina): línea blanca
-  float crest = smoothstep(0.1, 0.16, length(n.xz));
-  col = mix(col, vec3(0.95, 0.98, 1.0), crest * 0.85);
+  // olas de la malla (la piscina), dibujadas: la cara de la ola, un tono plano más claro, y su borde, una línea
+  // blanca de trazo duro (rellenas de blanco con borde suave parecían manchas de luz borrosas)
+  float slope = length(n.xz);
+  col = mix(col, col * 1.15 + 0.04, step(0.15, slope));
+  col = mix(col, vec3(0.95, 0.98, 1.0), step(0.12, slope) * (1.0 - step(0.15, slope)) * 0.8);
   gl_FragColor = vec4(col, uAlpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

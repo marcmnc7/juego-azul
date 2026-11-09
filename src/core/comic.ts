@@ -20,7 +20,9 @@ export const comic = {
  */
 export const LOOK_LIGHT: Record<ComicLook, { sky: number; ground: number; hemi: number; sunMax: number; background: number | null }> = {
   dia: { sky: 0xdff2ff, ground: 0xb59c84, hemi: 1.35 * 0.35, sunMax: 2.1, background: 0x76c3f0 },
-  noche: { sky: 0x9fb4ff, ground: 0x3a2f4a, hemi: 0.55, sunMax: 1.0, background: null },
+  // (de noche, la luna manda, como el sol de día: cara iluminada clara y sombra azul intenso; con mucha luz de
+  // ambiente todo salía del mismo lila plano)
+  noche: { sky: 0x5a6fc0, ground: 0x1a1830, hemi: 0.55, sunMax: 2.5, background: null },
   interior: { sky: 0xfff4e6, ground: 0x8a7a6a, hemi: 0.9, sunMax: 1.4, background: null },
   atardecer: { sky: 0xffd2a8, ground: 0x6a4a5a, hemi: 0.55, sunMax: 1.8, background: null },
 };
@@ -312,6 +314,10 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
   // Los personajes se marcan en el canal alfa de la imagen (0.5): la pasada de tebeo no les pone ni tinta de
   // aristas ni trama (en las caras eran manchas y rayas); su línea es solo su contorno, fino
   const mark = person && !t.transparent;
+  // Pintura de coche (laca con barniz): en el tebeo, el brillo se dibuja: una mancha blanca donde refleja la luna o
+  // el sol y una raya clara donde refleja el horizonte (ver comicGloss)
+  const ph = src as THREE.MeshPhysicalMaterial;
+  const paint = !!ph.isMeshPhysicalMaterial && ph.clearcoat >= 0.9 && ph.metalness >= 0.5 && !ph.transparent;
   {
     const prev = carry ? src.onBeforeCompile : null;
     const prevKey = carry ? src.customProgramCacheKey.bind(src) : () => '';
@@ -320,8 +326,9 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
       bandedLights(sh);
       if (grain) surfaceShader(sh, surf);
       if (mark) sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = 0.5;');
+      if (paint) sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', COMIC_GLOSS + '\n#include <opaque_fragment>');
     };
-    t.customProgramCacheKey = () => prevKey() + '|band' + (grain ? '|cs' + surf : '') + (mark ? '|pmask' : '');
+    t.customProgramCacheKey = () => prevKey() + '|band' + (grain ? '|cs' + surf : '') + (mark ? '|pmask' : '') + (paint ? '|gloss' : '');
   }
   isToon.add(t);
   converted.set(src, t);
@@ -351,6 +358,26 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
 }
 
 /**
+ * Brillo dibujado de la pintura de los coches: donde la superficie refleja la luz principal (sol o luna), una mancha
+ * blanca de borde duro; donde refleja el horizonte, una raya clara a lo largo de la carrocería, como la pinta un
+ * dibujante. Sin esto, un coche de tebeo era un bloque de color plano.
+ */
+const COMIC_GLOSS = /* glsl */ `
+  {
+    vec3 gV = normalize(vViewPosition);
+    vec3 gR = reflect(-gV, normalize(normal));
+    vec3 gRw = (vec4(gR, 0.0) * viewMatrix).xyz;
+    float gHorizon = step(0.03, gRw.y) * step(gRw.y, 0.17);
+    float gHot = 0.0;
+    #if NUM_DIR_LIGHTS > 0
+      gHot = step(0.96, dot(gR, directionalLights[0].direction));
+    #endif
+    float gL = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
+    outgoingLight = mix(outgoingLight, mix(outgoingLight, vec3(1.0), 0.5) + 0.06, gHorizon * (1.0 - gHot));
+    outgoingLight = mix(outgoingLight, vec3(max(1.0, gL)), gHot);
+  }`;
+
+/**
  * Las luces de punto y de foco (farolas, el porche, la luz de la piscina) en bandas: su luz baja a saltos con la
  * distancia, en anillos de color plano, como un charco de luz dibujado, en vez de en degradado.
  */
@@ -364,9 +391,11 @@ function bandedLights(sh: THREE.WebGLProgramParametersWithUniforms) {
       `#include <common>
       vec3 comicBand(vec3 c) {
         float m = max(max(c.r, c.g), c.b);
-        // (pocos anillos, cada uno ~4 veces más flojo que el anterior: un charco de luz, no una diana)
-        if (m < 0.1) return vec3(0.0);
-        return c * (exp2(floor(log2(m) * 0.5 + 0.5) / 0.5) / m);
+        // (tres anillos como mucho, y el de dentro con tope: un charco de luz dibujado, no una diana ni una
+        // mancha quemada a blanco junto a la bombilla)
+        if (m < 0.12) return vec3(0.0);
+        float q = m >= 1.2 ? 1.5 : m >= 0.4 ? 0.65 : 0.25;
+        return c * (q / m);
       }`,
     )
     .replace('#include <lights_fragment_begin>', LIGHTS_BANDED);
@@ -732,4 +761,40 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   renderer.render(scene, camera);
   renderer.setRenderTarget(null);
   renderer.render(pass.quad, pass.cam);
+}
+
+let poolTex: THREE.CanvasTexture | null = null;
+/**
+ * Charco de luz de tebeo en el suelo (bajo una farola): dos discos planos del color de la luz, el de dentro más
+ * fuerte, con el borde un poco a mano. Sale casi gratis (una malla plana) y hace lo que una luz de verdad por
+ * cada farola costaría en el móvil.
+ */
+export function comicLightPool(x: number, y: number, z: number, radius: number, color = 0xffe0a0, strength = 1) {
+  if (!poolTex) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    const disc = (r: number, a: number) => {
+      g.fillStyle = `rgba(255,255,255,${a})`;
+      g.beginPath();
+      for (let i = 0; i <= 64; i++) {
+        const t = (i / 64) * Math.PI * 2;
+        const rr = r * (1 + 0.025 * Math.sin(t * 5 + r) + 0.015 * Math.sin(t * 11));
+        g.lineTo(128 + Math.cos(t) * rr, 128 + Math.sin(t) * rr);
+      }
+      g.fill();
+    };
+    disc(124, 0.45);
+    disc(70, 0.55);
+    poolTex = new THREE.CanvasTexture(c);
+    poolTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(radius * 2, radius * 2).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: poolTex, color, transparent: true, opacity: 0.32 * strength, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+  );
+  m.position.set(x, y, z);
+  m.userData.noComic = true;
+  m.renderOrder = 1;
+  return m;
 }

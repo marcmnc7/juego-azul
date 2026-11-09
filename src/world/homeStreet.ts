@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { G, Merger, palmCrown } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
+import { comicLightPool } from '../core/comic';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { Door } from './door';
+import { menorcaWindow, menorcaTrim, MARES, LOUVRE_GREEN, LOUVRE_BLUE, LOUVRE_WHITE } from './menorcaHouse';
 
 // La calle de casa de Gas, la carretera y la fachada vista desde la calle, sacadas de las fotos
 // que pasó Marc (las texturas del Bar Imperi se usan en el Born, born.ts):
@@ -134,13 +136,13 @@ function palm(m: Merger, x: number, z: number, h: number) {
   palmCrown(m, x, h, z, 2.6, 14);
 }
 
-/** Ventana con marco blanco, luz dentro y contraventanas abiertas (o cerradas). */
-function window_(m: Merger, x: number, y: number, z: number, w: number, h: number, shutter: number, lit: boolean, faceZ = -1) {
-  const d = faceZ * 0.07;
-  m.add(G.box, WHITE, x, y, z + d, 0, 0, 0, w + 0.3, h + 0.3, 0.06);
-  m.add(G.box, lit ? 0xffd9a0 : 0x2a3348, x, y, z + d * 1.6, 0, 0, 0, w, h, 0.04);
-  m.add(G.box, WHITE, x, y, z + d * 2, 0, 0, 0, 0.06, h, 0.04);
-  for (const s of [-1, 1]) m.add(G.box, shutter, x + s * (w / 2 + 0.15 + w / 4), y, z + d * 1.4, 0, 0, 0, w / 2, h, 0.05);
+/**
+ * Ventana de la calle como las del cap. 1: marco y alféizar (blancos en casa, de marès en las vecinas), luz dentro y
+ * persianas de lamas abiertas (o cerradas, en algunas apagadas).
+ */
+function window_(m: Merger, x: number, y: number, z: number, w: number, h: number, shutter: number, lit: boolean, faceZ = -1, frame = MARES) {
+  const closed = !lit && Math.abs(Math.round(x * 7 + y * 3)) % 3 === 0;
+  menorcaWindow(m, x, y, z, w, h, { axis: 'z', s: faceZ < 0 ? -1 : 1 }, { lit, shutter, closed, frame });
 }
 
 /** Casa genérica de urbanización: blanca o amarilla, tejado de teja, muro delante. faceZ: hacia dónde da la fachada. */
@@ -148,11 +150,14 @@ function genericHouse(m: Merger, x: number, frontZ: number, faceZ: number, color
   const depth = 9;
   const cz = frontZ - faceZ * (depth / 2);
   m.add(G.box, color, x, 3, cz, 0, 0, 0, 8.6, 6, depth);
+  menorcaTrim(m, x, 0, cz, 8.6, depth, 6);
   m.add(ROOF_GEO, 0xb8623e, x, 6, cz, 0, 0, 0, 9.4, 2, depth + 0.6);
   m.add(G.box, WHITE, x - 2.6, 7.2, cz, 0, 0, 0, 0.6, 1.4, 0.6); // chimenea
+  m.add(G.box, MARES, x - 2.6, 7.95, cz, 0, 0, 0, 0.75, 0.1, 0.75);
+  const sh = Math.abs(Math.round(x)) % 20 < 10 ? LOUVRE_GREEN : LOUVRE_BLUE;
   for (const wx of [-2, 2]) {
-    window_(m, x + wx, 4.4, frontZ, 1.1, 1.3, 0xf4f4f0, Math.random() < 0.5, faceZ);
-    window_(m, x + wx, 1.6, frontZ, 1.1, 1.3, 0xf4f4f0, Math.random() < 0.4, faceZ);
+    window_(m, x + wx, 4.4, frontZ, 1.1, 1.3, sh, Math.random() < 0.5, faceZ);
+    window_(m, x + wx, 1.6, frontZ, 1.1, 1.3, sh, Math.random() < 0.4, faceZ);
   }
   colliders.push({ minX: x - 4.3, maxX: x + 4.3, minZ: Math.min(frontZ, cz - faceZ * depth / 2), maxZ: Math.max(frontZ, cz - faceZ * depth / 2) });
 }
@@ -166,8 +171,8 @@ export interface StreetWorld {
   slider: Door;
 }
 
-/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). */
-export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}): StreetWorld {
+/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). night: charcos de luz de las farolas. */
+export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?: boolean } = {}): StreetWorld {
   const open = !!opts.gateOpen;
   const m = new Merger();
   const colliders: Box2[] = [];
@@ -199,11 +204,11 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   m.add(ROOF_GEO, 0xb8623e, 0, 6.68, FZ - 0.35, 0, 0, 0, 9.6, 0.55, 1.0); // alero de teja
   m.add(G.box, WHITE, -1.6, 8.0, -13.4, 0, 0, 0, 0.7, 1.8, 0.7); // chimenea
   m.add(G.box, 0x9a9a9a, -1.6, 8.95, -13.4, 0, 0, 0, 0.8, 0.1, 0.8);
-  window_(m, 2.6, 4.7, FZ, 1.0, 1.7, 0xf4f4f0, true);
-  window_(m, -0.4, 4.7, FZ, 1.0, 1.7, 0xf4f4f0, false);
+  window_(m, 2.6, 4.7, FZ, 1.0, 1.7, LOUVRE_WHITE, true, -1, WHITE);
+  window_(m, -0.4, 4.7, FZ, 1.0, 1.7, LOUVRE_WHITE, false, -1, WHITE);
   for (let i = 0; i < 5; i++) m.add(G.box, 0x222222, 2.25 + i * 0.18, 4.2, FZ - 0.2, 0, 0, 0, 0.03, 0.7, 0.03); // barandilla
   m.add(G.box, 0x222222, 2.6, 4.55, FZ - 0.2, 0, 0, 0, 0.8, 0.04, 0.04);
-  window_(m, -0.4, 1.6, FZ, 1.0, 1.2, 0xf4f4f0, true);
+  window_(m, -0.4, 1.6, FZ, 1.0, 1.2, LOUVRE_WHITE, true, -1, WHITE);
   // Garaje abierto con luz dentro
   m.add(G.box, WHITE, 2.3, 1.25, FZ - 0.08, 0, 0, 0, 3.3, 2.7, 0.06);
   m.add(G.box, 0x3a3630, 2.3, 1.15, FZ - 0.13, 0, 0, 0, 3.0, 2.3, 0.04);
@@ -302,9 +307,10 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   for (const sx of [-1, 1]) {
     const x = sx < 0 ? -11.5 : 9;
     m.add(G.box, WHITE, x, 3, -13.5, 0, 0, 0, 9, 6, 3);
+    menorcaTrim(m, x, 0, -13.5, 9, 3, 6);
     m.add(G.box, WHITE, x, 0.65, S.wallZ, 0, 0, 0, 9, 1.3, 0.3);
-    window_(m, x - 1.5, 1.6, -15, 1.4, 1.1, 0xc9a77c, true);
-    window_(m, x + 2, 4.4, -15, 0.9, 1.1, 0xc9a77c, false);
+    window_(m, x - 1.5, 1.6, -15, 1.4, 1.1, LOUVRE_GREEN, true);
+    window_(m, x + 2, 4.4, -15, 0.9, 1.1, LOUVRE_GREEN, false);
     colliders.push({ minX: x - 4.5, maxX: x + 4.5, minZ: S.wallZ - 0.3, maxZ: S.wallZ + 0.3, low: true });
   }
 
@@ -332,6 +338,8 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
     m.add(G.box, 0x3a3a3a, x, 4.3, -20.8, 0, 0, 0, 0.4, 0.15, 0.3);
     colliders.push({ minX: x - 0.15, maxX: x + 0.15, minZ: -19.95, maxZ: -19.65 });
     lampPos.push(x, 4.15, -20.8);
+    // su charco de luz en la acera y la calzada
+    if (opts.night) sc.add(comicLightPool(x, 0.07, -21.4, 3.6));
   }
   // Brillos: farolas, farolillos del bar y de casa
   lampPos.push(S.door.x, 2.6, FZ - 0.3);

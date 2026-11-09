@@ -23,6 +23,7 @@ import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
+import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorcaHouse';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
@@ -193,25 +194,32 @@ export class Level4 implements Level {
     sc.add(this.sky.group);
     this.addMilkyWay();
     sc.add(new THREE.HemisphereLight(0x6f7fc0, 0x1a2030, 1.1));
-    // Luz de luna con sombras
-    this.sun = new Sun(sc, 0xa9bcff, 1.0, new THREE.Vector3(-0.5, 1, 0.4), 18);
+    // (poca luz de ambiente: la que dibuja es la luna)
+    sc.userData.hemiScale = 0.14;
+    // Luz de luna con sombras: fuerte, como el sol del capítulo 1, pero azul: lo iluminado sale frío y los charcos
+    // de las farolas, cálidos
+    this.sun = new Sun(sc, 0xa9bcff, 2.5, new THREE.Vector3(-0.5, 1, 0.4), 18);
+    // (la luna va más baja que el sol y roza las paredes largas del pasillo: sin esto salían rayas de sombra)
+    this.sun.light.shadow.normalBias = 0.16;
+    this.sun.light.shadow.bias = -0.0012;
     // (luz de dentro del agua: un charco de luz en bandas alrededor, no muy grande)
     const poolLight = new THREE.PointLight(0x5fe3ff, 7, 5.5, 1.6);
     poolLight.position.set((POOL.minX + POOL.maxX) / 2, -0.4, (POOL.minZ + POOL.maxZ) / 2);
     sc.add(poolLight);
-    const porch = new THREE.PointLight(0xffc27a, 10, 9, 1.6);
-    porch.position.set(0, 2.6, 0.9);
+    // (separada de la fachada: pegada a ella pintaba una diana de anillos en la pared)
+    const porch = new THREE.PointLight(0xffc27a, 6, 8, 1.6);
+    porch.position.set(0, 2.3, 2.2);
     sc.add(porch);
 
     this.waterTex = this.causticTexture();
     this.buildHouse();
     this.fx = new Particles(sc);
 
-    const street = buildStreet(sc);
+    const street = buildStreet(sc, { night: true });
     this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
     for (const [x, z, i] of [[-8, 9, 14], [8, -9, 14], [IMPERI.x + 2, IMPERI.z, 12]]) {
-      const l = new THREE.PointLight(0xffc27a, i, 16, 1.5);
+      const l = new THREE.PointLight(0xffc27a, i * 0.6, 12, 1.5);
       l.position.set(BORN_O.x + x, 4, BORN_O.z + z);
       sc.add(l);
     }
@@ -433,6 +441,8 @@ export class Level4 implements Level {
     // La casa: adosado de tejado plano. Cuerpo delantero (2 plantas) y trasero más alto.
     m.add(G.box, WALL, 0, 3.2, -4.5, 0, 0, 0, 9, 6.4, 9);
     m.add(G.box, 0xe9dcc2, 0, 6.55, -4.5, 0, 0, 0, 9.2, 0.3, 9.2); // pretil
+    // cantoneras de marès, como las casas del cap. 1 (sin zócalo: abajo van las cristaleras)
+    menorcaTrim(m, 0, 0, -4.5, 9, 9, 6.4, { plinth: false, cornice: false });
     // (por detrás de la fachada amarilla de la calle, no en su mismo plano: se pisaban y parpadeaban a cuadros)
     m.add(G.box, 0xe4d6bb, 0, 3.6, -11.93, 0, 0, 0, 9, 7.2, 5.86);
     m.add(G.box, 0x3a3030, 0, 7.3, -9.17, 0, 0, 0, 8.96, 0.5, 0.6); // franja oscura de la terraza de arriba
@@ -458,19 +468,33 @@ export class Level4 implements Level {
     sc.add(wm);
     // Ventanas del dormitorio de los padres: a oscuras… hasta que hacéis ruido
     const up = new Merger();
-    up.add(G.box, 0xffffff, -2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
-    up.add(G.box, 0xffffff, 2.2, 4.6, 0.03, 0, 0, 0, 1.6, 1.4, 0.05);
+    up.add(G.box, 0xffffff, -2.2, 4.6, 0.1, 0, 0, 0, 1.6, 1.4, 0.04);
+    up.add(G.box, 0xffffff, 2.2, 4.6, 0.1, 0, 0, 0, 1.6, 1.4, 0.04);
     sc.add(new THREE.Mesh(up.build(), this.winMat));
+    // su marco blanco, el alféizar y las persianas de lamas abiertas (el cristal es el de arriba, que se enciende)
+    for (const x of [-2.2, 2.2]) {
+      m.add(G.box, 0xf7f4ec, x, 4.6, 0.04, 0, 0, 0, 1.96, 1.76, 0.08);
+      m.add(G.box, 0xf7f4ec, x, 3.7, 0.12, 0, 0, 0, 2.16, 0.1, 0.26);
+      for (const sd of [-1, 1]) m.add(G.box, LOUVRE_WHITE, x + sd * (0.8 + 0.2 + 0.4), 4.6, 0.1, 0, 0, 0, 0.8, 1.42, 0.05);
+    }
     // Grava entre la terraza y el césped, con losas para pasar sin ruido
+    // (dibujada: guijarros de color plano con su contorno de tinta, como el resto del tebeo; el ruido de
+    // puntitos de antes parecía una foto)
     const gravelTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#9d988d';
+      ctx.fillStyle = '#a49c8c';
       ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 4000; i++) {
-        const v = 120 + Math.random() * 110;
-        ctx.fillStyle = `rgb(${v},${v - 4},${v - 12})`;
+      let sd = 5;
+      const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+      for (let i = 0; i < 520; i++) {
+        const x = rnd() * w, y = rnd() * h, r = 7 + rnd() * 7;
+        const v = 170 + rnd() * 50;
+        ctx.fillStyle = `rgb(${v},${v - 6},${v - 18})`;
+        ctx.strokeStyle = '#4a3f35';
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
-        ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 2.2, 0, Math.PI * 2);
+        ctx.ellipse(x, y, r, r * (0.6 + rnd() * 0.3), rnd() * Math.PI, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
       }
     });
     gravelTex.wrapS = gravelTex.wrapT = THREE.RepeatWrapping;
@@ -546,6 +570,8 @@ export class Level4 implements Level {
     for (const sx of [-1, 1]) {
       const x = sx < 0 ? -11.5 : 9;
       m.add(G.box, 0xf3ead8, x, 3, -6, 0, 0, 0, 9, 6, 12);
+      menorcaTrim(m, x, 0, -6, 9, 12, 6);
+      for (const wx of [-2.5, 2.5]) menorcaWindow(m, x + wx, 4.4, 0, 1.1, 1.3, { axis: 'z', s: 1 }, { lit: wx * sx > 0, shutter: LOUVRE_GREEN, closed: wx * sx < 0 });
       m.add(ROOF_GEO, 0xb8623e, x, 6, -6, 0, Math.PI / 2, 0, 12.2, 1.8, 9.4);
       m.add(G.box, 0xffd9a0, x, 1.3, 0.03, 0, 0, 0, 3, 2.2, 0.05);
       m.add(G.box, 0xf4efe2, x + sx * 4.5, 0.9, 7.25, 0, 0, 0, 0.25, 1.8, 14.5);

@@ -613,9 +613,15 @@ export function comicMoonTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const g = cv.getContext('2d')!;
-  g.fillStyle = 'rgba(255,248,220,0.14)';
+  // halo en dos aros planos azul pálido (crema, sobre el cielo de noche, salía un disco gris: la mezcla se hace con
+  // la luz lineal y un 14 % de blanco ya es un gris claro)
+  g.fillStyle = 'rgba(150,175,255,0.07)';
   g.beginPath();
   g.arc(128, 128, 124, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = 'rgba(190,205,255,0.09)';
+  g.beginPath();
+  g.arc(128, 128, 96, 0, Math.PI * 2);
   g.fill();
   g.fillStyle = '#fbf3d6';
   g.beginPath();

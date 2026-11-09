@@ -26,7 +26,8 @@ SPEC[Surf.Louvre] = ['louvre', 0.9, 0.85];
 SPEC[Surf.Paving] = ['slabs', 3.2, 0.85];
 SPEC[Surf.Terracotta] = ['terracotta', 2.4, 0.85];
 SPEC[Surf.Sand] = ['sand', 3, 0.7];
-SPEC[Surf.Cobble] = ['cobble', 1.6, 0.9];
+// (adoquín grande, como lo dibujaría un dibujante: a 1,6 m la explanada del Born parecía una foto de ladrillitos)
+SPEC[Surf.Cobble] = ['cobble', 2.6, 0.9];
 SPEC[Surf.DryStone] = ['drystone', 2.6, 0.95];
 SPEC[Surf.Bark] = ['bark', 1.2, 0.8];
 
