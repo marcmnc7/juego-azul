@@ -313,6 +313,7 @@ const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan,
 const LOOKS: Record<number, ComicLook> = { 1: 'dia', 2: 'noche', 3: 'dia', 4: 'noche', 5: 'dia', 6: 'dia', 7: 'noche', 8: 'dia', 9: 'dia' };
 function setLook(n: number, look: ComicLook = LOOKS[n] ?? 'dia') {
   comic.look = look;
+  dust.tint(look !== 'dia');
   lookMood = undefined;
   // (una curva de tono suave: el sol del capítulo es fuerte y sin ella se quemaba)
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -646,7 +647,7 @@ function dropShadows() {
   level.threeScene.traverse((o) => {
     const m = o as THREE.Mesh;
     if ((o as THREE.DirectionalLight).isDirectionalLight) (o as THREE.DirectionalLight).castShadow = false;
-    if (m.userData.blob) m.visible = true;
+    if (m.userData.blob) m.visible = !m.userData.blobOff;
     if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => (x.needsUpdate = true));
   });
 }

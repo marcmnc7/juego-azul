@@ -156,6 +156,20 @@ Partida completa jugada con el teclado, de la intro a «¡Capítulo superado!»,
 - Gas atravesaba la pelota nadando: ahora también la aparta.
 - Las copas de los ficus del Born tapaban la cámara: más altas.
 
+## Sexta pasada (9-nov, noche): realismo y coherencia
+| Problema | Arreglo |
+|---|---|
+| Tumbados, flotaban sobre la toalla | Se mide la malla ya posada y se apoya en la toalla (`restOnTowel`); postura de tumbado fija (`liePose`: brazos a lo largo, sin los gestos de estar de pie, que levantaban un brazo); sombra de contacto alargada debajo; la sombra redonda de los pies, apagada (de canto parecía que flotaban). `userData.blobOff` hace que siga apagada al quitar las sombras en el móvil |
+| Pasos de cebra que no llevaban a ningún sitio | De bordillo a bordillo: a Correus y al Imperi; el de Ses Voltes solo cuando la calle sigue (Sant Joan) |
+| Carretera «cutre» | `countryRoad.ts` rehecho como la de Son Oleo (Street View del dueño): dos carriles con discontinua y líneas de borde, carril bici rojo con armadillos negros y amarillos, bordillo y acera de baldosa roja, pared seca con remate de marès y lentisco y acebuche detrás; al otro lado, acera y casas encaladas de la urbanización con murete blanco y pilares, palmeras, araucarias y buganvillas; farolas altas de un brazo; señales de «Urb. Son Oleo». Curvas suaves; entra en la calle de casa |
+| Luna llena en el cielo | Fuera: el 27-8-2025 era casi luna nueva y a la una ya no estaba (por eso la Vía Láctea y la «oscuridad tenebre» del diálogo) |
+| Casa de los padres «despierta» a la una | Garaje con la basculante bajada y sin luz, ventanas de la fachada apagadas, las cristaleras de la terraza solo con una lámpara baja (`buildStreet({ night })`) |
+| Sombrilla abierta de noche, atravesada por la guirnalda | Cerrada y atada |
+| Bar Imperi abierto y vacío | Tres de tertulia en la terraza, de pie junto a la mesa del fondo |
+| Polvo de los pasos color crema de noche (parecía que brillaba) | Gris azulado de noche (`dust.tint`) |
+| Luciérnagas grandes; una pegada a la cámara en las estrellas | Más pequeñas; ocultas mientras se miran las estrellas |
+| Objetivo «al otro lado de la piscina» | «en el césped junto a la casa», que es donde están |
+
 ## Falta (común a varios capítulos)
 - fps medidos en el móvil del dueño.
 - Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.

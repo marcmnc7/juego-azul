@@ -170,8 +170,12 @@ export interface StreetWorld {
   slider: Door;
 }
 
-/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). */
-export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}): StreetWorld {
+/**
+ * gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). night: la una de la noche,
+ * con los padres durmiendo: el garaje cerrado y a oscuras y las ventanas de la fachada apagadas.
+ */
+export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?: boolean } = {}): StreetWorld {
+  const night = !!opts.night;
   const open = !!opts.gateOpen;
   const m = new Merger();
   const colliders: Box2[] = [];
@@ -203,16 +207,21 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}):
   m.add(ROOF_GEO, 0xb8623e, 0, 6.68, FZ - 0.35, 0, 0, 0, 9.6, 0.55, 1.0); // alero de teja
   m.add(G.box, WHITE, -1.6, 8.0, -13.4, 0, 0, 0, 0.7, 1.8, 0.7); // chimenea
   m.add(G.box, 0x9a9a9a, -1.6, 8.95, -13.4, 0, 0, 0, 0.8, 0.1, 0.8);
-  window_(m, 2.6, 4.7, FZ, 1.0, 1.7, LOUVRE_WHITE, true, -1, WHITE);
+  window_(m, 2.6, 4.7, FZ, 1.0, 1.7, LOUVRE_WHITE, !night, -1, WHITE);
   window_(m, -0.4, 4.7, FZ, 1.0, 1.7, LOUVRE_WHITE, false, -1, WHITE);
   for (let i = 0; i < 5; i++) m.add(G.box, 0x222222, 2.25 + i * 0.18, 4.2, FZ - 0.2, 0, 0, 0, 0.03, 0.7, 0.03); // barandilla
   m.add(G.box, 0x222222, 2.6, 4.55, FZ - 0.2, 0, 0, 0, 0.8, 0.04, 0.04);
-  window_(m, -0.4, 1.6, FZ, 1.0, 1.2, LOUVRE_WHITE, true, -1, WHITE);
-  // Garaje abierto con luz dentro
+  window_(m, -0.4, 1.6, FZ, 1.0, 1.2, LOUVRE_WHITE, !night, -1, WHITE);
+  // Garaje: de día abierto, con luz dentro; de noche, la puerta basculante bajada
   m.add(G.box, WHITE, 2.3, 1.25, FZ - 0.08, 0, 0, 0, 3.3, 2.7, 0.06);
-  m.add(G.box, 0x3a3630, 2.3, 1.15, FZ - 0.13, 0, 0, 0, 3.0, 2.3, 0.04);
-  m.add(G.box, 0xdddddd, 2.3, 2.2, FZ - 0.2, 0, 0, 0, 3.0, 0.25, 0.06); // puerta basculante recogida
-  m.add(G.box, 0xff9a3a, 2.3, 0.9, FZ - 0.16, 0, 0, 0, 1.2, 0.5, 0.02);
+  if (night) {
+    m.add(G.box, 0xe4e4e0, 2.3, 1.15, FZ - 0.14, 0, 0, 0, 3.0, 2.3, 0.05);
+    for (let i = 0; i < 6; i++) m.add(G.box, 0xc8c8c2, 2.3, 0.25 + i * 0.38, FZ - 0.17, 0, 0, 0, 2.96, 0.03, 0.02); // lamas de la basculante
+  } else {
+    m.add(G.box, 0x3a3630, 2.3, 1.15, FZ - 0.13, 0, 0, 0, 3.0, 2.3, 0.04);
+    m.add(G.box, 0xdddddd, 2.3, 2.2, FZ - 0.2, 0, 0, 0, 3.0, 0.25, 0.06); // puerta basculante recogida
+    m.add(G.box, 0xff9a3a, 2.3, 0.9, FZ - 0.16, 0, 0, 0, 1.2, 0.5, 0.02);
+  }
   // Puerta de entrada
   m.add(G.box, WHITE, S.door.x, 1.2, FZ - 0.08, 0, 0, 0, 1.3, 2.5, 0.06);
   m.add(G.box, 0x6b4a2e, S.door.x, 1.1, FZ - 0.12, 0, 0, 0, 1.0, 2.2, 0.06);

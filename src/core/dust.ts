@@ -55,6 +55,11 @@ class Dust {
     this.points.renderOrder = 2;
   }
 
+  /** Color del polvo: arena de día; de noche, gris azulado (sin luz propia, en crema parecía que brillaba). */
+  tint(night: boolean) {
+    ((this.points.material as THREE.ShaderMaterial).uniforms.color.value as THREE.Color).setHex(night ? 0x7d84a0 : 0xe8dcc4);
+  }
+
   /** Pone el polvo en la escena del capítulo (y lo quita de la anterior). */
   attach(scene: THREE.Scene) {
     if (this.points.parent !== scene) scene.add(this.points);

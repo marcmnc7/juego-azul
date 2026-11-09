@@ -50,7 +50,8 @@ export function applyShadows(scene: THREE.Object3D) {
     const m = o as THREE.Mesh;
     if (!m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh) return;
     if (m.userData.blob) {
-      m.visible = !quality.shadows;
+      // (blobOff: el nivel la ha apagado a propósito, p. ej. quien está en el agua o tumbado)
+      m.visible = !quality.shadows && !m.userData.blobOff;
       return;
     }
     const mat = m.material as THREE.Material;

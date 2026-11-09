@@ -4,7 +4,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
-import { comicMoonTexture, comicStarTexture, comicBulbTexture } from '../core/comicTiles';
+import { comicStarTexture, comicBulbTexture } from '../core/comicTiles';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
@@ -53,6 +53,8 @@ const WATER_Y = -0.22;
 const SWIM_Y = -1.4;
 /** Las dos toallas, en el césped entre la casa y la piscina. */
 const TOWELS = new THREE.Vector3(1.6, LAWN_Y, 3.35);
+/** La cara de arriba de la toalla: ahí apoya el cuerpo tumbado. */
+const TOWEL_TOP = LAWN_Y + 0.03;
 /** Largo de la toalla: cabe él (1,85 m) de la cabeza a los pies. */
 const TOWEL_LEN = 2.3;
 /** Tumbado, la raíz (a los pies) queda en este z: los pies hacia la piscina y la cabeza hacia la casa. */
@@ -172,6 +174,10 @@ export class Level4 implements Level {
    */
   private mp: { calls: number; next: number; ask: number; target: THREE.Vector3 | null; fast: boolean; noise: number; cool: number; caught: number; caughtAt: number } | null = null;
   private mpCaught = -1;
+  /** Gente en la terraza del Imperi (un bar abierto un 27 de agosto no está vacío). */
+  private barPeople: Person[] = [];
+  /** La sombra de contacto de cada uno, tumbado en su toalla (siempre, haya sombras reales o no). */
+  private lieShadows: THREE.Mesh[] = [];
   /** Saliendo de la piscina por la escalera: tiempo y de dónde sale cada uno. */
   private climbT = 0;
   private climbFrom = { a: new THREE.Vector3(), g: new THREE.Vector3() };
@@ -236,10 +242,25 @@ export class Level4 implements Level {
     this.buildHouse();
     this.fx = new Particles(sc);
 
-    const street = buildStreet(sc);
+    const street = buildStreet(sc, { night: true });
     buildCountryRoad(sc);
     this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
+    // Tres que siguen de tertulia en la terraza del Imperi, de pie junto a la mesa del fondo
+    const B = BORN_O;
+    for (const [lx, lz, look] of [
+      [-16.35, 11.55, { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x2b1d14, hairStyle: 'short', male: true }],
+      [-15.75, 12.35, { skin: 0xd9a27c, shirt: 0x1b998b, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true }],
+      [-16.45, 13.15, { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x2a2a2a, hair: 0xb07a3a, hairStyle: 'pony' }],
+    ] as [number, number, PersonLook][]) {
+      const p = makePerson(look);
+      p.root.position.set(B.x + lx, 0, B.z + lz);
+      // mirando al centro del corro
+      p.root.rotation.y = Math.atan2(B.x - 16.18 - p.root.position.x, B.z + 12.35 - p.root.position.z);
+      sc.add(p.root);
+      this.barPeople.push(p);
+      this.colliders.push({ minX: p.root.position.x - 0.3, maxX: p.root.position.x + 0.3, minZ: p.root.position.z - 0.3, maxZ: p.root.position.z + 0.3, round: true });
+    }
     this.colliders.push(...street.colliders, this.carBox);
     // Entre el muro del vecino y el de la casa siguiente queda un hueco hacia los jardines: cerrado
     this.colliders.push({ minX: 13.3, maxX: 16, minZ: STREET.wallZ - 0.3, maxZ: STREET.wallZ + 0.3, low: true });
@@ -267,7 +288,10 @@ export class Level4 implements Level {
       p.root.visible = false;
       // (la sombra de pega se quedaría flotando dentro del agua)
       p.root.traverse((o) => {
-        if (o.userData.blob) o.visible = false;
+        if (o.userData.blob) {
+          o.visible = false;
+          o.userData.blobOff = true;
+        }
       });
       sc.add(p.root);
     }
@@ -367,11 +391,8 @@ export class Level4 implements Level {
     const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xc8d0ff, size: 1.2, sizeAttenuation: false, transparent: true, opacity: 0.5, fog: false, depthWrite: false }));
     pts.renderOrder = -9;
     this.sky.group.add(pts);
-    // Luna de tebeo: disco plano con sus cráteres y su contorno de tinta
-    const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: comicMoonTexture(), fog: false, depthWrite: false }));
-    moon.position.set(-160, 230, 220);
-    moon.scale.setScalar(60);
-    this.sky.group.add(moon);
+    // (sin luna: el 27 de agosto de 2025 era casi luna nueva y a la una ya se había puesto; por eso se veía tan bien la
+    // Vía Láctea, y por eso hablan de «esa oscuridad tenebre»)
   }
 
   private ground(m: Merger, x0: number, x1: number, z0: number, z1: number, color: number, y = 0) {
@@ -475,7 +496,8 @@ export class Level4 implements Level {
     panel(2.0, -4.2, 2, 4, 6.4);
     panel(1.5, -13.5, 2, 5, 7.2);
     // Fachada al jardín: cristaleras iluminadas abajo y ventanas arriba
-    const glow = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+    // (una lámpara baja que se han dejado encendida en el salón, no la casa entera iluminada: los padres duermen)
+    const glow = new THREE.MeshBasicMaterial({ color: 0xa8865e });
     const windows = new Merger();
     windows.add(G.box, 0xffd9a0, -2, 1.3, 0.03, 0, 0, 0, 3.2, 2.4, 0.05);
     windows.add(G.box, 0xffd9a0, 2.2, 1.3, 0.03, 0, 0, 0, 2.4, 2.4, 0.05);
@@ -532,9 +554,11 @@ export class Level4 implements Level {
     woodChair(m, -1.75, 0.8, Math.PI / 2);
     woodChair(m, -0.25, 0.8, -Math.PI / 2);
     this.colliders.push({ minX: -2.1, maxX: 0.1, minZ: 0.3, maxZ: 1.3 });
-    // Sombrilla azul en la esquina de la terraza
+    // Sombrilla azul en la esquina de la terraza, cerrada (es la una de la noche; abierta, además, la atravesaba la
+    // guirnalda de la pérgola)
     m.add(G.cyl, 0xdddddd, 3.6, 1.2, 0.7, 0, 0, 0, 0.08, 2.4, 0.08);
-    m.add(G.cone, 0x2b4fa0, 3.6, 2.5, 0.7, 0, 0, 0, 2.4, 0.6, 2.4);
+    m.add(new THREE.CylinderGeometry(0.06, 0.24, 1, 8), 0x2b4fa0, 3.6, 1.75, 0.7, 0, 0, 0, 1, 1.3, 1);
+    m.add(G.cyl, 0x2b4fa0, 3.6, 1.2, 0.7, 0, 0, 0, 0.26, 0.08, 0.26); // la cinta que la ata
     this.colliders.push({ minX: 3.45, maxX: 3.75, minZ: 0.55, maxZ: 0.85 });
     {
       // Dos toallas de playa, una al lado de la otra: rayas, rizo de la tela, flecos y alguna arruga
@@ -564,6 +588,24 @@ export class Level4 implements Level {
         t.rotation.y = ry;
         t.userData.noCast = true;
         sc.add(t);
+        // La sombra de quien se tumbe aquí: una mancha alargada y suave, como la que deja un cuerpo en el suelo
+        const shadowTex = canvasTex((ctx, w, h) => {
+          const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+          g.addColorStop(0, 'rgba(20,16,40,0.55)');
+          g.addColorStop(0.6, 'rgba(20,16,40,0.35)');
+          g.addColorStop(1, 'rgba(20,16,40,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, w, h);
+        }, 64, 64);
+        const sh = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.62, 2.0).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+        );
+        sh.position.set(TOWELS.x + sx, LAWN_Y + 0.026, LIE_FEET_Z - 0.92);
+        sh.userData.noComic = true;
+        sh.visible = false;
+        this.lieShadows.push(sh);
+        sc.add(sh);
       }
     }
 
@@ -622,7 +664,7 @@ export class Level4 implements Level {
     for (let i = 0; i < 40; i++) ff.set([-4 + Math.random() * 8, 0.4 + Math.random() * 1.6, 2 + Math.random() * 12], i * 3);
     this.fireflies = new THREE.Points(
       new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(ff, 3)),
-      new THREE.PointsMaterial({ map: glowTexture(), color: 0xd8ff7a, size: 0.25, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.PointsMaterial({ map: glowTexture(), color: 0xd8ff7a, size: 0.15, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     sc.add(this.fireflies);
   }
@@ -799,7 +841,7 @@ export class Level4 implements Level {
         );
         break;
       case 'toTowels':
-        h.setObjective('Ve a las toallas, al otro lado de la piscina');
+        h.setObjective('Ve a las toallas, en el césped junto a la casa');
         break;
       case 'love':
         h.setObjective('💙');
@@ -844,6 +886,8 @@ export class Level4 implements Level {
     for (let i = 0; i < ffp.count; i++) ffp.setY(i, ffp.getY(i) + Math.sin(this.t * 1.3 + i) * dt * 0.25);
     ffp.needsUpdate = true;
     (this.fireflies.material as THREE.PointsMaterial).opacity = 0.6 + Math.sin(this.t * 3) * 0.3;
+    // (mirando al cielo desde la toalla, una luciérnaga pegada a la cámara era un disco verde en mitad de las estrellas)
+    this.fireflies.visible = this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done';
 
     const swimming = this.phase === 'swim';
     const onFoot = this.phase === 'atBar' || this.phase === 'arrive' || this.phase === 'toPool' || this.phase === 'toTowels';
@@ -851,6 +895,8 @@ export class Level4 implements Level {
     this.walker.turn(this.input.consumeCam());
     const pp = this.player.root.position;
 
+    // La tertulia del Imperi: uno habla y los otros escuchan (solo mientras se está por el Born)
+    if (pp.x < -500) this.barPeople.forEach((p, i) => animatePerson(p, dt, (Math.floor(this.t / 4) % 3) === i ? 'talk' : 'idle'));
     if (this.phase === 'diving') this.updateDive(dt);
     else if (this.phase === 'climbing') this.updateClimb(dt);
     else if (this.phase === 'drive') this.updateDrive(dt);
@@ -1150,7 +1196,7 @@ export class Level4 implements Level {
       animatePerson(g, dt, moving ? 'walk' : 'idle', moving ? Math.max(0.35, this.gasTrail.pace) : 0);
       if (!moving) g.root.rotation.y = Math.atan2(pp.x - g.root.position.x, pp.z - g.root.position.z);
     } else if (this.phase === 'love' || this.phase === 'stars' || this.phase === 'ending' || this.phase === 'done') {
-      animatePerson(g, dt, 'idle');
+      this.liePose(g, dt);
       g.eyes.scale.y = 1;
     } else if (this.phase === 'diving') {
       this.swimPose(g, 0, dt);
@@ -1720,9 +1766,56 @@ export class Level4 implements Level {
     for (const [p, sx] of [[this.player, -0.42], [this.gas, 0.42]] as const) {
       p.root.position.set(TOWELS.x + sx, LIE_Y, LIE_FEET_Z);
       p.root.rotation.set(-Math.PI / 2, 0, 0);
-      p.body.rotation.set(0, 0, 0);
-      animatePerson(p, 0.016, 'idle');
+      this.liePose(p, 0.016);
+      this.restOnTowel(p);
     }
+    for (const s of this.lieShadows) s.visible = true;
+  }
+
+  /**
+   * Tumbado boca arriba: la postura de estar de pie (con sus gestos) no vale, que levantaba un brazo al aire. Brazos a
+   * lo largo del cuerpo, piernas estiradas, la cabeza apoyada y solo la respiración.
+   */
+  private liePose(p: Person, dt: number) {
+    animatePerson(p, dt, 'idle');
+    if (p.rig) p.rig.force = { body: 1, head: 1, armL: 1, armR: 1, legL: 1, legR: 1 };
+    const breath = Math.sin(this.t * 1.6 + (p === this.gas ? 1.3 : 0)) * 0.012;
+    p.body.rotation.set(breath, 0, 0);
+    p.head.rotation.set(-0.08, p === this.gas ? -0.25 : 0.25, 0); // la cabeza, un poco girada hacia el otro
+    p.armL.rotation.set(0.05, 0, -0.16);
+    p.armR.rotation.set(0.05, 0, 0.16);
+    p.elbowL.rotation.set(-0.12, 0, 0);
+    p.elbowR.rotation.set(-0.12, 0, 0);
+    p.legL.rotation.set(0, 0, 0.04);
+    p.legR.rotation.set(0, 0, -0.04);
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 0.04;
+    p.footL.rotation.x = p.footR.rotation.x = 0.35;
+  }
+
+  /**
+   * Tumbado, el cuerpo apoyado de verdad en la toalla: se mide el punto más bajo de la malla ya posada y se baja
+   * (o sube) hasta tocarla. La sombra redonda de los pies (sin sombras reales, en el móvil) se apaga: tumbado
+   * quedaba de canto y separada del cuerpo, y parecía que flotaban.
+   */
+  private restOnTowel(p: Person) {
+    p.root.updateMatrixWorld(true);
+    let min = Infinity;
+    const v = this.v1;
+    p.root.traverse((o) => {
+      if (o.userData.blob) {
+        o.visible = false;
+        o.userData.blobOff = true;
+      }
+      const sm = o as THREE.SkinnedMesh;
+      if (!sm.isSkinnedMesh || !sm.visible) return;
+      const pos = sm.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 3) {
+        sm.getVertexPosition(i, v);
+        sm.localToWorld(v);
+        if (v.y < min) min = v.y;
+      }
+    });
+    if (min < Infinity) p.root.position.y += TOWEL_TOP - min;
   }
 
   /**
@@ -1772,7 +1865,7 @@ export class Level4 implements Level {
       this.mosaicT = 0.22;
       this.shuffleMosaic();
     }
-    animatePerson(this.player, dt, 'idle');
+    this.liePose(this.player, dt);
   }
 
   // ---------------- Estrellas ----------------
@@ -1908,6 +2001,8 @@ export class Level4 implements Level {
       this.swimT = 0;
       this.mp = null;
       this.gas.eyes.scale.y = 1;
+      for (const s of this.lieShadows) s.visible = false;
+      for (const q of [...this.looks.azul, ...this.looks.gas]) if (q.rig) q.rig.force = undefined;
     };
     return [
       {

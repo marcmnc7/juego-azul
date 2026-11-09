@@ -178,11 +178,21 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   const lines = new Merger();
   for (const z of [T.maxZ + 0.35, T.minZ - 0.35]) lines.add(G.box, 0xf2f0ea, 0, 0.03, z, 0, 0, 0, T.maxX - T.minX + 0.7, 0.01, 0.1);
   for (const x of [T.maxX + 0.35, T.minX - 0.35]) lines.add(G.box, 0xf2f0ea, x, 0.03, 0, 0, 0, 0, 0.1, 0.01, T.maxZ - T.minZ + 0.7);
-  for (let i = 0; i < 6; i++) {
-    lines.add(G.box, 0xf2f0ea, T.maxX + 2.1, 0.03, -2.25 + i * 0.9, 0, 0, 0, 3.2, 0.01, 0.5); // hacia Ses Voltes
-    lines.add(G.box, 0xf2f0ea, -0.25 * 0 - 2.25 + i * 0.9, 0.03, T.maxZ + 1.6, 0, 0, 0, 0.5, 0.01, 2.6); // hacia Correus
-    lines.add(G.box, 0xf2f0ea, T.minX - 2.1, 0.03, IMPERI.z - 2.25 + i * 0.9, 0, 0, 0, 3.2, 0.01, 0.5); // hacia el Imperi
-  }
+  // Pasos de cebra: cada uno de bordillo a bordillo (del de la explanada al de la acera de enfrente) y llevando a
+  // algún sitio: a la puerta de Correus, a la del Imperi y, cuando sigue (Sant Joan), a Ses Voltes. (El de Ses Voltes
+  // en una calle cerrada acababa en mitad del asfalto, y los otros se quedaban cortos)
+  const zebra = (a0: number, a1: number, at: number, alongX: boolean) => {
+    const len = Math.abs(a1 - a0), mid = (a0 + a1) / 2;
+    for (let i = 0; i < 6; i++) {
+      const c = at - 2.25 + i * 0.9;
+      if (alongX) lines.add(G.box, 0xf2f0ea, mid, 0.03, c, 0, 0, 0, len, 0.01, 0.5);
+      else lines.add(G.box, 0xf2f0ea, c, 0.03, mid, 0, 0, 0, 0.5, 0.01, len);
+    }
+  };
+  const kerb = 0.3; // el bordillo de la explanada sobresale 15 cm, más un palmo
+  zebra(T.maxZ + kerb, BORN.maxZ - SIDEWALK - 0.12, 0, false); // hacia Correus
+  zebra(T.minX - kerb, BORN.minX + SIDEWALK + 0.12, IMPERI.z, true); // hacia el Imperi
+  if (opts.voltes) zebra(T.maxX + kerb, BORN.maxX + 3.2, 0, true); // hacia Ses Voltes
   const lm = lines.mesh();
   lm.userData.noCast = true;
   g.add(lm);
