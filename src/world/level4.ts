@@ -4,7 +4,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
-import { comicMoonTexture, comicStarTexture } from '../core/comicTiles';
+import { comicMoonTexture, comicStarTexture, comicBulbTexture } from '../core/comicTiles';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
@@ -24,6 +24,7 @@ import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
 import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorcaHouse';
+import { DRIVE_PATH, DRIVE_START_U, ROAD_KEEP_OUT, buildCountryRoad, farFromRoad } from './countryRoad';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
 // La casa sigue la foto de satélite: adosado de tejado plano con placas solares, terraza,
@@ -71,12 +72,11 @@ const HOME_AREA = { ...PLOT, maxX: 15.5 };
 const PINS = new THREE.Vector3(BORN_O.x + 11, 0, STREET.laneZ + 1.9);
 const CAR_START_X = PINS.x + 1.2;
 const CAR_FAR_X = BORN_O.x - 14;
-/** En la calle de casa, el coche entra desde aquí. */
-// La calle de casa es de sentido único hacia el oeste (-x): el coche entra por el otro extremo y para unos
-// metros antes de casa, delante del vecino; desde ahí se va andando hasta la verja
-const DRIVE_FROM_X = 40;
+// Del Born a casa, por el camino de campo de countryRoad.ts: entra en la calle de casa (de sentido único hacia el
+// oeste) por el este y para unos metros antes de casa, delante del vecino; desde ahí se va andando hasta la verja
 const CAR_STOP_X = 11;
-const DRIVE_TIME = 7;
+/** Lo que dura cada bocadillo del viaje en pantalla (como bark: más largo cuanto más texto). */
+const barkTime = (text: string) => (2100 + Math.min(2400, text.length * 55)) / 1000;
 // Franja de grava entre la terraza y el césped: cruje al pisarla; las losas no
 const GRAVEL = { minX: CORRIDOR.minX, maxX: -0.3, minZ: 1.9, maxZ: 4.6 };
 const STONES: [number, number][] = [[-5.5, 2.2], [-5.35, 3.0], [-5.5, 3.8]];
@@ -178,7 +178,9 @@ export class Level4 implements Level {
   // Física: pelota de playa que flota en la piscina, Azul la empuja; ondas en el agua
   private phys = new PhysicsWorld();
   private ball!: Body;
-  private movers: Mover[] = [{ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 }];
+  // (Azul y Gas: los dos apartan la pelota; si no, Gas la atravesaba nadando)
+  private movers: Mover[] = [{ x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 }, { x: 0, z: 0, vx: 0, vz: 0, r: 0.35, height: 1.8 }];
+  private gasPrev = new THREE.Vector3();
   private rippleT = 0;
   private diveFrom = new THREE.Vector3();
   private diveTo = new THREE.Vector3();
@@ -201,7 +203,11 @@ export class Level4 implements Level {
   private rig: CarRig | null = null;
   private carBox = { minX: 0, maxX: 0, minZ: STREET.laneZ - 0.95, maxZ: STREET.laneZ + 0.95, low: true };
   private driveT = 0;
-  private driveTalkDone = false;
+  /** El viaje: lo que dura (según lo que hablan), la frase que toca y cuándo. */
+  private driveDur = 30;
+  private talkI = 0;
+  private talkAt = 0;
+  private driveYaw = 0;
   private camLook = new THREE.Vector3();
   private onTap = (e: PointerEvent) => this.tapStar(e.clientX, e.clientY, e.target as HTMLElement);
 
@@ -231,6 +237,7 @@ export class Level4 implements Level {
     this.fx = new Particles(sc);
 
     const street = buildStreet(sc);
+    buildCountryRoad(sc);
     this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
     this.colliders.push(...street.colliders, this.carBox);
@@ -252,8 +259,10 @@ export class Level4 implements Level {
     this.gas.root.rotation.y = Math.PI;
     this.gas.root.visible = false; // va en el coche
     sc.add(this.gas.root);
-    // Versiones sin ropa para la piscina
-    this.looks = { azul: [this.player, makePerson(nude(MARGAUX_LOOK))], gas: [this.gas, makePerson(nude(MARC_LOOK))] };
+    // Versiones sin ropa para la piscina. Azul, con el cuerpo de mujer de MakeHuman en su versión sin ropa (con su piel,
+    // su pelo y sus ojos): su modelo de siempre lleva la ropa en la misma malla y, pintada de piel, se veía un mono
+    // blanco con el bulto de los pantalones
+    this.looks = { azul: [this.player, makePerson({ ...nude(MARGAUX_LOOK), azul: false })], gas: [this.gas, makePerson(nude(MARC_LOOK))] };
     for (const p of [this.looks.azul[1], this.looks.gas[1]]) {
       p.root.visible = false;
       // (la sombra de pega se quedaría flotando dentro del agua)
@@ -389,7 +398,8 @@ export class Level4 implements Level {
     sc.add(lawnMesh);
     // Alrededores: el resto de la urbanización, con casas, pinos y lomas al fondo (nada de horizonte vacío)
     buildSurroundings(sc, {
-      keepOut: [{ minX: -66, maxX: 36, minZ: -40, maxZ: -5 }, { minX: -16.5, maxX: 14, minZ: -6, maxZ: 15.2 }],
+      keepOut: [{ minX: -66, maxX: 36, minZ: -40, maxZ: -5 }, { minX: -16.5, maxX: 14, minZ: -6, maxZ: 15.2 }, ROAD_KEEP_OUT],
+      hillFree: (x, z) => farFromRoad(x, z),
       half: 90,
       center: { x: -15, z: -10 },
       night: true,
@@ -603,10 +613,10 @@ export class Level4 implements Level {
     // Guirnalda de bombillas sobre la terraza y luciérnagas en el jardín
     const lp: number[] = [];
     for (let i = 0; i <= 16; i++) lp.push(-4.2 + i * 0.525, 2.55 - Math.sin((i / 16) * Math.PI) * 0.35, 1.3);
-    const lights = new THREE.Points(
-      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lp, 3)),
-      new THREE.PointsMaterial({ map: glowTexture(), color: 0xffd38a, size: 0.55, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-    );
+    // (bombillas de tebeo: un círculo de color con su aro de tinta; con el brillo de farola eran halos enormes)
+    const bulbs = new THREE.PointsMaterial({ map: comicBulbTexture(), color: 0xffd38a, size: 0.2, alphaTest: 0.5 });
+    bulbs.userData.comicGlow = true;
+    const lights = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lp, 3)), bulbs);
     sc.add(lights);
     const ff = new Float32Array(40 * 3);
     for (let i = 0; i < 40; i++) ff.set([-4 + Math.random() * 8, 0.4 + Math.random() * 1.6, 2 + Math.random() * 12], i * 3);
@@ -849,7 +859,9 @@ export class Level4 implements Level {
     else if (this.phase !== 'stars' && this.phase !== 'ending' && this.phase !== 'done') {
       // Nadando no se corre: la velocidad sube y baja con cada brazada y el agua frena y deja deslizar
       const stroke = this.swimSt.get(this.player);
-      this.walker.speed = swimming ? 1.5 + 0.8 * Math.max(0, Math.sin(stroke?.ph ?? 0)) : 5.0;
+      // (y en el jardín, de puntillas: con el teclado, o con el joystick a fondo, se iba a 5 m/s y los padres se
+      // despertaban al segundo de entrar, sin poder hacer nada; el reto es la grava, que cruje)
+      this.walker.speed = swimming ? 1.5 + 0.8 * Math.max(0, Math.sin(stroke?.ph ?? 0)) : this.phase === 'toPool' ? 2.3 : 5.0;
       this.walker.traction = swimming ? 0.28 : 1;
       this.solids.length = 0;
       if (this.phase !== 'toTowels') this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
@@ -861,6 +873,7 @@ export class Level4 implements Level {
             ? HOME_AREA
             : PLOT;
       this.walker.canJump = walking && !swimming;
+      this.walker.canSprint = this.phase !== 'toPool';
       const move = this.walker.move(dt, walking ? this.input.axes() : { x: 0, y: 0 }, swimming ? [] : this.colliders, bounds, this.solids);
       // En el Born, la explanada del obelisco está un escalón más alta que la calle (más el salto)
       if (this.phase === 'intro' || this.phase === 'atBar') pp.y = bornHeight(pp.x - BORN_O.x, pp.z - BORN_O.z) + this.walker.hop;
@@ -869,7 +882,8 @@ export class Level4 implements Level {
         this.swimMove = move;
         this.swimPose(this.player, move, dt);
       }
-      else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move, this.walker.walk, this.walker);
+      // (el paso, según la velocidad de verdad: de puntillas a 2,3 m/s no es correr)
+      else animatePerson(this.player, dt, move > 0.03 ? 'walk' : 'idle', move * Math.min(1, this.walker.speed / 5), this.walker.walk, this.walker);
     }
 
     this.updateGas(dt);
@@ -956,10 +970,12 @@ export class Level4 implements Level {
       // Plano fijo de la fachada del bar mientras se presenta la escena
       this.camera.lookAt(this.camLook);
     } else if (this.phase === 'drive') {
+      // Detrás del coche, un poco por encima, siguiendo las curvas
       const c = this.car.root.position;
-      this.v1.set(c.x + 7.5, 3.2, c.z - 4.2);
-      this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
-      this.camLook.lerp(this.v2.set(c.x - 3, 1, c.z), Math.min(1, dt * 4));
+      const fx = Math.sin(this.driveYaw), fz = Math.cos(this.driveYaw);
+      this.v1.set(c.x - fx * 7.5, 3.0, c.z - fz * 7.5);
+      this.camera.position.lerp(this.v1, Math.min(1, dt * 4.5));
+      this.camLook.lerp(this.v2.set(c.x + fx * 5, 1.2, c.z + fz * 5), Math.min(1, dt * 6));
       this.camera.lookAt(this.camLook);
     } else if (this.phase === 'love') {
       this.camera.lookAt(this.camLook);
@@ -1014,6 +1030,15 @@ export class Level4 implements Level {
     a.vx = this.walker.vx;
     a.vz = this.walker.vz;
     a.height = this.player.root.visible ? 1.8 : -10;
+    const b = this.movers[1];
+    const gp = this.gas.root.position;
+    b.vx = dt > 0 ? (gp.x - this.gasPrev.x) / dt : 0;
+    b.vz = dt > 0 ? (gp.z - this.gasPrev.z) / dt : 0;
+    if (Math.hypot(b.vx, b.vz) > 8) b.vx = b.vz = 0; // (un salto de sitio no es un empujón)
+    this.gasPrev.copy(gp);
+    b.x = gp.x;
+    b.z = gp.z;
+    b.height = this.gas.root.visible ? 1.8 : -10;
     const wasY = this.ball.pos.y;
     this.phys.step(dt, this.movers);
     const bp = this.ball.pos;
@@ -1232,27 +1257,51 @@ export class Level4 implements Level {
       this.car.azul.visible = true;
       this.phase = 'drive';
       this.driveT = 0;
-      this.driveTalkDone = false;
-      // Del Born a casa: el coche aparece ya en la calle de casa
-      this.car.root.rotation.y = -Math.PI / 2;
-      this.placeCar(DRIVE_FROM_X);
-      this.camera.position.set(DRIVE_FROM_X + 7.5, 3.2, STREET.laneZ - 4.2);
-      this.camLook.copy(this.car.root.position);
-      this.driveTalkDone = true;
+      this.talkI = 0;
+      this.talkAt = 1.2;
+      // Lo que dura el viaje: lo que tardan en decirse todo, y un poco más
+      const talk = NIGHT.drive.reduce((t, l) => t + barkTime(l.text) * 0.85, 0);
+      this.driveDur = Math.max(26, talk + 3);
+      this.placeDrive(DRIVE_START_U, 0);
+      // La cámara, ya detrás del coche
+      const c = this.car.root.position;
+      const t = DRIVE_PATH.getTangentAt(DRIVE_START_U);
+      this.camera.position.set(c.x - t.x * 7.5, 3.0, c.z - t.z * 7.5);
+      this.camLook.set(c.x + t.x * 5, 1.2, c.z + t.z * 5);
+      this.camera.lookAt(this.camLook);
       this.updateHud();
     }, 250);
   }
 
+  /** El coche en el camino: u de 0 a 1 a lo largo del recorrido; devuelve el giro (para el balanceo). */
+  private placeDrive(u: number, dt: number) {
+    const c = this.car.root;
+    DRIVE_PATH.getPointAt(u, c.position);
+    const t = DRIVE_PATH.getTangentAt(u);
+    const yaw = Math.atan2(t.x, t.z);
+    const turn = dt > 0 ? Math.atan2(Math.sin(yaw - this.driveYaw), Math.cos(yaw - this.driveYaw)) / dt : 0;
+    this.driveYaw = yaw;
+    c.rotation.y = yaw;
+    return turn;
+  }
+
   private updateDrive(dt: number) {
     this.driveT += dt;
-    const k = Math.min(1, this.driveT / DRIVE_TIME);
-    const e = k * k * (3 - 2 * k);
-    const prev = this.car.root.position.x;
-    this.placeCar(THREE.MathUtils.lerp(DRIVE_FROM_X, CAR_STOP_X, e));
-    const dx = this.car.root.position.x - prev;
+    const k = Math.min(1, this.driveT / this.driveDur);
+    // Arranca y frena suave; por el camino, a velocidad de camí (más rápido en el medio)
+    const s = k - Math.sin(2 * Math.PI * k) / (2 * Math.PI);
+    const prev = this.car.root.position.clone();
+    const turn = this.placeDrive(DRIVE_START_U + (1 - DRIVE_START_U) * Math.min(1, s), dt);
+    const speed = dt > 0 ? prev.distanceTo(this.car.root.position) / dt : 0;
     if (!this.rig) this.rig = new CarRig(this.car);
-    this.rig.update(dt, dt > 0 ? Math.abs(dx) / dt : 0, 0, 1.4); // calle de pueblo: algo más de bache
-    if (k >= 1 && this.driveTalkDone && this.busy && this.phase === 'drive') {
+    this.rig.update(dt, speed, turn * speed, 1.2);
+    // Hablan por el camino
+    if (this.talkI < NIGHT.drive.length && this.driveT >= this.talkAt) {
+      const l = NIGHT.drive[this.talkI++];
+      bark(l.who, l.text);
+      this.talkAt = this.driveT + barkTime(l.text) * 0.85;
+    }
+    if (k >= 1 && this.busy && this.phase === 'drive') {
       this.phase = 'arrive';
       fadeFlash(() => this.arriveHome());
     }

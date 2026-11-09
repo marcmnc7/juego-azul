@@ -10,6 +10,8 @@ const NZ = 42;
 const C2 = 2.3 * 2.3; // velocidad de las ondas (m/s)²
 const DAMP = 0.992;
 const H = 1 / 60;
+/** Lo más que sube o baja una ola (m): el agua está 22 cm por debajo del borde. */
+const MAX_WAVE = 0.14;
 
 export class PoolWater {
   readonly mesh: THREE.Mesh;
@@ -88,7 +90,21 @@ export class PoolWater {
           v[k] = (v[k] + lap * H) * DAMP;
         }
       }
-      for (let k = 0; k < h.length; k++) h[k] += v[k] * H;
+      // El agua no se crea ni se pierde: cada brazada, patada o chapuzón empuja hacia arriba o hacia abajo, y sin
+      // esto el nivel medio se iba desplazando hasta salirse del vaso (o vaciarlo). Se quita lo que se ha movido
+      // de media, y las olas, con tope (más que un palmo, por encima del borde)
+      let mh = 0, mv = 0;
+      for (let k = 0; k < h.length; k++) {
+        h[k] += v[k] * H;
+        mh += h[k];
+        mv += v[k];
+      }
+      mh /= h.length;
+      mv /= v.length;
+      for (let k = 0; k < h.length; k++) {
+        h[k] = Math.max(-MAX_WAVE, Math.min(MAX_WAVE, h[k] - mh));
+        v[k] -= mv;
+      }
     }
     if (!steps) return;
     // Plano: x local = x del mundo; y local = -z del mundo; z local = altura

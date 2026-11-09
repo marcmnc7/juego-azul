@@ -354,8 +354,9 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   araucaria(m, 8.5, R, -6, 16, 4.2);
   col(8.1, 8.9, -6.4, -5.6);
   for (const [x, z] of [[-8.5, 6.2], [8.5, 6.2], [-8.5, -6.2]]) {
-    m.add(G.cyl, 0x7a6a56, x, R + 1.8, z, 0, 0, 0, 0.5, 3.6, 0.5);
-    for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x3d7a34 : 0x4a8a3c, x + Math.cos(k) * 1.8, R + 4.6 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 1.4, 0, k, 0, 2.6, 1.8, 2.2);
+    // (la copa, alta: a la altura de la cámara la tapaba al pasar por debajo)
+    m.add(G.cyl, 0x7a6a56, x, R + 2.6, z, 0, 0, 0, 0.5, 5.2, 0.5);
+    for (let k = 0; k < 6; k++) m.add(G.bush, k % 2 ? 0x3d7a34 : 0x4a8a3c, x + Math.cos(k) * 1.8, R + 6.0 + Math.sin(k * 2) * 0.5, z + Math.sin(k) * 1.4, 0, k, 0, 2.6, 1.8, 2.2);
     m.add(G.cyl, KERB, x, R + 0.06, z, 0, 0, 0, 1.4, 0.12, 1.4); // alcorque
     col(x - 0.4, x + 0.4, z - 0.4, z + 0.4);
   }

@@ -140,6 +140,22 @@ Decisión del dueño: **las lámparas no iluminan nada**. Ni farolas, ni faroles
 | Grava | Guijarros más grandes, menos y con la tinta suave: de lejos era un ruido blanco y negro |
 | Minijuego: Marco Polo susurrado | Tras la luz de los padres, Gas propone jugar «flojito» y cierra los ojos. Cinco «¡Marco!» (bocadillo sobre Gas); hay 2,6 s para pulsar «🗣️ ¡Polo!» y Gas nada a ciegas hacia donde has contestado (si no contestas, va directo y más rápido). Nadar sin parar hace ruido: a los ~2,4 s te oye y va a por ti; hay que nadar a ratos. Si te alcanza, «¡PILLADA!» (una vez por «Marco»). Al final, el resultado en un bocadillo y en la pantalla del capítulo («Marco Polo: ni una vez 🏆» / «te pilló N veces 😘»), y a la escalera. Panel de prueba: «M · Marco Polo» |
 
+## Quinta pasada (9-nov, noche): viaje, cuerpo, agua y partida completa
+| Problema | Arreglo |
+|---|---|
+| Al subir al coche, la cámara empezaba entre paredes y persianas de la calle | El viaje ya no empieza en la calle: cámara detrás del coche desde el primer fotograma |
+| Viaje corto y recto, sin hablar | `world/countryRoad.ts`: camino de campo con curvas (unos 260 m), paredes de piedra seca, barreras de acebuche, acebuches, pinos y dos llocs; entra en la calle de casa por el este. Dura ~33 s, lo que tardan en hablar: diez bocadillos en `NIGHT.drive` (story.ts) — hola, qué tal, vas muy guapa, qué random, a casa de mis padres, silencio que duermen… |
+| Cuerpo sin ropa de Azul: su modelo pintado de piel (un mono con el bulto del pantalón) | Cuerpo de mujer de MakeHuman en su versión sin ropa, con su piel, su pelo y sus ojos. Nota: la cara es la del modelo de MakeHuman, no la suya |
+| El agua sobresalía de la piscina | La malla de ondas iba ganando o perdiendo agua con cada brazada y el nivel se desplazaba. Ahora conserva el volumen (se quita la subida media) y las olas tienen tope de 14 cm (el agua está 22 cm bajo el borde) |
+
+Partida completa jugada con el teclado, de la intro a «¡Capítulo superado!», sin errores en la consola. Fallos encontrados por el camino y arreglados:
+- **Sigilo imposible con teclado o joystick a fondo**: en el jardín Azul iba a 5 m/s y los padres se despertaban al segundo. Ahora, de puntillas (2,3 m/s, sin acelerón): solo la grava hace ruido.
+- La animación de andar, según la velocidad real (de puntillas ya no corre).
+- Polvo de los pies en el jardín (el acelerón): quitado al ir de puntillas.
+- Guirnalda de la pérgola: eran halos enormes; ahora bombillas de tebeo.
+- Gas atravesaba la pelota nadando: ahora también la aparta.
+- Las copas de los ficus del Born tapaban la cámara: más altas.
+
 ## Falta (común a varios capítulos)
 - fps medidos en el móvil del dueño.
 - Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.

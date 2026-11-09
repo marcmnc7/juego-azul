@@ -38,6 +38,8 @@ export interface SurroundOpts {
   fieldMaxZ?: number;
   /** Lo mismo hacia el oeste: ahí acaba la tierra (la punta del faro). */
   fieldMinX?: number;
+  /** Dónde puede haber lomas al fondo (un camino que sale de la urbanización no puede quedar enterrado). */
+  hillFree?: (x: number, z: number) => boolean;
 }
 
 const WALLS = [0xfbf7ee, 0xf6f0e3, 0xf3ead8, 0xf1d9a0, 0xfdfaf3];
@@ -170,7 +172,10 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
     const x = cx + Math.cos(a) * (R0 + r() * 40);
     const z = cz + Math.sin(a) * (R0 + r() * 40);
     if (seaSide(x, z)) continue;
-    m.add(G.sphere, i % 2 ? 0x4c5e34 : 0x56683a, x, y0 - 6, z, 0, a, 0, 70 + r() * 50, 22 + r() * 16, 40 + r() * 20);
+    // (los tamaños, siempre sacados: así las demás lomas salen igual que antes en los otros capítulos)
+    const sx = 70 + r() * 50, sy = 22 + r() * 16, sz = 40 + r() * 20;
+    if (o.hillFree && !o.hillFree(x, z)) continue;
+    m.add(G.sphere, i % 2 ? 0x4c5e34 : 0x56683a, x, y0 - 6, z, 0, a, 0, sx, sy, sz);
   }
   const mesh = m.mesh();
   mesh.userData.noCast = true;

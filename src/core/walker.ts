@@ -78,6 +78,8 @@ export class Walker implements AirState {
   land = 0;
   /** Se puede saltar (los niveles lo apagan en escenas, conduciendo o nadando). */
   canJump = true;
+  /** Si mantener a fondo acaba en acelerón (no, por ejemplo, andando de puntillas). */
+  canSprint = true;
   private baseY = 0;
   private coyote = 0;
   yaw = 0;
@@ -213,7 +215,7 @@ export class Walker implements AirState {
       // Acelerón: a fondo, recto y en tierra firme durante un rato
       const flat = mag > 0.92 && turnPenalty > 0.85 && this.traction >= 1 && this.stumble <= 0;
       this.fullT = flat ? this.fullT + dt : 0;
-      const wantBoost = this.fullT > SPRINT_AFTER ? SPRINT : 1;
+      const wantBoost = this.fullT > SPRINT_AFTER && this.canSprint ? SPRINT : 1;
       if (wantBoost > 1 && this.boost < 1.02) dust.puff(p.x, p.y, p.z, 7, 0.6);
       this.boost += (wantBoost - this.boost) * Math.min(1, dt * (wantBoost > this.boost ? 2.5 : 6));
       tx = (mx / len) * this.speed * this.boost * mag * turnPenalty;

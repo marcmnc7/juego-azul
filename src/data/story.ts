@@ -260,6 +260,19 @@ export const CONCERT = {
 export const NIGHT = {
   intro: [{ who: 'Narrador', text: 'Ciutadella. 27 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
+  /** En el coche, del Born a casa (bocadillos, sin parar el viaje). */
+  drive: [
+    { who: 'Gas', text: '¡Hola! ¿Qué tal?' },
+    { who: 'Azul', text: 'Bien, bien… ¿y tú?' },
+    { who: 'Gas', text: 'Bien. Oye… vas muy guapa.' },
+    { who: 'Azul', text: 'Jajaja, gracias. Qué random todo, ¿no?' },
+    { who: 'Gas', text: 'Un poco. A mí me gusta lo random.' },
+    { who: 'Azul', text: '¿Y adónde vamos?' },
+    { who: 'Gas', text: 'A casa de mis padres. Hay piscina.' },
+    { who: 'Azul', text: '¿A estas horas? 😳' },
+    { who: 'Gas', text: 'Te voy a pedir una cosa: en casa, silencio. Mis padres duermen.' },
+    { who: 'Azul', text: 'Silencio full. Prometido 🤫' },
+  ] as Line[],
   /** Después de hacer el amor en las toallas: lo que se dijeron esa noche. */
   love: [{ who: 'Narrador', text: 'Solo el césped sabe qué pasó.' }] as Line[],
   talk: [
