@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { airOf } from '../core/air';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeHelmet } from './helmet';
-import { toon, addOutline, hdSurfaces } from '../core/gfx';
+import { toon } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
 import { RigCrowd, crowdReady, type Behave } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
@@ -41,6 +41,47 @@ export function mergedMat(g: THREE.BufferGeometry): THREE.Material | THREE.Mater
   return g.groups.length ? [vertexMat(), foliageMat()] : vertexMat();
 }
 
+/**
+ * Parte los triángulos largos (aristas de más de `max` metros) en una rejilla de triángulos pequeños, para que el
+ * cómic pueda doblar la pieza a mano alzada como las de builder.ts (ver handDrawn en core/comic.ts). Lo que está a
+ * ras de suelo no se toca: el doblado allí no mueve nada.
+ */
+function subdivide(g: THREE.BufferGeometry, max: number) {
+  const P = g.attributes.position.array as ArrayLike<number>;
+  const N = g.attributes.normal?.array as ArrayLike<number> | undefined;
+  const op: number[] = [], on: number[] = [];
+  let split = false;
+  const v = (arr: ArrayLike<number>, t: number, k: number) => [arr[t + k * 3], arr[t + k * 3 + 1], arr[t + k * 3 + 2]];
+  for (let t = 0; t + 8 < P.length; t += 9) {
+    const a = v(P, t, 0), b = v(P, t, 1), c = v(P, t, 2);
+    const na = N ? v(N, t, 0) : [0, 1, 0], nb = N ? v(N, t, 1) : [0, 1, 0], nc = N ? v(N, t, 2) : [0, 1, 0];
+    const len = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), Math.hypot(c[0] - b[0], c[1] - b[1], c[2] - b[2]), Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2]));
+    const n = Math.max(a[1], b[1], c[1]) <= 0.05 ? 1 : Math.min(12, Math.ceil(len / max));
+    if (n <= 1) {
+      op.push(...a, ...b, ...c);
+      on.push(...na, ...nb, ...nc);
+      continue;
+    }
+    split = true;
+    const at = (x: number[], y: number[], z: number[], i: number, j: number) => [0, 1, 2].map((k) => x[k] + ((y[k] - x[k]) * i) / n + ((z[k] - x[k]) * j) / n);
+    const tri = (i0: number, j0: number, i1: number, j1: number, i2: number, j2: number) => {
+      op.push(...at(a, b, c, i0, j0), ...at(a, b, c, i1, j1), ...at(a, b, c, i2, j2));
+      on.push(...at(na, nb, nc, i0, j0), ...at(na, nb, nc, i1, j1), ...at(na, nb, nc, i2, j2));
+    };
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n - i; j++) {
+        tri(i, j, i + 1, j, i, j + 1);
+        if (i + j < n - 1) tri(i + 1, j, i + 1, j + 1, i, j + 1);
+      }
+  }
+  if (!split) return g;
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(op, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(on, 3));
+  g.dispose();
+  return out;
+}
+
 /** Junta muchas piezas de colores en una sola geometría (1 draw call; 2 si hay copas de árbol). */
 export class Merger {
   private parts: THREE.BufferGeometry[] = [];
@@ -57,11 +98,19 @@ export class Merger {
   constructor(private textured = true) {}
 
   add(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
-    const g = (geo.index ? geo.toNonIndexed() : geo.clone()) as THREE.BufferGeometry;
+    let g = (geo.index ? geo.toNonIndexed() : geo.clone()) as THREE.BufferGeometry;
     for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
     this.q.setFromEuler(this.e.set(rx, ry, rz));
     this.m.compose(new THREE.Vector3(x, y, z), this.q, new THREE.Vector3(sx, sy, sz));
     g.applyMatrix4(this.m);
+    // Las piezas grandes del decorado (paredes, tejados, muros), partidas para que se comben a mano alzada; lo
+    // enorme (lomas, terreno) no: no se notaría y dispararía los triángulos
+    if (this.textured) {
+      g.computeBoundingBox();
+      g.boundingBox!.getSize(this.v);
+      const big = Math.max(this.v.x, this.v.y, this.v.z);
+      if (big > 1 && big < 40) g = subdivide(g, 0.9);
+    }
     this.c.set(color);
     const n = g.attributes.position.count;
     const cols = new Float32Array(n * 3);
@@ -457,7 +506,7 @@ function eyesInto(m: Merger, look: PersonLook, oy = 0) {
 
 /** Personaje animable con cabeza grande (estilo "chibi"). Mira hacia +Z. */
 export function makePerson(look: PersonLook, scale = 1, outline = true): Person {
-  if (hdSurfaces.value && rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
+  if (rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const body = new THREE.Group();
@@ -543,8 +592,6 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   handR.position.set(0, -0.24, 0.06);
   aR.elbow.add(handR);
   body.add(legL, legR, armL, armR);
-
-  if (outline) addOutline(body, 0.02);
   root.add(blobShadow(1.1));
   root.scale.setScalar(scale);
   return {
@@ -856,7 +903,7 @@ export interface CrowdLike {
 
 /** Multitud: con personajes glTF horneados en los capítulos con la calidad de la prueba. */
 export function makeCrowd(look: PersonLook, count: number, dance = false, behave?: readonly Behave[]): CrowdLike {
-  if (hdSurfaces.value && crowdReady()) return new RigCrowd(look, count, dance, behave);
+  if (crowdReady()) return new RigCrowd(look, count, dance, behave);
   return new CrowdPeople(look, count);
 }
 
@@ -977,7 +1024,7 @@ export interface Donkey {
 
 /** Ase con su jinete (caixer): frac negro, pantalón blanco y bombín. Mira hacia +Z. */
 export function makeDonkey(coat = 0x7d6b5d): Donkey {
-  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
+  if (rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const pivot = new THREE.Group();
@@ -1029,14 +1076,13 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
     inner.add(p);
     legs.push(p);
   }
-  addOutline(pivot, 0.025);
   root.add(blobShadow(2.2));
   return { root, pivot, legs, head };
 }
 
 /** Caballo menorquín negro con su caixer, como los de Sant Joan: alto, crin larga y escarapelas. Mira hacia +Z. */
 export function makeHorse(coat = 0x0e0c0b): Donkey {
-  if (hdSurfaces.value && rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
+  if (rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const pivot = new THREE.Group();
@@ -1105,7 +1151,6 @@ export function makeHorse(coat = 0x0e0c0b): Donkey {
     inner.add(p);
     legs.push(p);
   }
-  addOutline(pivot, 0.025);
   root.add(blobShadow(2.8));
   return { root, pivot, legs, head };
 }
@@ -1118,7 +1163,7 @@ export interface Dog {
 
 /** Joy: perra negra mediana. Mira hacia +Z. */
 export function makeDog(): Dog {
-  if (hdSurfaces.value && rigReady() && vehiclesReady()) return makeDogHD(blobShadow(0.9));
+  if (rigReady() && vehiclesReady()) return makeDogHD(blobShadow(0.9));
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const black = 0x1d1b1f;
@@ -1147,7 +1192,6 @@ export function makeDog(): Dog {
     root.add(p);
     legs.push(p);
   }
-  addOutline(root, 0.02);
   root.add(blobShadow(0.9));
   return { root, tail, legs };
 }
@@ -1207,7 +1251,7 @@ const LAMP_GLASS = new THREE.CylinderGeometry(0.25, 0.17, 0.62, 6);
 const LAMP_CAP = new THREE.ConeGeometry(0.34, 0.3, 6);
 
 export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boolean; empty?: boolean; driver?: PersonLook; passenger?: PersonLook } = {}) {
-  if (hdSurfaces.value && rigReady() && vehiclesReady()) {
+  if (rigReady() && vehiclesReady()) {
     const c = makeCarHD(color, { empty: opts.empty, gas: opts.driver, azul: opts.passenger });
     c.root.add(blobShadow(4.4));
     return c;
@@ -1264,14 +1308,13 @@ export function makeCar(color = 0xd7263d, opts: { luggage?: boolean; joy?: boole
     root.add(w);
     wheels.push(w);
   }
-  addOutline(root, 0.03);
   root.add(blobShadow(4));
   return { root, body, joy, wheels, azul };
 }
 
 /** Moto (la de Gas) con él montado y casco. Mira hacia +Z. */
 export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
-  if (hdSurfaces.value && rigReady()) {
+  if (rigReady()) {
     const mo = makeMotoHD(color, rider);
     mo.root.add(blobShadow(1.4));
     return mo;
@@ -1315,7 +1358,6 @@ export function makeMoto(color = 0x1b1d22, rider?: PersonLook) {
     person.head.add(helmet);
     root.add(person.root);
   }
-  addOutline(root, 0.02);
   root.add(blobShadow(1.4));
   return { root, wheels, rider: person };
 }

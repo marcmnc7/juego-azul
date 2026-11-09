@@ -39,6 +39,8 @@ export class Door {
     this.group.position.copy(o.hinge);
     this.group.rotation.y = o.ry;
     this.group.add(this.leaf);
+    // (la hoja se mueve: el cómic no la dobla a mano alzada)
+    this.leaf.userData.comicBent = true;
     // Centro del hueco, en el mundo (para saber quién se acerca)
     this.center.set(o.width / 2, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), o.ry).add(o.hinge);
   }

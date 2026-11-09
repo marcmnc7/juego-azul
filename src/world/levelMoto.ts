@@ -111,7 +111,7 @@ export class LevelMoto implements Level {
     const sc = this.scene;
     sc.fog = new THREE.Fog(0xf2c99a, 70, 330);
     const sunDir = new THREE.Vector3(-0.6, 0.35, 0.7);
-    this.sky = new Sky({ top: 0x3d6fb8, mid: 0xf0b483, bottom: 0xf7dcb0, sun: { color: 0xffd9a0, dir: sunDir, size: 90 }, clouds: { count: 9, tint: 0xfff0e0 }, physical: { sunDir, turbidity: 6, rayleigh: 2 } });
+    this.sky = new Sky({ top: 0x3d6fb8, mid: 0xf0b483, bottom: 0xf7dcb0, sun: { color: 0xffd9a0, dir: sunDir, size: 90 }, clouds: { count: 9, tint: 0xfff0e0 } });
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0xcfe0ff, 0x6a5a40, 1.1));
     this.sun = new Sun(sc, 0xffe2b8, 2.1, sunDir, 24);

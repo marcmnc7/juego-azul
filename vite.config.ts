@@ -30,7 +30,7 @@ export default defineConfig({
   // Rutas relativas: el mismo index.html sirve en cualquier carpeta (GitHub Pages, un servidor propio…)
   base: './',
   // Modelos glTF, personajes de VRoid y cielos HDRI
-  assetsInclude: ['**/*.glb', '**/*.hdr', '**/*.vrm'],
+  assetsInclude: ['**/*.glb', '**/*.vrm'],
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 100000,

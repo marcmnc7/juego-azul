@@ -1,63 +1,23 @@
 import * as THREE from 'three';
-import { quality } from '../../core/gfx';
-import maresC from '../../assets/hd/mares_c.jpg';
-import maresN from '../../assets/hd/mares_n.jpg';
-import maresR from '../../assets/hd/mares_r.jpg';
-import plasterC from '../../assets/hd/plaster_c.jpg';
-import plasterN from '../../assets/hd/plaster_n.jpg';
-import plasterR from '../../assets/hd/plaster_r.jpg';
-import slabsC from '../../assets/hd/slabs_c.jpg';
-import slabsN from '../../assets/hd/slabs_n.jpg';
-import slabsR from '../../assets/hd/slabs_r.jpg';
-import roofC from '../../assets/hd/roof_c.jpg';
-import roofN from '../../assets/hd/roof_n.jpg';
-import roofR from '../../assets/hd/roof_r.jpg';
-import doorsC from '../../assets/hd/doors_c.jpg';
-import doorsN from '../../assets/hd/doors_n.jpg';
-import doorsR from '../../assets/hd/doors_r.jpg';
-import woodC from '../../assets/hd/wood_c.jpg';
-// Variantes de Menorca: el estuco encalado (blanco) y la teja árabe anaranjada
-import whitewashC from '../../assets/hd/whitewash_c.jpg';
-import roofMC from '../../assets/hd/roofm_c.jpg';
+import { comicTile } from '../../core/comicTiles';
 
-// Materiales PBR de la prueba de concepto: texturas fotográficas con color, relieve (normal map) y
-// rugosidad. En los .jpg de rugosidad de Sponza la rugosidad va en el canal G (formato glTF).
+// Materiales del pueblo de tebeo (Ferreries, el Born, Ciutadella): cada uno con su dibujo hecho a mano de
+// comicTiles.ts (losas, sillares de marès, encalado, teja árabe, madera, puertas y ventanas), que se repite por los
+// UV que pone builder.ts. El cómic los pasa a tres tonos al montar la escena (comic.ts).
 
-const loader = new THREE.TextureLoader();
-const texCache = new Map<string, THREE.Texture>();
-/** Qué dibujo de tebeo sustituye a cada foto en el estilo cómic (ver core/comicTiles.ts). */
-const COMIC_KIND = new Map<string, string>([
-  [slabsC, 'slabs'], [maresC, 'mares'], [roofMC, 'roof'], [roofC, 'roofGrey'],
-  [whitewashC, 'wash'], [plasterC, 'wash'], [woodC, 'wood'], [doorsC, 'doors'],
-]);
-function tex(url: string, color: boolean) {
-  let t = texCache.get(url);
-  if (!t) {
-    t = loader.load(url);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 8;
-    if (color) t.colorSpace = THREE.SRGBColorSpace;
-    const kind = color ? COMIC_KIND.get(url) : undefined;
-    if (kind) t.userData.comic = kind;
-    texCache.set(url, t);
-  }
+/** Dibujo de tebeo de ese tipo, marcado para que el cómic lo reconozca (userData.comic). */
+function tex(kind: string) {
+  const t = comicTile(kind)!;
+  t.userData.comic = kind;
   return t;
 }
 
-/** MeshStandardMaterial; en los dispositivos que no lo pintan bien, Phong con los mismos mapas. */
 function std(p: THREE.MeshStandardMaterialParameters) {
-  if (quality.kind === 'standard') return new THREE.MeshStandardMaterial(p);
-  const { roughness, metalness: _m, roughnessMap: _r, metalnessMap: _mm, ...rest } = p;
-  void _m, void _r, void _mm;
-  const smooth = 1 - (roughness ?? 0.8);
-  return new THREE.MeshPhongMaterial({ shininess: 4 + 90 * smooth * smooth, ...(rest as THREE.MeshPhongMaterialParameters) }) as unknown as THREE.MeshStandardMaterial;
+  return new THREE.MeshStandardMaterial(p);
 }
 
-function pbr(c: string, n: string, r: string, opts: THREE.MeshStandardMaterialParameters = {}, normalScale = 1) {
-  return std({
-    map: tex(c, true), normalMap: tex(n, false), roughnessMap: tex(r, false),
-    roughness: 1, metalness: 0, normalScale: new THREE.Vector2(normalScale, normalScale), ...opts,
-  });
+function drawn(kind: string, opts: THREE.MeshStandardMaterialParameters = {}) {
+  return std({ map: tex(kind), roughness: 1, metalness: 0, ...opts });
 }
 
 export type HdMats = ReturnType<typeof createHdMaterials>;
@@ -70,19 +30,19 @@ export function makeHdMaterials(): HdMats {
 function createHdMaterials() {
   const deco = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
   return {
-    mares: pbr(maresC, maresN, maresR, { color: 0xf3e2c4 }),
-    maresDark: pbr(maresC, maresN, maresR, { color: 0xc9b596 }),
-    // Ferreries es un pueblo encalado: el estuco de Sponza teñido de blanco roto
-    whites: [0xffffff, 0xfffaf2, 0xfdf8ee, 0xf8f3ea].map((c) => pbr(whitewashC, plasterN, plasterR, { color: c }, 0.7)),
-    plasterCream: pbr(plasterC, plasterN, plasterR, { color: 0xfff0d8 }, 0.8),
-    slabs: pbr(slabsC, slabsN, slabsR, { color: 0xe8e0d2 }, 1.2),
-    roof: pbr(roofMC, roofN, roofR, {}, 1.2),
-    roofGrey: pbr(roofC, roofN, roofR, {}, 1.2),
-    doors: pbr(doorsC, doorsN, doorsR, deco),
+    mares: drawn('mares', { color: 0xf3e2c4 }),
+    maresDark: drawn('mares', { color: 0xc9b596 }),
+    // Ferreries es un pueblo encalado: encalado teñido de blanco roto
+    whites: [0xffffff, 0xfffaf2, 0xfdf8ee, 0xf8f3ea].map((c) => drawn('wash', { color: c })),
+    plasterCream: drawn('wash', { color: 0xfff0d8 }),
+    slabs: drawn('slabs', { color: 0xe8e0d2 }),
+    roof: drawn('roof'),
+    roofGrey: drawn('roofGrey'),
+    doors: drawn('doors', deco),
     shutters: new Map<number, THREE.MeshStandardMaterial>(),
     iron: std({ color: 0x1d1f22, roughness: 0.45, metalness: 0.85 }),
     zinc: std({ color: 0x8a8e90, roughness: 0.4, metalness: 0.7 }),
-    wood: std({ map: tex(woodC, true), roughness: 0.7, color: 0xd9b48a }),
+    wood: std({ map: tex('wood'), roughness: 0.7, color: 0xd9b48a }),
     glass: [0x2f7d4a, 0xbfe3ee, 0x8a5a1c].map((c) => std({ color: c, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.75 })),
     cup: std({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }),
     lemonade: std({ color: 0xf2e27a, roughness: 0.2, transparent: true, opacity: 0.85 }),

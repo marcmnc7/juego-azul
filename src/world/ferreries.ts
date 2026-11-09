@@ -1,12 +1,9 @@
-import { comic } from '../core/comic';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Surf } from '../core/surfaces';
 import { buildSurroundings, collidersBox } from './surround';
 import { POT_CORE, G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
-import { Sky, Sun, toon, glowTexture, hdSurfaces } from '../core/gfx';
-import { paintStyle } from '../core/paint';
-import dayHdr from '../assets/env/quarry.hdr';
+import { Sky, Sun, toon, glowTexture } from '../core/gfx';
 import { FerreriesHD, CHURCH_STEP_Z } from './hd/ferreriesHD';
 import type { Circle } from '../core/walker';
 import { WALK_SPEED, type Behave } from '../entities/crowdRig';
@@ -352,28 +349,24 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const r = rand(42);
 
   // El jaleo d'ases es el día de Sant Bartomeuet (25 de agosto) a las 11 de la mañana: sol alto de verano
-  scene.fog = new THREE.Fog(paintStyle.value > 0 ? 0xe9e6dc : 0xcfe0ee, 70, 180);
-  const hd = hdSurfaces.value > 0;
-  // Estilo pintado: cielo de acuarela (azul intenso arriba, horizonte cálido) con cúmulos pintados
-  // (el cómic usa este mismo cielo: el físico, sin curva de tono, salía morado)
-  const painted = paintStyle.value > 0 || comic.on;
+  scene.fog = new THREE.Fog(0xcfe0ee, 70, 180);
+  // Cielo de tebeo: azul intenso arriba, horizonte cálido, con nubes de tebeo
   const sky = new Sky({
-    top: painted ? 0x2a6fd0 : 0x2f72c4,
-    mid: painted ? 0x7fbdf2 : 0x86bff0,
-    bottom: painted ? 0xf6ead2 : 0xdbeaf5,
+    top: 0x2a6fd0,
+    mid: 0x7fbdf2,
+    bottom: 0xf6ead2,
     sun: { color: 0xfff4dc, dir: MORNING_DIR, size: 70 },
-    clouds: painted ? { count: 11, tint: 0xffffff, painted: true } : { count: 6, tint: 0xffffff },
-    // Calidad de la prueba: cielo físico (dispersión atmosférica) y luz de un día despejado (HDRI)
-    ...(hd && !painted ? { physical: { sunDir: MORNING_DIR, turbidity: 3, rayleigh: 1.4 } } : {}),
+    clouds: { count: 11, tint: 0xffffff },
   });
   group.add(sky.group);
-  if (hd) scene.userData.hdri = { url: dayHdr, intensity: 1.0, sunDir: MORNING_DIR, hemi: 0.35 };
+  // (la luz de ambiente del pueblo, repartida como la daba su cielo de día: ver settleAmbient)
+  scene.userData.hemiScale = 0.35;
 
   group.add(new THREE.HemisphereLight(0xeaf2ff, 0x8a7a64, 1.0));
-  const sun = new Sun(scene, 0xfff1dc, hd ? 3.4 : 2.4, MORNING_DIR, 24);
+  const sun = new Sun(scene, 0xfff1dc, 3.4, MORNING_DIR, 24);
 
-  // Calidad de la prueba: casas, iglesia y suelo con materiales fotográficos (ver hd/ferreriesHD.ts)
-  const hdb = hd ? new FerreriesHD() : null;
+  // Casas, iglesia y suelo con sus dibujos de tebeo (ver hd/ferreriesHD.ts)
+  const hdb: FerreriesHD | null = new FerreriesHD();
   if (hdb) hdb.ground(220);
   else {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), toon({ map: groundTexture() }));

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { cinema } from '../core/cinema';
-import { Sky, Sun, applyEnvironment, applyShadows, glowTexture, makeSea, vibrate } from '../core/gfx';
+import { Sky, Sun, settleAmbient, applyShadows, glowTexture, makeSea, vibrate } from '../core/gfx';
 import { steerTo, type SteerState } from '../core/steer';
 import type { Walker } from '../core/walker';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
@@ -737,7 +737,7 @@ export class StoneSkip {
     this.stone.visible = false;
     sc.add(this.stone);
     applyShadows(sc);
-    applyEnvironment(sc);
+    settleAmbient(sc);
     this.chip = el('div', 'side-count');
     this.chip.hidden = true;
     uiRoot().append(this.chip);

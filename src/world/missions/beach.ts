@@ -48,7 +48,7 @@ class BeachMission implements Mission {
     const T = MINIS.voley;
     const sunDir = new THREE.Vector3(-0.3, 0.75, 0.6);
     sc.fog = new THREE.Fog(0xcfe3ee, 40, 220);
-    this.sky = new Sky({ top: 0x3d82d0, mid: 0x8cc2ec, bottom: 0xe2f0f7, sun: { color: 0xfff2c8, dir: sunDir, size: 50 }, clouds: { count: 7, tint: 0xffffff }, physical: { sunDir } });
+    this.sky = new Sky({ top: 0x3d82d0, mid: 0x8cc2ec, bottom: 0xe2f0f7, sun: { color: 0xfff2c8, dir: sunDir, size: 50 }, clouds: { count: 7, tint: 0xffffff } });
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0xdcecff, 0xb89a68, 0.8));
     this.sun = new Sun(sc, 0xfff0d0, 1.9, sunDir, 18);

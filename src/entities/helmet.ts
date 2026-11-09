@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { quality } from '../core/gfx';
 
 // Casco integral de moto: carcasa con la ventana de los ojos abierta, mentonera, visera ahumada que
 // sobresale un poco, ribete de goma abajo, franja de color por encima y tomas de aire. Va
@@ -24,10 +23,7 @@ function geo(key: string, make: () => THREE.BufferGeometry) {
 }
 
 function mat(p: THREE.MeshPhysicalMaterialParameters) {
-  if (quality.kind === 'standard') return new THREE.MeshPhysicalMaterial(p);
-  const { clearcoat: _c, clearcoatRoughness: _cr, transmission: _t, ...rest } = p;
-  void _c, void _cr, void _t;
-  return new THREE.MeshStandardMaterial(rest as THREE.MeshStandardMaterialParameters);
+  return new THREE.MeshPhysicalMaterial(p);
 }
 
 // Ángulos de la esfera (theta desde arriba, phi alrededor; la cara mira a +Z, que es phi = π/2 en

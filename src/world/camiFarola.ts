@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { G, Merger, makePerson, animatePerson, CarRig, type Person, type PersonLook } from '../entities/models';
 import { seated } from '../entities/vehiclesHD';
-import { Sky, Sun, glowTexture, applyShadows, applyEnvironment } from '../core/gfx';
+import { Sky, Sun, glowTexture, applyShadows, settleAmbient } from '../core/gfx';
 import { setSurface, Surf } from '../core/surfaces';
 import { cinema } from '../core/cinema';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
@@ -880,8 +880,7 @@ export class TaxiRide {
     sc.traverse((o) => {
       if (o.userData.noCast) o.castShadow = false;
     });
-    applyEnvironment(sc);
-    if (sc.environment) sc.environmentIntensity = 0.32;
+    settleAmbient(sc);
   }
 
   private buildGround(midZ: number) {

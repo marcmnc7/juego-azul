@@ -1,15 +1,30 @@
 import * as THREE from 'three';
-import { comicBulbTexture, comicTile } from './comicTiles';
+import { comicBulbTexture, comicHaloTexture, comicTile } from './comicTiles';
+import { glowOn, surfaceShader } from './comicSurfaces';
 
-// Estilo cómic (cel-shading): la luz en tres tonos planos en vez de en degradado y un contorno de tinta
-// alrededor de cada cosa. Se aplica a todos los materiales de una escena (comicScene) en los capítulos que lo
-// llevan; los materiales con sombreador propio (la multitud animada en la GPU, el agua, el cielo…) se dejan
-// como están, para no romperlos.
+// Estilo cómic (cel-shading), el único del juego: la luz en tres tonos planos en vez de en degradado y un
+// contorno de tinta alrededor de cada cosa. Se aplica a todos los materiales de cada escena (comicScene); los
+// materiales con sombreador propio (la multitud animada en la GPU, el agua, el cielo…) se dejan como están.
+
+/** Perfil de luz de tebeo: cada capítulo dice el suyo (main.ts, LOOKS) y una escena puede pedir otro. */
+export type ComicLook = 'dia' | 'noche' | 'interior' | 'atardecer';
 
 export const comic = {
-  /** Encendido para el capítulo que se está jugando. */
-  on: false,
+  /** Perfil del capítulo en marcha (scene.userData.comicLook manda sobre él). */
+  look: 'dia' as ComicLook,
 };
+
+/**
+ * Luz que añade el cómic en cada perfil: una hemisférica (cielo, suelo, intensidad final) y el tope de las
+ * direccionales. La de día es exactamente la del capítulo 1 (1,35 × 0,35 del reparto que hacía su HDRI).
+ */
+export const LOOK_LIGHT: Record<ComicLook, { sky: number; ground: number; hemi: number; sunMax: number; background: number | null }> = {
+  dia: { sky: 0xdff2ff, ground: 0xb59c84, hemi: 1.35 * 0.35, sunMax: 2.1, background: 0x76c3f0 },
+  noche: { sky: 0x9fb4ff, ground: 0x3a2f4a, hemi: 0.55, sunMax: 1.0, background: null },
+  interior: { sky: 0xfff4e6, ground: 0x8a7a6a, hemi: 0.9, sunMax: 1.4, background: null },
+  atardecer: { sky: 0xffd2a8, ground: 0x6a4a5a, hemi: 0.55, sunMax: 1.8, background: null },
+};
+const lookOf = (sc: THREE.Object3D) => (sc.userData.comicLook as ComicLook | undefined) ?? comic.look;
 
 const ramps = new Map<string, THREE.DataTexture>();
 /**
@@ -256,7 +271,10 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
     converted.set(src, src);
     return src;
   }
-  const carry = src.onBeforeCompile !== baseCompile && !src.userData.grain;
+  const carry = src.onBeforeCompile !== baseCompile;
+  // decorado de toon() / Merger: el dibujo de tebeo de su superficie, proyectado en el mundo (comicSurfaces.ts)
+  const grain = !!src.userData.grain;
+  const surf = (src.userData.surf as number | undefined) ?? 0;
   // Las texturas que se repiten (paredes, suelo, tejados: fotos de material) se suavizan: queda el dibujo de las
   // losas o las tejas, pero flojo, como trazo; si no se pueden leer, su color medio. Las que son un dibujo suelto
   // (carteles, pancartas, caras, ropa) se quedan
@@ -294,14 +312,16 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
   // Los personajes se marcan en el canal alfa de la imagen (0.5): la pasada de tebeo no les pone ni tinta de
   // aristas ni trama (en las caras eran manchas y rayas); su línea es solo su contorno, fino
   const mark = person && !t.transparent;
-  if (carry || mark) {
+  {
     const prev = carry ? src.onBeforeCompile : null;
     const prevKey = carry ? src.customProgramCacheKey.bind(src) : () => '';
     t.onBeforeCompile = (sh, r) => {
       prev?.call(src, sh, r);
+      bandedLights(sh);
+      if (grain) surfaceShader(sh, surf);
       if (mark) sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = 0.5;');
     };
-    t.customProgramCacheKey = () => prevKey() + (mark ? '|pmask' : '');
+    t.customProgramCacheKey = () => prevKey() + '|band' + (grain ? '|cs' + surf : '') + (mark ? '|pmask' : '');
   }
   isToon.add(t);
   converted.set(src, t);
@@ -328,6 +348,28 @@ function toToon(src: THREE.Material, person = false, cloth = false): THREE.Mater
     });
   }
   return t;
+}
+
+/**
+ * Las luces de punto y de foco (farolas, el porche, la luz de la piscina) en bandas: su luz baja a saltos con la
+ * distancia, en anillos de color plano, como un charco de luz dibujado, en vez de en degradado.
+ */
+const LIGHTS_BANDED = THREE.ShaderChunk.lights_fragment_begin
+  .replace('getPointLightInfo( pointLight, geometryPosition, directLight );', 'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tdirectLight.color = comicBand( directLight.color );')
+  .replace('getSpotLightInfo( spotLight, geometryPosition, directLight );', 'getSpotLightInfo( spotLight, geometryPosition, directLight );\n\t\tdirectLight.color = comicBand( directLight.color );');
+function bandedLights(sh: THREE.WebGLProgramParametersWithUniforms) {
+  sh.fragmentShader = sh.fragmentShader
+    .replace(
+      '#include <common>',
+      `#include <common>
+      vec3 comicBand(vec3 c) {
+        float m = max(max(c.r, c.g), c.b);
+        // (pocos anillos, cada uno ~4 veces más flojo que el anterior: un charco de luz, no una diana)
+        if (m < 0.1) return vec3(0.0);
+        return c * (exp2(floor(log2(m) * 0.5 + 0.5) / 0.5) / m);
+      }`,
+    )
+    .replace('#include <lights_fragment_begin>', LIGHTS_BANDED);
 }
 
 /** Materiales cuya textura aún estaba cargando al pasarlos a cómic: se rematan en una pasada posterior. */
@@ -373,7 +415,12 @@ function handDrawn(scene: THREE.Object3D) {
     if (!m.isMesh || m.userData.comicBent || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) return;
     if (o.parent?.userData.sky || o.userData.noComic || users.get(m.geometry)! > 1) return;
     m.userData.comicBent = true;
+    // (lo que va dentro de algo que se mueve, como un coche o la hoja de una puerta, no se dobla: viajaría torcido)
+    for (let a = o.parent; a; a = a.parent) if (a.userData.comicBent) return;
     const g = m.geometry;
+    // (una geometría que se reutiliza de una en una, como los obstáculos de la carretera, solo se dobla una vez)
+    if (g.userData.comicBent) return;
+    g.userData.comicBent = true;
     if (!g.boundingSphere) g.computeBoundingSphere();
     if (g.boundingSphere!.radius * o.matrixWorld.getMaxScaleOnAxis() < 0.8) return;
     const pos = g.attributes.position as THREE.BufferAttribute;
@@ -392,9 +439,10 @@ function handDrawn(scene: THREE.Object3D) {
 /** Pasa la escena al estilo cómic (se puede llamar varias veces: lo ya convertido se queda). */
 export function comicScene(scene: THREE.Object3D) {
   handDrawn(scene);
+  const night = lookOf(scene) !== 'dia';
   scene.traverse((o) => {
     const m = o as THREE.Mesh;
-    // Brillos (luces de fiesta, halos de farolas): de día, en un tebeo, apenas un punto de color, no un foco
+    // Brillos (luces de fiesta, halos de farolas, luciérnagas)
     const p = o as THREE.Points;
     if ((p.isPoints || (o as THREE.Sprite).isSprite) && !o.parent?.userData.sky) {
       const pm = p.material as THREE.PointsMaterial;
@@ -408,6 +456,13 @@ export function comicScene(scene: THREE.Object3D) {
           pm.depthWrite = true;
           pm.opacity = 1;
           pm.size *= 0.32;
+          pm.needsUpdate = true;
+        } else if (night) {
+          // de noche son la luz: núcleo con su aro de tinta y anillos planos del color de la luz
+          pm.map = comicHaloTexture();
+          pm.blending = THREE.NormalBlending;
+          pm.transparent = true;
+          pm.depthWrite = false;
           pm.needsUpdate = true;
         } else if (p.isPoints && pm.size >= 0.6) {
           // halos de las farolas: de día, en un tebeo, no se dibujan
@@ -424,30 +479,49 @@ export function comicScene(scene: THREE.Object3D) {
     m.material = Array.isArray(m.material) ? m.material.map((x) => toToon(x, person, cloth)) : toToon(m.material, person, cloth);
   });
   settlePending();
-  // Sin reflejo del cielo (los materiales de cómic no lo usan): una luz de cielo y suelo hace de ambiente
   const sc = scene as THREE.Scene;
-  if (sc.isScene && !sc.userData.comicSky) {
-    // Cielo azul plano de tebeo (el HDRI sin curva de tono salía oscuro)
-    sc.background = new THREE.Color(0x76c3f0);
+  if (sc.isScene && !sc.userData.comicHemi) {
+    // Sin reflejo del cielo (los materiales de cómic no lo usan): una luz de cielo y suelo hace de ambiente.
+    // (fuerte: en la sombra de la pared, la gente proyectaba una silueta casi negra que parecía un fantasma)
     sc.environment = null;
-    sc.userData.comicSky = true;
+    const hemi = new THREE.HemisphereLight();
+    hemi.userData.comicHemi = true;
+    sc.add(hemi);
+    sc.userData.comicHemi = hemi;
+    comicMood(sc, lookOf(sc));
   }
-  // Luces de tebeo: el sol más suave (en tres tonos planos el fuerte quema los colores claros a blanco) y más
-  // luz de ambiente, para que las sombras sean un tono más oscuro del color y no un agujero negro
-  // (la luz de ambiente del capítulo se queda como esté, que algunos la animan; se suma una propia del cómic)
-  if (sc.isScene) {
-    sc.traverse((o) => {
-      const l = o as THREE.DirectionalLight;
-      if (!l.isDirectionalLight || l.userData.comicLit) return;
-      l.userData.comicLit = true;
-      l.intensity = Math.min(l.intensity, 2.1);
-    });
-    if (!sc.userData.comicHemi) {
-      // (fuerte: en la sombra de la pared, la gente proyectaba una silueta casi negra que parecía un fantasma)
-      sc.add(new THREE.HemisphereLight(0xdff2ff, 0xb59c84, 1.35));
-      sc.userData.comicHemi = true;
-    }
+  // Las luces nuevas (un sol que se añade más tarde) también con su tope
+  if (sc.isScene) clampSuns(sc, LOOK_LIGHT[lookOf(sc)].sunMax);
+}
+
+/** El sol más suave (en tres tonos planos, el fuerte quema los colores claros a blanco). */
+function clampSuns(sc: THREE.Object3D, max: number) {
+  sc.traverse((o) => {
+    const l = o as THREE.DirectionalLight;
+    if (!l.isDirectionalLight || l.userData.comicLit === max) return;
+    l.userData.comicLit = max;
+    l.intensity = Math.min(l.intensity, max);
+  });
+}
+
+/**
+ * Cambia el perfil de luz de una escena ya convertida (un capítulo que pasa del día a la noche, Barajas de día
+ * en el capítulo de Fito). La hemisférica del cómic queda en scene.userData.comicHemi: los niveles que oscurecen
+ * a propósito la pueden bajar.
+ */
+export function comicMood(scene: THREE.Scene, look: ComicLook) {
+  scene.userData.comicLook = look;
+  const L = LOOK_LIGHT[look];
+  const hemi = scene.userData.comicHemi as THREE.HemisphereLight | undefined;
+  if (hemi) {
+    hemi.color.setHex(L.sky);
+    hemi.groundColor.setHex(L.ground);
+    hemi.intensity = L.hemi;
   }
+  // Fondo azul plano de tebeo detrás de la cúpula (el HDRI sin curva de tono salía oscuro)
+  if (L.background !== null && !(scene.background instanceof THREE.Texture)) scene.background = new THREE.Color(L.background);
+  clampSuns(scene, L.sunMax);
+  glowOn.value = look === 'dia' ? 0 : 1;
 }
 
 // ---------- Pasada de tebeo ----------
@@ -463,7 +537,8 @@ const PASS_FRAG = /* glsl */ `
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 texel;
-uniform float near, far, linePx, dotPx, action, seed;
+uniform float near, far, linePx, dotPx, action, seed, flash;
+uniform vec3 flashCol;
 varying vec2 vUv;
 float rawD(vec2 uv) { return texture2D(tDepth, uv).x; }
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -557,6 +632,8 @@ void main() {
   }
   // papel: lo blanco tira a crema, como impreso
   c.rgb *= vec3(1.0, 0.978, 0.93);
+  // destello (aciertos, fotos, sorpresas): un golpe de color plano que se apaga
+  c.rgb = mix(c.rgb, flashCol, flash);
   gl_FragColor = vec4(c.rgb, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -591,6 +668,8 @@ function makePass(renderer: THREE.WebGLRenderer): Pass {
       dotPx: { value: 5 },
       action: { value: 0 },
       seed: { value: 0 },
+      flash: { value: 0 },
+      flashCol: { value: new THREE.Color() },
     },
     depthTest: false,
     depthWrite: false,
@@ -602,6 +681,13 @@ function makePass(renderer: THREE.WebGLRenderer): Pass {
 
 let burst = 0;
 let burstSeed = 0;
+let flash = 0;
+const flashCol = new THREE.Color();
+/** Destello de pantalla (aciertos, fotos, sorpresas): lo usa juice. */
+export function comicFlash(color: number, amount: number) {
+  flashCol.setHex(color);
+  flash = Math.max(flash, amount);
+}
 /** Líneas de acción de un golpe o un acierto (0..1); se apagan solas en un tercio de segundo. */
 export function comicBurst(amount: number) {
   if (amount > burst) burstSeed++;
@@ -611,7 +697,7 @@ const lastCam = new THREE.Vector3();
 let lastT = 0;
 let speedAmt = 0;
 
-/** Dibuja en estilo cómic (sustituye al postproceso en los capítulos de cómic). */
+/** Dibuja un fotograma en estilo cómic: la escena y, encima, la pasada de tinta, papel y líneas de acción. */
 export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
   pass ??= makePass(renderer);
   renderer.getDrawingBufferSize(size);
@@ -635,6 +721,10 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   speedAmt += (target - speedAmt) * Math.min(1, dt * 4);
   burst = Math.max(0, burst - dt * 3);
   u.action.value = Math.max(speedAmt, burst);
+  // (más suave que el del cine: sobre papel, un blanco entero se come el dibujo)
+  u.flash.value = flash * 0.6;
+  (u.flashCol.value as THREE.Color).copy(flashCol);
+  flash = Math.max(0, flash - dt * 2.8);
   // las rayas de velocidad cambian a saltos (8 por segundo), como dibujadas a mano; las de golpe, por golpe
   u.seed.value = burst > speedAmt ? burstSeed * 7 : Math.floor(now * 8);
   renderer.autoClear = true;

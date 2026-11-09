@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
-import { Fireworks, Sky, glowTexture, makeSea } from '../core/gfx';
+import { Fireworks, Sky, makeSea } from '../core/gfx';
+import { comicMoonTexture } from '../core/comicTiles';
 import { FINAL_LETTER } from '../data/story';
 import { MEMORIES, LETTER_PHOTOS } from '../data/memories';
 import type { DebugItem } from '../ui/ui';
@@ -34,13 +35,11 @@ export class LetterScene implements Level {
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0x8fa0e0, 0x1a2040, 0.7));
     const moonDir = new THREE.Vector3(0.15, 0.32, 1).normalize();
-    const moon = new THREE.Mesh(new THREE.CircleGeometry(7, 40), new THREE.MeshBasicMaterial({ color: 0xfff6dc, fog: false }));
-    moon.position.copy(moonDir).multiplyScalar(300);
-    moon.lookAt(0, 0, 0);
-    this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xbfd0ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    this.moonGlow.position.copy(moon.position);
-    this.moonGlow.scale.setScalar(90);
-    sc.add(moon, this.moonGlow);
+    // Luna de tebeo (disco plano con su contorno y un anillo de luz)
+    this.moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: comicMoonTexture(), transparent: true, depthWrite: false, fog: false }));
+    this.moonGlow.position.copy(moonDir).multiplyScalar(300);
+    this.moonGlow.scale.setScalar(26);
+    sc.add(this.moonGlow);
     const light = new THREE.DirectionalLight(0xc8d4ff, 0.8);
     light.position.copy(moonDir).multiplyScalar(50);
     sc.add(light);
@@ -68,10 +67,7 @@ export class LetterScene implements Level {
       const frame = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W), new THREE.MeshBasicMaterial({ color: 0xfbf7ee, side: THREE.DoubleSide }));
       const photo = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W * 0.9, PHOTO_W * 0.9), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
       photo.position.z = 0.005;
-      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd9a0, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
-      halo.scale.setScalar(3);
-      halo.position.z = -0.05;
-      g.add(halo, frame, photo);
+      g.add(frame, photo);
       const side = i % 2 ? 1 : -1;
       const base = new THREE.Vector3(side * (1.8 + (i % 3) * 0.6), 1.6 + ((i * 7) % 5) * 0.35, 8 + i * 5.5);
       g.position.copy(base);

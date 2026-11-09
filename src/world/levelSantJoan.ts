@@ -4,7 +4,7 @@ import { Trail } from '../core/follow';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
-import { Sky, Sun, Fireworks, glowTexture, toon, vibrate, applyShadows, hdSurfaces } from '../core/gfx';
+import { Sky, Sun, Fireworks, glowTexture, toon, vibrate, applyShadows } from '../core/gfx';
 import { TownHD } from './hd/townHD';
 import { SANTJOAN } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
@@ -184,7 +184,7 @@ export class LevelSantJoan implements Level {
   private up = new THREE.Vector3(0, 1, 0);
   private bounds: Box2 = { minX: BORN.minX + 0.5, maxX: BE_BOX.maxX - 0.5, minZ: BORN.minZ + 0.5, maxZ: BORN.maxZ - 0.5 };
   private beIn = false;
-  private hd = hdSurfaces.value ? new TownHD() : null;
+  private hd: TownHD | null = new TownHD();
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -1335,7 +1335,6 @@ export class LevelSantJoan implements Level {
     });
     this.sun.light.color.set(0xa9bcff);
     this.sun.light.intensity = 0.55;
-    sc.environmentIntensity = 0.14;
     for (const h of this.horses) {
       h.d.root.visible = false;
       h.alert.visible = false;

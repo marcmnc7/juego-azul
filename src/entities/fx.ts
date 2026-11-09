@@ -31,12 +31,9 @@ const PAINT: Record<string, (c: CanvasRenderingContext2D) => void> = {
     c.fill();
   },
   '✨': (c) => {
-    const g = c.createRadialGradient(64, 64, 0, 64, 64, 60);
-    g.addColorStop(0, 'rgba(255,240,170,.8)');
-    g.addColorStop(1, 'rgba(255,240,170,0)');
-    c.fillStyle = g;
-    c.fillRect(0, 0, 128, 128);
-    star(c, 64, 64, 56, 7, 4, '#fff6c8');
+    // destello de tebeo: estrella de cuatro puntas plana (sin halo borroso)
+    star(c, 64, 64, 56, 12, 4, '#fff1a8');
+    star(c, 64, 64, 30, 8, 4, '#ffffff');
   },
   '🍀': (c) => {
     c.strokeStyle = '#2c7a34';
@@ -123,11 +120,37 @@ const PAINT: Record<string, (c: CanvasRenderingContext2D) => void> = {
 PAINT['🎶'] = PAINT['🎵'];
 PAINT['📸'] = PAINT['📷'] = PAINT['✨'];
 
+/**
+ * Contorno de tinta alrededor de un dibujo (como una pegatina de tebeo): la silueta, en tinta, desplazada en
+ * todas direcciones por detrás del dibujo.
+ */
+function inkOutline(src: HTMLCanvasElement, px = 5) {
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const g = out.getContext('2d')!;
+  const sil = document.createElement('canvas');
+  sil.width = src.width;
+  sil.height = src.height;
+  const sg = sil.getContext('2d')!;
+  sg.drawImage(src, 0, 0);
+  sg.globalCompositeOperation = 'source-in';
+  sg.fillStyle = '#2b2233';
+  sg.fillRect(0, 0, sil.width, sil.height);
+  for (let a = 0; a < 16; a++) g.drawImage(sil, Math.cos((a / 16) * Math.PI * 2) * px, Math.sin((a / 16) * Math.PI * 2) * px);
+  g.drawImage(src, 0, 0);
+  return out;
+}
+
 function emojiTexture(ch: string) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const ctx = c.getContext('2d')!;
   const paint = PAINT[ch];
+  // (un poco más pequeño que el lienzo: el contorno de tinta tiene que caber)
+  ctx.translate(64, 64);
+  ctx.scale(0.88, 0.88);
+  ctx.translate(-64, -64);
   if (paint) paint(ctx);
   else {
     ctx.font = '104px serif';
@@ -135,7 +158,7 @@ function emojiTexture(ch: string) {
     ctx.textBaseline = 'middle';
     ctx.fillText(ch, 64, 72);
   }
-  const t = new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(inkOutline(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -151,30 +174,38 @@ interface P {
   small?: boolean;
 }
 
+/** Polvo: una nubecilla de tebeo (tres bolas planas color arena con su contorno). */
 function dustTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, 'rgba(235,220,190,0.9)');
-  g.addColorStop(1, 'rgba(235,220,190,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 64);
-  return new THREE.CanvasTexture(c);
+  ctx.fillStyle = '#ebdcbe';
+  for (const [x, y, r] of [[22, 36, 13], [36, 28, 15], [44, 40, 11]] as const) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 7);
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(inkOutline(c, 2.5));
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
-/** Gotas de agua: un punto blanco azulado y brillante. */
+/** Gotas de agua: una gota de tebeo, blanca azulada con su brillo y su contorno de tinta. */
 function sprayTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 32;
   const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.45, 'rgba(225,242,255,0.85)');
-  g.addColorStop(1, 'rgba(200,230,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 32);
-  return new THREE.CanvasTexture(c);
+  ctx.fillStyle = '#d4ecff';
+  ctx.beginPath();
+  ctx.arc(16, 16, 10, 0, 7);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(13, 13, 3.5, 0, 7);
+  ctx.fill();
+  const t = new THREE.CanvasTexture(inkOutline(c, 2));
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // Texturas compartidas por todas las partículas del juego (una por emoji). Antes cada capítulo creaba las

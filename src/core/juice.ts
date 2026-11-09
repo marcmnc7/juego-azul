@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import { vibrate } from './gfx';
-import { comic, comicBurst } from './comic';
+import { comicBurst } from './comic';
 
 // "Juice": lo que hace que un acierto se sienta. Una micro-pausa (hit-stop), un golpe de zoom, un
 // destello y un pelín de aberración cromática, coordinados. Cada sonido de premio dispara su efecto
@@ -52,7 +52,7 @@ class Juice {
 
   cue(c: Cue) {
     const fx = this.fx;
-    if (comic.on) {
+    {
       const words = WORDS[c];
       // (sin amontonar: una cada medio segundo como mucho)
       const now = performance.now();

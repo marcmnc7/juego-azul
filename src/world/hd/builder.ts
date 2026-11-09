@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { comic } from '../../core/comic';
 
 // Constructor de decorado de la prueba de concepto: cajas con UV en metros (la textura no se
 // estira), recortes del atlas de puertas y ventanas, y toda la geometría fusionada por material
@@ -36,8 +35,8 @@ export class Builder {
     // (solo lo fino en dos dimensiones, como un barrote o un marco: las placas finas llevan persianas y puertas
     // pegadas delante, y al engordarlas las tapaban)
     const thin = s0.filter((v) => v < 0.2).length >= 2;
-    const s: V3 = comic.on && thin ? (s0.map((v) => (v < 0.2 ? Math.max(v * 1.5, v + 0.03) : v)) as V3) : s0;
-    const seg = s.map((v) => (comic.on ? segs(v) : 1));
+    const s: V3 = thin ? (s0.map((v) => (v < 0.2 ? Math.max(v * 1.5, v + 0.03) : v)) as V3) : s0;
+    const seg = s.map((v) => segs(v));
     const g = new THREE.BoxGeometry(s[0], s[1], s[2], seg[0], seg[1], seg[2]);
     const tile = o.tile ?? 2.5;
     const uv = g.attributes.uv as THREE.BufferAttribute;
@@ -56,9 +55,9 @@ export class Builder {
   /** Cilindro con UV en metros. */
   cyl(mat: THREE.Material, c: V3, rTop0: number, rBot0: number, h: number, o: { seg?: number; tile?: number; parent?: THREE.Matrix4; rx?: number } = {}) {
     // (cómic: barrotes y postes finos, más gruesos)
-    const fat = (r: number) => (comic.on && r < 0.06 ? r * 1.6 : r);
+    const fat = (r: number) => (r < 0.06 ? r * 1.6 : r);
     const rTop = fat(rTop0), rBot = fat(rBot0);
-    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12, comic.on ? segs(h) : 1);
+    const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 12, segs(h));
     const tile = o.tile ?? 1;
     const uv = g.attributes.uv as THREE.BufferAttribute;
     const circ = Math.PI * 2 * Math.max(rTop, rBot);
@@ -71,7 +70,7 @@ export class Builder {
   /** Plano con un recorte del atlas (u0,v0,u1,v1 en 0..1), o la textura entera. */
   decal(mat: THREE.Material, c: V3, w: number, h: number, rect: [number, number, number, number] | null, parent: THREE.Matrix4) {
     // (en el cómic, partido como las paredes: si no, al doblarse la pared tapaba media puerta)
-    const g = new THREE.PlaneGeometry(w, h, comic.on ? segs(w) : 1, comic.on ? segs(h) : 1);
+    const g = new THREE.PlaneGeometry(w, h, segs(w), segs(h));
     if (rect) {
       const uv = g.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < uv.count; i++) uv.setXY(i, rect[0] + uv.getX(i) * (rect[2] - rect[0]), rect[1] + uv.getY(i) * (rect[3] - rect[1]));

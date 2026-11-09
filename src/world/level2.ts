@@ -4,10 +4,9 @@ import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
 import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, woodChair, CarRig } from '../entities/models';
 import { ROOF_GEO } from './ferreries';
-import { hdSurfaces } from '../core/gfx';
 import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
-import { Sky, Sun, toon, vibrate, addOutline, applyShadows, makeSea } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, applyShadows, makeSea } from '../core/gfx';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
 import { CHATS } from '../data/chats';
@@ -650,7 +649,7 @@ export class Level2 implements Level {
     // (de la acera hacia dentro: antes la plataforma y la casa cruzaban la carretera)
     m.add(G.box, 0xbdb4a4, -12.4, 0.05, -22, 0, 0, 0, 15.6, 0.1, 16);
     m.add(G.box, 0xa89f90, -4.72, 0.08, -22, 0, 0, 0, 0.24, 0.16, 16); // bordillo
-    const hd = hdSurfaces.value ? new TownHD() : null;
+    const hd = new TownHD();
     houses(hd);
     if (hd) {
       hd.wall(-20, -5, -14, -11, 10, 0xd4c8b0);
@@ -816,7 +815,6 @@ export class Level2 implements Level {
       const d = defs[Math.floor(Math.random() * defs.length)];
       const o = new THREE.Mesh(d.geo, vertexMat());
       o.castShadow = true;
-      addOutline(o, 0.03);
       o.position.set(LANES[lanes[0]], 0, z);
       this.scene.add(o);
       this.things.push({ obj: o, kind: 'obstacle', lane: lanes[0], z, speed: d.speed, alive: true });
@@ -1449,7 +1447,7 @@ export class Level2 implements Level {
     const g = new THREE.Group();
     const wall = isM ? 0xf2e6c8 : [0xe8d9c0, 0xd9cfc0, 0xf0e2c8][name.length % 3];
     const m = new Merger();
-    const hd = hdSurfaces.value ? new TownHD() : null;
+    const hd = new TownHD();
     const H = 6.4;
     if (hd) {
       hd.wall(12, 20, -6, 6, H, wall);

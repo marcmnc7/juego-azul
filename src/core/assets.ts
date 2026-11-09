@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Carga de los archivos incrustados (modelos glTF y cielos HDRI). El visor de artefactos no deja
@@ -67,49 +65,3 @@ export function loadGLB(url: string): Promise<GLTF> {
   return p;
 }
 
-export interface Hdri {
-  texture: THREE.DataTexture;
-  /** Dirección del punto más brillante (el sol) en el espacio del mapa equirectangular. */
-  sun: THREE.Vector3;
-}
-
-const hdrCache = new Map<string, Hdri>();
-/** Cielo fotografiado (HDRI) como textura equirectangular lineal. Síncrono si el archivo va incrustado. */
-export function loadHdriSync(url: string): Hdri | null {
-  const c = hdrCache.get(url);
-  if (c) return c;
-  if (!url.startsWith('data:')) return null;
-  return parseHdri(url, dataUrlToBuffer(url));
-}
-
-/** Carga un HDRI de antemano (también los que van fuera, en un PNG), para tenerlo listo al empezar. */
-export async function preloadHdri(url: string) {
-  if (hdrCache.has(url)) return;
-  parseHdri(url, await bytes(url));
-}
-
-function parseHdri(url: string, buf: ArrayBuffer): Hdri {
-  const d = new RGBELoader().parse(buf) as unknown as { data: Uint16Array | Float32Array; width: number; height: number; type: THREE.TextureDataType };
-  const t = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
-  t.colorSpace = THREE.LinearSRGBColorSpace;
-  t.minFilter = t.magFilter = THREE.LinearFilter;
-  t.generateMipmaps = false;
-  t.flipY = true;
-  t.mapping = THREE.EquirectangularReflectionMapping;
-  t.needsUpdate = true;
-  // Busca el sol (el texel más brillante) para poder girar el cielo y que cuadre con el de la escena
-  const toF = d.type === THREE.HalfFloatType ? THREE.DataUtils.fromHalfFloat : (v: number) => v;
-  let best = -1, bi = 0;
-  for (let i = 0; i < d.width * d.height; i++) {
-    const l = toF(d.data[i * 4]) + toF(d.data[i * 4 + 1]) + toF(d.data[i * 4 + 2]);
-    if (l > best) { best = l; bi = i; }
-  }
-  const u = ((bi % d.width) + 0.5) / d.width;
-  const v = 1 - (Math.floor(bi / d.width) + 0.5) / d.height; // la fila 0 del HDR es la de arriba
-  const phi = (u - 0.5) * Math.PI * 2;
-  const el = (v - 0.5) * Math.PI;
-  const sun = new THREE.Vector3(Math.cos(phi) * Math.cos(el), Math.sin(el), Math.sin(phi) * Math.cos(el));
-  const h = { texture: t, sun };
-  hdrCache.set(url, h);
-  return h;
-}

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { loadGLB } from '../core/assets';
-import { quality } from '../core/gfx';
 import foxUrl from '../assets/chars/fox.glb';
 import { boneAnchor, grayTexture, makeRigPerson, rigTickers } from './rig';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -37,10 +36,7 @@ export function preloadVehicles() {
 const lin = (hex: number) => new THREE.Color(hex);
 
 function phys(p: THREE.MeshPhysicalMaterialParameters): THREE.MeshStandardMaterial {
-  if (quality.kind === 'standard') return new THREE.MeshPhysicalMaterial(p);
-  const { clearcoat: _c, clearcoatRoughness: _cr, ...rest } = p;
-  void _c, void _cr;
-  return new THREE.MeshStandardMaterial(rest as THREE.MeshStandardMaterialParameters);
+  return new THREE.MeshPhysicalMaterial(p);
 }
 
 const paintCache = new Map<number, THREE.MeshStandardMaterial>();
@@ -164,6 +160,8 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
     azul.add(az.root);
     body.add(azul);
   }
+  // (se mueve: el cómic no lo dobla a mano alzada)
+  root.userData.comicBent = true;
   return { root, body, joy, wheels, azul };
 }
 
@@ -360,6 +358,7 @@ export function makeMotoHD(color: number, rider?: PersonLook, helmet: HelmetOpts
     root.add(p.root);
     person = p;
   }
+  root.userData.comicBent = true;
   return { root, wheels, rider: person };
 }
 

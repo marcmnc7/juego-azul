@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { hdSurfaces } from '../core/gfx';
 import { TownHD } from './hd/townHD';
 import { G, Merger, araucaria, makeCar, streetLamp } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
@@ -75,7 +74,8 @@ function sign(g: THREE.Group, text: string, x: number, y: number, z: number, ry:
     512,
     128,
   );
-  const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.25), new THREE.MeshBasicMaterial({ map: tex }));
+  // (con luz: de noche, un rótulo de piedra no brilla solo)
+  const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.25), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
   s.position.set(x, y, z);
   s.rotation.y = ry;
   g.add(s);
@@ -92,7 +92,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
 
   let blockN = 0;
   // Con superficies de alta calidad, las manzanas como en Ferreries
-  const hd = hdSurfaces.value ? new TownHD() : null;
+  const hd = new TownHD();
   const block = (x0: number, x1: number, z0: number, z1: number, h: number, color: number) => {
     // Cada bloque unos milímetros distinto: dos manzanas en el mismo plano parpadean
     const e = (blockN++ % 6) * 0.012 + 0.006;

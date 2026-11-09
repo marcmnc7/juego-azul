@@ -3,7 +3,8 @@ import { faceTo } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
-import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
+import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
+import { comicMoonTexture, comicStarTexture } from '../core/comicTiles';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
@@ -128,6 +129,7 @@ export class Level4 implements Level {
   private solids: Circle[] = [];
   private swimT = 0;
   private waterTex: THREE.Texture;
+  private poolFloor: THREE.Mesh | null = null;
   private pool!: PoolWater;
   private swimOut = false;
   private gasTrail = new Trail();
@@ -138,6 +140,8 @@ export class Level4 implements Level {
   private mosaic!: THREE.Mesh;
   private mosaicData!: THREE.DataTexture;
   private mosaicT = 0;
+  private mosaicCanvas: HTMLCanvasElement | null = null;
+  private mosaicTex: THREE.CanvasTexture | null = null;
   private ballMesh!: THREE.Mesh;
   private fireflies!: THREE.Points;
   private marker: THREE.Group;
@@ -158,7 +162,7 @@ export class Level4 implements Level {
   // Constelación
   private starPts: THREE.Vector3[] = [];
   private starSprites: THREE.Sprite[] = [];
-  private starLine!: THREE.Line;
+  private starLine!: THREE.Mesh;
   private nextStar = 0;
   private misses = 0;
   private shooting: { s: THREE.Sprite; v: THREE.Vector3; life: number }[] = [];
@@ -191,7 +195,8 @@ export class Level4 implements Level {
     sc.add(new THREE.HemisphereLight(0x6f7fc0, 0x1a2030, 1.1));
     // Luz de luna con sombras
     this.sun = new Sun(sc, 0xa9bcff, 1.0, new THREE.Vector3(-0.5, 1, 0.4), 18);
-    const poolLight = new THREE.PointLight(0x5fe3ff, 14, 10, 1.6);
+    // (luz de dentro del agua: un charco de luz en bandas alrededor, no muy grande)
+    const poolLight = new THREE.PointLight(0x5fe3ff, 7, 5.5, 1.6);
     poolLight.position.set((POOL.minX + POOL.maxX) / 2, -0.4, (POOL.minZ + POOL.maxZ) / 2);
     sc.add(poolLight);
     const porch = new THREE.PointLight(0xffc27a, 10, 9, 1.6);
@@ -340,7 +345,8 @@ export class Level4 implements Level {
     const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xc8d0ff, size: 1.2, sizeAttenuation: false, transparent: true, opacity: 0.5, fog: false, depthWrite: false }));
     pts.renderOrder = -9;
     this.sky.group.add(pts);
-    const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff6d8, fog: false, depthWrite: false }));
+    // Luna de tebeo: disco plano con sus cráteres y su contorno de tinta
+    const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: comicMoonTexture(), fog: false, depthWrite: false }));
     moon.position.set(-160, 230, 220);
     moon.scale.setScalar(60);
     this.sky.group.add(moon);
@@ -396,6 +402,7 @@ export class Level4 implements Level {
     m.add(G.box, 0x2b6fb0, cx, -1.5, cz, 0, 0, 0, pw, 0.1, pd);
     // El fondo, con las cáusticas moviéndose: se ve a través del agua
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd).rotateX(-Math.PI / 2), toon({ map: this.waterTex, color: 0x8fd8ee, emissive: 0x1c7fa8, emissiveMap: this.waterTex, emissiveIntensity: 1.1, roughness: 0.6 }));
+    this.poolFloor = floor;
     floor.position.set(cx, -1.44, cz);
     floor.userData.noCast = true;
     sc.add(floor);
@@ -548,6 +555,10 @@ export class Level4 implements Level {
     for (const [x, z, w, d] of [[-12.1, 6.5, 3.2, 5], [-10.9, 12.2, 2.6, 2.4], [9.5, 8.5, 3, 4.6]]) {
       m.add(G.box, 0xe8e2d4, x, 0.04, z, 0, 0, 0, w + 0.7, 0.08, d + 0.7);
       m.add(G.box, 0x2f8fc0, x, 0.06, z, 0, 0, 0, w, 0.06, d);
+      // el agua, de tebeo como la nuestra (con su luz de dentro)
+      const wtr = makeSea([w, d], 0x1c8ec0, new THREE.Vector3(-0.5, 1, 0.4), { night: true, emissive: 0x0f4a66, ripples: true });
+      wtr.position.set(x, 0.1, z);
+      sc.add(wtr);
     }
     // Palmera junto a la casa del vecino
     for (let i = 0; i < 6; i++) m.add(G.cyl, 0x6b5a40, -8.4 + Math.sin(i * 0.3) * 0.3, (i + 0.5) * 1.2, 2.6, 0, 0, 0.05, 0.4 - i * 0.03, 1.2, 0.4 - i * 0.03);
@@ -581,7 +592,16 @@ export class Level4 implements Level {
     this.mosaicData = new THREE.DataTexture(new Uint8Array(W * H * 4), W, H, THREE.RGBAFormat);
     this.mosaicData.magFilter = this.mosaicData.minFilter = THREE.NearestFilter;
     this.mosaicData.colorSpace = THREE.SRGBColorSpace;
-    this.mosaic = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({ map: this.mosaicData, transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
+    // Cartela de tebeo: los píxeles dentro de un bocadillo con su contorno de tinta y «¡CENSURADO!» encima.
+    // Escribe profundidad (y recorta lo transparente): así la tinta de los dos que hay debajo no la atraviesa
+    const cv = document.createElement('canvas');
+    cv.width = 512;
+    cv.height = 326;
+    this.mosaicCanvas = cv;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.mosaicTex = tex;
+    this.mosaic = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.72), new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5, fog: false, toneMapped: false }));
     this.mosaic.visible = false;
     this.mosaic.renderOrder = 50;
     this.scene.add(this.mosaic);
@@ -604,6 +624,49 @@ export class Level4 implements Level {
         d[k + 3] = e > 1.02 ? 0 : 255;
       }
     this.mosaicData.needsUpdate = true;
+    this.drawCensor();
+  }
+
+  private drawCensor() {
+    const cv = this.mosaicCanvas;
+    if (!cv) return;
+    const g = cv.getContext('2d')!;
+    const w = cv.width, h = cv.height;
+    const W = this.mosaicData.image.width, H = this.mosaicData.image.height;
+    const d = this.mosaicData.image.data as Uint8Array;
+    g.clearRect(0, 0, w, h);
+    g.save();
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, w / 2 - 10, h / 2 - 10, 0, 0, Math.PI * 2);
+    g.clip();
+    const cw = w / W, ch = h / H;
+    for (let j = 0; j < H; j++)
+      for (let i = 0; i < W; i++) {
+        const k = (j * W + i) * 4;
+        g.fillStyle = `rgb(${d[k]},${d[k + 1]},${d[k + 2]})`;
+        g.fillRect(Math.floor(i * cw), Math.floor(j * ch), Math.ceil(cw) + 1, Math.ceil(ch) + 1);
+      }
+    g.restore();
+    g.lineWidth = 10;
+    g.strokeStyle = '#2b2233';
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, w / 2 - 10, h / 2 - 10, 0, 0, Math.PI * 2);
+    g.stroke();
+    // el letrero, ladeado, con letra de tebeo
+    g.save();
+    g.translate(w / 2, h / 2);
+    g.rotate(-0.08);
+    g.font = '92px Bangers, "Comic Neue", Impact, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.lineWidth = 12;
+    g.strokeStyle = '#2b2233';
+    g.strokeText('¡CENSURADO!', 0, 4);
+    g.fillStyle = '#ffe14a';
+    g.fillText('¡CENSURADO!', 0, 4);
+    g.restore();
+    if (this.mosaicTex) this.mosaicTex.needsUpdate = true;
   }
 
   /** Estrellas grandes que forman un corazón en el cielo, vistas desde las toallas. */
@@ -621,7 +684,9 @@ export class Level4 implements Level {
       const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
       this.starPts.push(center.clone().addScaledVector(right, hx * 1.05).addScaledVector(up, hy * 1.05 + 2));
     }
-    const mat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff4c0, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    // Estrellas de cinco puntas dibujadas, con su contorno de tinta (comicGlow: el cómic no las toca)
+    const mat = new THREE.SpriteMaterial({ map: comicStarTexture(), color: 0xfff4c0, fog: false, transparent: true, alphaTest: 0.4, depthWrite: false });
+    mat.userData.comicGlow = true;
     for (const p of this.starPts) {
       const s = new THREE.Sprite(mat.clone());
       s.position.copy(p);
@@ -630,9 +695,22 @@ export class Level4 implements Level {
       this.scene.add(s);
       this.starSprites.push(s);
     }
-    const g = new THREE.BufferGeometry().setFromPoints(this.starPts.map((p) => p.clone()).concat([this.starPts[0].clone()]));
+    // La línea del corazón: un trazo gordo rosa (una cinta en el plano de las estrellas) que escribe profundidad,
+    // así la pasada de tinta le pone su contorno
+    const pts = this.starPts.concat([this.starPts[0]]);
+    const pos: number[] = [];
+    const half = 0.45;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const along = b.clone().sub(a).normalize();
+      const side = new THREE.Vector3().crossVectors(along, dir).normalize().multiplyScalar(half);
+      const a0 = a.clone().sub(side), a1 = a.clone().add(side), b0 = b.clone().sub(side), b1 = b.clone().add(side);
+      pos.push(...a0.toArray(), ...b0.toArray(), ...b1.toArray(), ...a0.toArray(), ...b1.toArray(), ...a1.toArray());
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setDrawRange(0, 0);
-    this.starLine = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffd6ea, fog: false, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.starLine = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff8fc0, fog: false, side: THREE.DoubleSide }));
     this.starLine.frustumCulled = false;
     this.scene.add(this.starLine);
   }
@@ -708,6 +786,8 @@ export class Level4 implements Level {
     this.gate.update(dt, this.gateWho, this.camera.position);
     if (this.phase !== 'intro' && this.phase !== 'done' && this.phase !== 'ending') this.playTime += dt;
     this.waterTex.offset.set(Math.sin(this.t * 0.3) * 0.2, this.t * 0.03);
+    // (el cómic dibuja las cáusticas en una textura nueva: se mueve también)
+    (this.poolFloor?.material as THREE.MeshToonMaterial | undefined)?.map?.offset.copy(this.waterTex.offset);
     if (this.player.root.position.x > -100) this.pool.update(dt);
     const ffp = this.fireflies.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < ffp.count; i++) ffp.setY(i, ffp.getY(i) + Math.sin(this.t * 1.3 + i) * dt * 0.25);
@@ -1415,7 +1495,10 @@ export class Level4 implements Level {
       this.camera.position.set(TOWELS.x + 1.6, LAWN_Y + 2.7, TOWELS.z + 4.4); // (desde encima de la piscina, mirando a la casa)
       this.camLook.set(TOWELS.x, LIE_Y + 0.1, TOWELS.z);
       this.camera.lookAt(this.camLook);
-      this.mosaic.position.set(TOWELS.x, LIE_Y + 0.28, TOWELS.z);
+      // (la cartela, a un tercio del camino hacia la cámara y en proporción: tapa lo mismo, pero por delante de
+      // todo con la profundidad de verdad, así la tinta solo la rodea a ella)
+      this.mosaic.position.set(TOWELS.x, LIE_Y + 0.28, TOWELS.z).lerp(this.camera.position, 0.65);
+      this.mosaic.scale.setScalar(0.35);
       this.mosaic.quaternion.copy(this.camera.quaternion);
       this.mosaic.visible = true;
       later(() => {
@@ -1479,9 +1562,10 @@ export class Level4 implements Level {
     audio.chime(this.nextStar);
     vibrate(15);
     this.nextStar++;
-    this.starLine.geometry.setDrawRange(0, this.nextStar);
+    // (6 vértices por tramo: con n estrellas unidas, n - 1 tramos; al cerrar, todos)
+    this.starLine.geometry.setDrawRange(0, Math.max(0, this.nextStar - 1) * 6);
     if (this.nextStar >= this.starPts.length) {
-      this.starLine.geometry.setDrawRange(0, this.starPts.length + 1);
+      this.starLine.geometry.setDrawRange(0, this.starPts.length * 6);
       this.finishStars();
     }
   }
@@ -1520,7 +1604,7 @@ export class Level4 implements Level {
       s.scale.setScalar(base + (done ? Math.sin(this.t * 3 + i) * 1.2 : 0));
       (s.material as THREE.SpriteMaterial).color.set(lit ? (done ? 0xffa3c8 : 0xfff4c0) : next ? 0xffffff : 0xc8d0ff);
     });
-    (this.starLine.material as THREE.LineBasicMaterial).opacity = done ? 0.7 + Math.sin(this.t * 4) * 0.3 : 0.9;
+    (this.starLine.material as THREE.MeshBasicMaterial).color.setHex(done && Math.sin(this.t * 4) > 0 ? 0xffb3d4 : 0xff8fc0);
     if (this.phase === 'stars' && Math.random() < dt * 0.25) this.launchShootingStar();
     if (this.phase === 'ending') {
       this.endT += dt;
@@ -1534,7 +1618,9 @@ export class Level4 implements Level {
   }
 
   private launchShootingStar() {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, fog: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    // Estrella fugaz de tebeo: un trazo blanco que se afila, con su contorno de tinta
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: streakTexture(), color: 0xffffff, fog: false, transparent: true, depthWrite: false }));
+    s.material.userData.comicGlow = true;
     const start = this.starCamLook.clone().add(this.v1.set(-40 + Math.random() * 30, 20 + Math.random() * 15, 0));
     s.position.copy(start);
     s.scale.set(3, 3, 1);
@@ -1662,4 +1748,29 @@ export class Level4 implements Level {
     audio.ambience(0);
     disposeScene(this.scene);
   }
+}
+
+let streak: THREE.CanvasTexture | null = null;
+/** Trazo de estrella fugaz: cabeza redonda que se afila hacia atrás, blanco con contorno de tinta. */
+function streakTexture() {
+  if (streak) return streak;
+  const cv = document.createElement('canvas');
+  cv.width = 256;
+  cv.height = 64;
+  const g = cv.getContext('2d')!;
+  g.beginPath();
+  g.moveTo(8, 32);
+  g.quadraticCurveTo(150, 22, 218, 18);
+  g.arc(222, 32, 14, -Math.PI / 2, Math.PI / 2);
+  g.quadraticCurveTo(150, 42, 8, 32);
+  g.closePath();
+  g.fillStyle = '#fffbe6';
+  g.fill();
+  g.lineWidth = 5;
+  g.strokeStyle = '#2b2233';
+  g.lineJoin = 'round';
+  g.stroke();
+  streak = new THREE.CanvasTexture(cv);
+  streak.colorSpace = THREE.SRGBColorSpace;
+  return streak;
 }

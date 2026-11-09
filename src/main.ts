@@ -20,19 +20,12 @@ import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
-import { applyEnvironment, applyShadows, hdSurfaces, MOBILE, quality, removeEnvironment, setEnvRenderer, Sky, toon } from './core/gfx';
-import { loadHdPhotos, loadSurfacePhotos } from './core/surfaces';
+import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
 import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
 import { preloadCrowd } from './entities/crowdRig';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
-import { preloadHdri } from './core/assets';
-import { hdEnvDefault } from './core/gfx';
-import sunsetHdr from './assets/env/venice_sunset.hdr';
-import quarryHdr from './assets/env/quarry.hdr';
-import { Post, GRADES, NEUTRAL, type Grade } from './core/post';
-import { paintPalette, paintScene, paintStyle } from './core/paint';
-import { comic, comicScene, drawComic } from './core/comic';
+import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } from './core/comic';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
@@ -50,50 +43,27 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = quality.shadows;
 
-// Modo seguro. ?lite arranca sin grano, sin luz de entorno y sin postproceso. Y si en este
-// dispositivo algún shader no compila (cada GPU es más o menos estricta), se quitan esos efectos
-// uno a uno hasta que todo se vea.
-if (new URLSearchParams(location.search).has('lite')) {
-  quality.grain = false;
-  quality.env = false;
-  quality.post = false;
-}
+// Si en este dispositivo algún shader no compila (cada GPU es más o menos estricta), se avisa en la consola
 let shaderFailed = false;
 renderer.debug.onShaderError = (gl, program, vs, fs) => {
   shaderFailed = true;
   console.warn('[gfx] shader no compila en este dispositivo:', gl.getProgramInfoLog(program), gl.getShaderInfoLog(vs), gl.getShaderInfoLog(fs));
 };
-function safeStep() {
-  shaderFailed = false;
-  if (quality.grain) quality.grain = false;
-  else if (quality.env) quality.env = false;
-  else if (quality.post) quality.post = false;
-  else return;
-  console.warn('[gfx] modo seguro:', JSON.stringify(quality));
-  const sc = level ? level.threeScene : null;
-  if (!sc) return;
-  if (!quality.env) removeEnvironment(sc);
-  sc.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (m.isMesh) (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => (x.needsUpdate = true));
-  });
-}
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
-// En el móvil se empieza algo más bajo: la pantalla es pequeña y el estilo pintado lo disimula; sube si va sobrado
+// En el móvil se empieza algo más bajo: la pantalla es pequeña y la tinta lo disimula; sube si va sobrado
 let ratio = Math.min(maxRatio, MOBILE ? 1.35 : 1.5);
 renderer.setPixelRatio(ratio);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
-setEnvRenderer(renderer);
 
 /**
- * Autocomprobación al arrancar: dibuja un cubo verde con los mismos efectos que el juego en una
- * imagen diminuta y mira si de verdad sale verde. Si en este dispositivo no se ve (hay GPUs que no
- * dan error pero no pintan), se van quitando efectos hasta que se vea.
+ * Autocomprobación al arrancar: dibuja un cubo verde del decorado, ya pasado a cómic, en una imagen diminuta y
+ * mira si de verdad sale verde. Si en este dispositivo no se ve (hay GPUs que no dan error pero no pintan), se
+ * prueba sin sombras.
  */
 const gfxLog: string[] = [];
-function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
+function gfxSelfTest(): boolean {
   const sc = new THREE.Scene();
   const sky = new Sky({ top: 0x4060ff, mid: 0x6080ff, bottom: 0x8090ff });
   sc.add(sky.group);
@@ -103,18 +73,19 @@ function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
   sun.castShadow = quality.shadows;
   sc.add(sun);
   sc.fog = new THREE.Fog(0x8090ff, 30, 200);
-  // Igual que el decorado del juego: geometría sin UV y con colores por vértice
+  // Igual que el decorado del juego: geometría sin UV, con colores por vértice y superficie dibujada
   const geo = new THREE.BoxGeometry(2, 2, 2);
-  if (mode !== 'uv') geo.deleteAttribute('uv');
+  geo.deleteAttribute('uv');
   const col = new Float32Array(geo.attributes.position.count * 3);
   for (let i = 0; i < col.length; i += 3) col.set([0.19, 0.75, 0.31], i);
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = mode === 'basic' ? new THREE.MeshBasicMaterial({ vertexColors: true }) : mode === 'uv' ? toon({ color: 0x30c050 }) : toon({ vertexColors: true });
-  const box = new THREE.Mesh(geo, mat);
-  box.position.y = 3; // por encima de la suciedad del pie de las paredes
+  const box = new THREE.Mesh(geo, toon({ vertexColors: true }));
+  box.position.y = 3;
   box.castShadow = box.receiveShadow = true;
+  box.userData.comicBent = true;
   sc.add(box);
-  applyEnvironment(sc);
+  comicScene(sc);
+  settleAmbient(sc);
   const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
   cam.position.set(0, 3, 5);
   cam.lookAt(0, 3, 0);
@@ -130,75 +101,49 @@ function gfxSelfTest(mode: 'game' | 'basic' | 'uv' = 'game'): boolean {
   renderer.setRenderTarget(null);
   rt.dispose();
   geo.dispose();
-  mat.dispose();
-  sc.environment?.dispose();
   const ok = px[1] > px[0] + 25 && px[1] > px[2] + 10;
-  gfxLog.push(`${mode === 'game' ? (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + quality.kind[0].toUpperCase() : mode}:${px[0]},${px[1]},${px[2]}`);
+  gfxLog.push(`${quality.shadows ? 'S' : '-'}:${px[0]},${px[1]},${px[2]}`);
   if (!ok) console.warn('[gfx] autocomprobación falla', Array.from(px), JSON.stringify(quality));
   return ok;
 }
-// Orden de preferencia: lo más realista primero. Se queda con lo primero que se vea de verdad.
-const gfxTries: Array<Partial<typeof quality>> = [
-  { kind: 'standard', grain: true, env: true },
-  { kind: 'standard', grain: false, env: true },
-  { kind: 'standard', grain: false, env: false },
-  { kind: 'phong', grain: true, env: false },
-  { kind: 'phong', grain: false, env: false },
-  { kind: 'lambert', grain: false, env: false },
-];
-let gfxOk = false;
-for (const t of gfxTries) {
-  Object.assign(quality, t);
-  if ((gfxOk = gfxSelfTest())) break;
-}
+let gfxOk = gfxSelfTest();
 if (!gfxOk) {
   quality.shadows = false;
   renderer.shadowMap.enabled = false;
+  gfxOk = gfxSelfTest();
 }
-if (!gfxOk || quality.kind === 'lambert') {
+if (!gfxOk) {
   // Nota discreta unos segundos para saber qué ha pasado si alguien manda una captura
   const note = document.createElement('div');
   const gl = renderer.getContext();
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '?';
-  note.textContent = `gráficos: modo seguro ${quality.grain ? 'G' : '-'}${quality.env ? 'E' : '-'}${quality.shadows ? 'S' : '-'}${quality.kind[0].toUpperCase()} · ${gfxLog.join(' ')} · ${gpu.slice(0, 60)}`;
+  note.textContent = `gráficos: ${gfxLog.join(' ')} · ${gpu.slice(0, 60)}`;
   note.style.cssText = 'position:fixed;left:8px;bottom:6px;font:11px monospace;color:#fff;opacity:.75;right:8px;word-break:break-all;z-index:99;pointer-events:none;text-shadow:0 1px 2px #000';
   document.body.appendChild(note);
   setTimeout(() => note.remove(), 25000);
 }
 renderer.info.autoReset = false;
 
-// Postproceso de cine (ver core/post.ts): oclusión ambiental, profundidad de campo en los diálogos,
-// bloom, tono y etalonaje por capítulo.
-const post = new Post(renderer, camera, MOBILE);
-// La oclusión ambiental son varias pasadas a pantalla completa: en el móvil, fuera desde el principio
-if (MOBILE) post.aoEnabled = false;
-juice.fx = post;
-// Cómic: cada golpe, chapuzón o acierto, con su onomatopeya
+// Cómic: cada golpe, chapuzón o acierto, con su onomatopeya y su destello
+juice.fx = { flashScreen: comicFlash, kick: () => {} };
 juice.onWord = (w, c) => comicWord(w, c);
 audio.onCue = (c) => juice.cue(c);
 let cine = 0;
-function draw(scene: THREE.Scene, dt = 1 / 60) {
-  // El postproceso borra por su cuenta y deja autoClear apagado. Sin él hay que volver a encenderlo: si
-  // no, cada fotograma se pintaba encima del anterior (fantasmas y cosas que asomaban a través de otras)
-  // Estilo cómic: luz en tres tonos y contorno de tinta, sin postproceso
-  if (comic.on) {
-    drawComic(renderer, scene, camera);
-    return;
-  }
-  renderer.autoClear = !quality.post;
-  if (!quality.post) {
+/** Un fotograma: el capítulo en estilo cómic; la pantalla del mapa, solo su fondo. */
+function draw(scene: THREE.Scene) {
+  if (scene === idle) {
+    renderer.autoClear = true;
     renderer.render(scene, camera);
     return;
   }
-  post.draw(scene, dt);
+  drawComic(renderer, scene, camera);
 }
 const input = new Input(canvas, uiRoot);
 // Las misiones usan la misma cámara y el mismo control; al empezar, su escena se prepara como la de un capítulo
 stage.setContext({ camera, input });
 stage.onStart = (sc) => {
-  if (paintStyle.value) paintScene(sc);
-  if (comic.on) comicScene(sc);
+  comicScene(sc);
   applyShadows(sc);
   try {
     renderer.compile(sc, camera);
@@ -269,7 +214,6 @@ function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
-  post.setSize(w, h);
   camera.aspect = w / h;
   // En vertical abrimos más el plano para que se vea algo de calle
   camera.fov = w < h ? 75 : 60;
@@ -332,11 +276,11 @@ function startLetter() {
   leaveLevel();
   clearScreens();
   audio.bed('none');
-  setHd(true, 2); // la luz pintada de noche
+  setLook(0, 'noche');
   const me = new LetterScene(camera, goMap, () => finalLetter(() => clearScreens()));
   level = me;
+  comicScene(me.threeScene);
   applyShadows(me.threeScene);
-  if (paintStyle.value) paintScene(me.threeScene);
   levelAt = performance.now();
   if (TEST) closeDebug = debugPanel(me.debug());
 }
@@ -344,7 +288,6 @@ function startLetter() {
 function goMap() {
   leaveLevel();
   audio.bed('none');
-  setHd(false);
   mapScreen(data, mapOpts);
 }
 
@@ -355,83 +298,29 @@ function goMap() {
 let hdAssets = false;
 // Pantalla de carga: la portada no deja empezar hasta que todo está listo (así cada capítulo abre al momento)
 let loadedParts = 0;
-const LOAD_PARTS = 8;
+const LOAD_PARTS = 4;
 const part = <T,>(p: Promise<T>) => p.finally(() => loadedParts++);
-const photosLoading = Promise.all([part(Promise.resolve(loadSurfacePhotos())), part(Promise.resolve(loadHdPhotos()))]);
 const rigLoading = part(preloadRig())
-  .then(() => Promise.all([part(preloadCrowd()), part(preloadDonkey()), part(preloadVehicles()), part(preloadHdri(sunsetHdr).catch((e) => console.warn('[gfx] HDRI', e))), part(preloadHdri(quarryHdr).catch((e) => console.warn('[gfx] HDRI', e)))]))
+  .then(() => Promise.all([part(preloadCrowd()), part(preloadDonkey()), part(preloadVehicles())]))
   .then(() => (hdAssets = true));
-const allLoading = Promise.all([rigLoading, photosLoading.catch(() => {})]);
+const allLoading = rigLoading;
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
 
-// Capítulos que ya usan la calidad de la prueba de concepto: texturas fotográficas con relieve,
-// cielo HDRI y tono AgX. Los demás siguen con el aspecto anterior hasta que se migren.
-const HD_CHAPTERS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-// De día, la luz ambiente sale del cielo de la prueba (quarry_01); de noche, del cielo de cada escena
-const HD_DAY_CHAPTERS = [3, 5, 6, 8];
-// Estilo pintado en todos los capítulos. ?estilo=antes lo quita para comparar con el aspecto anterior
-const ESTILO = new URLSearchParams(location.search).get('estilo');
 /**
- * Estilo cómic (el elegido): de momento en Ferreries (capítulos 1 y 9); ?estilo=pintado lo quita.
- * ?estilo=comic lo pone en todos los capítulos, para ir migrándolos y comparar (ver docs/PLAN-estilo-comic.md).
+ * Perfil de luz de tebeo de cada capítulo (comic.ts, LOOK_LIGHT). Un capítulo que cambia de hora a mitad lo dice
+ * con level.mood ('day' / 'night') y las escenas que se montan aparte, con scene.userData.comicLook.
  */
-const COMIC_CHAPTERS = ESTILO === 'antes' || ESTILO === 'pintado' ? [] : ESTILO === 'comic' ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : [1, 9];
-const PAINT_CHAPTERS = ESTILO === 'antes' ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((n) => !COMIC_CHAPTERS.includes(n));
-/** Luz pintada de cada capítulo: tinte de las sombras, de lo que da el sol (o la luna) y del perfil de los personajes. */
-const PAINT_LIGHT: Record<number, [number, number, number]> = {
-  1: [0xc9c8f2, 0xfff0d4, 0xfff3cf], // Ferreries a las 11: sombras lavanda, sol de mediodía
-  2: [0xb6bae6, 0xfff4e6, 0xa9c4ff], // La piscinita: noche azul, luz de luna en el perfil
-  3: [0xc4cbe8, 0xfff2dc, 0xfff3d6], // Carretera al norte en octubre
-  4: [0xa89cf0, 0xfff0f6, 0xffc0e8], // Fito: noche de neón rosa
-  5: [0xc8b8e8, 0xffe6c4, 0xffe0b0], // Costa Brava a la hora dorada
-  6: [0xc9c8f2, 0xfff0d4, 0xfff3cf], // Sant Joan, de día
-  7: [0xb6bae6, 0xfff1e0, 0xb0c4ff], // Cena a escondidas, de noche
-  8: [0xc0b0e6, 0xffdcb4, 0xffd2a0], // El eclipse, sol bajo sobre el mar
-  9: [0xc9c8f2, 0xfff0d4, 0xfff3cf],
-};
-const NIGHT_CHAPTERS = [2, 4, 7];
-/** Etalonaje pintado: el de cada capítulo, más vivo, con filtro de óleo en el fondo, tinta y papel. */
-function paintGrade(n: number): Grade {
-  const base = GRADES[n] ?? NEUTRAL;
-  const night = NIGHT_CHAPTERS.includes(n);
-  if (n === 1 || n === 9) return { ...base, exposure: 1.06, saturation: 1.2, contrast: 1.02, tint: 0.12, bloom: 0.35, vignette: 0.22, paint: 0, ink: 0.3, paper: 0.012, lift: 0.025 };
-  return { ...base, saturation: base.saturation * 1.07, contrast: Math.min(base.contrast, 1.04), paint: 0, ink: night ? 0.25 : 0.3, paper: 0.012, lift: night ? 0.02 : 0.025 };
-}
-/**
- * Luz y etalonaje del capítulo. Un capítulo de noche con un rato de día (Barajas, en el de Fito) toma
- * para ese rato los del viaje por el norte.
- */
-function applyLook(n: number, paint: boolean, mood?: 'day' | 'night') {
-  const k = mood === 'day' && NIGHT_CHAPTERS.includes(n) ? 3 : n;
-  const pl = PAINT_LIGHT[k] ?? [0xc6c6ee, 0xffefd8, 0xfff2cc];
-  paintPalette.shadow.setHex(pl[0]);
-  paintPalette.light.setHex(pl[1]);
-  paintPalette.rim.setHex(pl[2]);
-  post.setGrade(paint ? paintGrade(k) : GRADES[k] ?? NEUTRAL, true);
-}
-let lookN = 0;
-let lookMood: 'day' | 'night' | undefined;
-function setHd(on: boolean, n = 0) {
-  comic.on = on && COMIC_CHAPTERS.includes(n);
-  const paint = on && PAINT_CHAPTERS.includes(n);
-  paintStyle.value = paint ? 1 : 0;
-  lookN = n;
+const LOOKS: Record<number, ComicLook> = { 1: 'dia', 2: 'noche', 3: 'dia', 4: 'noche', 5: 'dia', 6: 'dia', 7: 'noche', 8: 'dia', 9: 'dia' };
+function setLook(n: number, look: ComicLook = LOOKS[n] ?? 'dia') {
+  comic.look = look;
   lookMood = undefined;
-  hdSurfaces.value = on ? 1 : 0;
-  hdEnvDefault.url = on && !comic.on && HD_DAY_CHAPTERS.includes(n) ? quarryHdr : null;
-  // AgX apaga los colores: el pintado va con ACES, más vivo
-  renderer.toneMapping = on && !paint ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = paint ? 0.98 : on ? 1.05 : 0.92;
-  // (el cómic, con una curva de tono suave: el sol del capítulo es fuerte y sin ella se quemaba)
-  if (comic.on) {
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
-  }
-  // la interfaz (bocadillos, cartuchos, avisos) se dibuja como un tebeo en los capítulos de cómic
-  document.documentElement.classList.toggle('comic-mode', comic.on);
-  if (on) applyLook(n, paint);
-  else post.setGrade(NEUTRAL, true);
+  // (una curva de tono suave: el sol del capítulo es fuerte y sin ella se quemaba)
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.95;
 }
+let lookMood: 'day' | 'night' | undefined;
+// La interfaz (bocadillos, cartuchos, avisos) se dibuja siempre como un tebeo
+document.documentElement.classList.add('comic-mode');
 
 // Ambiente sonoro de fondo: casi todo fuera (Marc pondrá canciones). Solo queda el mar suave del eclipse;
 // el público del concierto de Fito lo pone el propio capítulo
@@ -477,7 +366,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   const stale = () => epochAt !== buildEpoch;
   // Personajes glTF y texturas (suele estar desde la portada)
   card.progress(0.08, 'Cargando personajes');
-  if (HD_CHAPTERS.includes(n) && !hdAssets) await rigLoading;
+  if (!hdAssets) await rigLoading;
   if (stale()) return;
   // La canción se descodifica mientras tanto: así suena desde el primer segundo
   card.progress(0.2, 'Preparando la canción');
@@ -519,15 +408,14 @@ async function buildLevel(n: number, card: ChapterLoading) {
   };
   camera.fov = camera.userData.baseFov ?? camera.fov;
   camera.updateProjectionMatrix();
-  setHd(HD_CHAPTERS.includes(n), n);
+  setLook(n);
   const t0 = performance.now();
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   level = me;
   quizScore.right = quizScore.total = 0;
   extras = new ChapterExtras(n, data, () => save(data));
-  // Pintado y sombras en el mismo paso: si se dibujara antes sin ellos, cada shader se compilaría dos veces
-  if (paintStyle.value) paintScene(me.threeScene);
-  if (comic.on) comicScene(me.threeScene);
+  // Cómic y sombras en el mismo paso: si se dibujara antes sin ellos, cada shader se compilaría dos veces
+  comicScene(me.threeScene);
   applyShadows(me.threeScene);
   console.info(`[juego] capítulo ${n} montado en ${Math.round(performance.now() - t0)} ms`);
   if (TEST) closeDebug = debugPanel(me.debug());
@@ -542,14 +430,9 @@ async function buildLevel(n: number, card: ChapterLoading) {
   } catch (e) {
     console.warn('[gfx] compilar', e);
   }
-  // Unos fotogramas detrás del rótulo: suben las texturas, se hacen las sombras y se compila el postproceso
-  // (también el desenfoque de los diálogos, que si no daba un tirón la primera vez que alguien hablaba)
+  // Unos fotogramas detrás del rótulo: suben las texturas, se hacen las sombras y se compila la pasada de tinta
   card.progress(0.86, 'Últimos retoques');
-  post.dofAmount = 1;
-  post.cinematic = 1;
-  warmPost = true;
   await settle(MOBILE ? 7000 : 4000);
-  warmPost = false;
   if (level !== me) return;
   loadingLevel = false;
   levelAt = performance.now();
@@ -557,8 +440,6 @@ async function buildLevel(n: number, card: ChapterLoading) {
   card.done();
 }
 let buildEpoch = 0;
-/** Durante la carga: fuerza el desenfoque de diálogo para que su shader quede compilado. */
-let warmPost = false;
 
 function tryFullscreen() {
   const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
@@ -603,7 +484,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, post, juice, cinema, beacon, input, stage, camWorld,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */
@@ -642,8 +523,8 @@ if (stats) {
 // dt suavizado: un fotograma que llega tarde (GC, carga de textura) no provoca un salto brusco,
 // pero el tiempo total se conserva para que nada vaya a cámara lenta.
 let smoothDt = 1 / 60;
-let paintedScene: THREE.Scene | null = null;
-let paintedAt = 0;
+let comicScened: THREE.Scene | null = null;
+let comicAt = 0;
 let debt = 0;
 // Modo prueba: bucle de reserva por mensajes (no lo frena el navegador) mientras la página está oculta
 let keepAlive = false;
@@ -690,15 +571,9 @@ function frame() {
     if (uiRoot.classList.contains('filming') !== filming) uiRoot.classList.toggle('filming', filming);
     // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
     beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
-    // Diálogos en modo cine: bandas, un leve acercamiento y desenfoque del fondo enfocando a quien habla
+    // Diálogos en modo cine: un leve acercamiento
     const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
-    post.cinematic = warmPost ? 1 : cine < 0.01 ? 0 : cine;
-    // Solo se desenfoca el fondo cuando habla alguien que está en escena (el narrador no)
-    const speaker = (talking && lastSpeaker.at > performance.now() - 300) || cinema.hasFocus;
-    if (cinema.hasFocus) post.focus.copy(cinema.focus);
-    else if (speaker) post.focus.copy(lastSpeaker.pos);
-    post.dofAmount = warmPost ? 1 : post.dofAmount + ((speaker ? 1 : 0) - post.dofAmount) * Math.min(1, dt * 4);
     juice.apply(camera, dt, cine * 0.1);
     // Primeros pasos: en cuanto se controla a Azul por primera vez en el capítulo 1
     if (tutoPending && !tutorial && levelN === 1 && !frozen && !talking && performance.now() - walkerActiveAt < 300) {
@@ -721,23 +596,25 @@ function frame() {
     // Capítulos que pasan del día a la noche: cambia la luz al cambiar de sitio
     if (level && !mission && level.mood !== lookMood) {
       lookMood = level.mood;
-      applyLook(lookN, paintStyle.value > 0, lookMood);
+      comicMood(level.threeScene, lookMood === 'day' ? 'dia' : lookMood === 'night' ? 'noche' : comic.look);
     }
-    // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pinta
-    if ((paintStyle.value || comic.on) && (sc !== paintedScene || clock.elapsedTime - paintedAt > 1)) {
-      paintedScene = sc;
-      paintedAt = clock.elapsedTime;
-      if (comic.on) comicScene(paintedScene);
-      else paintScene(paintedScene);
+    // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pasa a cómic
+    if (sc !== comicScened || clock.elapsedTime - comicAt > 1) {
+      comicScened = sc;
+      comicAt = clock.elapsedTime;
+      comicScene(sc);
     }
-    draw(sc, dt);
+    draw(sc);
     if (shotReq) {
       shotReq(canvas.toDataURL('image/png'));
       shotReq = null;
     }
-    if (shaderFailed) safeStep();
+    if (shaderFailed) {
+      shaderFailed = false;
+      console.warn('[gfx] algún shader no compila en este dispositivo');
+    }
   } else {
-    draw(idle, dt);
+    draw(idle);
   }
   avg = avg * 0.95 + dt * 1000 * 0.05;
   const now = clock.elapsedTime;
@@ -747,10 +624,7 @@ function frame() {
     if (avg > 19.5 && ratio > 1) {
       ratio = Math.max(1, ratio - 0.15);
       lastDrop = now;
-    } else if (avg > 21 && post.aoEnabled) post.aoEnabled = false; // primero fuera la oclusión ambiental
-    // Mejor 30 fps con el estilo pintado que 40 sin él: solo se quita si de verdad no llega
-    else if (avg > 40 && quality.post) quality.post = false;
-    else if (avg > 46 && quality.shadows) dropShadows();
+    } else if (avg > 46 && quality.shadows) dropShadows();
     else if (avg < 17.4 && ratio < Math.min(maxRatio, MOBILE ? 1.5 : 2) && now - lastDrop > 10) ratio = Math.min(maxRatio, ratio + 0.15);
     if (renderer.getPixelRatio() !== ratio) {
       renderer.setPixelRatio(ratio);
@@ -759,7 +633,7 @@ function frame() {
   }
   if (stats) {
     const i = renderer.info.render;
-    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}${quality.grain && quality.env && quality.kind === 'standard' ? '' : ' · seguro ' + (quality.grain ? 'G' : '-') + (quality.env ? 'E' : '-') + (quality.shadows ? 'S' : '-') + quality.kind[0].toUpperCase()}`;
+    stats.textContent = `${(1000 / avg).toFixed(0)} fps · ${i.calls} draws · ${(i.triangles / 1000).toFixed(0)}k tris · x${ratio}${quality.shadows ? '' : ' · sin sombras'}`;
   }
 }
 renderer.setAnimationLoop(frame);

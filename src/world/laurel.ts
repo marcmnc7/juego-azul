@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Sky, Sun, glowTexture, toon, hdSurfaces } from '../core/gfx';
+import { Sky, Sun, glowTexture, toon } from '../core/gfx';
 import { TownHD } from './hd/townHD';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } from '../entities/models';
@@ -50,7 +50,7 @@ export class Laurel {
     const m = new Merger();
     const L = 44;
     const W = 3.4; // media anchura de la calle
-    const hd = hdSurfaces.value ? new TownHD() : null;
+    const hd = new TownHD();
     // Suelo de losa, con su canal de agua en medio y los bordes de piedra
     if (hd) hd.b.box(hd.M.slabs, [0, -0.05, 0], [W * 2, 0.1, L * 2], { tile: 2 });
     else m.add(G.box, 0x6b6660, 0, -0.05, 0, 0, 0, 0, W * 2, 0.1, L * 2);

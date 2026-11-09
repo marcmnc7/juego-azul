@@ -3,7 +3,6 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
 import { airOf } from '../core/air';
-import { comic } from '../core/comic';
 import type { Person, PersonLook, PersonMode } from './models';
 import womanUrl from '../assets/chars/woman.glb';
 import womanMhUrl from '../assets/chars/woman_mh.glb';
@@ -548,7 +547,7 @@ function denimMean() {
 function womanTexture(src: THREE.Texture, look: PersonLook) {
   // En el cómic la ropa va en color liso: los pliegues y el sombreado de la foto, casi fuera (la luz la pone
   // el sombreado en tres tonos)
-  const cm = comic.on;
+  const cm = true;
   const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : jeansOn(look) ? 'J' : ''}${look.nude ? 'n' : ''}${cm ? 'C' : ''}`;
   const jeans = jeansOn(look);
   const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : jeans ? waistMask() : null;

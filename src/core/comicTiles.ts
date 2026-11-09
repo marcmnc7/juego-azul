@@ -324,6 +324,344 @@ function doors(g: CanvasRenderingContext2D) {
   }
 }
 
+// ---------- Superficies del decorado (ver comicSurfaces.ts) ----------
+// Mismo trazo que las de arriba, para lo que se construye con Merger: asfalto, hierba, adoquín, piedra seca…
+
+/** Manchas planas (sin degradado) de un tono un poco más claro u oscuro. */
+function patches(g: CanvasRenderingContext2D, base: THREE.Color, r: () => number, n: number, k: number, size: number) {
+  for (let i = 0; i < n; i++) {
+    const x = r() * S, y = r() * S, rx = size * (0.5 + r()), ry = size * (0.3 + r() * 0.5), rot = r() * 3;
+    const kk = k > 1 ? 1 + (k - 1) * (0.5 + r() * 0.5) : 1 - (1 - k) * (0.5 + r() * 0.5);
+    wrapDraw((dx, dy) => {
+      g.fillStyle = css(base, kk);
+      g.beginPath();
+      g.ellipse(x + dx, y + dy, rx, ry, rot, 0, Math.PI * 2);
+      g.fill();
+    });
+  }
+}
+function dots(g: CanvasRenderingContext2D, base: THREE.Color, r: () => number, n: number, k: number, r0: number, r1: number) {
+  for (let i = 0; i < n; i++) {
+    const x = r() * S, y = r() * S, rad = r0 + r() * (r1 - r0);
+    wrapDraw((dx, dy) => {
+      g.fillStyle = css(base, k);
+      g.beginPath();
+      g.arc(x + dx, y + dy, rad, 0, Math.PI * 2);
+      g.fill();
+    });
+  }
+}
+/** Grieta o trazo corto de plumilla. */
+function strokes(g: CanvasRenderingContext2D, r: () => number, n: number, style: string, w: number, len: number, segs = 3) {
+  for (let i = 0; i < n; i++) {
+    const pts = [[r() * S, r() * S]];
+    const a0 = r() * Math.PI * 2;
+    for (let s = 0; s < segs; s++) {
+      const a = a0 + (r() - 0.5) * 1.2;
+      pts.push([pts[s][0] + Math.cos(a) * len * (0.5 + r()), pts[s][1] + Math.sin(a) * len * (0.5 + r())]);
+    }
+    wrapDraw((dx, dy) => {
+      g.strokeStyle = style;
+      g.lineWidth = w;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(pts[0][0] + dx, pts[0][1] + dy);
+      for (const q of pts.slice(1)) g.lineTo(q[0] + dx, q[1] + dy);
+      g.stroke();
+    });
+  }
+}
+
+function asphalt(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0x9a9a9e);
+  g.fillStyle = css(base);
+  g.fillRect(0, 0, S, S);
+  patches(g, base, r, 9, 0.93, 60);
+  patches(g, base, r, 5, 1.05, 40);
+  dots(g, base, r, 420, 0.82, 0.8, 1.8);
+  dots(g, base, r, 160, 1.12, 0.8, 1.5);
+  strokes(g, r, 5, INK, 1.4, 14);
+}
+
+function grass(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0x7fb05a);
+  g.fillStyle = css(base);
+  g.fillRect(0, 0, S, S);
+  patches(g, base, r, 10, 0.88, 55);
+  patches(g, base, r, 8, 1.08, 45);
+  // matas: una uve de tres trazos, oscura, y alguna clara al lado
+  for (let i = 0; i < 260; i++) {
+    const x = r() * S, y = r() * S, h = 6 + r() * 7, dark = r() < 0.75;
+    wrapDraw((dx, dy) => {
+      g.strokeStyle = dark ? css(base, 0.55) : css(base, 1.2);
+      g.lineWidth = dark ? 1.6 : 1.3;
+      g.lineCap = 'round';
+      g.beginPath();
+      for (const a of [-0.45, 0, 0.45]) {
+        g.moveTo(x + dx, y + dy);
+        g.lineTo(x + dx + Math.sin(a) * h, y + dy - Math.cos(a) * h);
+      }
+      g.stroke();
+    });
+  }
+}
+
+/** Baldosas cuadradas en retícula (barro, gres). */
+function pavers(g: CanvasRenderingContext2D, base: THREE.Color, n: number, seed: number) {
+  const r = rng(seed), w = S / n;
+  g.fillStyle = INK;
+  g.fillRect(0, 0, S, S);
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const c = base.clone().multiplyScalar(0.93 + r() * 0.12);
+      const X0 = i * w + 1.8, Y0 = j * w + 1.8, X1 = (i + 1) * w - 1.8, Y1 = (j + 1) * w - 1.8;
+      g.fillStyle = css(c);
+      g.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+      g.fillStyle = css(c, 1.07);
+      g.fillRect(X0, Y0, X1 - X0, w * 0.06);
+      g.fillStyle = css(c, 0.85);
+      g.fillRect(X0, Y1 - w * 0.08, X1 - X0, w * 0.08);
+      if (r() < 0.2) {
+        const px = X0 + 8 + r() * (w - 20), py = Y0 + 8 + r() * (w - 20);
+        g.strokeStyle = css(c, 0.66);
+        g.lineWidth = 1.3;
+        g.beginPath();
+        g.moveTo(px, py);
+        g.lineTo(px + 6 + r() * 8, py + (r() - 0.5) * 8);
+        g.stroke();
+      }
+    }
+}
+
+/** Adoquín: piedras redondeadas en hileras al tresbolillo. */
+function cobble(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0xb4b0a8);
+  const rows = 10, rh = S / rows;
+  g.fillStyle = '#4a4038';
+  g.fillRect(0, 0, S, S);
+  for (let row = 0; row < rows; row++) {
+    const cols = 9, cw = S / cols, off = (row % 2) * cw * 0.5;
+    for (let c = 0; c < cols; c++) {
+      const col = base.clone().multiplyScalar(0.88 + r() * 0.2);
+      const x = c * cw + off + 2.5, y = row * rh + 2.5, w = cw - 5 - r() * 3, h = rh - 5 - r() * 2;
+      wrapDraw((dx) => {
+        g.fillStyle = css(col);
+        g.beginPath();
+        g.roundRect(x + dx, y, w, h, 9);
+        g.fill();
+        g.fillStyle = css(col, 1.1);
+        g.fillRect(x + dx + 6, y + 3, w - 12, h * 0.16);
+        g.strokeStyle = INK;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.roundRect(x + dx, y, w, h, 9);
+        g.stroke();
+      });
+    }
+  }
+}
+
+function sand(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0xe2cfa2);
+  g.fillStyle = css(base);
+  g.fillRect(0, 0, S, S);
+  patches(g, base, r, 8, 0.95, 70);
+  dots(g, base, r, 700, 0.84, 0.7, 1.4);
+  dots(g, base, r, 250, 1.08, 0.7, 1.3);
+  // ondas del viento: trazos suaves y largos
+  for (let i = 0; i < 9; i++) {
+    const y = r() * S, x = r() * S, len = 60 + r() * 90;
+    wrapDraw((dx, dy) => {
+      g.strokeStyle = css(base, 0.86);
+      g.lineWidth = 1.4;
+      g.beginPath();
+      g.moveTo(x + dx, y + dy);
+      g.bezierCurveTo(x + dx + len * 0.3, y + dy - 5, x + dx + len * 0.6, y + dy + 5, x + dx + len, y + dy);
+      g.stroke();
+    });
+  }
+}
+
+/** Piedra seca (paret seca menorquina): piedras irregulares con mucha junta oscura y contorno gordo. */
+function drystone(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0xc4b8a2);
+  g.fillStyle = '#4a3f36';
+  g.fillRect(0, 0, S, S);
+  const n = 8, cell = S / n;
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const cx = (i + 0.5) * cell + (r() - 0.5) * cell * 0.3, cy = (j + 0.5) * cell + (r() - 0.5) * cell * 0.25;
+      const k = 6 + Math.floor(r() * 3);
+      const pts: [number, number][] = [];
+      for (let p = 0; p < k; p++) {
+        const a = (p / k) * Math.PI * 2 + (r() - 0.5) * 0.4;
+        const rad = cell * (0.42 + r() * 0.16);
+        pts.push([cx + Math.cos(a) * rad * 1.15, cy + Math.sin(a) * rad * 0.85]);
+      }
+      const col = base.clone().multiplyScalar(0.84 + r() * 0.24);
+      wrapDraw((dx, dy) => {
+        g.beginPath();
+        g.moveTo(pts[0][0] + dx, pts[0][1] + dy);
+        for (const q of pts.slice(1)) g.lineTo(q[0] + dx, q[1] + dy);
+        g.closePath();
+        g.fillStyle = css(col);
+        g.fill();
+        g.strokeStyle = INK;
+        g.lineWidth = 3;
+        g.stroke();
+        g.fillStyle = css(col, 1.1);
+        g.beginPath();
+        g.ellipse(cx + dx - cell * 0.06, cy + dy - cell * 0.14, cell * 0.2, cell * 0.06, 0, 0, Math.PI * 2);
+        g.fill();
+      });
+    }
+}
+
+/** Persiana de lamas: franjas horizontales con su luz arriba, sombra abajo y una línea de tinta. */
+function louvre(g: CanvasRenderingContext2D) {
+  const base = new THREE.Color(0xd8d8d8), n = 16, h = S / n;
+  for (let i = 0; i < n; i++) {
+    const y = i * h;
+    g.fillStyle = css(base);
+    g.fillRect(0, y, S, h);
+    g.fillStyle = css(base, 1.12);
+    g.fillRect(0, y, S, h * 0.25);
+    g.fillStyle = css(base, 0.7);
+    g.fillRect(0, y + h * 0.72, S, h * 0.28);
+    g.fillStyle = INK;
+    g.fillRect(0, y + h - 2, S, 2);
+  }
+}
+
+function bark(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0xa08060);
+  g.fillStyle = css(base);
+  g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 46; i++) {
+    const x = r() * S, len = 50 + r() * 120, y = r() * S;
+    wrapDraw((dx, dy) => {
+      g.strokeStyle = r() < 0.7 ? css(base, 0.6) : INK;
+      g.lineWidth = 1.6 + r() * 1.4;
+      g.beginPath();
+      g.moveTo(x + dx, y + dy);
+      g.bezierCurveTo(x + dx + 4, y + dy + len * 0.3, x + dx - 4, y + dy + len * 0.6, x + dx + 2, y + dy + len);
+      g.stroke();
+    });
+  }
+}
+
+/** Lienzo de 512 px con el dibujo de una superficie del decorado (o null si va lisa). */
+export function comicSurfaceCanvas(kind: string): HTMLCanvasElement | null {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d', { willReadFrequently: true })!;
+  switch (kind) {
+    case 'wash': wash(g, new THREE.Color(0xffffff), 41); break;
+    case 'roof': tiles(g, new THREE.Color(0xd0703f), 31); break;
+    case 'mares': blocks(g, new THREE.Color(0xeee3cf), 11, 70, 150, 23, 3); break;
+    case 'stone': blocks(g, new THREE.Color(0xc9c2b4), 7, 80, 190, 61, 4); break;
+    case 'asphalt': asphalt(g, 71); break;
+    case 'wood': wood(g, new THREE.Color(0xc08a55), 53); break;
+    case 'grass': grass(g, 83); break;
+    case 'louvre': louvre(g); break;
+    case 'slabs': blocks(g, new THREE.Color(0xe6d3aa), 6, 95, 165, 11, 4); break;
+    case 'terracotta': pavers(g, new THREE.Color(0xd9a07a), 6, 91); break;
+    case 'sand': sand(g, 97); break;
+    case 'cobble': cobble(g, 101); break;
+    case 'drystone': drystone(g, 107); break;
+    case 'bark': bark(g, 113); break;
+    default: return null;
+  }
+  return cv;
+}
+
+// ---------- Luces y cielo de noche ----------
+
+let halo: THREE.CanvasTexture | null = null;
+/**
+ * Luz de tebeo (farolas, ventanas, luciérnagas de noche): núcleo blanco con su aro de tinta y dos anillos planos
+ * del color de la luz alrededor, en vez de un halo borroso. El color del material la tiñe.
+ */
+export function comicHaloTexture() {
+  if (halo) return halo;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d')!;
+  const ring = (rad: number, fill: string) => {
+    g.fillStyle = fill;
+    g.beginPath();
+    g.arc(64, 64, rad, 0, Math.PI * 2);
+    g.fill();
+  };
+  ring(62, 'rgba(255,255,255,0.16)');
+  ring(44, 'rgba(255,255,255,0.32)');
+  ring(20, '#ffffff');
+  g.strokeStyle = 'rgba(43,34,51,0.9)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(64, 64, 21, 0, Math.PI * 2);
+  g.stroke();
+  halo = new THREE.CanvasTexture(cv);
+  halo.colorSpace = THREE.SRGBColorSpace;
+  return halo;
+}
+
+let moon: THREE.CanvasTexture | null = null;
+/** Luna de tebeo: disco crema plano con tres cráteres, contorno de tinta y un anillo de luz plano. */
+export function comicMoonTexture() {
+  if (moon) return moon;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const g = cv.getContext('2d')!;
+  g.fillStyle = 'rgba(255,248,220,0.14)';
+  g.beginPath();
+  g.arc(128, 128, 124, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#fbf3d6';
+  g.beginPath();
+  g.arc(128, 128, 70, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#e6dab0';
+  for (const [x, y, rad] of [[104, 108, 15], [150, 140, 11], [122, 160, 8]]) {
+    g.beginPath();
+    g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#2b2233';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(128, 128, 70, 0, Math.PI * 2);
+  g.stroke();
+  moon = new THREE.CanvasTexture(cv);
+  moon.colorSpace = THREE.SRGBColorSpace;
+  return moon;
+}
+
+let star: THREE.CanvasTexture | null = null;
+/** Estrella de cinco puntas dibujada, con contorno de tinta. El color del material la tiñe. */
+export function comicStarTexture() {
+  if (star) return star;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d')!;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rad = i % 2 ? 24 : 56;
+    g.lineTo(64 + Math.cos(a) * rad, 66 + Math.sin(a) * rad);
+  }
+  g.closePath();
+  g.fillStyle = '#ffffff';
+  g.fill();
+  g.strokeStyle = '#2b2233';
+  g.lineWidth = 6;
+  g.lineJoin = 'round';
+  g.stroke();
+  star = new THREE.CanvasTexture(cv);
+  star.colorSpace = THREE.SRGBColorSpace;
+  return star;
+}
+
 let bulb: THREE.CanvasTexture | null = null;
 /** Bombilla de tebeo: círculo de color con su aro de tinta y un brillo, en vez de un halo borroso. */
 export function comicBulbTexture() {

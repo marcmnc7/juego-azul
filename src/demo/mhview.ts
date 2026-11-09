@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import quarryHdr from '../assets/env/quarry.hdr';
 import { buildMH, exportGLB, fuseCrowd } from './mhbuild';
 
 // EJEMPLO: el hombre de MakeHuman montado, en reposo, para revisarlo (?v=1 cara) y exportarlo (window.__export).
@@ -17,11 +15,6 @@ const sun = new THREE.DirectionalLight(0xfff2e0, 2.6);
 sun.position.set(2, 4, 3);
 sun.castShadow = true;
 scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x998877, 0.8));
-new RGBELoader().load(quarryHdr, (hdr) => {
-  hdr.mapping = THREE.EquirectangularReflectionMapping;
-  scene.environment = new THREE.PMREMGenerator(renderer).fromEquirectangular(hdr).texture;
-  scene.environmentIntensity = 0.5;
-});
 const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 48), new THREE.MeshStandardMaterial({ color: 0xcfc6b8 }));
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;

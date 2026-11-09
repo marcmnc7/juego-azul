@@ -6,8 +6,7 @@ import { SIDE } from '../data/story';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
-import { Sky, Sun, toon, glowTexture, vibrate, applyShadows, makeSea, hdSurfaces } from '../core/gfx';
-import sunsetHdr from '../assets/env/venice_sunset.hdr';
+import { Sky, Sun, toon, glowTexture, vibrate, applyShadows, makeSea } from '../core/gfx';
 import { ECLIPSE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { POT_CORE, G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, woodChair, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
@@ -236,7 +235,7 @@ export class LevelEclipse implements Level {
   }
 
   private daySky() {
-    return { top: 0x3f86d8, mid: 0x8ec4ee, bottom: 0xd9ecf7, clouds: { count: 8, tint: 0xffffff }, physical: { sunDir: new THREE.Vector3(0.4, 0.9, 0.6) } };
+    return { top: 0x3f86d8, mid: 0x8ec4ee, bottom: 0xd9ecf7, clouds: { count: 8, tint: 0xffffff } };
   }
 
   /** Sentados en la roca: rodillas arriba, pies apoyados y las manos en la piedra, un poco por detrás. */
@@ -483,7 +482,7 @@ export class LevelEclipse implements Level {
     const dusk = { top: 0x2b4a8a, mid: 0xf0985a, bottom: 0xffcf8a, clouds: { count: 5, tint: 0xffc9a0 }, stars: 600, avoid: this.sunDir };
     const sc = this.newScene(dusk, 0xf3b27a, 0xffc98a, 1.8, this.sunDir.clone().setY(0.35));
     // Con la calidad de la prueba: luz de un atardecer fotografiado, que se apaga con el eclipse
-    if (hdSurfaces.value) sc.userData.hdri = { url: sunsetHdr, intensity: 0.9, sunDir: this.sunDir.clone().setY(0.35), hemi: 0.4 };
+    sc.userData.hemiScale = 0.4;
     this.sky.group.traverse((o) => {
       if ((o as THREE.Points).isPoints) this.stars = o as THREE.Points;
     });
@@ -1506,7 +1505,6 @@ export class LevelEclipse implements Level {
     );
     this.hemi.intensity = 0.75 - dark * 0.5;
     this.sun.light.intensity = 1.8 * (1 - dark * 0.9);
-    if (this.scene.userData.hdri) this.scene.environmentIntensity = 0.9 * (1 - dark * 0.92);
     if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = dark;
     // La corona solo se ve en la totalidad (antes la tapa el brillo del sol) y gira muy despacio
     const cm = this.corona.material as THREE.SpriteMaterial;

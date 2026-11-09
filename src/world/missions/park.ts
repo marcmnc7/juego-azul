@@ -55,7 +55,7 @@ class ParkMission implements Mission {
     const sc = this.scene;
     const sunDir = new THREE.Vector3(0.5, 0.6, -0.4);
     sc.fog = new THREE.Fog(0xd8e8f0, 40, 160);
-    this.sky = new Sky({ top: 0x4a86cc, mid: 0x9cc8ea, bottom: 0xe6f0f2, sun: { color: 0xfff0c8, dir: sunDir, size: 40 }, clouds: { count: 8, tint: 0xffffff }, physical: { sunDir } });
+    this.sky = new Sky({ top: 0x4a86cc, mid: 0x9cc8ea, bottom: 0xe6f0f2, sun: { color: 0xfff0c8, dir: sunDir, size: 40 }, clouds: { count: 8, tint: 0xffffff } });
     sc.add(this.sky.group);
     sc.add(new THREE.HemisphereLight(0xdcecff, 0x5a7a3a, 0.9));
     this.sun = new Sun(sc, 0xfff2d8, 2.0, sunDir, 26);

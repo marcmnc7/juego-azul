@@ -1,361 +1,47 @@
 import * as THREE from 'three';
-import { Sky as SkyMesh } from 'three/examples/jsm/objects/Sky.js';
-import { loadHdriSync } from './assets';
-import { paintStyle } from './paint';
-import { comic } from './comic';
 import { comicCloudTextures } from './comicTiles';
-import { Water } from 'three/examples/jsm/objects/Water.js';
-import { surfaceTexture, surfMeans, SURF_SCALE, SURF_STRENGTH, SURF_NORMAL, hdSurfaceTexture, hdNormalTexture, hdMeans, hdRoughMeans, type Surf } from './surfaces';
+import type { Surf } from './surfaces';
 
-// Aspecto visual común: materiales físicos (PBR) iluminados por el propio cielo de cada nivel,
-// sombras suaves, bloom en las luces, cielo con nubes y un ajuste de calidad que baja solo si el
-// móvil no llega. (El antiguo estilo "dibujo animado" con contornos se puede recuperar con
-// quality.outlines = true.)
+// Aspecto visual común (estilo cómic: ver comic.ts): materiales del decorado, sombras, cielo con nubes de tebeo,
+// agua de tebeo, confeti, fuegos y el ajuste de calidad que baja solo si el móvil no llega.
 
-/** Móvil o tableta: menos sombras, sin oclusión ambiental y mapas de sombra más pequeños. */
+/** Móvil o tableta: menos sombras y mapas de sombra más pequeños. */
 export const MOBILE =
   typeof navigator !== 'undefined' &&
   (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900));
 
 export const quality = {
+  /** Sombras de verdad (si el móvil no llega se quitan y quedan las "manchas" bajo cada cosa). */
   shadows: true,
-  outlines: false,
-  post: true,
-  /** Grano procedural en las superficies. Se apaga solo si el shader no compila en el dispositivo. */
-  grain: true,
-  /** Luz de entorno a partir del cielo (PMREM). */
-  env: true,
-  /**
-   * Tipo de material. 'standard' es PBR; algunos Mac con M1 (ANGLE Metal) lo pintan invisible, y
-   * entonces se usa 'phong' (con brillos) o, como último recurso, 'lambert'.
-   */
-  kind: 'standard' as 'standard' | 'phong' | 'lambert',
 };
 
 /**
- * Calidad de la prueba de concepto (texturas fotográficas con relieve y rugosidad). Es un uniforme
- * compartido por todos los materiales: se enciende al entrar en un capítulo que la usa y se apaga
- * al salir, sin recompilar nada. De momento, solo el capítulo 1.
+ * Material base del decorado. Al montar la escena, el cómic lo pasa a tres tonos y le pone encima el dibujo de
+ * tebeo de su superficie (surf: encalado, teja, losas…; ver comicSurfaces.ts). Los de Merger la llevan por vértice.
  */
-export const hdSurfaces = { value: 0 };
-const HD_STRENGTH = SURF_STRENGTH.map((v, i) => ([1, 2, 3, 10].includes(i) ? 1 : v));
-// Las texturas HD solo se crean si algún capítulo HD llega a dibujarse
-const hdColorUniform = { get value() { return hdSurfaces.value ? hdSurfaceTexture() : surfaceTexture(); } };
-const hdNormalUniform = { get value() { return hdSurfaces.value ? hdNormalTexture() : surfaceTexture(); } };
-
-/** Material base de todo el juego: PBR mate (nombre heredado de cuando era toon). */
 export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: Surf; leafy?: boolean }) {
   const { surf, leafy, ...params } = allParams;
-  if (quality.kind !== 'standard') {
-    const { roughness, metalness: _m, envMapIntensity: _e, ...rest } = params;
-    void _m, void _e;
-    if (quality.kind === 'lambert') return new THREE.MeshLambertMaterial(rest as THREE.MeshLambertMaterialParameters) as unknown as THREE.MeshStandardMaterial;
-    // Phong imitando la rugosidad: mate casi sin brillo, el agua muy brillante
-    const smooth = 1 - (roughness ?? 0.82);
-    const ph = new THREE.MeshPhongMaterial({
-      shininess: 4 + 90 * smooth * smooth,
-      specular: new THREE.Color().setScalar(0.03 + 0.3 * smooth * smooth),
-      ...(rest as THREE.MeshPhongMaterialParameters),
-    });
-    ph.userData.surf = surf ?? 0;
-    addGrain(ph);
-    return ph as unknown as THREE.MeshStandardMaterial;
-  }
   const m = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0, ...params });
   m.userData.surf = surf ?? 0;
   m.userData.leafy = !!leafy;
-  addGrain(m);
-  return m;
-}
-
-/**
- * Variación sutil de color y rugosidad según la posición en el mundo (ruido en dos escalas), para
- * que ninguna superficie sea un color plano: paredes con manchas, suelo con desgaste, ropa con textura.
- */
-export function addGrain(m: THREE.Material, amount = 0.14) {
-  // (el estilo cómic los convierte igual: este sombreador solo añade el grano y la foto de la superficie)
   m.userData.grain = true;
-  m.onBeforeCompile = (sh) => {
-    if (!quality.grain) return;
-    const leafy = !!m.userData.leafy;
-    sh.uniforms.surfTex = { value: surfaceTexture() };
-    sh.uniforms.surfScale = { value: SURF_SCALE.map((v) => 1 / v) };
-    sh.uniforms.surfStrength = { value: SURF_STRENGTH };
-    sh.uniforms.surfMean = { value: surfMeans };
-    sh.uniforms.uSurf = { value: (m.userData.surf as number) ?? 0 };
-    sh.uniforms.uHD = hdSurfaces;
-    sh.uniforms.hdTex = hdColorUniform;
-    sh.uniforms.hdNrm = hdNormalUniform;
-    sh.uniforms.hdMean = { value: hdMeans };
-    sh.uniforms.hdRoughMean = { value: hdRoughMeans };
-    sh.uniforms.hdStrength = { value: HD_STRENGTH };
-    sh.uniforms.hdNormal = { value: SURF_NORMAL };
-    sh.uniforms.uPaintG = paintStyle;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying highp vec3 vGrainPos;\nvarying vec3 vGrainN;\nattribute float surf;\nvarying float vSurf;')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          vGrainPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-          vGrainN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
-        #else
-          vGrainPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
-          vGrainN = normalize(mat3(modelMatrix) * objectNormal);
-        #endif
-        vSurf = surf;`,
-      );
-    sh.fragmentShader = sh.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        varying highp vec3 vGrainPos;
-        varying vec3 vGrainN;
-        varying float vSurf;
-        uniform highp sampler2DArray surfTex;
-        uniform float surfScale[16];
-        uniform float surfStrength[16];
-        uniform float surfMean[16];
-        uniform float uSurf;
-        uniform float uHD;
-        uniform highp sampler2DArray hdTex;
-        uniform highp sampler2DArray hdNrm;
-        uniform vec3 hdMean[16];
-        uniform float hdRoughMean[16];
-        uniform float hdStrength[16];
-        uniform float hdNormal[16];
-        uniform float uPaintG;
-        float gHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-        float gNoise(vec3 x) {
-          vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
-          return mix(mix(mix(gHash(i), gHash(i + vec3(1,0,0)), f.x), mix(gHash(i + vec3(0,1,0)), gHash(i + vec3(1,1,0)), f.x), f.y),
-                     mix(mix(gHash(i + vec3(0,0,1)), gHash(i + vec3(1,0,1)), f.x), mix(gHash(i + vec3(0,1,1)), gHash(i + vec3(1,1,1)), f.x), f.y), f.z);
-        }`,
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        float gN = gNoise(vGrainPos * 0.6) * 0.6 + gNoise(vGrainPos * 4.0) * 0.3 + gNoise(vGrainPos * 19.0) * 0.1;
-        diffuseColor.rgb *= 1.0 + (gN - 0.5) * ${(amount * 2).toFixed(3)};
-        // Textura de la superficie (encalado, teja, marès…) proyectada desde los tres ejes del mundo
-        int sFull = int(max(vSurf, uSurf) + 0.5);
-        // Metal (16) y cristal (17) no llevan foto: los hace su brillo
-        int sIdx = sFull > 15 ? 0 : sFull;
-        // (en una arista muy viva, la normal interpolada casi se anula: sin esto salían líneas blancas)
-        float gnL = length(vGrainN);
-        vec3 gnU = gnL > 1e-3 ? vGrainN / gnL : vec3(0.0, 1.0, 0.0);
-        vec3 bw = pow(abs(gnU), vec3(4.0));
-        bw /= (bw.x + bw.y + bw.z + 1e-4);
-        vec3 sp = vGrainPos * surfScale[sIdx];
-        float sl = float(sIdx);
-        bool hdOn = uHD > 0.5 && sIdx > 0;
-        if (hdOn) {
-          // Foto en color (Sponza) proyectada en los tres ejes, normalizada a su color medio para
-          // respetar el color elegido de cada pared
-          // (el estilo pintado apenas la suaviza: el detalle de la foto es lo que hace real una pared)
-          float pb = uPaintG * 0.35;
-          vec3 sdc = texture(hdTex, vec3(sp.zy, sl), pb).rgb * bw.x
-                   + texture(hdTex, vec3(sp.xz, sl), pb).rgb * bw.y
-                   + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl), pb).rgb * bw.z;
-          vec2 mpc = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
-          vec3 smc = texture(hdTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mpc * 0.23 + 0.37, sl)).rgb;
-          diffuseColor.rgb *= mix(vec3(1.0), (sdc * 0.7 + smc * 0.3) / hdMean[sIdx], hdStrength[sIdx] * (1.0 - uPaintG * 0.05));
-        } else if (sIdx > 0) {
-          float sd = texture(surfTex, vec3(sp.zy, sl)).r * bw.x
-                   + texture(surfTex, vec3(sp.xz, sl)).r * bw.y
-                   + texture(surfTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).r * bw.z;
-          // Segunda muestra a escala grande (y girada) en el plano dominante: rompe la repetición
-          // y da las manchas grandes que tienen las superficies reales
-          vec2 mp = bw.y > 0.5 ? sp.xz : (bw.x > bw.z ? sp.zy : sp.xy);
-          float sm = texture(surfTex, vec3(mat2(0.8, -0.6, 0.6, 0.8) * mp * 0.23 + 0.37, sl)).r;
-          diffuseColor.rgb *= mix(1.0, (sd * 0.65 + sm * 0.35) / surfMean[sIdx], surfStrength[sIdx]);
-        }
-        ${
-          leafy
-            ? `// Hojas de verdad: la copa es una cáscara recortada con la silueta de cada hoja; por los huecos
-        // se ve la cara interior, en sombra. En el borde hay más huecos, y de lejos, ninguno
-        if (hdOn && sIdx == 7) {
-          float la = texture(hdTex, vec3(sp.zy, sl)).a * bw.x + texture(hdTex, vec3(sp.xz, sl)).a * bw.y + texture(hdTex, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
-          float dV = length(vViewPosition);
-          float nv = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-          float cut = mix(0.74, 0.34, smoothstep(0.08, 0.75, nv)) * (1.0 - smoothstep(24.0, 75.0, dV));
-          if (la < cut) discard;
-          if (!gl_FrontFacing) diffuseColor.rgb *= 0.4;
-        }`
-            : ''
-        }
-        // Cristal: refleja el cielo como un espejo oscuro
-        if (sFull == 17) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.58, 0.68), 0.55);
-        // Suciedad y humedad al pie de las paredes, y desgaste en las aristas altas: lo que hace que
-        // un muro encalado parezca de verdad y no una caja
-        float gWall = 1.0 - abs(vGrainN.y);
-        float gFoot = (1.0 - smoothstep(0.0, 0.75, vGrainPos.y)) * step(-0.3, vGrainPos.y) * gWall;
-        diffuseColor.rgb *= 1.0 - gFoot * (0.16 + gN * 0.12);
-        float gStreak = gWall * smoothstep(0.55, 0.9, gNoise(vec3(vGrainPos.x * 3.0 + vGrainPos.z * 3.0, vGrainPos.y * 0.25, 0.0)));
-        diffuseColor.rgb *= 1.0 - gStreak * 0.06;
-        // Lo que mira hacia abajo recibe menos cielo (aleros, balcones, copas por debajo)
-        diffuseColor.rgb *= 1.0 - clamp(-vGrainN.y, 0.0, 1.0) * 0.2;
-        if (sIdx == 7) {
-          // Copas de árbol y matas: por dentro y por debajo, sombra; arriba, hojas al sol con motas
-          diffuseColor.rgb *= mix(0.5, 1.1, smoothstep(-0.7, 0.9, vGrainN.y));
-          float lf = gNoise(vGrainPos * 11.0) * 0.6 + gNoise(vGrainPos * 27.0) * 0.4;
-          diffuseColor.rgb *= 0.78 + lf * 0.42;
-        }`,
-      )
-      .replace(
-        '#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor + (gN - 0.5) * 0.25, 0.04, 1.0);
-        if (hdOn) {
-          float rS = texture(hdNrm, vec3(sp.zy, sl)).a * bw.x
-                   + texture(hdNrm, vec3(sp.xz, sl)).a * bw.y
-                   + texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).a * bw.z;
-          // (con un mínimo: piedra y tierra no dan destellos blancos)
-          roughnessFactor = clamp(roughnessFactor * mix(1.0, rS / hdRoughMean[sIdx], 0.8), roughnessFactor < 0.35 ? 0.2 : 0.55, 1.0);
-        }
-        if (sFull == 16) roughnessFactor = 0.34 + (gN - 0.5) * 0.22;
-        if (sFull == 17) roughnessFactor = 0.07;`,
-      )
-      .replace(
-        '#include <metalnessmap_fragment>',
-        `#include <metalnessmap_fragment>
-        if (sFull == 16) metalnessFactor = 0.88;
-        if (sFull == 17) metalnessFactor = 0.72;`,
-      )
-      .replace(
-        '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
-        if (hdOn) {
-          // Relieve triplanar (mezcla "whiteout"): juntas, grietas y teja con volumen de verdad
-          vec3 nW = normalize(inverseTransformDirection(normal, viewMatrix));
-          float ns = hdNormal[sIdx] * (1.0 - uPaintG * 0.1);
-          vec3 tx = texture(hdNrm, vec3(sp.zy, sl)).xyz * 2.0 - 1.0;
-          vec3 ty = texture(hdNrm, vec3(sp.xz, sl)).xyz * 2.0 - 1.0;
-          vec3 tz = texture(hdNrm, vec3(sp.xy * vec2(1.0, -1.0), sl)).xyz * 2.0 - 1.0;
-          tx.xy *= ns; ty.xy *= ns; tz.xy *= ns; tz.y = -tz.y;
-          tx = vec3(tx.xy + nW.zy, abs(tx.z) * nW.x);
-          ty = vec3(ty.xy + nW.xz, abs(ty.z) * nW.y);
-          tz = vec3(tz.xy + nW.xy, abs(tz.z) * nW.z);
-          vec3 nb = tx.zyx * bw.x + ty.xzy * bw.y + tz.xyz * bw.z;
-          // (si sale nula o inválida, se queda la normal de la malla: es lo que brillaba como grietas blancas)
-          if (dot(nb, nb) > 1e-6) normal = normalize((viewMatrix * vec4(normalize(nb), 0.0)).xyz);
-        }`,
-      );
-  };
-  m.customProgramCacheKey = () => (quality.grain ? 'grain' + amount + 's' + (m.userData.surf ?? 0) + (m.userData.leafy ? 'L' : '') : 'plain');
-}
-
-/**
- * Luz ambiente realista: convierte el cielo del nivel (cúpula, sol, nubes, estrellas) en un mapa
- * de entorno prefiltrado, para que cada material recoja el color del cielo de forma física.
- */
-let pmrem: THREE.PMREMGenerator | null = null;
-/** Sentido del giro del HDRI (comprobado con una esfera espejo). */
-export let ENV_ROT_SIGN = 1;
-export function setEnvRotSign(v: number) {
-  ENV_ROT_SIGN = v;
-}
-export function setEnvRenderer(r: THREE.WebGLRenderer) {
-  pmrem = new THREE.PMREMGenerator(r);
-}
-/** Cielo HDRI para los capítulos de día con la calidad de la prueba que no ponen uno propio. */
-export const hdEnvDefault: { url: string | null } = { url: null };
-
-function sunDirOf(scene: THREE.Scene) {
-  let dir: THREE.Vector3 | undefined;
-  scene.traverse((o) => {
-    const l = o as THREE.DirectionalLight;
-    if (!dir && l.isDirectionalLight) dir = l.position.clone().sub(l.target.position).normalize();
-  });
-  return dir;
-}
-
-export function applyEnvironment(scene: THREE.Scene) {
-  if (!pmrem || !quality.env || scene.userData.envDone) return;
-  scene.userData.envDone = true;
-  let sky: THREE.Object3D | null = null;
-  scene.traverse((o) => {
-    if (o.userData.sky) sky = o;
-  });
-  // Capítulos con la calidad de la prueba: luz de un cielo real fotografiado (HDRI), girado para
-  // que su sol caiga donde está el sol de la escena
-  const hd = (scene.userData.hdri ??
-    (hdSurfaces.value && hdEnvDefault.url && !scene.userData.noHdri ? { url: hdEnvDefault.url, intensity: 0.85, sunDir: sunDirOf(scene), hemi: 0.4 } : undefined)) as
-    | { url: string; intensity?: number; sunDir?: THREE.Vector3; hemi?: number }
-    | undefined;
-  const h = hd ? loadHdriSync(hd.url) : null;
-  if (hd && h) {
-    // Se guarda el render target para poder liberarlo entero al salir (unos MB de vídeo por escena)
-    const envRT = pmrem.fromEquirectangular(h.texture);
-    scene.userData.envRT = envRT;
-    scene.environment = envRT.texture;
-    scene.environmentIntensity = hd.intensity ?? 0.75;
-    if (hd.sunDir) scene.environmentRotation.y = ENV_ROT_SIGN * (Math.atan2(hd.sunDir.z, hd.sunDir.x) - Math.atan2(h.sun.z, h.sun.x));
-    // Con un cielo real dando la luz ambiente, la hemisférica casi sobra y el sol manda (como en la prueba)
-    scene.traverse((o) => {
-      const hl = o as THREE.HemisphereLight;
-      if (hl.isHemisphereLight) hl.intensity *= hd.hemi ?? 0.3;
-    });
-    return;
-  }
-  const tmp = new THREE.Scene();
-  if (sky) {
-    const c = (sky as THREE.Object3D).clone();
-    c.position.set(0, 0, 0);
-    tmp.add(c);
-  } else tmp.background = scene.background instanceof THREE.Color ? scene.background : new THREE.Color(0x888899);
-  const rt = pmrem.fromScene(tmp, 0.03, 0.1, 1000);
-  scene.userData.envRT = rt;
-  scene.environment = rt.texture;
-  scene.environmentIntensity = 0.9;
-  // Con el cielo aportando luz, las luces hemisféricas sobran en parte
-  scene.traverse((o) => {
-    const h = o as THREE.HemisphereLight;
-    if (h.isHemisphereLight) h.intensity *= 0.55;
-  });
-}
-
-/** Quita la luz de entorno de una escena (modo seguro) y devuelve las luces hemisféricas a su valor. */
-export function removeEnvironment(scene: THREE.Scene) {
-  if (!scene.userData.envDone || !scene.environment) return;
-  scene.environment = null;
-  scene.traverse((o) => {
-    const h = o as THREE.HemisphereLight;
-    if (h.isHemisphereLight) h.intensity /= 0.55;
-  });
-}
-
-// Contorno: se dibuja la cara trasera inflada a lo largo de la normal.
-const outlineMats = new Map<number, THREE.MeshBasicMaterial>();
-export function outlineMat(thickness = 0.025) {
-  let m = outlineMats.get(thickness);
-  if (!m) {
-    m = new THREE.MeshBasicMaterial({ color: 0x2a1a2e, side: THREE.BackSide });
-    m.onBeforeCompile = (sh) => {
-      sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\n transformed += normal * ${thickness.toFixed(4)};`);
-    };
-    m.customProgramCacheKey = () => 'outline' + thickness;
-    outlineMats.set(thickness, m);
-  }
   return m;
 }
 
-/** Añade contorno a todas las mallas de un objeto (personajes, animales, coche). */
-export function addOutline(obj: THREE.Object3D, thickness = 0.025) {
-  if (!quality.outlines) return obj;
-  const meshes: THREE.Mesh[] = [];
-  obj.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (m.isMesh && !m.userData.blob && !m.userData.outline && !(m.material as THREE.Material).transparent) meshes.push(m);
+/**
+ * Reparte la luz de ambiente de la escena una sola vez: sus hemisféricas propias se multiplican por
+ * scene.userData.hemiScale (0,55 si no dice nada; Ferreries, 0,35). Es lo que antes hacía la luz de entorno del
+ * cielo (HDRI) y es parte del aspecto de referencia del capítulo 1. La hemisférica del cómic no se toca: su
+ * intensidad es la del perfil (comic.ts, LOOK_LIGHT).
+ */
+export function settleAmbient(scene: THREE.Scene) {
+  if (scene.userData.ambientDone) return;
+  scene.userData.ambientDone = true;
+  const k = (scene.userData.hemiScale as number | undefined) ?? 0.55;
+  scene.traverse((o) => {
+    const h = o as THREE.HemisphereLight;
+    if (h.isHemisphereLight && !h.userData.comicHemi) h.intensity *= k;
   });
-  for (const m of meshes) {
-    const o = new THREE.Mesh(m.geometry, outlineMat(thickness));
-    o.userData.outline = true;
-    o.castShadow = false;
-    o.receiveShadow = false;
-    m.add(o);
-  }
-  return obj;
 }
 
 /** Marca qué proyecta y recibe sombra. Llamar una vez construida la escena. */
@@ -367,13 +53,12 @@ export function applyShadows(scene: THREE.Object3D) {
       m.visible = !quality.shadows;
       return;
     }
-    if (m.userData.outline) return;
     const mat = m.material as THREE.Material;
     if (mat.transparent || (mat as THREE.MeshBasicMaterial).isMeshBasicMaterial) return;
     m.receiveShadow = !m.userData.noReceive;
     m.castShadow = !m.userData.noCast;
   });
-  if ((scene as THREE.Scene).isScene) applyEnvironment(scene as THREE.Scene);
+  if ((scene as THREE.Scene).isScene) settleAmbient(scene as THREE.Scene);
 }
 
 /** Sol con sombra que sigue a un punto (la jugadora o el coche). */
@@ -427,110 +112,19 @@ export function glowTexture() {
   return glowTex;
 }
 
-let cloudTex: THREE.Texture | null = null;
-function cloudTexture() {
-  if (cloudTex) return cloudTex;
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 128;
-  const ctx = c.getContext('2d')!;
-  const blobs = [[70, 80, 40], [120, 60, 52], [170, 78, 40], [100, 88, 34], [150, 92, 34], [200, 92, 26], [50, 96, 24]];
-  for (const [x, y, r] of blobs) {
-    const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.7, 'rgba(255,255,255,0.8)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  cloudTex = new THREE.CanvasTexture(c);
-  cloudTex.colorSpace = THREE.SRGBColorSpace;
-  return cloudTex;
-}
-
-let paintedCloudTex: THREE.Texture[] | null = null;
-/**
- * Nubes de acuarela para el estilo pintado: cúmulos con la panza plana en sombra lavanda, la cima al sol
- * en blanco cálido y el borde deshilachado a pinceladas. Tres formas distintas para que no se repitan.
- */
-function paintedCloudTextures() {
-  if (paintedCloudTex) return paintedCloudTex;
-  let s = 11;
-  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  paintedCloudTex = [0, 1, 2].map(() => {
-    const W = 512, H = 256;
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d')!;
-    const base = H * 0.72;
-    const blobs: [number, number, number][] = [];
-    const n = 6 + Math.floor(rnd() * 4);
-    for (let i = 0; i < n; i++) {
-      const x = W * (0.18 + 0.64 * (i / (n - 1))) + (rnd() - 0.5) * 30;
-      const mid = 1 - Math.abs(i / (n - 1) - 0.5) * 1.6;
-      const r = 34 + mid * 46 + rnd() * 18;
-      blobs.push([x, base - r * (0.45 + rnd() * 0.3), r]);
-    }
-    const blob = (dy: number, grow: number, col: string, alpha: number) => {
-      for (const [x, y, r] of blobs) {
-        const gr = g.createRadialGradient(x, y + dy, r * 0.1, x, y + dy, r * grow);
-        gr.addColorStop(0, `rgba(${col},${alpha})`);
-        gr.addColorStop(0.72, `rgba(${col},${alpha * 0.92})`);
-        gr.addColorStop(1, `rgba(${col},0)`);
-        g.fillStyle = gr;
-        g.beginPath();
-        g.arc(x, y + dy, r * grow, 0, Math.PI * 2);
-        g.fill();
-      }
-    };
-    // Sombra (panza), luego la parte al sol, desplazada hacia arriba
-    blob(10, 1.05, '196,190,226', 0.95);
-    blob(-8, 0.9, '255,250,238', 0.95);
-    blob(-18, 0.55, '255,255,250', 0.7);
-    // Panza plana: se borra lo que cae por debajo de la base, con borde irregular
-    g.globalCompositeOperation = 'destination-out';
-    for (let x = 0; x < W; x += 6) {
-      const y = base + Math.sin(x * 0.05) * 3 + rnd() * 4;
-      g.fillRect(x, y, 7, H - y);
-    }
-    // Pinceladas que deshilachan el borde
-    g.globalCompositeOperation = 'destination-out';
-    g.lineCap = 'round';
-    for (let i = 0; i < 70; i++) {
-      g.strokeStyle = `rgba(0,0,0,${0.15 + rnd() * 0.25})`;
-      g.lineWidth = 2 + rnd() * 5;
-      const x = rnd() * W, y = rnd() * base;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + 20 + rnd() * 40, y + (rnd() - 0.5) * 6);
-      g.stroke();
-    }
-    g.globalCompositeOperation = 'source-over';
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  });
-  return paintedCloudTex;
-}
-
 export interface SkyOptions {
   top: number;
   mid: number;
   bottom: number;
   sun?: { color: number; dir: THREE.Vector3; size?: number };
-  /** painted: nubes de acuarela (estilo pintado) en vez de las redondas. */
-  clouds?: { count: number; tint: number; painted?: boolean };
-  /** Dirección que las nubes pintadas no deben tapar (un sol que no es el del cielo, como el del eclipse). */
+  /** Nubes de tebeo (ver comicTiles.ts). */
+  clouds?: { count: number; tint: number };
+  /** Dirección que las nubes no deben tapar (un sol que no es el del cielo, como el del eclipse). */
   avoid?: THREE.Vector3;
   stars?: number;
-  /** Cielo físico (dispersión atmosférica) en lugar del degradado, con el sol en esa dirección. */
-  physical?: { sunDir: THREE.Vector3; turbidity?: number; rayleigh?: number };
 }
 
-/** Cúpula de cielo con degradado, sol con halo, nubes y estrellas. Sigue a la cámara. */
+/** Cúpula de cielo con degradado, sol con halo, nubes de tebeo y estrellas. Sigue a la cámara. */
 export class Sky {
   group = new THREE.Group();
   private colors: THREE.BufferAttribute;
@@ -548,33 +142,12 @@ export class Sky {
     const dome = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
     dome.renderOrder = -10;
     this.group.add(dome);
-    // En el estilo pintado el cielo es siempre de acuarela: degradado y nubes pintadas, sin dispersión física.
-    // Y la noche no es negra sino azul ultramar (como en las películas de Ghibli)
-    const painted = paintStyle.value > 0;
+    // La noche de tebeo no es negra sino azul ultramar: una cúpula casi negra se aclara
     const night = (hex: number, deep: number) => {
       const c = new THREE.Color(hex);
-      return painted && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.12 ? c.lerp(new THREE.Color(deep), 0.7).getHex() : hex;
+      return c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.12 ? c.lerp(new THREE.Color(deep), 0.7).getHex() : hex;
     };
     this.setColors(night(opts.top, 0x0b1846), night(opts.mid, 0x1c2f6e), night(opts.bottom, 0x34407e));
-    if (opts.physical && !painted) {
-      const ph = new SkyMesh();
-      ph.scale.setScalar(410);
-      const u = ph.material.uniforms;
-      u.turbidity.value = opts.physical.turbidity ?? 3.2;
-      u.rayleigh.value = opts.physical.rayleigh ?? 1.4;
-      u.mieCoefficient.value = 0.004;
-      u.mieDirectionalG.value = 0.82;
-      u.sunPosition.value.copy(opts.physical.sunDir).normalize();
-      // El cielo de three.js está pensado para una exposición de 0.5: lo bajamos aquí para que no queme
-      // ni el cielo ni la luz de entorno que se saca de él
-      const sm = ph.material as THREE.ShaderMaterial;
-      sm.fragmentShader = sm.fragmentShader.replace('gl_FragColor = vec4( retColor, 1.0 );', 'gl_FragColor = vec4( retColor * 0.42, 1.0 );');
-      ph.material.depthWrite = false;
-      (ph.material as THREE.ShaderMaterial).fog = false;
-      ph.renderOrder = -10;
-      dome.visible = false;
-      this.group.add(ph);
-    }
 
     if (opts.sun) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: opts.sun.color, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -584,24 +157,21 @@ export class Sky {
       this.group.add(s);
     }
     if (opts.clouds) {
-      // (en el cómic, nubes de tebeo con su contorno; van igual que las pintadas: opacas, bajas y grandes)
-      const painted = comic.on ? comicCloudTextures() : opts.clouds.painted || paintStyle.value > 0 ? paintedCloudTextures() : null;
+      // Nubes de tebeo con su contorno: opacas, bajas y no muy grandes (una nube enorme encima del pueblo pesa mucho)
+      const maps = comicCloudTextures();
       for (let i = 0; i < opts.clouds.count; i++) {
-        const map = painted ? painted[i % painted.length] : cloudTexture();
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: opts.clouds.tint, fog: false, depthWrite: false, transparent: true, opacity: painted ? 1 : 0.9 }));
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: maps[i % maps.length], color: opts.clouds.tint, fog: false, depthWrite: false, transparent: true, opacity: 1 }));
         let a = (i / opts.clouds.count) * Math.PI * 2 + Math.random() * 0.4;
-        // Las pintadas son opacas: ninguna delante del sol (en el eclipse tapaban justo el momento)
+        // Son opacas: ninguna delante del sol (en el eclipse tapaban justo el momento)
         const keepClear = opts.sun?.dir ?? opts.avoid;
-        if (painted && keepClear) {
+        if (keepClear) {
           const sa = Math.atan2(keepClear.z, keepClear.x);
           const off = Math.atan2(Math.sin(a - sa), Math.cos(a - sa));
           if (Math.abs(off) < 0.6) a = sa + (off < 0 ? -0.6 : 0.6) - off * 0.2;
         }
         const r = 300 + Math.random() * 60;
-        // Las pintadas, más bajas y más grandes: cúmulos de verano sobre los tejados
-        sp.position.set(Math.cos(a) * r, (painted ? 32 : 50) + (comic.on ? 25 : 0) + Math.random() * (painted ? 55 : 70), Math.sin(a) * r);
-        // (las de tebeo, más pequeñas: con contorno, una nube enorme encima del pueblo pesa mucho)
-        const w = ((painted ? 130 : 90) + Math.random() * 90) * (comic.on ? 0.6 : 1);
+        sp.position.set(Math.cos(a) * r, 57 + Math.random() * 55, Math.sin(a) * r);
+        const w = (130 + Math.random() * 90) * 0.6;
         sp.scale.set(w, w / 2, 1);
         sp.renderOrder = -8;
         sp.userData.a = a;
@@ -619,7 +189,8 @@ export class Sky {
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.8, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.9 }));
+      // (sin escribir profundidad: si no, la pasada de tinta las rodeaba de negro)
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff6dc, size: 1.8, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.9, depthWrite: false }));
       pts.renderOrder = -9;
       this.group.add(pts);
     }
@@ -828,102 +399,93 @@ export function vibrate(ms: number | number[]) {
   }
 }
 
-/** Mapa de normales del oleaje, dibujado en un canvas (suma de ondas) para no depender de imágenes. */
-let waveNormals: THREE.Texture | null = null;
-function waveNormalTexture() {
-  if (waveNormals) return waveNormals;
-  const N = 256;
-  const h = new Float32Array(N * N);
-  const waves: [number, number, number, number][] = [];
-  for (let i = 0; i < 14; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const k = 1 + Math.floor(Math.random() * (2 + i));
-    waves.push([Math.round(Math.cos(a) * k), Math.round(Math.sin(a) * k), 1 / (1 + i * 0.6), Math.random() * 6.28]);
-  }
-  for (let y = 0; y < N; y++)
-    for (let x = 0; x < N; x++) {
-      let v = 0;
-      for (const [kx, ky, amp, ph] of waves) v += amp * Math.sin(((kx * x + ky * y) / N) * Math.PI * 2 + ph);
-      h[y * N + x] = v;
-    }
-  const data = new Uint8Array(N * N * 4);
-  for (let y = 0; y < N; y++)
-    for (let x = 0; x < N; x++) {
-      const dx = h[y * N + ((x + 1) % N)] - h[y * N + ((x + N - 1) % N)];
-      const dy = h[((y + 1) % N) * N + x] - h[((y + N - 1) % N) * N + x];
-      const n = new THREE.Vector3(-dx * 2.2, -dy * 2.2, 1).normalize();
-      const i = (y * N + x) * 4;
-      data[i] = (n.x * 0.5 + 0.5) * 255;
-      data[i + 1] = (n.y * 0.5 + 0.5) * 255;
-      data[i + 2] = (n.z * 0.5 + 0.5) * 255;
-      data[i + 3] = 255;
-    }
-  const t = new THREE.DataTexture(data, N, N);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.generateMipmaps = true;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.needsUpdate = true;
-  waveNormals = t;
-  return t;
-}
+const WATER_VERT = /* glsl */ `
+varying vec3 vW;
+varying vec3 vN;
+#include <fog_pars_vertex>
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  vec4 mvPosition = viewMatrix * w;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+
+const WATER_FRAG = /* glsl */ `
+uniform vec3 uColor;
+uniform vec3 uEmissive;
+uniform float uTime, uAlpha, uNight, uStroke;
+varying vec3 vW;
+varying vec3 vN;
+#include <common>
+#include <fog_pars_fragment>
+float wh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main() {
+  vec3 V = normalize(cameraPosition - vW);
+  vec3 n = normalize(vN);
+  float facing = clamp(dot(n, V), 0.0, 1.0);
+  // tres bandas planas: hondo a los pies, medio y, rasante hacia el horizonte, el reflejo claro del cielo
+  vec3 deep = uColor * 0.82;
+  vec3 mid = uColor * 1.15 + 0.02;
+  // (de noche, el reflejo del cielo es azul oscuro: si no, el mar parecía un suelo claro)
+  vec3 far = uNight > 0.5 ? mix(uColor * 1.25 + 0.02, vec3(0.16, 0.22, 0.45), 0.25) : mix(uColor * 1.45 + 0.05, vec3(0.82, 0.9, 1.0), 0.3);
+  vec3 col = facing > 0.6 ? deep : facing > 0.25 ? mid : far;
+  col += uEmissive;
+  // reflejos: trazos blancos cortos que cambian a saltos (6 por segundo), como dibujados
+  float t = floor(uTime * 6.0) / 6.0;
+  vec2 q = vW.xz * vec2(0.55, 1.6) * uStroke + vec2(t * 0.35, t * 0.12);
+  vec2 cell = floor(q);
+  vec2 f = fract(q);
+  float on = step(0.8, wh(cell + floor(t * 1.5)));
+  float len = 0.2 + 0.45 * wh(cell + 7.1);
+  float stroke = on * step(abs(f.y - 0.5), 0.07) * step(abs(f.x - 0.5), len * 0.5);
+  stroke *= 1.0 - smoothstep(35.0, 110.0, length(cameraPosition - vW));
+  col = mix(col, uNight > 0.5 ? vec3(0.8, 0.86, 1.0) : vec3(1.0), stroke * (uNight > 0.5 ? 0.6 : 0.9));
+  // crestas de las olas de la malla (la piscina): línea blanca
+  float crest = smoothstep(0.1, 0.16, length(n.xz));
+  col = mix(col, vec3(0.95, 0.98, 1.0), crest * 0.85);
+  gl_FragColor = vec4(col, uAlpha);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
+}`;
 
 /**
- * Mar con reflejos del cielo, oleaje animado y brillo del sol (Water de three.js). En móviles que
- * bajan de calidad se queda en un plano PBR brillante. El plano se tumba girando la malla, así que
- * quien lo use solo debe tocar su posición.
+ * Mar, piscina o lago de tebeo: bandas de color plano según el ángulo, reflejos como trazos blancos que se mueven
+ * a saltos y, si la malla tiene olas (la piscina), sus crestas en blanco. El plano se tumba girando la malla, así
+ * que quien lo use solo debe tocar su posición. sunDir se conserva por compatibilidad (el agua de tebeo no lo usa).
  */
-export function makeSea(size: [number, number], color: number, sunDir: THREE.Vector3, opts: { night?: boolean; emissive?: number; alpha?: number; geometry?: THREE.BufferGeometry; ripples?: boolean } = {}) {
+export function makeSea(size: [number, number], color: number, _sunDir: THREE.Vector3, opts: { night?: boolean; emissive?: number; alpha?: number; geometry?: THREE.BufferGeometry; ripples?: boolean } = {}) {
   const geo = opts.geometry ?? new THREE.PlaneGeometry(size[0], size[1]);
-  let mesh: THREE.Mesh;
-  if (quality.kind === 'standard' && quality.post) {
-    const w = new Water(geo, {
-      textureWidth: 256,
-      textureHeight: 256,
-      waterNormals: waveNormalTexture(),
-      sunDirection: sunDir.clone().normalize(),
-      sunColor: opts.ripples ? 0x10141c : opts.night ? 0x445577 : 0xfff2d8, // (en un vaso tan pequeño, los destellos del oleaje se veían como cuadraditos)
-      waterColor: color,
-      distortionScale: opts.night ? 0.8 : 1.3,
-      fog: true,
-      alpha: opts.alpha ?? 1,
-    });
-    // Agua mediterránea: el reflejo del cielo se tiñe del color del mar y nunca lo tapa del todo,
-    // así el mar se ve azul y profundo aunque el cielo del horizonte sea casi blanco
-    const wm = w.material as THREE.ShaderMaterial;
-    wm.fragmentShader = wm.fragmentShader.replace(
-      /vec3 albedo = mix\([^;]*;/,
-      `vec3 refl = reflectionSample * mix( vec3( 1.0 ), waterColor * 2.6 + 0.15, 0.7 );
-      float rfl = min( reflectance, 0.48 );
-      vec3 deep = waterColor * ( 0.5 + 0.7 * max( 0.0, dot( surfaceNormal, eyeDirection ) ) );
-      vec3 albedo = mix( ( sunColor * diffuseLight * 0.22 + deep ) * getShadowMask(), ( vec3( 0.03 ) + refl * 0.9 + reflectionSample * specularLight ), rfl );`,
-    );
-    if (opts.alpha !== undefined && opts.alpha < 1) {
-      wm.transparent = true;
-      wm.depthWrite = false;
-    }
-    // Olas de verdad (piscina): la pendiente de la malla se suma a la del oleaje fino
-    if (opts.ripples) {
-      wm.vertexShader = 'varying vec3 vRip;\n' + wm.vertexShader.replace('void main() {', 'void main() {\n vRip = normal;');
-      wm.fragmentShader = 'varying vec3 vRip;\n' + wm.fragmentShader.replace(
-        'vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );',
-        'vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) + vec3( vRip.x, 0.0, -vRip.y ) * 2.6 );',
-      );
-    }
-    const u = wm.uniforms;
-    u.size.value = 6;
-    let last = performance.now();
-    w.onBeforeRender = ((orig) =>
-      function (this: THREE.Mesh, ...args: unknown[]) {
-        const now = performance.now();
-        u.time.value += Math.min(0.1, (now - last) / 1000) * 0.6;
-        last = now;
-        (orig as (...a: unknown[]) => void).apply(this, args);
-      })(w.onBeforeRender);
-    mesh = w;
-  } else {
-    mesh = new THREE.Mesh(geo, toon({ color, emissive: opts.emissive ?? 0x06283a, roughness: 0.12, metalness: 0.12, ...(opts.alpha !== undefined && opts.alpha < 1 ? { transparent: true, opacity: opts.alpha, depthWrite: false } : {}) }));
-  }
+  const alpha = opts.alpha ?? 1;
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: WATER_VERT,
+    fragmentShader: WATER_FRAG,
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        uColor: { value: new THREE.Color(color) },
+        uEmissive: { value: new THREE.Color(opts.emissive ?? 0).multiplyScalar(0.6) },
+        uTime: { value: 0 },
+        uAlpha: { value: alpha },
+        uNight: { value: opts.night ? 1 : 0 },
+        // (en un vaso pequeño, los trazos más apretados)
+        uStroke: { value: opts.ripples ? 2.6 : 1 },
+      },
+    ]),
+    fog: true,
+    transparent: alpha < 1,
+    depthWrite: alpha >= 1,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  const t0 = performance.now();
+  mesh.onBeforeRender = () => {
+    mat.uniforms.uTime.value = (performance.now() - t0) / 1000;
+  };
   mesh.rotation.x = -Math.PI / 2;
   mesh.userData.noCast = true;
+  // (el agua no se dobla a mano alzada: la de la piscina mueve sus vértices cada fotograma)
+  mesh.userData.comicBent = true;
   return mesh;
 }

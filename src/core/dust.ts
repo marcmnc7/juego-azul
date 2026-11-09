@@ -41,9 +41,11 @@ class Dust {
         uniform vec3 color;
         varying float vA;
         void main() {
-          float a = texture2D(map, gl_PointCoord).a * vA;
-          if (a < 0.01) discard;
-          gl_FragColor = vec4(color, a);
+          // nubecilla de tebeo: disco plano color arena con su aro de tinta (sin degradado)
+          float r = length(gl_PointCoord - 0.5) * 2.0;
+          if (r > 1.0 || vA < 0.05) discard;
+          vec3 c = r > 0.8 ? vec3(0.17, 0.13, 0.2) : color;
+          gl_FragColor = vec4(c, min(1.0, vA * 1.6));
         }`,
       transparent: true,
       depthWrite: false,

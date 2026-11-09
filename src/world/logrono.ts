@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, Merger, streetLamp } from '../entities/models';
-import { hdSurfaces, makeSea } from '../core/gfx';
+import { makeSea } from '../core/gfx';
 import { ROOF_GEO } from './ferreries';
 import { TownHD } from './hd/townHD';
 
@@ -72,7 +72,7 @@ function poplar(m: Merger, x: number, z: number, h: number) {
 export function buildLogronoTown(z0: number) {
   const g = new THREE.Group();
   const m = new Merger();
-  const hd = hdSurfaces.value ? new TownHD() : null;
+  const hd = new TownHD();
 
   // Una casa: paredes, fachada con sus balcones hacia la orilla, alero, tejado a dos aguas y chimeneas
   let n = 0;
