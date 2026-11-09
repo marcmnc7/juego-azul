@@ -131,6 +131,15 @@ Comprobado: capturas de todas las fases; cap. 1 sin cambios visibles; caps. 4 y 
 | Luces «aleatorias», que no salen de ninguna lámpara (discos amarillos en la fachada del Imperi, en la de casa y en la terraza) | Fuera las luces sueltas (tres en el Born, la del patio, la del porche). La luz se dibuja donde hay lámpara: charco al pie de cada farola del Born y de la calle, abanico bajando por la fachada desde cada farol de pared (Imperi y farolillo de la puerta de casa), luz de las cristaleras en la terraza. La de la piscina se queda, más corta, dentro del vaso |
 | Al salir de la piscina, fundido a negro y vestidos | Salen desnudos y sin corte: Azul nada a la escalera, sube y sale al borde; Gas, detrás (`climbing`). De ahí, a pie a las toallas. Siguen sin ropa en las toallas y en las estrellas (la ropa se queda en el borde) |
 
+## Cuarta pasada (9-nov, noche): menos oscuridad y Marco Polo
+Decisión del dueño: **las lámparas no iluminan nada**. Ni farolas, ni faroles de pared, ni faros, ni la luz de la piscina dan luz o reflejo en ningún sitio: solo se ven encendidas (su halo). Se han quitado los charcos, los abanicos de luz (y sus funciones `comicLightPool` / `comicLightFan`), el haz de los faros y la luz de la piscina; las tablas de arriba que los mencionan quedan como historia.
+
+| Cambio | Cómo |
+|---|---|
+| Noche menos exagerada | Perfil `noche`: ambiente azul claro (0x9aa8e0 / 0x4a4a70, 1,0). Cap. 2: `hemiScale` 0,32 y luna 0xb8c8ff a 2,0. Se ve de noche, pero las fachadas en sombra se leen (antes casi negras) |
+| Grava | Guijarros más grandes, menos y con la tinta suave: de lejos era un ruido blanco y negro |
+| Minijuego: Marco Polo susurrado | Tras la luz de los padres, Gas propone jugar «flojito» y cierra los ojos. Cinco «¡Marco!» (bocadillo sobre Gas); hay 2,6 s para pulsar «🗣️ ¡Polo!» y Gas nada a ciegas hacia donde has contestado (si no contestas, va directo y más rápido). Nadar sin parar hace ruido: a los ~2,4 s te oye y va a por ti; hay que nadar a ratos. Si te alcanza, «¡PILLADA!» (una vez por «Marco»). Al final, el resultado en un bocadillo y en la pantalla del capítulo («Marco Polo: ni una vez 🏆» / «te pilló N veces 😘»), y a la escalera. Panel de prueba: «M · Marco Polo» |
+
 ## Falta (común a varios capítulos)
 - fps medidos en el móvil del dueño.
 - Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.

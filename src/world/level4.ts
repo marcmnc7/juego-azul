@@ -17,13 +17,12 @@ import { Particles } from '../entities/fx';
 import { PoolWater } from '../core/poolWater';
 import { Trail } from '../core/follow';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, fadeFlash, toast, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
 import { embrace, type Embrace } from '../entities/embrace';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
-import { comicLightFan } from '../core/comic';
 import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorcaHouse';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
@@ -89,6 +88,19 @@ const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
 const T_SNEAK_HINT = () => txt<string>('sneakHint', 'Llega a la piscina sin hacer ruido: despacio y por las losas');
 const T_LIGHT_ON = () => txt<string>('lightOn', '💡 Se ha encendido una luz arriba… ¡quieta!');
 const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga.' }]);
+// Marco Polo en la piscina, en voz baja (están los padres durmiendo)
+const MP_CALLS = 5;
+const MP = {
+  start: () => txt<string>('mpStart', '¿Jugamos a Marco Polo? Flojito, que duermen… 🤫'),
+  rules: () => txt<string>('mpRules', '🙈 Marco Polo: cuando Gas diga «Marco», contesta «Polo» y escápate. Nada a ratos: si chapoteas sin parar, te oye'),
+  marco: () => txt<string>('mpMarco', '¡Marco!'),
+  polo: () => txt<string>('mpPolo', 'Polo…'),
+  noAnswer: () => txt<string>('mpNoAnswer', '¡Eh, tramposa! Que hay que contestar 😜'),
+  heard: () => txt<string>('mpHeard', 'Te he oído… 👂'),
+  caught: () => txt<string>('mpCaught', '¡Te pillé! 😘'),
+  win: () => txt<string>('mpWin', 'Vale, vale… no te he pillado ni una 🏆'),
+  lost: (n: number) => txt<string>('mpLost', n === 1 ? 'Una vez te he pillado… y un beso 😘' : `${n} veces te he pillado 😘`),
+};
 // Sin ropa: el mismo muñeco con todo del color de la piel
 const nude = (l: PersonLook): PersonLook => ({ ...l, shirt: l.skin, pants: l.skin, shoes: l.skin, skirt: false, jumpsuit: false, shorts: false, stripes: undefined, nude: true });
 /** Altura de la cadera sobre los pies, para tumbar al que nada con la espalda a ras de agua. */
@@ -153,6 +165,13 @@ export class Level4 implements Level {
   private diveV = new THREE.Vector3();
   private diveStage = 0;
   private divePitch = 0;
+  /**
+   * Marco Polo: Gas con los ojos cerrados nada hacia donde has contestado «Polo» (o hacia donde te ha oído
+   * chapotear). calls: «Marco» dichos; next: lo que falta para el siguiente; ask: tiempo para contestar; noise:
+   * el chapoteo acumulado; cool: tras pillarte, cuenta hasta tres antes de seguir.
+   */
+  private mp: { calls: number; next: number; ask: number; target: THREE.Vector3 | null; fast: boolean; noise: number; cool: number; caught: number; caughtAt: number } | null = null;
+  private mpCaught = -1;
   /** Saliendo de la piscina por la escalera: tiempo y de dónde sale cada uno. */
   private climbT = 0;
   private climbFrom = { a: new THREE.Vector3(), g: new THREE.Vector3() };
@@ -198,26 +217,20 @@ export class Level4 implements Level {
     sc.add(this.sky.group);
     this.addMilkyWay();
     sc.add(new THREE.HemisphereLight(0x6f7fc0, 0x1a2030, 1.1));
-    // (poca luz de ambiente: la que dibuja es la luna)
-    sc.userData.hemiScale = 0.14;
-    // Luz de luna con sombras: fuerte, como el sol del capítulo 1, pero azul: lo iluminado sale frío y los charcos
-    // de las farolas, cálidos
-    this.sun = new Sun(sc, 0xa9bcff, 2.5, new THREE.Vector3(-0.5, 1, 0.4), 18);
+    sc.userData.hemiScale = 0.32;
+    // Luz de luna con sombras, azulada: de noche, pero que se vea todo
+    this.sun = new Sun(sc, 0xb8c8ff, 2.0, new THREE.Vector3(-0.5, 1, 0.4), 18);
     // (la luna va más baja que el sol y roza las paredes largas del pasillo: sin esto salían rayas de sombra)
     this.sun.light.shadow.normalBias = 0.16;
     this.sun.light.shadow.bias = -0.0012;
-    // Las luces, solo donde hay una lámpara (luces sueltas pintaban discos en paredes sin nada que los explicara):
-    // la del vaso de la piscina, que se queda dentro del agua; las cristaleras encendidas de la terraza y las
-    // farolas se dibujan con abanicos y charcos planos (comicLightFan / comicLightPool)
-    const poolLight = new THREE.PointLight(0x5fe3ff, 6, 3.6, 1.6);
-    poolLight.position.set((POOL.minX + POOL.maxX) / 2, -0.4, (POOL.minZ + POOL.maxZ) / 2);
-    sc.add(poolLight);
+    // (sin luces de lámpara: ni farolas, ni faros, ni la de la piscina dan luz a nada; el dueño las quiere solo
+    // encendidas, sin charcos ni manchas de luz en el suelo ni en las paredes)
 
     this.waterTex = this.causticTexture();
     this.buildHouse();
     this.fx = new Particles(sc);
 
-    const street = buildStreet(sc, { night: true });
+    const street = buildStreet(sc);
     this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
     this.colliders.push(...street.colliders, this.carBox);
@@ -227,12 +240,6 @@ export class Level4 implements Level {
     this.car.azul.visible = false;
     this.placeCar(CAR_FAR_X);
     sc.add(this.car.root);
-    // Faros encendidos: el haz en el suelo, delante del coche, que se abre hacia delante (un brillo flotando delante
-    // del morro, pasado a tebeo, era un disco con su aro que no se entendía)
-    const beams = comicLightFan(1.5, 3.6, 7, 0xfff3c0, 0.75);
-    beams.rotation.x = -Math.PI / 2;
-    beams.position.set(0, 0.06, 2.1);
-    this.car.root.add(beams);
 
     this.player = makePerson(MARGAUX_LOOK);
     this.player.root.position.copy(BAR_START);
@@ -464,13 +471,6 @@ export class Level4 implements Level {
     windows.add(G.box, 0xffd9a0, 2.2, 1.3, 0.03, 0, 0, 0, 2.4, 2.4, 0.05);
     const wm = new THREE.Mesh(windows.build(), glow);
     sc.add(wm);
-    // la luz de las cristaleras, en la terraza: un abanico plano que sale de cada una
-    for (const [x, w] of [[-2, 3.2], [2.2, 2.4]]) {
-      const f = comicLightFan(w, w + 1.4, 2.8, 0xffd9a0, 0.55);
-      f.rotation.x = -Math.PI / 2;
-      f.position.set(x, 0.05, 0.12);
-      sc.add(f);
-    }
     // Ventanas del dormitorio de los padres: a oscuras… hasta que hacéis ruido
     const up = new Merger();
     up.add(G.box, 0xffffff, -2.2, 4.6, 0.1, 0, 0, 0, 1.6, 1.4, 0.04);
@@ -486,16 +486,16 @@ export class Level4 implements Level {
     // (dibujada: guijarros de color plano con su contorno de tinta, como el resto del tebeo; el ruido de
     // puntitos de antes parecía una foto)
     const gravelTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#a49c8c';
+      ctx.fillStyle = '#b3ab9b';
       ctx.fillRect(0, 0, w, h);
       let sd = 5;
       const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
-      for (let i = 0; i < 520; i++) {
-        const x = rnd() * w, y = rnd() * h, r = 7 + rnd() * 7;
-        const v = 170 + rnd() * 50;
+      for (let i = 0; i < 340; i++) {
+        const x = rnd() * w, y = rnd() * h, r = 8 + rnd() * 8;
+        const v = 185 + rnd() * 35;
         ctx.fillStyle = `rgb(${v},${v - 6},${v - 18})`;
-        ctx.strokeStyle = '#4a3f35';
-        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = 'rgba(74,63,53,0.45)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.ellipse(x, y, r, r * (0.6 + rnd() * 0.3), rnd() * Math.PI, 0, Math.PI * 2);
         ctx.fill();
@@ -776,7 +776,17 @@ export class Level4 implements Level {
         h.setObjective('🫂');
         break;
       case 'swim':
-        h.setObjective(this.swimOut ? 'Sal por la escalera de la piscina' : this.freezeT > 0 ? NIGHT.freezeHint : 'Nada un rato con Marc 💙');
+        h.setObjective(
+          this.mp
+            ? this.mp.ask > 0
+              ? '🗣️ ¡Contesta «Polo»!'
+              : `🙈 Marco Polo (${this.mp.calls}/${MP_CALLS}): escápate nadando a ratos, sin chapotear`
+            : this.swimOut
+              ? 'Sal por la escalera de la piscina'
+              : this.freezeT > 0
+                ? NIGHT.freezeHint
+                : 'Nada un rato con Marc 💙',
+        );
         break;
       case 'toTowels':
         h.setObjective('Ve a las toallas, al otro lado de la piscina');
@@ -899,10 +909,9 @@ export class Level4 implements Level {
         vibrate([40, 40, 40]);
         this.updateHud();
       }
-      if (this.swimT > 12) {
-        this.swimOut = true;
-        this.updateHud();
-      }
+      // Pasada la luz de los padres, a jugar a Marco Polo; al acabar, a la escalera
+      if (this.mp) this.updateMarcoPolo(dt);
+      else if (this.freezeDone && this.freezeT <= 0 && this.swimT > 8) this.startMarcoPolo();
     }
 
     // Acción contextual
@@ -914,6 +923,9 @@ export class Level4 implements Level {
     } else if (!this.busy && this.phase === 'toPool' && this.nearPoolEdge()) {
       label = '👙 Fuera ropa';
       action = () => this.undress();
+    } else if (!this.busy && this.phase === 'swim' && this.mp && this.mp.ask > 0) {
+      label = '🗣️ ¡Polo!';
+      action = () => this.answerPolo();
     } else if (!this.busy && this.phase === 'swim' && this.swimOut && Math.hypot(pp.x - LADDER.x, pp.z - LADDER.z) < 1.7) {
       label = '🪜 Salir del agua';
       action = () => this.climbOut();
@@ -1092,7 +1104,9 @@ export class Level4 implements Level {
     const g = this.gas;
     if (!g.root.visible) return;
     if (this.phase !== 'swim') g.root.rotation.z = 0;
-    if (this.phase === 'swim') {
+    if (this.phase === 'swim' && this.mp) {
+      this.marcoGas(dt);
+    } else if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
       // (con la luz encendida, él también se queda quieto)
       if (this.freezeT <= 0) this.gasSwim += dt;
@@ -1478,6 +1492,111 @@ export class Level4 implements Level {
     }
   }
 
+  // ---------------- Marco Polo ----------------
+
+  private startMarcoPolo() {
+    this.mp = { calls: 0, next: 3.5, ask: 0, target: null, fast: false, noise: 0, cool: 0, caught: 0, caughtAt: -1 };
+    this.gas.eyes.scale.y = 0.12;
+    bark('Gas', MP.start());
+    toast(MP.rules());
+    this.updateHud();
+  }
+
+  private updateMarcoPolo(dt: number) {
+    const mp = this.mp!;
+    const p = this.player.root.position;
+    const g = this.gas.root.position;
+    // Nadar sin parar hace olas que se oyen; quieta, el agua se calma
+    mp.noise = THREE.MathUtils.clamp(mp.noise + dt * (this.swimMove > 0.12 ? 0.42 : -0.6), 0, 1);
+    if (mp.noise > 0.6 && Math.random() < dt * 2.5) this.fx.burst(this.v1.copy(g).setY(WATER_Y + 1.1), '👂', 1, 0.5, 0.6);
+    if (mp.cool > 0) mp.cool -= dt;
+    if (mp.noise >= 1 && mp.cool <= 0) {
+      mp.noise = 0.35;
+      mp.target = p.clone();
+      mp.fast = false;
+      bark('Gas', MP.heard());
+    }
+    if (mp.ask > 0) {
+      mp.ask -= dt;
+      if (mp.ask <= 0) {
+        // No has contestado: abre un ojo y va a por ti
+        mp.target = p.clone();
+        mp.fast = true;
+        bark('Gas', MP.noAnswer());
+        this.updateHud();
+      }
+    } else {
+      mp.next -= dt;
+      if (mp.next <= 0) {
+        if (mp.calls >= MP_CALLS) return this.finishMarcoPolo();
+        mp.calls++;
+        mp.ask = 2.6;
+        mp.next = 4.6 + Math.random() * 1.4;
+        bark('Gas', MP.marco());
+        audio.knock(0.2, 420, 0.12);
+        this.updateHud();
+      }
+    }
+    // A ciegas, pero si llega hasta ti, te pilla (una vez por cada «Marco»: luego vuelve a contar)
+    if (mp.cool <= 0 && mp.caughtAt < mp.calls && Math.hypot(p.x - g.x, p.z - g.z) < 0.85) {
+      mp.caughtAt = mp.calls;
+      mp.caught++;
+      mp.cool = 2.8;
+      mp.target = null;
+      mp.noise = 0;
+      mp.next = Math.max(mp.next, 3.2);
+      comicWord('¡PILLADA!', 'hit');
+      bark('Gas', MP.caught());
+      audio.splash();
+      vibrate(40);
+      this.pool.disturb((p.x + g.x) / 2, (p.z + g.z) / 2, 0.6, 0.5);
+    }
+  }
+
+  private answerPolo() {
+    const mp = this.mp!;
+    mp.ask = 0;
+    // Va hacia donde ha oído la voz (a oído: más o menos)
+    const p = this.player.root.position;
+    mp.target = new THREE.Vector3(p.x + (Math.random() - 0.5) * 0.9, 0, p.z + (Math.random() - 0.5) * 0.9);
+    mp.fast = false;
+    bark('Azul', MP.polo());
+    this.updateHud();
+  }
+
+  private finishMarcoPolo() {
+    const n = this.mp!.caught;
+    this.mpCaught = n;
+    this.mp = null;
+    this.gas.eyes.scale.y = 1;
+    bark('Gas', n === 0 ? MP.win() : MP.lost(n));
+    if (n === 0) comicWord('¡BIEN!', 'perfect');
+    this.swimOut = true;
+    this.updateHud();
+  }
+
+  /** Gas, con los ojos cerrados: nada hacia donde cree que estás y, si llega y no hay nadie, gira buscándote. */
+  private marcoGas(dt: number) {
+    const mp = this.mp!;
+    const g = this.gas;
+    const gp = g.root.position;
+    let move = 0;
+    if (mp.target && mp.cool <= 0) {
+      const dx = mp.target.x - gp.x, dz = mp.target.z - gp.z, d = Math.hypot(dx, dz);
+      if (d > 0.3) {
+        const st = Math.min(d, (mp.fast ? 1.35 : 0.95) * dt);
+        gp.x += (dx / d) * st;
+        gp.z += (dz / d) * st;
+        faceTo(g.root, Math.atan2(dx, dz), dt, 3);
+        move = 0.6;
+      } else mp.target = null;
+    } else g.root.rotation.y += dt * 0.5;
+    gp.x = THREE.MathUtils.clamp(gp.x, POOL.minX + 0.5, POOL.maxX - 0.5);
+    gp.z = THREE.MathUtils.clamp(gp.z, POOL.minZ + 0.5, POOL.maxZ - 0.5);
+    this.swimPose(g, move, dt);
+    g.eyes.scale.y = 0.12;
+  }
+
   /**
    * Por la escalera de la piscina, sin cortes y tal cual estáis (desnudos: la ropa se queda en el borde): Azul nada
    * hasta la escalera, sube y sale al borde; Gas, detrás. Luego, a pie hasta las toallas.
@@ -1666,7 +1785,7 @@ export class Level4 implements Level {
           this.phase = 'done';
           audio.ambience(0);
           const stars = 1 + (this.misses <= 6 ? 1 : 0) + (this.playTime < 240 ? 1 : 0);
-          this.onComplete({ stars, stats: [['Estrellas unidas', '10/10 ✨'], ['Casi os pillan', this.caught ? `${this.caught} ${this.caught === 1 ? 'vez' : 'veces'} 💡` : 'nunca 🤫'], ['Tiempo', clock(this.playTime)]] });
+          this.onComplete({ stars, stats: [['Estrellas unidas', '10/10 ✨'], ['Casi os pillan', this.caught ? `${this.caught} ${this.caught === 1 ? 'vez' : 'veces'} 💡` : 'nunca 🤫'], ...(this.mpCaught >= 0 ? ([['Marco Polo', this.mpCaught ? `te pilló ${this.mpCaught} ${this.mpCaught === 1 ? 'vez' : 'veces'} 😘` : 'ni una vez 🏆']] as [string, string][]) : []), ['Tiempo', clock(this.playTime)]] });
         }, 1500);
       });
     }, 2200);
@@ -1738,6 +1857,8 @@ export class Level4 implements Level {
       this.mosaic.visible = false;
       this.swimOut = false;
       this.swimT = 0;
+      this.mp = null;
+      this.gas.eyes.scale.y = 1;
     };
     return [
       {
@@ -1782,6 +1903,22 @@ export class Level4 implements Level {
           this.phase = 'toPool';
           this.player.root.position.set(-4.95, 0, 7.4);
           this.undress();
+        },
+      },
+      {
+        label: 'M · Marco Polo',
+        run: () => {
+          reset();
+          this.toGarden();
+          this.setNude(true);
+          this.phase = 'swim';
+          this.freezeDone = true;
+          this.freezeT = 0;
+          this.swimT = 8;
+          this.player.root.position.set(-2, SWIM_Y, 7.4);
+          this.gas.root.position.set(2.2, SWIM_Y, 8.2);
+          this.walker.stop();
+          this.startMarcoPolo();
         },
       },
       {

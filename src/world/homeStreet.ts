@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { G, Merger, palmCrown } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
-import { comicLightFan, comicLightPool } from '../core/comic';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { Door } from './door';
@@ -171,8 +170,8 @@ export interface StreetWorld {
   slider: Door;
 }
 
-/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). night: charcos de luz de las farolas. */
-export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?: boolean } = {}): StreetWorld {
+/** gateOpen: la corredera abierta (día del eclipse: el coche entra marcha atrás al patio). */
+export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean } = {}): StreetWorld {
   const open = !!opts.gateOpen;
   const m = new Merger();
   const colliders: Box2[] = [];
@@ -338,8 +337,6 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
     m.add(G.box, 0x3a3a3a, x, 4.3, -20.8, 0, 0, 0, 0.4, 0.15, 0.3);
     colliders.push({ minX: x - 0.15, maxX: x + 0.15, minZ: -19.95, maxZ: -19.65 });
     lampPos.push(x, 4.15, -20.8);
-    // su charco de luz en la acera y la calzada
-    if (opts.night) sc.add(comicLightPool(x, 0.07, -21.4, 3.6));
   }
   // Brillos: farolas, farolillos del bar y de casa
   lampPos.push(S.door.x, 2.6, FZ - 0.3);
@@ -348,13 +345,6 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
     new THREE.PointsMaterial({ map: glowTexture(), color: 0xffd38a, size: 1.6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   sc.add(lamps);
-  // La luz del farolillo de la puerta: su abanico bajando por la fachada y un charco en el patio (antes, una luz
-  // suelta en mitad del patio pintaba un disco amarillo en la pared)
-  if (opts.night) {
-    const wash = comicLightFan(0.4, 1.9, 2.4, 0xffd890, 0.7);
-    wash.position.set(S.door.x, 2.55, FZ - 0.21);
-    sc.add(wash, comicLightPool(S.door.x, 0.05, FZ - 1.3, 1.7));
-  }
 
   const mesh = m.mesh();
   sc.add(mesh);

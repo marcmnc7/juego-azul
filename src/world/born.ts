@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { TownHD } from './hd/townHD';
 import { G, Merger, araucaria, makeCar, streetLamp } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
-import { comicLightFan, comicLightPool } from '../core/comic';
 import { Surf } from '../core/surfaces';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
@@ -390,20 +389,6 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     s.position.set(x, R + 4.2, z);
     s.scale.setScalar(opts.night ? 2.6 : 1.8);
     g.add(s);
-  }
-  if (opts.night) {
-    // Su luz de tebeo: un charco plano al pie de cada farola de la explanada y, en el Imperi, el abanico de cada
-    // farol de pared bajando por la fachada y su charquito en la acera (solo donde hay una lámpara)
-    for (const [x, z] of lamps) {
-      const p = comicLightPool(x, R + 0.03, z, 3.0);
-      g.add(p);
-    }
-    for (const sd of [-1, 1]) {
-      const wash = comicLightFan(0.5, 1.9, 3.3, 0xffd890, 0.7);
-      wash.position.set(W + 0.2, 3.6, B.z + sd * 2.3);
-      wash.rotation.y = Math.PI / 2;
-      g.add(wash, comicLightPool(W + 1.1, 0.07, B.z + sd * 2.3, 1.5));
-    }
   }
   sc.add(g);
   return { group: g, lamps };
