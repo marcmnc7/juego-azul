@@ -798,3 +798,37 @@ export function comicLightPool(x: number, y: number, z: number, radius: number, 
   m.renderOrder = 1;
   return m;
 }
+
+let fanTex: THREE.CanvasTexture | null = null;
+/**
+ * Abanico de luz de tebeo: un trapecio plano que nace estrecho en la lámpara (o en la ventana, o en el faro) y se
+ * abre, fuerte cerca y más flojo lejos, en dos tonos. En el plano XY: el lado estrecho en y = 0 y el ancho en
+ * y = -len. Para el suelo, girarlo con rotation.x = -π/2 (se abre hacia +z); para una pared, dejarlo de pie
+ * (se abre hacia abajo) y girarlo con rotation.y hacia fuera de la pared.
+ */
+export function comicLightFan(nearW: number, farW: number, len: number, color = 0xffe0a0, strength = 1) {
+  if (!fanTex) {
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 128;
+    const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    g.fillRect(0, 0, 16, 56);
+    g.fillStyle = 'rgba(255,255,255,0.28)';
+    g.fillRect(0, 56, 16, 66);
+    fanTex = new THREE.CanvasTexture(c);
+    fanTex.colorSpace = THREE.SRGBColorSpace;
+    fanTex.magFilter = THREE.NearestFilter;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([-nearW / 2, 0, 0, nearW / 2, 0, 0, farW / 2, -len, 0, -farW / 2, -len, 0], 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+  geo.setIndex([0, 2, 1, 0, 3, 2]);
+  const m = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({ map: fanTex, color, transparent: true, opacity: 0.6 * strength, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+  );
+  m.userData.noComic = true;
+  m.renderOrder = 1;
+  return m;
+}

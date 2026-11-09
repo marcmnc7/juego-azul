@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { G, Merger, palmCrown } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
-import { comicLightPool } from '../core/comic';
+import { comicLightFan, comicLightPool } from '../core/comic';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { Door } from './door';
@@ -348,9 +348,13 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
     new THREE.PointsMaterial({ map: glowTexture(), color: 0xffd38a, size: 1.6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   sc.add(lamps);
-  const homeLight = new THREE.PointLight(0xffc27a, 9, 9, 1.5);
-  homeLight.position.set(-1.5, 2.6, -17.5);
-  sc.add(homeLight);
+  // La luz del farolillo de la puerta: su abanico bajando por la fachada y un charco en el patio (antes, una luz
+  // suelta en mitad del patio pintaba un disco amarillo en la pared)
+  if (opts.night) {
+    const wash = comicLightFan(0.4, 1.9, 2.4, 0xffd890, 0.7);
+    wash.position.set(S.door.x, 2.55, FZ - 0.21);
+    sc.add(wash, comicLightPool(S.door.x, 0.05, FZ - 1.3, 1.7));
+  }
 
   const mesh = m.mesh();
   sc.add(mesh);

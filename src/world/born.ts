@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TownHD } from './hd/townHD';
 import { G, Merger, araucaria, makeCar, streetLamp } from '../entities/models';
 import { toon, glowTexture } from '../core/gfx';
+import { comicLightFan, comicLightPool } from '../core/comic';
 import { Surf } from '../core/surfaces';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
@@ -55,6 +56,14 @@ export interface BornWorld {
   lamps: [number, number][];
 }
 
+/**
+ * Plano partido en trozos de ~0,4 m: el decorado se comba a mano alzada (comic.ts) y un plano de una sola pieza
+ * (cartel, puerta, persiana) se quedaba recto; lo de detrás, combado, lo atravesaba a manchas.
+ */
+function bendable(w: number, h: number) {
+  return new THREE.PlaneGeometry(w, h, Math.max(1, Math.ceil(w / 0.4)), Math.max(1, Math.ceil(h / 0.4)));
+}
+
 function sign(g: THREE.Group, text: string, x: number, y: number, z: number, ry: number, w = 3.2, bg = '#f4efe2', fg = '#2a1a2e') {
   const tex = canvasTex(
     (ctx, cw, ch) => {
@@ -75,10 +84,29 @@ function sign(g: THREE.Group, text: string, x: number, y: number, z: number, ry:
     128,
   );
   // (con luz: de noche, un rótulo de piedra no brilla solo)
-  const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.25), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  const s = new THREE.Mesh(bendable(w, w * 0.25), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
   s.position.set(x, y, z);
   s.rotation.y = ry;
   g.add(s);
+}
+
+/**
+ * Silla de director de la terraza del Imperi: dos costados de madera (patas, la de atrás alta hasta el respaldo,
+ * y brazo), lona verde de asiento y de respaldo tensada entre ellos y las patas en aspa. s: hacia dónde queda la
+ * espalda (+1, +z; -1, -z); la silla mira a la mesa.
+ */
+function directorChair(m: Merger, x: number, z: number, s: number) {
+  const WOOD = 0x8a5a34, CANVAS = 0x1f5a45;
+  const front = z - s * 0.2, back = z + s * 0.2;
+  for (const sx of [-0.25, 0.25]) {
+    m.add(G.box, WOOD, x + sx, 0.33, front, 0, 0, 0, 0.05, 0.66, 0.05); // pata delantera, hasta el brazo
+    m.add(G.box, WOOD, x + sx, 0.47, back, 0, 0, 0, 0.05, 0.94, 0.05); // pata trasera, hasta arriba del respaldo
+    m.add(G.box, WOOD, x + sx, 0.68, z, 0, 0, 0, 0.07, 0.04, 0.5); // brazo
+    m.add(G.box, WOOD, x + sx, 0.24, z, s * 0.62, 0, 0, 0.04, 0.5, 0.04); // aspa
+    m.add(G.box, WOOD, x + sx, 0.24, z, -s * 0.62, 0, 0, 0.04, 0.5, 0.04);
+  }
+  m.add(G.box, CANVAS, x, 0.46, z, 0, 0, 0, 0.46, 0.03, 0.4); // asiento
+  m.add(G.box, CANVAS, x, 0.82, back, 0, 0, 0, 0.5, 0.22, 0.03); // respaldo, entre las patas traseras
 }
 
 /** Construye el Born en `origin` (el obelisco) y añade sus obstáculos a `colliders` en coordenadas del mundo. */
@@ -226,17 +254,18 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   block(W - 9, W, 0.5, BORN.maxZ, 8, 0xf0c24f);
   m.add(G.box, WHITE, W + 0.03, 0.15, (0.5 + BORN.maxZ) / 2, 0, 0, 0, 0.08, 0.3, BORN.maxZ - 0.5); // zócalo
   m.add(G.box, WHITE, W + 0.04, 1.6, B.z, 0, 0, 0, 0.08, 3.2, 2.6);
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.7), new THREE.MeshBasicMaterial({ map: barDoorTexture(), color: 0xe6e6e6 }));
-  door.position.set(W + 0.1, 1.35, B.z);
+  const door = new THREE.Mesh(bendable(1.8, 2.7), new THREE.MeshBasicMaterial({ map: barDoorTexture(), color: 0xe6e6e6 }));
+  door.position.set(W + 0.12, 1.35, B.z);
   door.rotation.y = Math.PI / 2;
-  const bs = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.74), new THREE.MeshBasicMaterial({ map: barSignTexture(), color: 0xf0f0f0 }));
-  bs.position.set(W + 0.12, 3.75, B.z);
+  // El rótulo, separado del marco negro y partido en trozos, para que se comben juntos sin que el marco lo atraviese
+  const bs = new THREE.Mesh(bendable(3.4, 0.74), new THREE.MeshBasicMaterial({ map: barSignTexture(), color: 0xf0f0f0 }));
+  bs.position.set(W + 0.17, 3.75, B.z);
   bs.rotation.y = Math.PI / 2;
-  m.add(G.box, 0x2b2b2b, W + 0.07, 3.75, B.z, 0, 0, 0, 0.06, 0.84, 3.5);
+  m.add(G.box, 0x2b2b2b, W + 0.08, 3.75, B.z, 0, 0, 0, 0.06, 0.84, 3.5);
   const shutter = toon({ map: shutterTexture(), color: 0xffffff });
   for (const [z, y, w, h] of [[B.z, 6.0, 2.0, 1.4], [B.z - 3.4, 1.35, 1.3, 1.5], [B.z + 3.6, 6.0, 1.6, 1.4], [B.z - 3.4, 6.0, 1.6, 1.4]] as [number, number, number, number][]) {
-    const sh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), shutter);
-    sh.position.set(W + 0.1, y, z);
+    const sh = new THREE.Mesh(bendable(w, h), shutter);
+    sh.position.set(W + 0.12, y, z);
     sh.rotation.y = Math.PI / 2;
     g.add(sh);
     m.add(G.box, WHITE, W + 0.05, y, z, 0, 0, 0, 0.06, h + 0.3, w + 0.4);
@@ -253,11 +282,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(G.box, 0x9a6a40, x, 0.72, z, 0, 0, 0, 0.7, 0.05, 0.7);
     for (const [dx, dz] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) m.add(G.box, 0x8a5a34, x + dx, 0.36, z + dz, 0, 0, 0, 0.05, 0.72, 0.05);
     m.add(G.cyl, 0xffffff, x + 0.12, 0.78, z, 0, 0, 0, 0.12, 0.08, 0.12);
-    for (const s of [-1, 1]) {
-      m.add(G.box, 0x1f5a45, x, 0.46, z + s * 0.6, 0, 0, 0, 0.46, 0.04, 0.42);
-      m.add(G.box, 0x1f5a45, x, 0.82, z + s * 0.8, 0, 0, 0, 0.48, 0.24, 0.03);
-      m.add(G.box, 0x8a5a34, x, 0.24, z + s * 0.6, 0, 0, 0, 0.46, 0.48, 0.04);
-    }
+    for (const s of [-1, 1]) directorChair(m, x, z + s * 0.62, s);
     col(x - 0.5, x + 0.5, z - 0.95, z + 0.95);
   };
   table(W + 0.95, B.z + 3.6);
@@ -365,6 +390,20 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     s.position.set(x, R + 4.2, z);
     s.scale.setScalar(opts.night ? 2.6 : 1.8);
     g.add(s);
+  }
+  if (opts.night) {
+    // Su luz de tebeo: un charco plano al pie de cada farola de la explanada y, en el Imperi, el abanico de cada
+    // farol de pared bajando por la fachada y su charquito en la acera (solo donde hay una lámpara)
+    for (const [x, z] of lamps) {
+      const p = comicLightPool(x, R + 0.03, z, 3.0);
+      g.add(p);
+    }
+    for (const sd of [-1, 1]) {
+      const wash = comicLightFan(0.5, 1.9, 3.3, 0xffd890, 0.7);
+      wash.position.set(W + 0.2, 3.6, B.z + sd * 2.3);
+      wash.rotation.y = Math.PI / 2;
+      g.add(wash, comicLightPool(W + 1.1, 0.07, B.z + sd * 2.3, 1.5));
+    }
   }
   sc.add(g);
   return { group: g, lamps };

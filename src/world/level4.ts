@@ -23,6 +23,7 @@ import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
+import { comicLightFan } from '../core/comic';
 import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorcaHouse';
 
 // Capítulo 2 · La piscinita: noche de piscina y estrellas, en casa de los padres de Gas.
@@ -38,7 +39,7 @@ import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorc
 // El nado es de verdad: crol con el cuerpo tumbado en el agua, brazos que entran y salen, patada,
 // y cada brazada empuja el agua de la malla de ondas (PoolWater); de pie, se mantiene a flote.
 
-type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'toTowels' | 'love' | 'stars' | 'ending' | 'done';
+type Phase = 'intro' | 'atBar' | 'drive' | 'arrive' | 'toPool' | 'diving' | 'hug' | 'swim' | 'climbing' | 'toTowels' | 'love' | 'stars' | 'ending' | 'done';
 
 // Piscina (interior del vaso)
 // La piscina ocupa todo el ancho de la casa; las tumbonas, al fondo
@@ -152,6 +153,9 @@ export class Level4 implements Level {
   private diveV = new THREE.Vector3();
   private diveStage = 0;
   private divePitch = 0;
+  /** Saliendo de la piscina por la escalera: tiempo y de dónde sale cada uno. */
+  private climbT = 0;
+  private climbFrom = { a: new THREE.Vector3(), g: new THREE.Vector3() };
   // Física: pelota de playa que flota en la piscina, Azul la empuja; ondas en el agua
   private phys = new PhysicsWorld();
   private ball!: Body;
@@ -202,14 +206,12 @@ export class Level4 implements Level {
     // (la luna va más baja que el sol y roza las paredes largas del pasillo: sin esto salían rayas de sombra)
     this.sun.light.shadow.normalBias = 0.16;
     this.sun.light.shadow.bias = -0.0012;
-    // (luz de dentro del agua: un charco de luz en bandas alrededor, no muy grande)
-    const poolLight = new THREE.PointLight(0x5fe3ff, 7, 5.5, 1.6);
+    // Las luces, solo donde hay una lámpara (luces sueltas pintaban discos en paredes sin nada que los explicara):
+    // la del vaso de la piscina, que se queda dentro del agua; las cristaleras encendidas de la terraza y las
+    // farolas se dibujan con abanicos y charcos planos (comicLightFan / comicLightPool)
+    const poolLight = new THREE.PointLight(0x5fe3ff, 6, 3.6, 1.6);
     poolLight.position.set((POOL.minX + POOL.maxX) / 2, -0.4, (POOL.minZ + POOL.maxZ) / 2);
     sc.add(poolLight);
-    // (separada de la fachada: pegada a ella pintaba una diana de anillos en la pared)
-    const porch = new THREE.PointLight(0xffc27a, 6, 8, 1.6);
-    porch.position.set(0, 2.3, 2.2);
-    sc.add(porch);
 
     this.waterTex = this.causticTexture();
     this.buildHouse();
@@ -218,11 +220,6 @@ export class Level4 implements Level {
     const street = buildStreet(sc, { night: true });
     this.gate = street.gate;
     buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
-    for (const [x, z, i] of [[-8, 9, 14], [8, -9, 14], [IMPERI.x + 2, IMPERI.z, 12]]) {
-      const l = new THREE.PointLight(0xffc27a, i * 0.6, 12, 1.5);
-      l.position.set(BORN_O.x + x, 4, BORN_O.z + z);
-      sc.add(l);
-    }
     this.colliders.push(...street.colliders, this.carBox);
     // Entre el muro del vecino y el de la casa siguiente queda un hueco hacia los jardines: cerrado
     this.colliders.push({ minX: 13.3, maxX: 16, minZ: STREET.wallZ - 0.3, maxZ: STREET.wallZ + 0.3, low: true });
@@ -230,10 +227,11 @@ export class Level4 implements Level {
     this.car.azul.visible = false;
     this.placeCar(CAR_FAR_X);
     sc.add(this.car.root);
-    // Faros encendidos
-    const beams = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff3c0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    beams.position.set(0, 0.7, 2.3);
-    beams.scale.set(2.6, 1.2, 1);
+    // Faros encendidos: el haz en el suelo, delante del coche, que se abre hacia delante (un brillo flotando delante
+    // del morro, pasado a tebeo, era un disco con su aro que no se entendía)
+    const beams = comicLightFan(1.5, 3.6, 7, 0xfff3c0, 0.75);
+    beams.rotation.x = -Math.PI / 2;
+    beams.position.set(0, 0.06, 2.1);
     this.car.root.add(beams);
 
     this.player = makePerson(MARGAUX_LOOK);
@@ -466,6 +464,13 @@ export class Level4 implements Level {
     windows.add(G.box, 0xffd9a0, 2.2, 1.3, 0.03, 0, 0, 0, 2.4, 2.4, 0.05);
     const wm = new THREE.Mesh(windows.build(), glow);
     sc.add(wm);
+    // la luz de las cristaleras, en la terraza: un abanico plano que sale de cada una
+    for (const [x, w] of [[-2, 3.2], [2.2, 2.4]]) {
+      const f = comicLightFan(w, w + 1.4, 2.8, 0xffd9a0, 0.55);
+      f.rotation.x = -Math.PI / 2;
+      f.position.set(x, 0.05, 0.12);
+      sc.add(f);
+    }
     // Ventanas del dormitorio de los padres: a oscuras… hasta que hacéis ruido
     const up = new Merger();
     up.add(G.box, 0xffffff, -2.2, 4.6, 0.1, 0, 0, 0, 1.6, 1.4, 0.04);
@@ -827,6 +832,7 @@ export class Level4 implements Level {
     const pp = this.player.root.position;
 
     if (this.phase === 'diving') this.updateDive(dt);
+    else if (this.phase === 'climbing') this.updateClimb(dt);
     else if (this.phase === 'drive') this.updateDrive(dt);
     else if (this.phase === 'hug') this.updateHug(dt);
     else if (this.phase === 'love') this.updateLove(dt);
@@ -1472,24 +1478,73 @@ export class Level4 implements Level {
     }
   }
 
-  /** Por la escalera de la piscina: ya secos y vestidos (la ropa estaba en el borde), y a pie al césped. */
+  /**
+   * Por la escalera de la piscina, sin cortes y tal cual estáis (desnudos: la ropa se queda en el borde): Azul nada
+   * hasta la escalera, sube y sale al borde; Gas, detrás. Luego, a pie hasta las toallas.
+   */
   private climbOut() {
     this.busy = true;
     this.hud.setAction(null);
     this.input.reset();
     this.walker.stop();
     audio.splash();
-    fadeFlash(() => {
-      this.setNude(false);
+    this.phase = 'climbing';
+    this.climbT = 0;
+    this.climbFrom.a.copy(this.player.root.position);
+    this.climbFrom.g.copy(this.gas.root.position);
+    this.updateHud();
+  }
+
+  private updateClimb(dt: number) {
+    const t0 = this.climbT;
+    this.climbT += dt;
+    const base = this.v2.set(LADDER.x + 0.5, SWIM_Y, LADDER.z);
+    const top = new THREE.Vector3(LADDER.x - 0.25, 0, LADDER.z);
+    const smooth = (k: number) => THREE.MathUtils.smoothstep(k, 0, 1);
+    // swim: lo que tarda en llegar nadando al pie de la escalera; después, un segundo subiendo y 0,7 s hasta su sitio
+    const step = (p: Person, from: THREE.Vector3, end: THREE.Vector3, swim: number) => {
+      const t = this.climbT;
+      const pos = p.root.position;
+      if (t < swim) {
+        const k = smooth(t / swim);
+        pos.set(THREE.MathUtils.lerp(from.x, base.x, k), pos.y, THREE.MathUtils.lerp(from.z, base.z, k));
+        p.root.rotation.y = Math.atan2(base.x - from.x, base.z - from.z);
+        this.swimPose(p, 0.3, dt);
+        return;
+      }
+      if (p.rig) p.rig.force = undefined;
+      p.body.rotation.set(0, 0, 0);
+      p.head.rotation.set(0, 0, 0);
+      if (t < swim + 1) {
+        // sube los peldaños mirando a la escalera, de espaldas al agua no: de cara al borde
+        const k = t - swim;
+        pos.set(THREE.MathUtils.lerp(base.x, top.x, k), THREE.MathUtils.lerp(SWIM_Y, 0, smooth(k)), LADDER.z);
+        p.root.rotation.y = -Math.PI / 2;
+        animatePerson(p, dt, 'walk', 0.45);
+      } else if (t < swim + 1.7) {
+        const k = smooth((t - swim - 1) / 0.7);
+        pos.set(THREE.MathUtils.lerp(top.x, end.x, k), 0, THREE.MathUtils.lerp(top.z, end.z, k));
+        p.root.rotation.y = Math.atan2(end.x - top.x, end.z - top.z);
+        animatePerson(p, dt, 'walk', 0.5);
+      } else {
+        pos.copy(end);
+        animatePerson(p, dt, 'idle');
+      }
+    };
+    const endA = new THREE.Vector3(LADDER.x - 0.95, 0, LADDER.z);
+    const endG = new THREE.Vector3(LADDER.x - 1.5, 0, LADDER.z + 1.2);
+    step(this.player, this.climbFrom.a, endA, 0.7);
+    step(this.gas, this.climbFrom.g, endG, 1.8);
+    // al salir del agua, la onda en la escalera
+    for (const at of [0.95, 2.05]) if (t0 < at && this.climbT >= at) this.pool.disturb(LADDER.x + 0.3, LADDER.z, 0.35, 0.4);
+    if (this.climbT > 3.6) {
       this.phase = 'toTowels';
-      this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
       this.walker.yaw = this.walker.facing = Math.PI; // (mirando hacia las toallas, hacia la casa)
-      this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z + 1.2);
       this.gas.root.rotation.set(0, Math.PI, 0);
       this.gasTrail = new Trail();
       this.busy = false;
       this.updateHud();
-    }, 400);
+    }
   }
 
   /** Los dos tumbados uno al lado del otro, cada uno en su toalla. */
@@ -1733,6 +1788,7 @@ export class Level4 implements Level {
         label: '3 · Al césped',
         run: () => {
           reset();
+          this.setNude(true);
           this.phase = 'toTowels';
           this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
           this.gas.root.position.set(LADDER.x - 1.5, 0, LADDER.z + 1.2);
@@ -1746,6 +1802,7 @@ export class Level4 implements Level {
         label: '4 · Unir estrellas',
         run: () => {
           reset();
+          this.setNude(true);
           this.nextStar = 0;
           this.startStars();
         },
@@ -1754,6 +1811,7 @@ export class Level4 implements Level {
         label: '5 · Final',
         run: () => {
           reset();
+          this.setNude(true);
           this.startStars();
           later(() => {
             while (this.phase === 'stars') {

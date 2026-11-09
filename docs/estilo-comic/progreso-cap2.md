@@ -122,6 +122,15 @@ El dueño vio el cap. 2 «sin parecido» con el 1. Diferencias encontradas en ca
 
 Comprobado: capturas de todas las fases; cap. 1 sin cambios visibles; caps. 4 y 7 (noche) siguen legibles; consola sin errores (solo el aviso de vibración de la prueba automática).
 
+## Tercera pasada (9-nov, noche): lo que vio el dueño
+| Problema | Arreglo |
+|---|---|
+| El rótulo del Bar Imperi, atravesado por una mancha negra | Su marco negro se combaba a mano alzada y el rótulo (un plano de una pieza) no: lo atravesaba. Rótulo, puerta, persianas y rótulos de piedra del Born, partidos en trozos de 0,4 m (`bendable`) y el rótulo separado del marco |
+| Sillas de la terraza del Imperi con el respaldo flotando | Silla de director de verdad (`directorChair`): patas traseras hasta el respaldo, brazos, aspas y lona de asiento y respaldo |
+| Un disco con aro delante del coche de Gas «que no se sabe qué es» | Era el brillo de los faros pasado a halo. Ahora, el haz en el suelo: un abanico plano que se abre delante del coche (`comicLightFan`) |
+| Luces «aleatorias», que no salen de ninguna lámpara (discos amarillos en la fachada del Imperi, en la de casa y en la terraza) | Fuera las luces sueltas (tres en el Born, la del patio, la del porche). La luz se dibuja donde hay lámpara: charco al pie de cada farola del Born y de la calle, abanico bajando por la fachada desde cada farol de pared (Imperi y farolillo de la puerta de casa), luz de las cristaleras en la terraza. La de la piscina se queda, más corta, dentro del vaso |
+| Al salir de la piscina, fundido a negro y vestidos | Salen desnudos y sin corte: Azul nada a la escalera, sube y sale al borde; Gas, detrás (`climbing`). De ahí, a pie a las toallas. Siguen sin ropa en las toallas y en las estrellas (la ropa se queda en el borde) |
+
 ## Falta (común a varios capítulos)
 - fps medidos en el móvil del dueño.
 - Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.
