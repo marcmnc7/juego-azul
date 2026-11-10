@@ -427,34 +427,65 @@ export const MOTO = {
     { who: 'Narrador', text: 'Tú no has ido nunca tanto rato de paquete.' },
   ] as Line[],
   packIntro: [{ who: 'Narrador', text: 'La víspera, a las 00:44, te manda la lista de la mochila. Hazla tal cual: no cabe nada más.' }] as Line[],
-  ride: [
-    { who: 'Narrador', text: 'Sábado. De L’Escala hacia Cap de Creus por la costa.' },
-    { who: 'Gas', text: 'Tú solo acompaña las curvas conmigo. Si yo me inclino, tú también.' },
-    { who: 'Gas', text: 'Y si viene una moto de frente, se saluda. A los coches, no.' },
-  ] as Line[],
-  rideHint: 'Inclínate con las curvas y saluda a las motos (a los coches, no)',
+  ride: [{ who: 'Narrador', text: 'Sábado. De L’Escala hacia Cap de Creus por la costa.' }] as Line[],
+  /**
+   * Lo que se dicen por el camino, cada uno desde su asiento (llevan intercomunicador en el casco). at: dónde de la
+   * ruta (0 a 1). Las dos primeras son las normas que Gas daba antes de salir. [inventada]: no sale de la historia.
+   */
+  talk: [
+    { at: 0.03, who: 'Gas', text: 'Tú solo acompaña las curvas conmigo. Si yo me inclino, tú también.' },
+    { at: 0.07, who: 'Gas', text: 'Y si viene una moto de frente, se saluda. A los coches, no.' },
+    { at: 0.3, who: 'Gas', text: 'Más pegaítos, con el aire en la cara.' },
+    { at: 0.32, who: 'Margaux', text: 'Ay, que eres lo mejor, te juro.' },
+    { at: 0.45, who: 'Gas', text: '¿Ves? Ni tacones ni secador.' },
+    // [inventadas]
+    { at: 0.535, who: 'Gas', text: 'Parc Natural de Cap de Creus. Ya casi.' },
+    { at: 0.77, who: 'Gas', text: 'Mira, allí enfrente: Cadaqués.' },
+    { at: 0.9, who: 'Margaux', text: '¿Aquello blanco es el faro?' },
+    { at: 0.915, who: 'Gas', text: 'El de Cap de Creus. Lo más al este de la Península.' },
+  ] as (Line & { at: number })[],
   wave: {
     btn: '✌️ Saludar',
-    ok: ['✌️ Saludo motero', '✌️ Te devuelve el saludo', '✌️ Hermandad de la carretera'],
-    car: ['🚗 ¡A los coches no se les saluda!', '🚗 Eso era un coche…', '🚗 El del coche no entiende nada'],
-    missed: '🏍️ Te ha saludado… y no le has devuelto el saludo',
+    /** (Gas, al ver que saludas bien, a un coche o que no contestas) [inventadas] */
+    ok: ['Eso es. Saludo motero ✌️', 'Te ha devuelto el saludo.', 'Hermandad de la carretera.'],
+    car: ['¡A los coches no se les saluda! 😂', 'Eso era un coche…', 'El del coche no entiende nada.'],
+    missed: 'Te ha saludado… ¡y tú nada!',
   },
   photoHint: '📷 ¡Foto!',
-  photoOk: ['📷 Foto guardada', '📷 Otra para el álbum', '📷 Esta es la buena'],
-  lean: { good: 'Fluida ✨', bad: 'Uy, acompaña la curva' },
-  /** La tramontana de Cap de Creus: racha de viento, inclinarse hacia la flecha. */
-  wind: '🌬️ ¡Tramontana! Inclínate hacia donde marca la flecha',
-  windBad: '🌬️ ¡Que nos lleva!',
+  /** (ella, al sacar la foto en un mirador) [inventadas] */
+  photoOk: ['¡Qué bonito! 📷', 'Otra para el álbum.', 'Esta es la buena.'],
+  /** (Gas, cuando no le acompañas en la curva) [inventadas] */
+  lean: { bad: ['¡Échate conmigo, que me sacas de la curva!', 'Acompaña, acompaña…', 'Conmigo, conmigo.'] },
+  /** La tramontana de Cap de Creus: rachas de viento, hay que echarse contra el viento. [inventada] */
+  wind: '¡Tramontana! Agárrate y échate contra el viento.',
+  windBad: '¡Que nos lleva!',
   windOff: 'Pasó la racha 😮‍💨',
-  windHint: '🌬️ Inclínate hacia la flecha',
+  /** Al llegar a la valla [inventada] */
+  closed: 'Anda… cortada.',
   creus: [
     { who: 'Narrador', text: 'El faro de Cap de Creus, ahí delante… y la carretera, cortada. El último tramo está cerrado.' },
     { who: 'Narrador', text: 'Hasta aquí llegasteis. Media vuelta, con el faro de fondo.' },
-    { who: 'Narrador', text: 'Esa noche, cena y helado en L’Escala. Con el conjunto de paseo, claro.' },
   ] as Line[],
-  back: [{ who: 'Narrador', text: 'El lunes por la mañana devolvéis la moto.' }] as Line[],
+  /** La foto del faro antes de dar la vuelta (paso nuevo). [inventadas] */
+  faroAsk: '¿Le haces una al faro antes de dar la vuelta?',
+  faroLost: 'Venga, la foto del faro, que nos vamos.',
+  faroPhoto: {
+    btn: '📷 El faro',
+    title: 'Que salga el faro entero',
+    zones: ['Torcida', 'El faro', 'Cortado'],
+    good: 'Ya está. El faro y la valla, para que conste.',
+    bad: 'Uy, torcida. Otra.',
+    meh: 'Bueno… se intuye el faro.',
+  },
+  /** Media vuelta y a la cala (pasos nuevos). [inventadas] */
+  uturn: 'Media vuelta. Aquí al lado baja un camino a una cala.',
+  calaStop: 'Aquí. Se baja a pie por el Camí de Ronda.',
+  back: [
+    { who: 'Narrador', text: 'Esa noche, cena y helado en L’Escala. Con el conjunto de paseo, claro.' },
+    { who: 'Narrador', text: 'El lunes por la mañana devolvéis la moto.' },
+  ] as Line[],
   stats: (fluid: number, photos: number, waves: number, motos: number, wrong: number) =>
-    [['Curvas fluidas', `${fluid}%`], ['Saludos moteros', `${waves}/${motos}${wrong ? ` · ${wrong} a coches 🚗` : ''}`], ['Fotos', `${photos}/3`]] as [string, string][],
+    [['Curvas fluidas', `${fluid}%`], ['Saludos moteros', `${waves}/${motos}${wrong ? ` · ${wrong} a coches 🚗` : ''}`], ['Fotos', `${photos}/4`]] as [string, string][],
   pack: [
     { icon: '🏍️', label: 'Conjunto de moto (tejanos, chupa, guantes)', ok: true },
     { icon: '👕', label: '2 camisetas finas de manga larga', ok: true },

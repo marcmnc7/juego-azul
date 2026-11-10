@@ -12,6 +12,7 @@ import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } fr
 import { rigPost } from '../entities/rig';
 import { bark, comicWord, dialogue, later, timingGauge, toast } from '../ui/ui';
 import type { Box2 } from './ferreries';
+import { disposeScene } from './level';
 
 // Los minijuegos que hay que pasar para seguir con la historia. Fallar nunca hace perder: se repite ahí mismo.
 
@@ -691,15 +692,21 @@ export class StoneSkip {
   private tries = 0;
   private finished = false;
   private camLook = new THREE.Vector3(0, 0.8, 30);
+  /** El primer fotograma pone la cámara en su sitio (venía de la carretera: cruzaba el mapa y salían líneas de velocidad). */
+  private first = true;
 
-  constructor(private onDone: () => void) {
+  /** looks: la ropa del día (en el cap. 5, el conjunto de moto). */
+  constructor(private onDone: () => void, looks: { azul?: PersonLook; gas?: PersonLook } = {}) {
     const sc = this.scene;
-    const sunDir = new THREE.Vector3(-0.55, 0.62, -0.3).normalize();
-    sc.fog = new THREE.Fog(0xbcd8ea, 90, 520);
-    this.sky = new Sky({ top: 0x2f7cc9, mid: 0x8cc4e8, bottom: 0xd8ecf6, clouds: { count: 3, tint: 0xffffff }, avoid: sunDir });
+    // La misma tarde que en la carretera (antes, hora dorada en la carretera y mediodía aquí): sol alto a la espalda
+    // y el reparto de la luz de ambiente del cap. 1
+    sc.userData.hemiScale = 0.35;
+    const sunDir = new THREE.Vector3(0.45, 0.75, -0.48).normalize();
+    sc.fog = new THREE.Fog(0xcfe2ee, 110, 520);
+    this.sky = new Sky({ top: 0x2a6fd0, mid: 0x7fbdf2, bottom: 0xdcebf4, clouds: { count: 4, tint: 0xffffff }, avoid: sunDir });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xcfe6ff, 0x5a5048, 1.3));
-    this.sun = new Sun(sc, 0xfff0d6, 2.4, sunDir, 22);
+    sc.add(new THREE.HemisphereLight(0xcfe6ff, 0x5a5048, 1.0));
+    this.sun = new Sun(sc, 0xfff0d6, 2.1, sunDir, 22);
     const sea = makeSea([900, 900], 0x12577f, sunDir, {});
     sea.position.y = 0;
     sc.add(sea);
@@ -728,11 +735,20 @@ export class StoneSkip {
       const x = -5 + i * 0.7, z = -0.7 + Math.sin(i * 2.1) * 0.25;
       m.add(G.crag, SLATE[i % 4], x, 0.05, z, 0, i, 0, 0.7, 0.28, 0.5);
     }
-    sc.add(m.mesh());
-    this.azul = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
-    this.azul.root.position.set(-0.5, 0.55, -1.9);
-    this.gas.root.position.set(0.55, 0.55, -1.9);
+    const rocks = m.mesh();
+    sc.add(rocks);
+    this.azul = makePerson(looks.azul ?? MARGAUX_LOOK);
+    this.gas = makePerson(looks.gas ?? MARC_LOOK);
+    // De pie sobre la losa, medida: los pies donde está la roca de verdad (antes, a 0,55 a ojo)
+    rocks.updateMatrixWorld(true);
+    const down = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
+    const groundAt = (x: number, z: number) => {
+      down.ray.origin.set(x, 5, z);
+      // (acotado: si el rayo diera en el canto de una roca suelta, que no los suba encima)
+      return THREE.MathUtils.clamp(down.intersectObject(rocks, false)[0]?.point.y ?? 0.55, 0.4, 0.8);
+    };
+    this.azul.root.position.set(-0.5, groundAt(-0.5, -1.9), -1.9);
+    this.gas.root.position.set(0.55, groundAt(0.55, -1.9), -1.9);
     sc.add(this.azul.root, this.gas.root);
     this.thrower = this.gas;
     this.stone = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 7).scale(1, 0.4, 1), new THREE.MeshStandardMaterial({ color: 0x6a6660, roughness: 0.75 }));
@@ -834,12 +850,19 @@ export class StoneSkip {
     this.chip.textContent = '🏆 ' + this.chip.textContent;
   }
 
+  /** Onda del bote: aro blanco plano con su raya de tinta por fuera, como las ondas dibujadas del tebeo. */
   private splash(x: number, z: number) {
     const g = new THREE.RingGeometry(0.1, 0.18, 24).rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
     const m = new THREE.Mesh(g, mat);
     m.position.set(x, 0.05, z);
     m.userData.noCast = true;
+    const ink = new THREE.Mesh(
+      new THREE.RingGeometry(0.18, 0.205, 24).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x2b2233, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    ink.position.y = 0.002;
+    m.add(ink);
     this.scene.add(m);
     this.rings.push({ m, t: 0 });
   }
@@ -876,8 +899,16 @@ export class StoneSkip {
       r.t += dt;
       r.m.scale.setScalar(1 + r.t * 7);
       (r.m.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.85 - r.t * 0.7);
+      const ink = r.m.children[0] as THREE.Mesh | undefined;
+      if (ink) (ink.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.6 - r.t * 0.5);
       if (r.t > 1.25) {
         r.m.removeFromParent();
+        r.m.geometry.dispose();
+        (r.m.material as THREE.Material).dispose();
+        if (ink) {
+          ink.geometry.dispose();
+          (ink.material as THREE.Material).dispose();
+        }
         this.rings.splice(i, 1);
       }
     }
@@ -897,6 +928,11 @@ export class StoneSkip {
     }
     // La cámara, detrás de los dos, siguiendo un poco la piedra
     const cam = camera as THREE.PerspectiveCamera;
+    if (this.first) {
+      this.first = false;
+      cam.position.set(0.7, 2.5, -7);
+      this.camLook.set(0, 0.6, 28);
+    }
     const z = this.flight ? this.stone.position.z : 22;
     this.camLook.lerp(new THREE.Vector3(this.flight ? this.stone.position.x : 0, 0.6, Math.min(40, z + 6)), 1 - Math.exp(-dt * 2.4));
     cam.position.lerp(new THREE.Vector3(0.7, 2.5, -7), 1 - Math.exp(-dt * 4));
@@ -905,9 +941,28 @@ export class StoneSkip {
     this.sky.update(camera, dt);
   }
 
+  /** Dónde habla cada uno (para que su bocadillo salga de su cabeza y no de la de la moto, que está en otra escena). */
+  speakerPoint(who: string) {
+    const p = /^(Gas|Marc)$/.test(who) ? this.gas : /^(Azul|Margaux)$/.test(who) ? this.azul : null;
+    if (!p) return null;
+    const head = p.rig?.bones.get('Head') ?? p.head;
+    const out = head.getWorldPosition(new THREE.Vector3());
+    out.y += 0.32;
+    return out;
+  }
+
+  /** En pantalla (la cámara mira al mar, hacia +z), Gas queda a la izquierda y ella a la derecha: cada globo, a su lado. */
+  speakerSide(who: string): 'l' | 'r' | undefined {
+    return /^(Gas|Marc)$/.test(who) ? 'l' : /^(Azul|Margaux)$/.test(who) ? 'r' : undefined;
+  }
+
   dispose() {
     this.chip.remove();
     document.querySelectorAll('.gauge').forEach((g) => g.remove());
+    disposeScene(this.scene);
+    // (fuera de la escena: si no, el esqueleto de los dos se seguía animando cada fotograma hasta salir del capítulo)
+    this.azul.root.removeFromParent();
+    this.gas.root.removeFromParent();
   }
 }
 
