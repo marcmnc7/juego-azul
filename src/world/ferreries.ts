@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Surf } from '../core/surfaces';
+import { Surf, setSurface } from '../core/surfaces';
+
+// Las sillas de madera de las terrazas: su color caía en marès y salían con dibujo de sillares
+setSurface(0xd2a15b, Surf.Wood);
 import { buildSurroundings, collidersBox } from './surround';
 import { POT_CORE, G, Merger, makeCrowd, crowdPose, newCrowdPose, PersonLook, type CrowdLike } from '../entities/models';
 import { Sky, Sun, toon, glowTexture } from '../core/gfx';

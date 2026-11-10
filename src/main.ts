@@ -172,6 +172,8 @@ const SPEAKERS: Record<string, string[]> = {
 const _head = new THREE.Vector3();
 const lastSpeaker = { pos: new THREE.Vector3(), at: 0 };
 setSpeakerResolver((who) => {
+  // (en una misión manda su escena y su cámara: los personajes del capítulo que espera no valen)
+  if (stage.current) return null;
   const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
   if (!L) return null;
   // El nivel puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
