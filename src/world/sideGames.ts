@@ -1253,7 +1253,8 @@ const TABLE_ITEMS: { name: string; icon: string; build: (m: Merger) => void }[] 
       m.add(new THREE.CylinderGeometry(0.05, 0.035, 0.16, 14), 0x2f6b8a, 0, 0.08, 0);
       for (let i = 0; i < 6; i++) {
         const a = i * 1.05;
-        m.add(G.cyl, 0x3a6a30, Math.cos(a) * 0.02, 0.2, Math.sin(a) * 0.02, Math.sin(a) * 0.2, 0, -Math.cos(a) * 0.2, 0.008, 0.12, 0.008);
+        // (tallos de 1,6 cm: con 8 mm la tinta los hacía parpadear)
+        m.add(G.cyl, 0x3a6a30, Math.cos(a) * 0.02, 0.2, Math.sin(a) * 0.02, Math.sin(a) * 0.2, 0, -Math.cos(a) * 0.2, 0.016, 0.12, 0.016);
         m.add(G.sphere, [0xe2547a, 0xf4c95d, 0xf6f6f2][i % 3], Math.cos(a) * 0.05, 0.27, Math.sin(a) * 0.05, 0, 0, 0, 0.055, 0.055, 0.055);
       }
     },
@@ -1270,7 +1271,8 @@ const TABLE_ITEMS: { name: string; icon: string; build: (m: Merger) => void }[] 
     build: (m) => {
       m.add(new THREE.CylinderGeometry(0.05, 0.06, 0.02, 14), 0xb5a06a, 0, 0.01, 0);
       m.add(new THREE.CylinderGeometry(0.018, 0.018, 0.18, 10), 0xf5efe0, 0, 0.11, 0);
-      m.add(G.sphere, 0xffb83a, 0, 0.215, 0, 0, 0, 0, 0.02, 0.04, 0.02);
+      // La llama, de un color que brilla por sí solo (Surf.Glow): de noche, plana y sin sombra (no alumbra nada)
+      m.add(G.sphere, 0xffc680, 0, 0.222, 0, 0, 0, 0, 0.026, 0.05, 0.026);
     },
   },
   {
@@ -1293,6 +1295,52 @@ const TABLE_ITEMS: { name: string; icon: string; build: (m: Merger) => void }[] 
 ];
 const TABLE_SLOTS: [number, number][] = [[-0.19, -0.33], [0.19, -0.33], [0, 0], [-0.19, 0.33], [0.19, 0.33]];
 
+/** Cómo estaba la mesa en la foto: qué objeto hay en cada sitio (al azar en cada partida). */
+export function tableLayout() {
+  return [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5);
+}
+
+/** Otro orden con todo cambiado de sitio (la mesa durante la cena: se movieron las cosas para los platos). */
+export function shuffledLayout(from: readonly number[]) {
+  // Rotar dos posiciones: ningún objeto se queda donde estaba
+  return from.map((_, i) => from[(i + 2) % from.length]);
+}
+
+/**
+ * Los cinco objetos de la mesa de la terraza, fuera del minijuego: así la mesa está puesta como en la foto desde
+ * el principio del capítulo, se ve movida durante la cena y queda otra vez como estaba al acabar.
+ */
+export class TableDecor {
+  readonly root = new THREE.Group();
+  private items: THREE.Object3D[] = [];
+
+  constructor(sc: THREE.Scene, private center: THREE.Vector3, private y: number) {
+    TABLE_ITEMS.forEach((d) => {
+      const m = new Merger(false);
+      d.build(m);
+      const o = m.mesh();
+      o.visible = false;
+      this.root.add(o);
+      this.items.push(o);
+    });
+    // (encima de una mesa que no se dobla: los objetos no se descolocan)
+    this.root.userData.comicBent = true;
+    sc.add(this.root);
+  }
+
+  /** layout[sitio] = objeto; null: la mesa vacía (mientras se juega el minijuego). */
+  show(layout: readonly number[] | null) {
+    this.items.forEach((o) => (o.visible = false));
+    if (!layout) return;
+    layout.forEach((it, slot) => {
+      const [dx, dz] = TABLE_SLOTS[slot];
+      const o = this.items[it];
+      o.visible = true;
+      o.position.set(this.center.x + dx, this.y, this.center.z + dz);
+    });
+  }
+}
+
 export class TableMemory {
   private root = new THREE.Group();
   private items: THREE.Object3D[] = [];
@@ -1311,8 +1359,10 @@ export class TableMemory {
   private v = new THREE.Vector3();
   tries = 0;
 
-  constructor(sc: THREE.Scene, private center: THREE.Vector3, topY: number, private onDone: () => void) {
+  /** answer: la foto (el orden de la mesa antes de que llegara Gas, el que ya se ha visto en el capítulo). */
+  constructor(sc: THREE.Scene, private center: THREE.Vector3, topY: number, private onDone: () => void, answer: readonly number[] = tableLayout()) {
     this.y = topY;
+    this.root.userData.comicBent = true;
     TABLE_ITEMS.forEach((d) => {
       const m = new Merger(false);
       d.build(m);
@@ -1352,7 +1402,7 @@ export class TableMemory {
       uiRoot().append(b);
       this.spots.push(b);
     });
-    this.answer = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5);
+    this.answer = [...answer];
     this.showPhoto(4600);
   }
 
