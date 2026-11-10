@@ -7,7 +7,16 @@ import { makeHdMaterials, shutterMat, type HdMats } from './materials';
 // hierro. El Born y Sant Joan lo usan en lugar de las cajas de color.
 
 const tints = new Map<number, THREE.Material>();
+const stones = new Map<number, THREE.Material>();
 const IN = 0.03;
+
+export interface WallOpts {
+  /**
+   * Sillería de marès en vez de encalado (D6a): la Catedral, el campanario, el Ajuntament, las casas de piedra.
+   * El color tiñe los sillares dibujados. Por defecto, encalado como siempre.
+   */
+  stone?: boolean;
+}
 
 export class TownHD {
   b = new Builder();
@@ -24,12 +33,25 @@ export class TownHD {
     return m;
   }
 
+  /** Los sillares de marès teñidos del color de la piedra de cada edificio. */
+  private stoneTint(color: number) {
+    let m = stones.get(color);
+    if (!m) {
+      m = this.M.mares.clone();
+      (m as THREE.MeshStandardMaterial).color.set(color);
+      stones.set(color, m);
+    }
+    return m;
+  }
+
   /** La manzana entera, con su cornisa. Cada una unos milímetros distinta: dos en el mismo plano parpadean. */
-  wall(x0: number, x1: number, z0: number, z1: number, h: number, color: number) {
+  wall(x0: number, x1: number, z0: number, z1: number, h: number, color: number, o: WallOpts = {}) {
     const e = (this.n++ % 6) * 0.012 + 0.006;
     const w = Math.max(0.02, x1 - x0 - e), d = Math.max(0.02, z1 - z0 - e);
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-    this.b.box(this.tint(color), [cx, h / 2, cz], [w, h, d], { tile: 3 });
+    // (los sillares, a la escala del cap. 1: 1,5 m por repetición, piezas de ~0,14 m)
+    if (o.stone) this.b.box(this.stoneTint(color), [cx, h / 2, cz], [w, h, d], { tile: 1.5 });
+    else this.b.box(this.tint(color), [cx, h / 2, cz], [w, h, d], { tile: 3 });
     this.b.box(this.M.mares, [cx, h + 0.12 + e / 2, cz], [w + 0.22, 0.24, d + 0.22], { tile: 2 });
   }
 

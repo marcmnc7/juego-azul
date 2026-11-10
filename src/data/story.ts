@@ -102,20 +102,25 @@ export const SANTJOAN = {
   night: [{ who: 'Narrador', text: 'Ciutadella. Madrugada del 23 de junio de 2026. Mañana es Sant Joan.' }] as Line[],
   morning: [{ who: 'Narrador', text: 'Por la mañana.' }] as Line[],
   bandera: [{ who: 'Narrador', text: 'A las cinco y cuarto se acaba la bandera. Estás en la Plaça Espanya y hay que ir hacia el Born.' }] as Line[],
-  huntHint: 'Ve hacia Correus por Ses Voltes 📍',
+  // Objetivos: un emoji o dos palabras, sin decir qué hacer (las pistas solo salen si te pierdes)
+  huntHint: '📍',
   correus: [{ who: 'Narrador', text: 'Correus. Ni rastro de Gas. Una hora después:' }] as Line[],
-  exactHint: 'Mándale una foto exacta: que salga el obelisco 📷',
-  notExact: 'Con esta foto no sabrá dónde estás. Que salga el obelisco 📷',
-  comingHint: 'Gas viene hacia ti',
+  exactHint: '📷',
+  /** Lo que contesta Gas a una foto en la que no sale nada que se reconozca (inventado; era un aviso de «que salga el obelisco»). */
+  notExact: ['(WhatsApp) ¿Y eso dónde es? 😅', '(WhatsApp) Ni idea de dónde es eso', '(WhatsApp) Algo que se reconozca, pls 🙏'],
+  comingHint: '💙',
+  /** Gas, cuando la ve entre la gente (inventado). */
+  spotted: '¡Azul! ¡Aquí!',
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
   /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul. */
   toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
-  beHint: 'Ve con Gas a Sa Plaça d’es Bè',
-  beGo: 'Toca el pecho de los caballos cuando se pongan de manos',
+  beHint: '🐑 Es Bè',
+  beGo: '🐎',
   beCount: (n: number, of: number) => `🐎 ${n}/${of}`,
-  /** Un caballo se desboca por Ses Voltes. */
-  charge: '🐎 ¡Un caballo desbocado viene de frente! ¡Apártate a los soportales!',
-  chargeOk: '¡Por poco! 😮‍💨',
+  /** Un caballo se desboca por Ses Voltes: lo grita su caixer (inventado, en menorquí; era un aviso que decía qué hacer). */
+  charge: 'Alerta! Fora des mig!',
+  /** Ella, cuando el caballo pasa de largo. */
+  chargeOk: '¡Uf! Por poco 😮‍💨',
   beDone: [
     { who: 'Margaux', text: '¿Te vienes a dormir a casa?' },
     { who: 'Gas', text: 'Sí. Vamos.' },
@@ -126,20 +131,51 @@ export const SANTJOAN = {
     { who: 'Gas', text: 'Ay, ay, ay… No siento el pie.' },
     { who: 'Margaux', text: 'Agárrate a mí. Cogemos un taxi, está ahí, en la Plaça Espanya.' },
   ] as Line[],
-  taxiHint: 'Sujeta a Gas y llévale hasta el taxi de la Plaça Espanya',
+  taxiHint: '🚕',
+  /** A medio camino del taxi, Gas tiene que pararse (inventado). */
+  rest: { stop: 'Para, para… Un segundo.', pulled: '¡Ay! Que no puedo…', go: 'Venga. Ya.' },
   taxiBtn: '🚕 Subir al taxi',
   taxiPals: [{ who: 'Taxista', text: '¿Adónde vais?' }, { who: 'Margaux', text: 'Camí de sa Farola, por favor.' }] as Line[],
   ride: [{ who: 'Narrador', text: 'De vuelta a casa, por el Camí de sa Farola.' }] as Line[],
+  /**
+   * Lo que hablan en el taxi, cada uno desde su asiento (inventado entero: Marc, cámbialo por lo que se dijo).
+   * El taxista, delante a la izquierda; Azul, a su lado; Gas, detrás.
+   */
+  rideTalk: [
+    { who: 'Taxista', text: 'Qué, ¿mucho jaleo hoy?' },
+    { who: 'Margaux', text: 'Todo el día detrás de los caballos.' },
+    { who: 'Gas', text: 'Y uno me ha pisado.' },
+    { who: 'Taxista', text: 'Ja, ja. Això és Sant Joan.' },
+    { who: 'Margaux', text: 'Lleva así desde las diez. Cojo.' },
+    { who: 'Gas', text: 'Pero he tocado tres caballos. Tres.' },
+    { who: 'Taxista', text: 'Bé, bé. Ja quasi som.' },
+  ] as Line[],
+  /** Al parar delante de casa: pagar (inventado). */
+  pay: [
+    { who: 'Taxista', text: 'Són dotze euros.' },
+    { who: 'Margaux', text: 'Toma. Bona nit.' },
+    { who: 'Taxista', text: 'Bona nit, i que se millori es peu.' },
+  ] as Line[],
   home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los dos, muertos de sueño.' }] as Line[],
-  homeHint: 'Entra en casa con Gas',
+  homeHint: '😴',
+  /** La puerta, con las llaves y sin hacer ruido: duerme todo el mundo (inventado). */
+  keysBtn: '🔑 Abrir',
+  keys: 'Despacito… que la puerta cruje.',
   sleepBtn: '😴 A dormir',
   after: [{ who: 'Narrador', text: 'Dos días después.' }] as Line[],
+  // (los avisos de texto no se ven en el cómic: los aciertos son onomatopeyas de tebeo, comicWord)
   hints: {
-    pomada: '¡Avellanes! 🌰',
-    luck: '¡Toque de suerte! 🐎',
-    rear: '¡Ahora! Tócale el pecho',
-    perfect: '¡Toque perfecto! ✨🐎',
-    late: 'Uy, por los pelos 🐎',
+    pomada: '¡AVELLANES!',
+    luck: '¡SUERTE!',
+    rear: '🐎 Tocarle el pecho',
+    perfect: '¡TOQUE PERFECTO!',
+    late: '¡POR LOS PELOS!',
+    /** Onomatopeya del caballo que te aparta. */
+    hitWord: '¡PATAPAF!',
+    /** Onomatopeya del caballo desbocado. */
+    chargeWord: '¡CATACLOC!',
+    /** El caixer, cuando su caballo te aparta (inventado; era un aviso «¡Buu! Un caballo te ha pillado»). */
+    hit: 'Alerta, al·lota!',
   },
 };
 
@@ -748,11 +784,18 @@ export const SIDE = {
       { who: 'Una de Ciutadella', text: 'Avellanes! Qui en vol? Els del balcó del Casino no paren de tirar-ne.' },
       { who: 'Gas', text: 'Toma la bolsa. Devuélveselas, que si no no nos dejan salir de aquí.' },
     ] as Line[],
-    hint: '🌰 Acierta a los del balcón cuando se paren',
+    hint: '🌰',
     btn: '🌰 Tirar',
-    far: 'Acércate más al balcón',
-    miss: 'Se ha movido. ¡Tira cuando se pare!',
-    pelted: ['🌰 ¡En toda la cabeza!', '🌰 ¡Au!', '🌰 Mira el anillo del suelo: ahí cae'],
+    /** Lo dice Gas (inventado: era un aviso «Acércate más al balcón»). */
+    far: 'Desde ahí no llegas',
+    /** Lo dice Gas (era un aviso que decía qué hacer). */
+    miss: '¡Uy! Se ha movido',
+    /** Cuando te da una avellana: lo dice quien lo diría (la última, inventada). */
+    pelted: [
+      { who: 'Margaux', text: '¡Au! 🌰' },
+      { who: 'Gas', text: '¡En toda la cabeza! 🌰' },
+      { who: 'Gas', text: '¡Cuidado, que viene otra!' },
+    ] as Line[],
     end: [
       { who: 'Una de Ciutadella', text: 'Molt bé! Ja et pots quedar la bossa.' },
     ] as Line[],

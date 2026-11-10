@@ -1,364 +1,35 @@
 import * as THREE from 'three';
-import { G, Merger, makePerson, animatePerson, CarRig, type Person, type PersonLook } from '../entities/models';
+import { G, Merger, makePerson, animatePerson, vertexMat, CarRig, type Person, type PersonLook } from '../entities/models';
 import { seated } from '../entities/vehiclesHD';
-import { Sky, Sun, glowTexture, applyShadows, settleAmbient } from '../core/gfx';
+import { Sky, Sun, glowTexture, applyShadows, settleAmbient, toon, paintMat } from '../core/gfx';
 import { setSurface, Surf } from '../core/surfaces';
-import { cinema } from '../core/cinema';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
 import { canvasTex, streetSignTexture } from './deco';
 
-// Sant Joan, de madrugada: el taxi por el Camí de sa Farola, como en Street View. Asfalto gastado con sus grietas,
-// parches y la línea discontinua medio borrada, arcén de tierra roja con pinaza, coches aparcados a los dos lados,
-// pinos enormes que cierran la carretera por arriba, muro de piedra seca con sus cancelas, villas con la luz
-// encendida, farolas de hormigón y postes con el cable. Y gente que vuelve de la fiesta por el arcén.
+// Sant Joan, de madrugada: el taxi por el Camí de sa Farola, como en Street View. Asfalto con la línea discontinua,
+// arcén de tierra roja, coches aparcados a los dos lados, pinos enormes que cierran la carretera por arriba, muro de
+// piedra seca con sus cancelas, villas (casi todas ya a oscuras), farolas de hormigón y postes con el cable. Y gente
+// que vuelve de la fiesta por el arcén.
+//
+// En tebeo (como el cap. 1 y el 2): superficies dibujadas (asfalto, tierra, piedra seca, corteza) en vez de fotos
+// pintadas en lienzo, copas de pino macizas, la pintura de la calzada plana y ninguna lámpara que ilumine nada (ni
+// farolas, ni faros): solo se ven encendidas.
 
 const EARTH = 0x8a4f33;
 setSurface(EARTH, Surf.Sand);
+/** Suelo del pinar: tierra con pinaza. */
+const FOREST = 0x5e5034;
+setSurface(FOREST, Surf.Sand);
 const LEN = 300;
 /** Carril de la derecha, mirando hacia +z. */
 const LANE_X = -1.75;
 const FROM_Z = 8;
 const TO_Z = 232;
-const RIDE_SECS = 15.5;
 const WALL_X = -7.3;
 
 const TAXI_DRIVER: PersonLook = { skin: 0xe2b08c, shirt: 0xf2f2ee, pants: 0x2a2a2a, hair: 0x4a4a4a, hairStyle: 'short', male: true };
 
-// ---------------- Texturas pintadas ----------------
-
-let seed = 7;
-const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const rr = (a: number, b: number) => a + rnd() * (b - a);
-
-function surface(tex: THREE.Texture, rx: number, ry: number) {
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(rx, ry);
-  tex.anisotropy = 8;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** Puntitos de grava: claros y oscuros. */
-function grain(x: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number, n: number, lo: number, hi: number, r0 = 0.5, r1 = 1.6, a = 0.5) {
-  for (let i = 0; i < n; i++) {
-    const v = rr(lo, hi) | 0;
-    x.fillStyle = `rgba(${v},${v},${v},${rr(a * 0.4, a)})`;
-    const r = rr(r0, r1);
-    x.fillRect(x0 + rnd() * w, y0 + rnd() * h, r, r);
-  }
-}
-
-/** Una línea que se quiebra: grieta o raíz de alquitrán. */
-function crack(x: CanvasRenderingContext2D, px: number, py: number, ang: number, steps: number, step: number) {
-  x.beginPath();
-  x.moveTo(px, py);
-  for (let i = 0; i < steps; i++) {
-    ang += rr(-0.55, 0.55);
-    px += Math.cos(ang) * step * rr(0.5, 1.3);
-    py += Math.sin(ang) * step * rr(0.5, 1.3);
-    x.lineTo(px, py);
-  }
-  x.stroke();
-}
-
-// La carretera entera (15 m de ancho, tierra incluida), 45 m de largo por repetición
 const ROAD_W = 15;
-const ROAD_L = 45;
-function roadTexture() {
-  return surface(
-    canvasTex((x, w, h) => {
-      const mx = w / ROAD_W; // píxeles por metro
-      const X = (m: number) => (m + ROAD_W / 2) * mx;
-      // La tierra roja del arcén, con su polvo y sus piedras
-      x.fillStyle = '#6b4a38';
-      x.fillRect(0, 0, w, h);
-      for (let i = 0; i < 900; i++) {
-        x.fillStyle = `rgba(${rr(60, 135) | 0},${rr(40, 90) | 0},${rr(28, 62) | 0},${rr(0.1, 0.32)})`;
-        const r = rr(4, 34);
-        x.beginPath();
-        x.ellipse(rnd() * w, rnd() * h, r, r * rr(0.4, 1), rnd() * 3, 0, 7);
-        x.fill();
-      }
-      grain(x, 0, 0, w, h, 26000, 40, 200, 0.6, 2.4, 0.38);
-      // Las rodadas de quien aparca en el arcén
-      for (const s of [-1, 1])
-        for (const d of [4.3, 5.75]) {
-          x.fillStyle = 'rgba(40,24,16,.17)';
-          x.fillRect(X(s * d) - 14, 0, 28, h);
-        }
-      // El asfalto: el borde se desmenuza
-      const edge = (sgn: number) => {
-        const pts: [number, number][] = [];
-        let off = 0;
-        for (let y = 0; y <= h; y += 14) {
-          off += rr(-3.4, 3.4);
-          // Vuelve a cero al final para que empalme
-          off *= 1 - Math.pow(y / h, 8) * 0.6;
-          pts.push([X(sgn * 3.5) + sgn * off, y]);
-        }
-        pts[pts.length - 1][0] = pts[0][0];
-        return pts;
-      };
-      const L = edge(-1), R = edge(1);
-      x.fillStyle = '#404045';
-      x.beginPath();
-      x.moveTo(L[0][0], 0);
-      for (const p of L) x.lineTo(p[0], p[1]);
-      for (const p of [...R].reverse()) x.lineTo(p[0], p[1]);
-      x.closePath();
-      x.fill();
-      x.save();
-      x.clip();
-      // Manchas grandes: el asfalto envejece a trozos
-      for (let i = 0; i < 240; i++) {
-        const v = rr(38, 92) | 0;
-        x.fillStyle = `rgba(${v},${v},${v + 3},${rr(0.05, 0.16)})`;
-        const r = rr(24, 150);
-        x.beginPath();
-        x.ellipse(rnd() * w, rnd() * h, r, r * rr(0.5, 2.4), rnd() * 3, 0, 7);
-        x.fill();
-      }
-      // Las bandas por donde pisan las ruedas, más pulidas
-      for (const c of [-2.6, -0.9, 0.9, 2.6]) {
-        const g = x.createLinearGradient(X(c) - 42, 0, X(c) + 42, 0);
-        g.addColorStop(0, 'rgba(120,120,126,0)');
-        g.addColorStop(0.5, 'rgba(120,120,126,.17)');
-        g.addColorStop(1, 'rgba(120,120,126,0)');
-        x.fillStyle = g;
-        x.fillRect(X(c) - 42, 0, 84, h);
-      }
-      // Grava del firme
-      grain(x, X(-3.8), 0, X(3.8) - X(-3.8), h, 220000, 18, 165, 0.6, 2.1, 0.5);
-      // Parches rectangulares, más oscuros y con el corte visible
-      for (let i = 0; i < 9; i++) {
-        const pw = rr(0.9, 2.6) * mx, ph = rr(1.6, 6.5) * mx, px = X(rr(-3.3, 1.6)), py = rnd() * (h - ph);
-        x.fillStyle = `rgba(${rr(36, 46) | 0},${rr(36, 46) | 0},${rr(38, 48) | 0},.42)`;
-        x.fillRect(px, py, pw, ph);
-        grain(x, px, py, pw, ph, (pw * ph) / 14, 18, 130, 0.5, 1.6, 0.42);
-        x.strokeStyle = 'rgba(16,16,18,.62)';
-        x.lineWidth = 1.6;
-        x.strokeRect(px, py, pw, ph);
-      }
-      // Reparaciones de alquitrán brillante y grietas finas
-      x.lineCap = 'round';
-      for (let i = 0; i < 9; i++) {
-        x.strokeStyle = 'rgba(14,14,16,.7)';
-        x.lineWidth = rr(1.8, 3.2);
-        crack(x, X(rr(-3.4, 3.4)), rnd() * h, rnd() * 6.28, 12, 22);
-      }
-      x.strokeStyle = 'rgba(20,20,22,.55)';
-      x.lineWidth = 0.9;
-      for (let i = 0; i < 120; i++) crack(x, X(rr(-3.4, 3.4)), rnd() * h, rnd() * 6.28, 7, 9);
-      // Línea discontinua: pintura vieja, con trozos saltados
-      const dash = 5.5 * mx, on = 2.6 * mx, lw = 0.11 * mx;
-      for (let y = 0; y < h; y += dash) {
-        x.fillStyle = 'rgba(214,210,196,.72)';
-        x.fillRect(X(0) - lw / 2, y, lw, on);
-        for (let i = 0; i < 90; i++) {
-          x.fillStyle = 'rgba(58,58,62,.8)';
-          x.fillRect(X(0) - lw / 2 + rnd() * lw, y + rnd() * on, rr(1, 5), rr(1, 8));
-        }
-      }
-      // Manchas de aceite, tapa de registro y agujas de pino que invaden el asfalto
-      for (let i = 0; i < 12; i++) {
-        x.fillStyle = `rgba(10,10,12,${rr(0.14, 0.34)})`;
-        x.beginPath();
-        x.ellipse(X(rr(-3.2, 3.2)), rnd() * h, rr(8, 30), rr(8, 22), rnd() * 3, 0, 7);
-        x.fill();
-      }
-      const mh = [X(-2.5), h * 0.62];
-      x.fillStyle = '#26262a';
-      x.beginPath();
-      x.arc(mh[0], mh[1], 0.36 * mx, 0, 7);
-      x.fill();
-      x.strokeStyle = '#111';
-      x.lineWidth = 3;
-      for (let k = -2; k <= 2; k++) {
-        x.beginPath();
-        x.moveTo(mh[0] - 0.28 * mx, mh[1] + (k * 0.11 * mx));
-        x.lineTo(mh[0] + 0.28 * mx, mh[1] + (k * 0.11 * mx));
-        x.stroke();
-      }
-      x.restore();
-      // Pinaza: agujas sueltas por todas partes, muchas más en los bordes
-      for (let i = 0; i < 6400; i++) {
-        const side = rnd() < 0.5 ? -1 : 1;
-        const d = 2.9 + Math.pow(rnd(), 1.5) * 4.6;
-        const px = X(side * d), py = rnd() * h, a = rnd() * 6.28, l = rr(5, 13);
-        x.strokeStyle = `rgba(${rr(110, 170) | 0},${rr(70, 105) | 0},${rr(35, 55) | 0},${rr(0.45, 0.9)})`;
-        x.lineWidth = rr(0.8, 1.5);
-        x.beginPath();
-        x.moveTo(px, py);
-        x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l);
-        x.stroke();
-      }
-      // Piedrecitas al borde
-      for (let i = 0; i < 620; i++) {
-        const side = rnd() < 0.5 ? -1 : 1;
-        const px = X(side * rr(3.5, 7.4)), py = rnd() * h, r = rr(1.2, 5);
-        x.fillStyle = 'rgba(14,8,5,.55)';
-        x.beginPath();
-        x.ellipse(px + 1, py + 1.5, r, r * 0.8, 0, 0, 7);
-        x.fill();
-        const v = rr(120, 190) | 0;
-        x.fillStyle = `rgb(${v},${(v * 0.86) | 0},${(v * 0.7) | 0})`;
-        x.beginPath();
-        x.ellipse(px, py, r, r * 0.8, rnd(), 0, 7);
-        x.fill();
-      }
-    }, 2048, 6144),
-    1,
-    (LEN + 120) / ROAD_L,
-  );
-}
-
-/** Suelo de pinar: tierra oscura, hierba seca, pinaza y piedras. */
-function forestTexture() {
-  return surface(
-    canvasTex((x, w, h) => {
-      x.fillStyle = '#4c4630';
-      x.fillRect(0, 0, w, h);
-      for (let i = 0; i < 500; i++) {
-        x.fillStyle = `rgba(${rr(40, 110) | 0},${rr(40, 90) | 0},${rr(20, 50) | 0},${rr(0.08, 0.28)})`;
-        const r = rr(10, 70);
-        x.beginPath();
-        x.ellipse(rnd() * w, rnd() * h, r, r * rr(0.5, 1), rnd() * 3, 0, 7);
-        x.fill();
-      }
-      for (let i = 0; i < 9000; i++) {
-        const px = rnd() * w, py = rnd() * h, a = rnd() * 6.28, l = rr(4, 11);
-        x.strokeStyle = rnd() < 0.6 ? `rgba(${rr(120, 170) | 0},${rr(85, 115) | 0},${rr(40, 60) | 0},.7)` : `rgba(${rr(70, 100) | 0},${rr(90, 120) | 0},${rr(40, 60) | 0},.6)`;
-        x.lineWidth = 1;
-        x.beginPath();
-        x.moveTo(px, py);
-        x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l);
-        x.stroke();
-      }
-    }, 1024, 1024),
-    70,
-    90,
-  );
-}
-
-/** Piedra seca menorquina: caliza y marès a trozos irregulares, bien encajados, con líquenes. Repite cada 6 m. */
-function stoneTexture() {
-  return surface(
-    canvasTex((x, w, h) => {
-      x.fillStyle = '#20180f';
-      x.fillRect(0, 0, w, h);
-      let y = -6;
-      while (y < h) {
-        const rowH = rr(52, 118);
-        let px = -rr(0, 80);
-        while (px < w) {
-          const sw = rr(64, 230);
-          const hgt = rowH * rr(0.74, 1);
-          const shift = rr(-6, 6);
-          const base = rr(122, 186);
-          // Unas grises, otras de marès, algo más amarillas
-          const warm = rnd() < 0.35 ? rr(0.84, 0.9) : rr(0.91, 0.96);
-          const c = [base, base * warm, base * (warm - rr(0.08, 0.2))];
-          // Un polígono de cantos rotos
-          const n = 5 + ((rnd() * 4) | 0);
-          const verts: [number, number][] = [];
-          for (let i = 0; i < n; i++) {
-            const a = (i / n) * 6.283 + rr(-0.26, 0.26);
-            const q = Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)));
-            verts.push([(Math.cos(a) / q) * (sw / 2) * rr(0.86, 1), (Math.sin(a) / q) * (hgt / 2) * rr(0.82, 1)]);
-          }
-          const drawStone = (ox: number) => {
-            const cx = px + sw / 2 + ox, cy = y + rowH / 2 + shift;
-            x.beginPath();
-            verts.forEach(([vx, vy], i) => (i ? x.lineTo(cx + vx, cy + vy) : x.moveTo(cx + vx, cy + vy)));
-            x.closePath();
-            x.fillStyle = `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
-            x.fill();
-            x.save();
-            x.clip();
-            const g = x.createLinearGradient(0, cy - hgt / 2, 0, cy + hgt / 2);
-            g.addColorStop(0, 'rgba(255,250,236,.2)');
-            g.addColorStop(0.4, 'rgba(0,0,0,0)');
-            g.addColorStop(1, 'rgba(0,0,0,.5)');
-            x.fillStyle = g;
-            x.fillRect(cx - sw, cy - hgt, sw * 2, hgt * 2);
-            // Vetas, poros y manchas
-            x.strokeStyle = 'rgba(40,32,24,.35)';
-            x.lineWidth = 1;
-            for (let k = 0; k < 3; k++) crack(x, cx + rr(-sw / 2, sw / 2), cy + rr(-hgt / 2, hgt / 2), rnd() * 6, 5, 9);
-            grain(x, cx - sw / 2, cy - hgt / 2, sw, hgt, (sw * hgt) / 16, 20, 235, 0.6, 2.4, 0.42);
-            if (rnd() < 0.42) {
-              x.fillStyle = rnd() < 0.55 ? 'rgba(170,165,92,.34)' : 'rgba(220,220,205,.32)';
-              for (let k = 0; k < 9; k++) {
-                x.beginPath();
-                x.arc(cx + rr(-sw / 2, sw / 2), cy + rr(-hgt / 2, hgt / 2), rr(2, 11), 0, 7);
-                x.fill();
-              }
-            }
-            x.restore();
-          };
-          drawStone(0);
-          if (px < 0) drawStone(w);
-          if (px + sw > w) drawStone(-w);
-          px += sw * rr(0.92, 1);
-        }
-        y += rowH * 0.9;
-      }
-    }, 1024, 512),
-    1,
-    1,
-  );
-}
-
-/** Corteza de pino: placas alargadas, rojizas, separadas por grietas profundas. */
-function barkTexture() {
-  return surface(
-    canvasTex((x, w, h) => {
-      x.fillStyle = '#1b120c';
-      x.fillRect(0, 0, w, h);
-      for (let i = 0; i < 1500; i++) {
-        const pw = rr(10, 30), ph = rr(26, 104), px = rnd() * w, py = rnd() * h;
-        const v = rr(46, 112);
-        const c = `rgb(${v | 0},${(v * rr(0.72, 0.82)) | 0},${(v * rr(0.56, 0.66)) | 0})`;
-        for (const ox of [-w, 0, w])
-          for (const oy of [-h, 0, h]) {
-            x.fillStyle = c;
-            x.beginPath();
-            x.ellipse(px + ox, py + oy, pw / 2, ph / 2, rr(-0.14, 0.14), 0, 7);
-            x.fill();
-          }
-      }
-      grain(x, 0, 0, w, h, 26000, 10, 170, 0.6, 2.2, 0.4);
-    }, 512, 1024),
-    1,
-    1,
-  );
-}
-
-/** Una mata de agujas de pino, recortada: estallidos de agujas finas sobre fondo transparente. */
-function needleTexture() {
-  return surface(
-    canvasTex((x, w, h) => {
-      x.clearRect(0, 0, w, h);
-      const greens = ['#284a22', '#2f5a28', '#3b6b30', '#20401e', '#47783a'];
-      const tufts = 34;
-      for (let t = 0; t < tufts; t++) {
-        const a0 = rnd() * 6.283, r0 = Math.pow(rnd(), 0.6) * w * 0.34;
-        const cx = w / 2 + Math.cos(a0) * r0, cy = h / 2 + Math.sin(a0) * r0;
-        x.strokeStyle = greens[(rnd() * greens.length) | 0];
-        for (let i = 0; i < 46; i++) {
-          const a = rnd() * 6.283, l = rr(18, 58);
-          x.lineWidth = rr(1, 2.1);
-          x.beginPath();
-          x.moveTo(cx, cy);
-          x.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l);
-          x.stroke();
-        }
-      }
-    }, 512, 512),
-    1,
-    1,
-  );
-}
 
 // ---------------- Pinos ----------------
 
@@ -431,33 +102,15 @@ function pine(variant: number) {
     parts.push(tube([b, b.clone().add(v(Math.cos(a) * l * 0.5, 0.3, Math.sin(a) * l * 0.5)), b.clone().add(v(Math.cos(a) * l, 0.25, Math.sin(a) * l))], 0.085, 0.015));
   }
   const trunk = concat(parts);
-  // La copa: láminas de agujas casi horizontales, en una seta aplastada, más oscuras por abajo
-  const quads: THREE.BufferGeometry[] = [];
-  const o = new THREE.Object3D();
-  const c = new THREE.Color();
-  for (let i = 0; i < 170; i++) {
-    const tip = tips[i % tips.length];
-    const a = rnd() * 6.283, rad = Math.pow(rnd(), 0.55) * 4.2;
-    const yy = rr(-0.75, 0.75);
-    const s = rr(1.9, 3.5);
-    const q = new THREE.PlaneGeometry(s, s);
-    o.position.set(tip.x + Math.cos(a) * rad, tip.y + yy - (rad * rad) / 26, tip.z + Math.sin(a) * rad);
-    o.rotation.set(-Math.PI / 2 + rr(-0.75, 0.75), rr(-0.65, 0.65), rnd() * 6.28);
-    o.updateMatrix();
-    q.applyMatrix4(o.matrix);
-    // Normales hacia arriba: la copa se ilumina entera, sin el parpadeo de las láminas
-    const n = q.attributes.normal;
-    const col = new Float32Array(n.count * 3);
-    const k = THREE.MathUtils.clamp(0.42 + ((yy + 0.75) / 1.5) * 0.75, 0, 1);
-    c.setRGB(k, k, k);
-    for (let j = 0; j < n.count; j++) {
-      n.setXYZ(j, 0.12, 1, 0.12);
-      col.set([c.r, c.g, c.b], j * 3);
-    }
-    q.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    quads.push(q.toNonIndexed());
-  }
-  return { trunk, crown: concat(quads) };
+  // La copa: una seta ancha y plana de matas macizas (como las copas del cap. 1), más oscura por abajo. Las 170
+  // láminas de agujas recortadas de antes llenaban la copa de tinta
+  const crown = new Merger(false);
+  tips.forEach((tip, i) => {
+    crown.add(G.sphere, 0x24441f, tip.x, tip.y - 0.42, tip.z, 0, i, 0, 2.9, 0.75, 2.9);
+    crown.add(G.sphere, i % 2 ? 0x2f5a28 : 0x335e2b, tip.x, tip.y, tip.z, 0, i * 2, 0, 3.4, 1.05, 3.4);
+    crown.add(G.sphere, 0x3b6b30, tip.x + 0.3, tip.y + 0.42, tip.z - 0.2, 0, i, 0, 2.3, 0.6, 2.3);
+  });
+  return { trunk, crown: crown.build() };
 }
 
 // ---------------- Coches ----------------
@@ -568,6 +221,9 @@ function bar(m: Merger, c: number, a: [number, number, number], b: [number, numb
 /** Las tres capas de un modelo: la pintura (se tiñe por coche), los cristales y todo lo demás. */
 function carModel(s: CarSpec, withWheels = true) {
   const paint = new Merger(false), glass = new Merger(false), trim = new Merger(false);
+  // Los cristales de los faros y los pilotos, aparte: en un coche en marcha van encendidos (sin halo ni haz: solo se
+  // ven encendidos, como los del cap. 2)
+  const head = new Merger(false), tail = new Merger(false);
   const W = s.w, HW = W / 2, L = s.len;
   // La planta se estrecha un poco en el morro y en la cola
   const plan = (z: number) => HW * (1 - 0.13 * Math.pow(Math.abs(z) / (L / 2), 3.4));
@@ -692,10 +348,12 @@ function carModel(s: CarSpec, withWheels = true) {
     trim.add(G.rbox, 0x1a1c20, sg * (HW * 0.62), hy, FZ - 0.1, 0, sg * 0.32, 0, 0.5, 0.17, 0.2);
     trim.add(G.rbox, 0xdfe6ea, sg * (HW * 0.64), hy, FZ - 0.04, 0, sg * 0.32, 0, 0.42, 0.13, 0.17);
     trim.add(G.rbox, 0xf6f4e4, sg * (HW * 0.58), hy, FZ - 0.015, 0, sg * 0.32, 0, 0.12, 0.08, 0.14);
+    head.add(G.rbox, 0xfff4dc, sg * (HW * 0.64), hy, FZ - 0.035, 0, sg * 0.32, 0, 0.44, 0.15, 0.21);
     // Pilotos
     const ty = s === SPECS.van ? 1.15 : ry - 0.02;
     trim.add(G.rbox, 0x7a0e12, sg * (HW * 0.72), ty, RZ + 0.05, 0, -sg * 0.26, 0, 0.42, s === SPECS.van ? 0.3 : 0.17, 0.12);
     trim.add(G.rbox, 0xc62a22, sg * (HW * 0.72), ty, RZ + 0.02, 0, -sg * 0.26, 0, 0.32, s === SPECS.van ? 0.2 : 0.09, 0.09);
+    tail.add(G.rbox, 0xff3a26, sg * (HW * 0.72), ty, RZ + 0.015, 0, -sg * 0.26, 0, 0.35, s === SPECS.van ? 0.22 : 0.11, 0.11);
     trim.add(G.rbox, 0xe3a23a, sg * (HW * 0.8), s.bot + 0.28, FZ - 0.05, 0, 0, 0, 0.1, 0.05, 0.08);
     // Luz de niebla y reflectante
     trim.add(DISC.clone().rotateY(Math.PI / 2), 0xcfd3d6, sg * (HW * 0.68), s.bot + 0.14, FZ + 0.012, 0, 0, 0, 0.09, 0.09, 0.012);
@@ -717,7 +375,7 @@ function carModel(s: CarSpec, withWheels = true) {
   plate(RZ - 0.02, s.bot + 0.3, -1);
   if (s === SPECS.hatch || s === SPECS.suv || s === SPECS.city) trim.add(G.box, 0x0a0b0c, 0, lerpTable(s.cabin!, RZ + 0.25) - 0.05, RZ + 0.26, 0.5, 0, 0, 0.28, 0.012, 0.02);
   trim.add(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8).rotateX(Math.PI / 2), 0x8d9096, HW * 0.45, s.bot + 0.03, RZ + 0.02);
-  return { paint: paint.build(), glass: glass.build(), trim: trim.build() };
+  return { paint: paint.build(), glass: glass.build(), trim: trim.build(), head: head.build(), tail: tail.build() };
 }
 
 function m3rail(m: Merger, x: number, y: number, z0: number, z1: number) {
@@ -725,22 +383,34 @@ function m3rail(m: Merger, x: number, y: number, z0: number, z1: number) {
   for (const z of [z0, z1]) m.add(G.box, 0x22242a, x, y + 0.008, z, 0, 0, 0, 0.04, 0.04, 0.06);
 }
 
-let mats: { paint: THREE.MeshPhysicalMaterial; glass: THREE.MeshPhysicalMaterial; trim: THREE.MeshStandardMaterial } | null = null;
+let mats: { paint: THREE.MeshPhysicalMaterial; glass: THREE.MeshPhysicalMaterial; trim: THREE.MeshStandardMaterial; lamp: THREE.MeshBasicMaterial } | null = null;
 function carMaterials() {
   return (mats ??= {
     paint: new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.34, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.12 }),
     glass: new THREE.MeshPhysicalMaterial({ color: 0x0a0e13, roughness: 0.06, metalness: 0.75, clearcoat: 1 }),
     trim: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48, metalness: 0.28 }),
+    // (faros y pilotos encendidos: color pleno, sin sombra)
+    lamp: new THREE.MeshBasicMaterial({ vertexColors: true }),
   });
 }
 
-/** Taxi de Menorca: una berlina blanca, con su cajetín en el techo, su rótulo en la puerta y la luz verde encendida. */
-export function makeTaxi() {
+/** Faros y pilotos encendidos de un modelo, para un coche en marcha (los aparcados, apagados). */
+function carLamps(model: ReturnType<typeof carModel>) {
+  const { lamp } = carMaterials();
+  const h = new THREE.Mesh(model.head, lamp), t = new THREE.Mesh(model.tail, lamp);
+  h.userData.noCast = t.userData.noCast = true;
+  return [h, t];
+}
+
+/** Taxi de Menorca: una berlina blanca, con su cajetín en el techo, su rótulo en la puerta y la luz verde de libre. */
+export function makeTaxi(opts: { back?: PersonLook } = {}) {
   const M = carMaterials();
   const spec = SPECS.sedan;
   const model = carModel(spec, false);
   const root = new THREE.Group();
   root.userData.noCam = true;
+  // (se mueve: el cómic no lo dobla a mano alzada; si no, viajaba torcido)
+  root.userData.comicBent = true;
   const body = new THREE.Group();
   root.add(body);
   const paint = M.paint.clone();
@@ -751,6 +421,7 @@ export function makeTaxi() {
     b.receiveShadow = true;
     body.add(b);
   }
+  body.add(...carLamps(model));
   // Ruedas: van aparte para que rueden
   const wheelM = new Merger(false);
   wheel(wheelM, 1, 0, 0.315, 0);
@@ -772,16 +443,23 @@ export function makeTaxi() {
       root.add(holder);
       wheels.push(holder);
     }
-  // Ocupantes: el taxista delante a la izquierda; ella, a su lado
+  // Ocupantes: el taxista delante a la izquierda; ella, a su lado; detrás, quien vaya (Gas, cojo, se estira)
   const azul = new THREE.Group();
   const joy = new THREE.Group();
   const drv = seated(TAXI_DRIVER, 0.95, 0.9);
-  if (drv.rig) drv.root.position.set(0.4, 0.6 - drv.rig.hipsHeight * 0.95, -0.2);
+  if (drv.rig) drv.root.position.set(SEAT.driver[0], 0.6 - drv.rig.hipsHeight * 0.95, SEAT.driver[2]);
   body.add(drv.root);
   const her = seated(MARGAUX_LOOK, 0.95, 0.35);
-  if (her.rig) her.root.position.set(-0.4, 0.6 - her.rig.hipsHeight * 0.95, -0.2);
+  if (her.rig) her.root.position.set(SEAT.front[0], 0.6 - her.rig.hipsHeight * 0.95, SEAT.front[2]);
   azul.add(her.root);
   body.add(azul);
+  const back = new THREE.Group();
+  if (opts.back) {
+    const him = seated(opts.back, 0.95, 0.35);
+    if (him.rig) him.root.position.set(SEAT.back[0], 0.62 - him.rig.hipsHeight * 0.95, SEAT.back[2]);
+    back.add(him.root);
+  }
+  body.add(back);
   const tex = canvasTex((x, w, h) => {
     x.fillStyle = '#fbfbf2';
     x.fillRect(0, 0, w, h);
@@ -794,10 +472,11 @@ export function makeTaxi() {
   const sign = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 0.2), new THREE.MeshBasicMaterial({ map: tex, fog: false, toneMapped: false }));
   sign.position.set(0, 1.56, -0.32);
   body.add(sign);
-  const green = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: 0x38ff6a, fog: false, toneMapped: false }));
+  // La luz verde: encendida si va libre; con gente dentro, apagada (ver taxiFree)
+  const green = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: GREEN_ON, fog: false, toneMapped: false }));
   green.position.set(0.38, 1.52, -0.32);
   body.add(green);
-  // En las puertas, el rótulo
+  // En las puertas, el rótulo (con luz: de noche, una pegatina no brilla sola)
   const door = canvasTex((x, w, h) => {
     x.clearRect(0, 0, w, h);
     x.fillStyle = '#16365a';
@@ -807,7 +486,7 @@ export function makeTaxi() {
     x.font = '26px Arial, sans-serif';
     x.fillText('Ciutadella de Menorca', w / 2, 84);
   }, 320, 100);
-  const doorMat = new THREE.MeshBasicMaterial({ map: door, transparent: true, depthWrite: false, color: 0x8a8a8a });
+  const doorMat = new THREE.MeshStandardMaterial({ map: door, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   for (const sg of [-1, 1]) {
     const d = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.27), doorMat);
     d.position.set(sg * 0.896, 0.68, 0.08);
@@ -815,44 +494,78 @@ export function makeTaxi() {
     d.userData.noCast = true;
     body.add(d);
   }
-  // Los pilotos, encendidos: de noche se ven desde lejos
-  const tail = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a1e, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  for (const sg of [-1, 1]) {
-    const t = new THREE.Sprite(tail);
-    t.position.set(sg * 0.64, 0.86, -spec.len / 2 - 0.04);
-    t.scale.setScalar(0.42);
-    body.add(t);
-  }
-  return { root, body, joy, wheels, azul };
+  return { root, body, joy, wheels, azul, back, green };
+}
+
+export type Taxi = ReturnType<typeof makeTaxi>;
+
+const GREEN_ON = 0x38ff6a;
+/** Asientos del taxi (locales, mirando a +z; +x es la izquierda): el taxista, ella delante y quien va detrás. */
+const SEAT = { driver: [0.4, 0, -0.2], front: [-0.4, 0, -0.2], back: [0.32, 0, -1.08] } as const;
+
+/** Libre (luz verde encendida) u ocupado (apagada), como los de verdad. */
+export function taxiFree(t: Taxi, free: boolean) {
+  (t.green.material as THREE.MeshBasicMaterial).color.setHex(free ? GREEN_ON : 0x1f3326);
+}
+
+/**
+ * De dónde sale el bocadillo de quien va en el taxi (cada uno desde su asiento, como en el coche del cap. 2): el
+ * taxista y Gas a la izquierda, ella a la derecha. null si no es de los que van dentro.
+ */
+export function taxiSeat(t: Taxi, who: string) {
+  const s = who === 'Taxista' ? SEAT.driver : who === 'Margaux' || who === 'Azul' ? SEAT.front : who === 'Gas' || who === 'Marc' ? SEAT.back : null;
+  if (!s) return null;
+  return t.body.localToWorld(new THREE.Vector3(s[0], who === 'Gas' || who === 'Marc' ? 1.58 : 1.64, s[2]));
+}
+
+/** Hacia qué lado se abre su globo (el taxista y Gas van a la izquierda; ella, a la derecha). */
+export function taxiSide(who: string): 'l' | 'r' {
+  return who === 'Margaux' || who === 'Azul' ? 'r' : 'l';
 }
 
 // ---------------- El camino ----------------
+
+/** Hasta dónde puede seguir el taxi si aún les queda conversación (la carretera sigue hasta LEN + 60). */
+const RIDE_END = TO_Z + 45;
 
 export class TaxiRide {
   scene = new THREE.Scene();
   private sky: Sky;
   private sun: Sun;
-  private taxi = makeTaxi();
+  /** El taxi, con Gas detrás (cojo, estirado en el asiento de atrás). Va ocupado: luz verde apagada. */
+  readonly taxi = makeTaxi({ back: MARC_LOOK });
   private rig!: CarRig;
   private t = 0;
-  private prevZ = FROM_Z;
+  /** Por dónde va (z), a qué velocidad y su velocidad de crucero (la que hace que les dé tiempo a hablar). */
+  private z = FROM_Z;
+  private v = 5;
+  private vmax = 10;
   private lampZ: number[] = [];
-  /** Las dos farolas más cercanas alumbran de verdad: brillo en las carrocerías y en el asfalto. */
-  private lit = [new THREE.PointLight(0xffd6ac, 0, 30, 1.5), new THREE.PointLight(0xffd6ac, 0, 30, 1.5)];
   private moths: THREE.Points;
-  private dust: THREE.Points;
-  private oncoming: { root: THREE.Group; at: number; v: number }[] = [];
+  private lampA = new THREE.Vector3();
+  private lampB = new THREE.Vector3();
+  private oncoming: { root: THREE.Group; v: number }[] = [];
   private walkers: { p: Person; v: number }[] = [];
+  private camLook = new THREE.Vector3();
+  private v1 = new THREE.Vector3();
   done = false;
 
   constructor() {
     const sc = this.scene;
-    sc.fog = new THREE.Fog(0x090e24, 30, 165);
-    this.sky = new Sky({ top: 0x02030c, mid: 0x060a22, bottom: 0x0e1432, stars: 1400 });
+    // De madrugada, como la noche del cap. 2: perfil «noche», poco ambiente y la luz de luna azul que dibuja
+    sc.userData.comicLook = 'noche';
+    sc.userData.hemiScale = 0.32;
+    // (un viaje tranquilo a casa de madrugada: sin líneas de velocidad todo el camino; solo en la rama principal)
+    sc.userData.speedLines = 0;
+    sc.fog = new THREE.Fog(0x0b1030, 35, 150);
+    this.sky = new Sky({ top: 0x02030f, mid: 0x0b1440, bottom: 0x1d2350, stars: 1400 });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0x8090c8, 0x1a2030, 1.15));
-    this.sun = new Sun(sc, 0xa9bcff, 0.7, new THREE.Vector3(-0.3, 1, 0.55), 26);
-    sc.add(...this.lit);
+    sc.add(new THREE.HemisphereLight(0x6f7fc0, 0x1a2030, 1.1));
+    this.sun = new Sun(sc, 0xb8c8ff, 2.0, new THREE.Vector3(-0.3, 1, 0.55), 26);
+    // (luz baja: sin esto, rayas de sombra en las superficies largas, como en el pasillo del cap. 2)
+    this.sun.light.shadow.normalBias = 0.16;
+    this.sun.light.shadow.bias = -0.0012;
+    // (y ninguna luz de lámpara: ni las farolas ni los faros iluminan nada; solo se ven encendidos)
 
     const midZ = LEN / 2;
     this.buildGround(midZ);
@@ -873,7 +586,6 @@ export class TaxiRide {
     this.buildPlate();
     this.buildTaxi();
     this.moths = this.makeMoths();
-    this.dust = this.makeDust();
     this.buildWalkers();
     this.buildOncoming();
     applyShadows(sc);
@@ -883,25 +595,33 @@ export class TaxiRide {
     settleAmbient(sc);
   }
 
+  /** Asfalto, arcén de tierra roja y suelo del pinar, con su dibujo de tebeo; la línea discontinua, pintada plana. */
   private buildGround(midZ: number) {
     const sc = this.scene;
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(ROAD_W, LEN + 120).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ map: (this.roadMap = roadTexture()), bumpMap: this.roadMap, bumpScale: 1.1, roughness: 0.86, metalness: 0 }),
-    );
-    road.position.set(0, 0.01, midZ);
-    road.receiveShadow = true;
-    road.userData.noCast = true;
-    sc.add(road);
-    const forest = new THREE.Mesh(new THREE.PlaneGeometry(420, LEN + 220).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: forestTexture(), roughness: 1 }));
-    forest.position.set(0, -0.03, midZ);
-    forest.userData.noCast = true;
-    sc.add(forest);
+    const L = LEN + 120;
+    const add = (w: number, y: number, mat: THREE.Material) => {
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(w, L).rotateX(-Math.PI / 2), mat);
+      g.position.set(0, y, midZ);
+      g.receiveShadow = true;
+      g.userData.noCast = true;
+      sc.add(g);
+    };
+    // (antes, un lienzo de 2048 × 6144 con foto pintada: el cómic lo reducía y la línea y las grietas desaparecían)
+    add(7, 0.012, toon({ color: 0x4a4a50, roughness: 0.92, surf: Surf.Asphalt }));
+    add(ROAD_W, 0.006, toon({ color: EARTH, roughness: 1, surf: Surf.Sand }));
+    add(420, -0.03, toon({ color: FOREST, roughness: 1, surf: Surf.Sand }));
+    // La línea discontinua del centro, plana sobre el asfalto (sin grosor: la tinta no le dibuja dientes de sierra)
+    const paint = new Merger(false);
+    const flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    for (let z = midZ - L / 2 + 1; z < midZ + L / 2; z += 5.5) paint.add(flat, 0xe6e2d6, 0, 0.02, z, 0, 0, 0, 0.11, 1, 2.6);
+    const lines = new THREE.Mesh(paint.build(), paintMat());
+    lines.userData.noCast = true;
+    sc.add(lines);
     for (const z of [LEN + 62, -66]) {
       const fade = canvasTex((x, w, h) => {
         const g = x.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, 'rgba(9,14,36,0)');
-        g.addColorStop(0.45, 'rgba(9,14,36,1)');
+        g.addColorStop(0, 'rgba(11,16,48,0)');
+        g.addColorStop(0.45, 'rgba(11,16,48,1)');
         x.fillStyle = g;
         x.fillRect(0, 0, w, h);
       }, 4, 64);
@@ -911,18 +631,14 @@ export class TaxiRide {
       sc.add(end);
     }
   }
-  private roadMap!: THREE.Texture;
 
-  /** El muro: una tira con la textura de piedra, con su remate irregular y piedras sueltas arriba y al pie. */
+  /** El muro: una tira de piedra seca dibujada, con su remate irregular y piedras sueltas arriba y al pie. */
   private buildWall(midZ: number) {
     const sc = this.scene;
     const L = LEN + 120;
-    const tex = stoneTexture();
-    tex.repeat.set(1, 1);
     const seg = Math.round(L / 1.3);
     const front = new THREE.PlaneGeometry(L, 1.38, seg, 4);
     const p = front.attributes.position;
-    const uv = front.attributes.uv;
     for (let i = 0; i < p.count; i++) {
       const lx = p.getX(i), ly = p.getY(i);
       const k = (ly + 0.69) / 1.38;
@@ -930,12 +646,11 @@ export class TaxiRide {
       const n = Math.sin(lx * 3.1) * 0.05 + Math.sin(lx * 7.7 + ly * 4) * 0.04 + Math.sin(ly * 9 + lx) * 0.02;
       p.setZ(i, n);
       p.setY(i, ly + k * (Math.sin(lx * 1.3) * 0.08 + Math.sin(lx * 3.7) * 0.05 + Math.sin(lx * 0.31) * 0.1));
-      uv.setXY(i, (lx + L / 2) / 6, ly / 1.38 + 0.5);
     }
     front.computeVertexNormals();
     front.rotateY(-Math.PI / 2);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: 2.4, roughness: 1 });
-    const wall = new THREE.Mesh(front, mat);
+    // (el dibujo de piedra seca de tebeo, triplanar: el lienzo de foto con relieve se perdía en el cómic)
+    const wall = new THREE.Mesh(front, toon({ color: 0x9c9078, roughness: 1, surf: Surf.DryStone }));
     wall.position.set(WALL_X + 0.42, 0.68, midZ);
     wall.rotation.y = Math.PI;
     wall.receiveShadow = true;
@@ -992,7 +707,8 @@ export class TaxiRide {
         bar(m, 0x7d6b52, [x, 0.3, z - 1.35], [x, 1.32, z + 1.35], 0.05, 0.07);
       } else {
         // Verja de hierro pintada de verde
-        for (let k = -13; k <= 13; k++) m.add(G.box, 0x24382a, x, 0.92, z + k * 0.11, 0, 0, 0, 0.022, 1.45 + (13 - Math.abs(k)) * 0.016, 0.022);
+        // (barrotes de 3,5 cm: con 2,2 la tinta temblaba)
+        for (let k = -11; k <= 11; k++) m.add(G.box, 0x24382a, x, 0.92, z + k * 0.13, 0, 0, 0, 0.035, 1.45 + (11 - Math.abs(k)) * 0.019, 0.035);
         for (const y of [0.3, 1.5]) m.add(G.box, 0x24382a, x, y, z, 0, 0, 0, 0.04, 0.05, 2.9);
       }
       // Azulejo con el número y buzón
@@ -1025,7 +741,8 @@ export class TaxiRide {
       const sg = x < 0 ? 1 : -1;
       for (let k = 0; k < 4; k++) {
         const wz = z - w / 2 + 1.5 + k * ((w - 3) / 3);
-        const lit = (i * 3 + k * 5) % 4 !== 0;
+        // (de madrugada casi todo el mundo duerme: una ventana encendida de cada cinco)
+        const lit = (i * 3 + k * 5) % 5 === 0;
         const fl = i % 3 === 0 && k % 2 === 0 ? 1 : 0;
         const y = 1.5 + fl * 2.9;
         if (lit) glow.add(G.box, (i + k) % 2 ? 0xffc77f : 0xffe0a8, face + sg * 0.012, y, wz, 0, 0, 0, 0.02, 1.12, 0.86);
@@ -1062,7 +779,8 @@ export class TaxiRide {
             const sag = (u: number) => 8.25 - Math.sin(u * Math.PI) * 0.7;
             const z0 = prev + (z - prev) * a, z1 = prev + (z - prev) * b;
             const y0 = sag(a), y1 = sag(b);
-            m.add(G.box, 0x121214, 7.05 + dx, (y0 + y1) / 2, (z0 + z1) / 2, Math.atan2(y0 - y1, z1 - z0), 0, 0, 0.02, 0.02, Math.hypot(z1 - z0, y1 - y0));
+            // (3,5 cm: los de 2 cm salían con la tinta a trozos)
+            m.add(G.box, 0x121214, 7.05 + dx, (y0 + y1) / 2, (z0 + z1) / 2, Math.atan2(y0 - y1, z1 - z0), 0, 0, 0.035, 0.035, Math.hypot(z1 - z0, y1 - y0));
           }
       prev = z;
     }
@@ -1143,7 +861,7 @@ export class TaxiRide {
   private carMats!: { paint: THREE.Material; glass: THREE.Material; trim: THREE.Material };
   private models: Record<string, ReturnType<typeof carModel>> = {};
 
-  /** Farolas altas de hormigón, a la derecha, con su brazo, su luminaria, el resplandor y el charco de luz. */
+  /** Farolas altas de hormigón, a la derecha, con su brazo y su luminaria encendida (sin charco de luz: no iluminan). */
   private buildLamps() {
     const sc = this.scene;
     const m = new Merger();
@@ -1157,9 +875,8 @@ export class TaxiRide {
     }
     sc.add(m.mesh());
     const bulb = new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false, toneMapped: false });
+    // (de noche, el cómic dibuja el halo como luz de tebeo: núcleo con su aro y anillos planos)
     const halo = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const pool = new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xffc48c, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
-    const poolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     const bulbGeo = new THREE.BoxGeometry(0.66, 0.03, 0.26);
     for (const z of this.lampZ) {
       const b = new THREE.Mesh(bulbGeo, bulb);
@@ -1170,11 +887,6 @@ export class TaxiRide {
       s.position.set(-5.42, 7.9, z);
       s.scale.setScalar(3);
       sc.add(s);
-      const p = new THREE.Mesh(poolGeo, pool);
-      p.position.set(-3.6, 0.05, z);
-      p.scale.set(19, 1, 23);
-      p.userData.noCast = true;
-      sc.add(p);
     }
     // Los faroles de las cancelas
     const small = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffbb70, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 });
@@ -1189,10 +901,9 @@ export class TaxiRide {
   /** Los pinos: los de delante, sobre la carretera; los de detrás, el pinar hasta donde se pierde la vista. */
   private buildPines() {
     const sc = this.scene;
-    const bark = barkTexture();
-    const barkMat = new THREE.MeshStandardMaterial({ map: bark, bumpMap: bark, bumpScale: 3, roughness: 1 });
-    const needle = needleTexture();
-    const crownMat = new THREE.MeshStandardMaterial({ map: needle, vertexColors: true, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.95 });
+    // Corteza y copa de tebeo: la corteza dibujada (Surf.Bark) y la copa maciza, lisa como las del cap. 1
+    const barkMat = toon({ color: 0x5a4634, roughness: 1, surf: Surf.Bark });
+    const crownMat = vertexMat();
     const q = new THREE.Quaternion(), e = new THREE.Euler(), mt = new THREE.Matrix4(), ps = new THREE.Vector3(), sz = new THREE.Vector3();
     for (let v = 0; v < 3; v++) {
       const { trunk, crown } = pine(v);
@@ -1224,63 +935,22 @@ export class TaxiRide {
   /** La placa de la calle, al empezar. */
   private buildPlate() {
     const sc = this.scene;
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.34), new THREE.MeshBasicMaterial({ map: streetSignTexture('Camí de sa Farola') }));
+    // (con luz: de noche, una placa de calle no brilla sola)
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.34), new THREE.MeshStandardMaterial({ map: streetSignTexture('Camí de sa Farola'), roughness: 1 }));
     plate.position.set(-6.5, 2.9, 30.05);
     plate.rotation.y = Math.PI;
     sc.add(plate);
     sc.add(new Merger().add(G.cyl, 0x8a8e92, -6.5, 1.5, 30.12, 0, 0, 0, 0.06, 3, 0.06).add(G.box, 0x9aa0a6, -6.5, 2.9, 30.1, 0, 0, 0, 1.54, 0.38, 0.03).mesh());
   }
 
-  /** El taxi, con los faros iluminando la carretera y el haz visible en el aire. Gas, detrás. */
+  /** El taxi al principio del camino; Gas, detrás. Sin foco ni haz de los faros: solo se ven encendidos. */
   private buildTaxi() {
     const t = this.taxi;
+    t.azul.visible = true;
+    taxiFree(t, false);
     t.root.position.set(LANE_X, 0, FROM_Z);
     this.scene.add(t.root);
     this.rig = new CarRig(t);
-    const back = seated(MARC_LOOK, 0.95, 0.35);
-    if (back.rig) {
-      back.root.position.set(0.32, 0.62 - back.rig.hipsHeight * 0.95, -1.08);
-      t.body.add(back.root);
-    }
-    const head = new THREE.SpotLight(0xfff0d0, 80, 50, 0.52, 0.7, 1.2);
-    head.position.set(0, 0.85, 2);
-    head.target.position.set(0, 0, 16);
-    t.root.add(head, head.target);
-    const beamTex = canvasTex((x, w, h) => {
-      const img = x.createImageData(w, h);
-      for (let j = 0; j < h; j++)
-        for (let i = 0; i < w; i++) {
-          // Se abre y se apaga a lo largo; en sección, suave desde el centro
-          const v = j / h, u = (i / w - 0.5) * 2;
-          const width = 0.12 + v * 0.88;
-          const a = Math.max(0, 1 - Math.abs(u) / width);
-          const o = (i + j * w) * 4;
-          img.data[o] = 255;
-          img.data[o + 1] = 238;
-          img.data[o + 2] = 205;
-          img.data[o + 3] = 255 * a * a * Math.pow(1 - v, 1.6) * 0.34;
-        }
-      x.putImageData(img, 0, 0);
-    }, 64, 128);
-    const beamMat = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
-    const sheet = new THREE.PlaneGeometry(5, 14);
-    sheet.rotateX(Math.PI / 2);
-    for (const s of [-0.62, 0.62])
-      {
-        // Solo la lámina vertical: la horizontal se veía desde abajo con la cámara baja
-        const c = new THREE.Mesh(sheet, beamMat);
-        c.position.set(s, 0.84, 2.2 + 7);
-        c.rotation.set(0.03, 0, Math.PI / 2);
-        c.userData.noCast = true;
-        t.root.add(c);
-      }
-    const gl = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff0c8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    for (const s of [-0.62, 0.62]) {
-      const h = new THREE.Sprite(gl);
-      h.position.set(s, 0.76, 2.28);
-      h.scale.setScalar(1.3);
-      t.body.add(h);
-    }
   }
 
   /** Polillas alrededor de las farolas cercanas. */
@@ -1295,21 +965,10 @@ export class TaxiRide {
     return p;
   }
 
-  /** Polvo y mosquitos en el haz de los faros. */
-  private makeDust() {
-    const n = 90;
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) pos.set([(Math.random() - 0.5) * 4, Math.random() * 2.2 + 0.2, Math.random() * 16], i * 3);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff0d0, size: 0.028, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    p.frustumCulled = false;
-    p.userData.noCast = true;
-    this.scene.add(p);
-    return p;
-  }
-
-  /** Gente que vuelve de Sant Joan por el arcén, de blanco (y alguno ya cojeando). */
+  /**
+   * Gente que vuelve de Sant Joan, de blanco (y alguno ya cojeando): van hacia sus casas, en el mismo sentido que el
+   * taxi, por el lado izquierdo, de cara a los coches que vienen (antes iban hacia el pueblo).
+   */
   private buildWalkers() {
     const looks: PersonLook[] = [
       { skin: 0xe8c2a0, shirt: 0xf6f6f2, pants: 0x25304a, hair: 0x2b1d14, hairStyle: 'short', male: true },
@@ -1317,78 +976,81 @@ export class TaxiRide {
       { skin: 0xdcae88, shirt: 0xf6f6f2, pants: 0x25304a, hair: 0x1c1410, hairStyle: 'short', male: true },
       { skin: 0xf0cdb0, shirt: 0xf6f6f2, pants: 0x6f8fb8, hair: 0x4a2c18, hairStyle: 'pony', shorts: true },
     ];
-    const at: [number, number, number][] = [[2.95, 74, 0.95], [3.38, 75, 1], [3.05, 146, 1.1], [3.4, 147.4, 1.05]];
+    const at: [number, number, number][] = [[3.0, 74, 1.0], [3.42, 75, 1.0], [3.05, 146, 1.1], [3.42, 147.2, 1.1]];
     at.forEach(([x, z, v], i) => {
       const p = makePerson(looks[i], 1);
       p.root.position.set(x, 0, z);
-      p.root.rotation.y = Math.PI;
+      p.root.rotation.y = 0;
       this.scene.add(p.root);
       this.walkers.push({ p, v });
     });
   }
 
-  /** Dos coches que vienen de frente, con las luces puestas y el haz sobre el asfalto. */
+  /** Dos coches que vienen de frente, con las luces puestas (sin haz en el asfalto). */
   private buildOncoming() {
-    const glow = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff0c8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const red = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a1e, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 });
-    const beam = new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xffe9b8, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
-    const beamGeo = new THREE.PlaneGeometry(4.4, 14).rotateX(-Math.PI / 2);
     const paints = [0x8a1f24, 0x2b3744];
     (['hatch', 'suv'] as const).forEach((k, i) => {
       const model = this.models[k];
       const root = new THREE.Group();
+      root.userData.comicBent = true;
       const paint = (this.carMats.paint as THREE.MeshPhysicalMaterial).clone();
       paint.vertexColors = false;
       paint.color.set(paints[i]);
-      root.add(new THREE.Mesh(model.paint, paint), new THREE.Mesh(model.glass, this.carMats.glass), new THREE.Mesh(model.trim, this.carMats.trim));
-      for (const s of [-0.58, 0.58]) {
-        const h = new THREE.Sprite(glow);
-        h.position.set(s, 0.72, SPECS[k].len / 2 + 0.1);
-        h.scale.setScalar(2.1);
-        root.add(h);
-        const r = new THREE.Sprite(red);
-        r.position.set(s * 1.1, 0.86, -SPECS[k].len / 2 - 0.05);
-        r.scale.setScalar(0.42);
-        root.add(r);
-      }
-      const b = new THREE.Mesh(beamGeo, beam);
-      b.position.set(0, 0.07, SPECS[k].len / 2 + 7);
-      b.userData.noCast = true;
-      root.add(b);
+      root.add(new THREE.Mesh(model.paint, paint), new THREE.Mesh(model.glass, this.carMats.glass), new THREE.Mesh(model.trim, this.carMats.trim), ...carLamps(model));
       root.rotation.y = Math.PI;
-      root.position.set(1.75, 0, -999);
+      // (de dónde salen: se cruzan con el taxi a los ~5 s y a los ~11 s)
+      root.position.set(1.75, 0, i ? 268 : 92);
       this.scene.add(root);
-      this.oncoming.push({ root, at: i ? 11.8 : 3.2, v: 11 + i * 2 });
+      this.oncoming.push({ root, v: 11 + i * 2 });
     });
   }
 
-  /** La carretera a cámara: por detrás, de frente con los faros y desde el arcén, bajo los pinos. */
-  start() {
-    const p = this.taxi.root.position;
-    const V = (x: number, y: number, z: number) => () => new THREE.Vector3(p.x + x, y, p.z + z);
-    cinema.play([
-      { dur: 5.4, pos: V(-0.4, 2.2, -8), pos2: V(0.6, 1.7, -6.6), look: V(0, 1.4, 9), fov: 56 },
-      { dur: 4.6, pos: V(1.5, 0.72, 8.5), pos2: V(1.05, 0.9, 6.4), look: V(0, 0.95, -1), fov: 42 },
-      { dur: 5.6, pos: V(2.2, 3.6, 5), pos2: V(-1.1, 6.8, -9), look: V(0, 1, 14), fov: 58 },
-    ]);
+  /**
+   * Arranca ya en marcha (como el coche del cap. 2: desde parado se hacía eterno) y con la cámara detrás del taxi
+   * desde el primer fotograma. secs: lo que tardan en hablar, para que el camino dure eso.
+   */
+  start(camera: THREE.PerspectiveCamera, secs: number) {
+    this.vmax = THREE.MathUtils.clamp((TO_Z - FROM_Z) / Math.max(8, secs), 7, 12);
+    this.v = 5;
+    this.z = FROM_Z;
+    this.placeCamera(camera, 1);
   }
 
-  /** Avanza el viaje; devuelve true al llegar al final. */
-  update(dt: number, camera: THREE.Camera) {
-    this.t += dt;
-    const k = Math.min(1, this.t / RIDE_SECS);
-    // Sale despacio, va a lo suyo y frena un poco al final
-    const e = k < 0.12 ? (k * k) / 0.24 : k > 0.9 ? 1 - ((1 - k) * (1 - k)) / 0.2 - 0.06 + 0.0 : k - 0.06;
-    const z = FROM_Z + (TO_Z - FROM_Z) * Math.min(1, e / 0.94);
-    const v = dt > 0 ? (z - this.prevZ) / dt : 0;
-    this.prevZ = z;
+  /** Detrás del taxi, un poco por encima y algo a la izquierda (se ve la carretera y los pinos), siguiéndolo. */
+  private placeCamera(camera: THREE.PerspectiveCamera, k: number) {
     const p = this.taxi.root.position;
-    p.z = z;
-    this.rig.update(dt, v, 0, 1.2);
+    const sway = Math.sin(this.t * 0.21) * 0.9;
+    this.v1.set(p.x + 0.6 + sway, 2.6, p.z - 7.4);
+    camera.position.lerp(this.v1, k);
+    this.camLook.lerp(this.v1.set(p.x, 1.25, p.z + 6), k);
+    camera.lookAt(this.camLook);
+  }
+
+  /** Dónde habla quien va en el taxi (el bocadillo sale de su asiento). */
+  speakerPoint(who: string) {
+    return taxiSeat(this.taxi, who);
+  }
+
+  /**
+   * Avanza el viaje; devuelve true al llegar. hold: aún les queda conversación (no llega hasta que acaben: en los
+   * últimos metros va más despacio, sin pararse en mitad del camino).
+   */
+  update(dt: number, camera: THREE.PerspectiveCamera, hold = false) {
+    this.t += dt;
+    // Acelera fuerte hasta su velocidad (4,5 m/s²) y la mantiene; no frena al final: la escena siguiente lo recoge
+    // en marcha por la calle de casa
+    let target = this.vmax;
+    if (hold) target = Math.min(target, Math.max(2.5, (RIDE_END - this.z) * 0.25));
+    this.v = this.v < target ? Math.min(target, this.v + 4.5 * dt) : Math.max(target, this.v - 4 * dt);
+    this.z = Math.min(RIDE_END, this.z + this.v * dt);
+    const p = this.taxi.root.position;
+    p.z = this.z;
+    this.rig.update(dt, this.v, 0, 1.2);
+    this.placeCamera(camera, Math.min(1, dt * 4.5));
     this.sun.follow(p);
     this.sky.update(camera, dt);
 
-    // Las dos farolas cercanas alumbran: una par y otra impar, y cambian donde ya no se nota
+    // Polillas: giran alrededor de las dos farolas más cercanas a la cámara
     const focus = camera.position.z;
     for (let s = 0; s < 2; s++) {
       let best = 1e9, bz = 0;
@@ -1399,47 +1061,22 @@ export class TaxiRide {
           bz = this.lampZ[i];
         }
       }
-      const l = this.lit[s];
-      l.position.set(-5.2, 7.4, bz);
-      l.intensity = 95 * Math.max(0, 1 - best / 33);
+      (s ? this.lampB : this.lampA).set(-5.42, 7.5, bz);
     }
-
-    // Polillas: giran alrededor de la farola más cercana
-    const lampA = this.lit[0].position, lampB = this.lit[1].position;
     const mp = this.moths.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < mp.count; i++) {
-      const L = i % 2 ? lampA : lampB;
+      const L = i % 2 ? this.lampA : this.lampB;
       const a = this.t * (1.8 + (i % 5) * 0.7) + i * 2.1, r = 0.4 + ((i * 7) % 10) * 0.08;
       mp.setXYZ(i, L.x + Math.cos(a) * r, 7.5 + Math.sin(a * 1.7 + i) * 0.5, L.z + Math.sin(a) * r);
     }
     mp.needsUpdate = true;
-    // Polvo en el haz
-    const dp = this.dust.geometry.attributes.position as THREE.BufferAttribute;
-    const step = v * dt * 0.98;
-    for (let i = 0; i < dp.count; i++) {
-      let w = dp.getZ(i) - step * (0.9 + (i % 3) * 0.1);
-      if (w < 0) w += 16;
-      dp.setZ(i, w);
-    }
-    dp.needsUpdate = true;
-    this.dust.position.set(p.x, 0, p.z + 2.2);
 
     // Los coches de frente y la gente del arcén
-    for (const c of this.oncoming) {
-      const left = (this.zAt(c.at) - z) * 1 + (c.at - this.t) * c.v;
-      c.root.position.z = z + left;
-    }
+    for (const c of this.oncoming) c.root.position.z -= c.v * dt;
     for (const w of this.walkers) {
-      w.p.root.position.z -= w.v * dt;
+      w.p.root.position.z += w.v * dt;
       animatePerson(w.p, dt, 'walk', 0.32);
     }
-    return k >= 1;
-  }
-
-  /** Dónde estará el taxi en el segundo t. */
-  private zAt(t: number) {
-    const k = Math.min(1, t / RIDE_SECS);
-    const e = k < 0.12 ? (k * k) / 0.24 : k > 0.9 ? 1 - ((1 - k) * (1 - k)) / 0.2 - 0.06 : k - 0.06;
-    return FROM_Z + (TO_Z - FROM_Z) * Math.min(1, e / 0.94);
+    return (this.z >= TO_Z && !hold) || this.z >= RIDE_END;
   }
 }
