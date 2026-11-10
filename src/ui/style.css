@@ -1360,6 +1360,20 @@ html, body { background: #000; }
 .comic-mode .bark.anchored::after { top: calc(100% - 4px); margin-left: -4px; border-width: 9px 4px 0 4px; border-color: var(--paper-c) transparent transparent transparent; bottom: auto; }
 /* Avisos: en el cómic no salen (con la onomatopeya basta; Marc no quería los dos carteles juntos) */
 .comic-mode .toast { display: none; }
+/* Paneles de los minijuegos como el resto del tebeo: papel, tinta y sombra dura (antes, cristal oscuro) */
+.comic-mode .gauge, .comic-mode .side-panel, .comic-mode .wind-arrow, .comic-mode .side-count {
+  background: var(--paper-c); color: var(--ink-c); border: 3px solid var(--ink-c); border-radius: 8px;
+  box-shadow: 4px 5px 0 var(--ink-c); backdrop-filter: none; -webkit-backdrop-filter: none; font-family: 'Comic Neue', var(--font);
+}
+/* (el de punto justo, abajo: en el centro tapaba lo que se fotografía, como el faro del cap. 5) */
+.comic-mode .gauge { top: auto; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
+.comic-mode .gauge.miss { animation: shakeC .3s; }
+@keyframes shakeC { 25% { transform: translateX(-52%); } 75% { transform: translateX(-48%); } }
+.comic-mode .gauge-title { font-family: 'Bangers', var(--display); font-weight: 400; font-size: 20px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-c); }
+.comic-mode .gauge-bar { border: 3px solid var(--ink-c); border-radius: 6px; }
+.comic-mode .gauge-seg { color: var(--ink-c); font-weight: 700; }
+.comic-mode .pack-item { background: var(--paper-c); color: var(--ink-c); border: 2.5px solid var(--ink-c); border-radius: 8px; box-shadow: 3px 3px 0 var(--ink-c); }
+.comic-mode .pack-item.in { background: #d8f2c8; border-color: var(--ink-c); }
 /* Onomatopeya: letras gordas de tebeo sobre un estallido, que saltan y se van */
 .pow {
   position: fixed; z-index: 8; pointer-events: none; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));

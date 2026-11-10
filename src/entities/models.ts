@@ -127,7 +127,7 @@ export class Merger {
     const green = base === Surf.Foliage || base === Surf.Grass;
     const crown = big <= 11 && (geo === G.bush || ((geo === G.sphere || geo === G.ball) && base === Surf.Foliage && big <= 7));
     if (this.textured) {
-      if (geo === G.rock || geo === G.rock2 || geo === G.crag) sf = green ? Surf.Grass : Surf.Stone;
+      if (geo === G.rock || geo === G.rock2 || geo === G.crag) sf = green ? Surf.Grass : Surf.Rock;
       else if (crown) sf = Surf.Foliage;
       else if (geo === G.rbox && sf !== Surf.Wood && sf < Surf.Metal) sf = Surf.None; // muebles y objetos, no paredes
       else if (base === Surf.Foliage && !HEDGES.has(color)) sf = big > 7 ? Surf.Grass : Surf.None; // lo verde que no es planta: armarios, lonas…

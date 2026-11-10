@@ -268,7 +268,10 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
     const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 24), black);
     brim.position.y = 0.175;
     hat.add(crown, brim);
-    hat.traverse((o) => (o.castShadow = true));
+    hat.traverse((o) => {
+      o.castShadow = true;
+      o.userData.person = true;
+    });
     boneAnchor(rider, 'Head').add(hat);
   }
 

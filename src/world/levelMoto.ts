@@ -429,7 +429,7 @@ export class LevelMoto implements Level {
       g.computeVertexNormals();
       return g;
     };
-    const surf = [Surf.Grass, Surf.Sand, Surf.Stone];
+    const surf = [Surf.Grass, Surf.Sand, Surf.Rock];
     geo.forEach((gg, k) => {
       const mesh = new THREE.Mesh(mk(gg.pos, gg.col), toon({ vertexColors: true, side: THREE.DoubleSide, surf: surf[k] }));
       mesh.userData.noCast = true;

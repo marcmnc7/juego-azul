@@ -43,6 +43,8 @@ export function makeHelmet(o: HelmetOpts) {
   const add = (gg: THREE.BufferGeometry, m: THREE.Material) => {
     const mesh = new THREE.Mesh(gg, m);
     mesh.castShadow = true;
+    // (lo lleva una persona: en el tebeo, con su rampa clara y sin tinta por dentro)
+    mesh.userData.person = true;
     g.add(mesh);
     return mesh;
   };

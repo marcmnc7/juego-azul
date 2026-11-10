@@ -517,6 +517,72 @@ function drystone(g: CanvasRenderingContext2D, seed: number) {
     }
 }
 
+/**
+ * Roca natural (acantilados, la cala, las rocas del mar): caras grandes e irregulares de tono algo distinto, cada una
+ * con su luz arriba y su sombra abajo, grietas de tinta entre ellas y alguna veta. Antes la roca llevaba el dibujo de
+ * sillares de pared (`stone`): un acantilado de bloques de obra.
+ */
+function rock(g: CanvasRenderingContext2D, seed: number) {
+  const r = rng(seed), base = new THREE.Color(0xbcb2a2);
+  const N = 5, cell = S / N;
+  const sx: number[] = [], sy: number[] = [], tone: number[] = [];
+  for (let j = 0; j < N; j++)
+    for (let i = 0; i < N; i++) {
+      sx.push((i + 0.05 + r() * 0.9) * cell);
+      sy.push((j + 0.05 + r() * 0.9) * cell);
+      tone.push(0.8 + r() * 0.32);
+    }
+  // (no todas las juntas son grieta: entre algunas caras solo cambia el tono, como en una roca de verdad)
+  const crack = (a: number, b: number) => ((Math.min(a, b) * 31 + Math.max(a, b) * 17) % 7) > 1;
+  const img = g.createImageData(S, S);
+  const d = img.data;
+  const ink = [52, 38, 30];
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const ci = Math.floor(x / cell), cj = Math.floor(y / cell);
+      let d1 = 1e9, d2 = 1e9, best = 0, second = 0, by = 0;
+      for (let oj = -1; oj <= 1; oj++)
+        for (let oi = -1; oi <= 1; oi++) {
+          const ii = (ci + oi + N) % N, jj = (cj + oj + N) % N;
+          const k = jj * N + ii;
+          // (repite por los bordes: la textura se repite sin costuras)
+          const px = sx[k] + (ci + oi - ii) * cell, py = sy[k] + (cj + oj - jj) * cell;
+          // caras más anchas que altas: la roca se parte en estratos
+          const dx = x - px, dy = (y - py) * 1.7;
+          const dd = dx * dx + dy * dy;
+          if (dd < d1) {
+            d2 = d1;
+            second = best;
+            d1 = dd;
+            best = k;
+            by = py;
+          } else if (dd < d2) {
+            d2 = dd;
+            second = k;
+          }
+        }
+      const edge = Math.sqrt(d2) - Math.sqrt(d1);
+      const o = (y * S + x) * 4;
+      const wobble = 2.2 + Math.sin(x * 0.11 + y * 0.07) * 0.9;
+      if (edge < wobble && crack(best, second)) {
+        d[o] = ink[0];
+        d[o + 1] = ink[1];
+        d[o + 2] = ink[2];
+      } else {
+        // luz arriba en cada cara, sombra justo debajo de la grieta y alguna veta fina
+        const up = (by - y) / cell;
+        let k = tone[best] * (1 + THREE.MathUtils.clamp(up, -0.5, 0.5) * 0.2);
+        if (edge < 10 && y > by && crack(best, second)) k *= 0.84;
+        if (Math.abs((x * 0.3 + y + best * 37) % 41) < 1.2 && edge > 16) k *= 0.78;
+        d[o] = Math.min(255, base.r * 255 * k);
+        d[o + 1] = Math.min(255, base.g * 255 * k);
+        d[o + 2] = Math.min(255, base.b * 255 * k);
+      }
+      d[o + 3] = 255;
+    }
+  g.putImageData(img, 0, 0);
+}
+
 /** Persiana de lamas: franjas horizontales con su luz arriba, sombra abajo y una línea de tinta. */
 function louvre(g: CanvasRenderingContext2D) {
   const base = new THREE.Color(0xd8d8d8), n = 16, h = S / n;
@@ -570,6 +636,7 @@ export function comicSurfaceCanvas(kind: string): HTMLCanvasElement | null {
     case 'cobble': cobble(g, 101); break;
     case 'drystone': drystone(g, 107); break;
     case 'bark': bark(g, 113); break;
+    case 'rock': rock(g, 127); break;
     default: return null;
   }
   return cv;

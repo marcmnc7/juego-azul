@@ -503,7 +503,8 @@ export function comicScene(scene: THREE.Object3D) {
     }
     if (!m.isMesh) return;
     if (o.userData.noComic) return;
-    const person = !!(o as THREE.SkinnedMesh).isSkinnedMesh || (!!(o as THREE.InstancedMesh).isInstancedMesh && !!o.userData.person);
+    // (también lo que llevan encima, marcado userData.person: cascos, sombreros, estampados; D6b)
+    const person = !!(o as THREE.SkinnedMesh).isSkinnedMesh || !!o.userData.person;
     const cloth = person && /^(Shirt|Pants|PantsShort|Shoes)$/.test(o.name);
     m.material = Array.isArray(m.material) ? m.material.map((x) => toToon(x, person, cloth)) : toToon(m.material, person, cloth);
   });

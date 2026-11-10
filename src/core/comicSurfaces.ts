@@ -7,7 +7,7 @@ import { Surf } from './surfaces';
 // tres ejes del mundo (triplanar) y se multiplica por el color de la pieza, normalizado a su color medio: el
 // dibujo pone las piezas, las juntas y la tinta; el color lo sigue eligiendo quien construye.
 
-const LAYERS = 16;
+const LAYERS = 20;
 const SIZE = 512;
 
 /** Dibujo de cada Surf (índice), metros que ocupa una repetición y cuánto se nota. Misma escala que el cap. 1. */
@@ -30,6 +30,7 @@ SPEC[Surf.Sand] = ['sand', 3, 0.7];
 SPEC[Surf.Cobble] = ['cobble', 2.6, 0.9];
 SPEC[Surf.DryStone] = ['drystone', 2.6, 0.95];
 SPEC[Surf.Bark] = ['bark', 1.2, 0.8];
+SPEC[Surf.Rock] = ['rock', 4, 0.9];
 
 let tex: THREE.DataArrayTexture | null = null;
 const scale = new Array<number>(LAYERS).fill(1);
@@ -41,7 +42,7 @@ const toLin = (v: number) => {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 };
 
-/** La textura por capas (se dibuja una vez, al primer uso: unos 16 MB de vídeo). */
+/** La textura por capas (se dibuja una vez, al primer uso: unos 21 MB de vídeo). */
 function surfaceArray() {
   if (tex) return tex;
   const data = new Uint8Array(SIZE * SIZE * 4 * LAYERS).fill(255);

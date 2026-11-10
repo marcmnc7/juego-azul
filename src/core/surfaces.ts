@@ -27,6 +27,8 @@ export enum Surf {
   Glass = 17,
   /** Lo que brilla por sí solo (ventanas encendidas, faroles): de noche, sin sombra. */
   Glow = 18,
+  /** Roca natural: acantilados, calas, rocas del mar (no sillares). */
+  Rock = 19,
 }
 
 // ---------- Qué superficie corresponde a cada color ----------
