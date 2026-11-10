@@ -47,12 +47,21 @@ export interface BornOpts {
   /** Ses Voltes sigue (Sant Joan); si no, la calle se cierra con una fachada a los pocos metros. */
   voltes?: boolean;
   night?: boolean;
+  /** El Ajuntament de sillería de marès, no encalado (D6a; Sant Joan). Sin la opción, como siempre. */
+  stone?: boolean;
+  /**
+   * El balcón corrido del Casino con barandilla de barrotes de hierro, no con el antepecho negro macizo (Sant Joan:
+   * desde ahí tiran las avellanes y se tiene que ver a la gente). Sin la opción, como siempre.
+   */
+  casinoRail?: boolean;
 }
 
 export interface BornWorld {
   group: THREE.Group;
   /** Puntos de luz de las farolas (locales). */
   lamps: [number, number][];
+  /** Los halos de las farolas (el capítulo que va de día a noche los esconde de día y los enciende de noche). */
+  halos: THREE.Sprite[];
 }
 
 /**
@@ -120,10 +129,10 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   let blockN = 0;
   // Con superficies de alta calidad, las manzanas como en Ferreries
   const hd = new TownHD();
-  const block = (x0: number, x1: number, z0: number, z1: number, h: number, color: number) => {
+  const block = (x0: number, x1: number, z0: number, z1: number, h: number, color: number, stone = false) => {
     // Cada bloque unos milímetros distinto: dos manzanas en el mismo plano parpadean
     const e = (blockN++ % 6) * 0.012 + 0.006;
-    if (hd) hd.wall(x0, x1, z0, z1, h, color);
+    if (hd) hd.wall(x0, x1, z0, z1, h, color, { stone });
     else {
       m.add(G.box, color, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 - e, h, z1 - z0 - e);
       m.add(G.box, 0xcdbb98, (x0 + x1) / 2, h + 0.12 + e / 2, (z0 + z1) / 2, 0, 0, 0, x1 - x0 + 0.2 - e, 0.24, z1 - z0 + 0.2 - e);
@@ -239,7 +248,7 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
 
   // --- Oeste, al fondo a la derecha: el Ajuntament (antiguo alcázar): almenas, ojivas y torre ---
   const W = BORN.minX;
-  block(W - 9, W, BORN.minZ, 0.5, 11, OCHRE);
+  block(W - 9, W, BORN.minZ, 0.5, 11, OCHRE, !!opts.stone);
   for (let z = BORN.minZ + 0.4; z <= 0.2; z += 1.2) m.add(G.box, OCHRE, W + 0.2, 11.6, z, 0, 0, 0, 0.5, 1.2, 0.7);
   m.add(G.box, OCHRE, W - 1.5, 8, -6.5, 0, 0, 0, 3.4, 16, 5); // torre
   for (let z = -8.6; z <= -4.4; z += 1.05) m.add(G.box, OCHRE, W + 0.3, 16.5, z, 0, 0, 0, 0.5, 1, 0.6);
@@ -349,7 +358,13 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     m.add(new THREE.CylinderGeometry(0.6, 0.6, 0.06, 12, 1, false, 0, Math.PI), 0xf8f2e2, x, 7.45, S + 0.1, Math.PI / 2, 0, Math.PI / 2, 1, 1, 1);
   }
   m.add(G.box, 0x2a2a2a, 4, 5.25, S + 0.55, 0, 0, 0, 15.6, 0.08, 1.0); // balcón corrido
-  m.add(G.box, 0x2a2a2a, 4, 5.75, S + 1.02, 0, 0, 0, 15.6, 0.9, 0.04);
+  if (opts.casinoRail) {
+    // Barandilla de hierro: pasamanos, zócalo y barrotes (gruesos: con 2 cm la tinta temblaba)
+    const IRON = 0x1e1e1e;
+    m.add(G.box, IRON, 4, 6.2, S + 1.02, 0, 0, 0, 15.6, 0.06, 0.07);
+    m.add(G.box, IRON, 4, 5.34, S + 1.02, 0, 0, 0, 15.6, 0.05, 0.05);
+    for (let x = -3.75; x <= 11.76; x += 0.17) m.add(G.box, IRON, x, 5.77, S + 1.02, 0, 0, 0, 0.035, 0.82, 0.035);
+  } else m.add(G.box, 0x2a2a2a, 4, 5.75, S + 1.02, 0, 0, 0, 15.6, 0.9, 0.04);
   sign(g, 'Es Casino Nou', 4, 9.4, S + 0.24, 0, 4.2); // (por delante de las pilastras)
   block(12, 18, S - 9, S, 9, 0xeee3c8);
   facade(12, 18, S, 1, 2);
@@ -412,12 +427,14 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   g.add(mesh);
   // Luz de las farolas
   const lampMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const halos: THREE.Sprite[] = [];
   for (const [x, z] of lamps) {
     const s = new THREE.Sprite(lampMat);
     s.position.set(x, R + 4.2, z);
     s.scale.setScalar(opts.night ? 2.6 : 1.8);
     g.add(s);
+    halos.push(s);
   }
   sc.add(g);
-  return { group: g, lamps };
+  return { group: g, lamps, halos };
 }

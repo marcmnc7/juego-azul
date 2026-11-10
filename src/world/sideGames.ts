@@ -918,11 +918,23 @@ function targetTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d')!;
-  for (const [r, col] of [[60, '#ffffff'], [47, '#d9352b'], [33, '#ffffff'], [20, '#d9352b']] as const) {
+  // Diana de tebeo: aros de color plano y su contorno de tinta (era un degradado de aros sin borde)
+  for (const [r, col] of [[56, '#ffffff'], [44, '#d9352b'], [31, '#ffffff'], [18, '#d9352b']] as const) {
     x.fillStyle = col;
     x.beginPath();
     x.arc(64, 64, r, 0, 7);
     x.fill();
+  }
+  x.strokeStyle = '#2a1a2e';
+  x.lineWidth = 7;
+  x.beginPath();
+  x.arc(64, 64, 57, 0, 7);
+  x.stroke();
+  x.lineWidth = 3;
+  for (const r of [44, 31, 18]) {
+    x.beginPath();
+    x.arc(64, 64, r, 0, 7);
+    x.stroke();
   }
   targetTex = new THREE.CanvasTexture(c);
   targetTex.colorSpace = THREE.SRGBColorSpace;
@@ -940,7 +952,7 @@ export class NutThrow {
   private nuts: { m: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; onLand: () => void; h: number }[] = [];
   private pool: THREE.Mesh[] = [];
   private rings: { m: THREE.Mesh; t: number; dur: number }[] = [];
-  private rail: THREE.Mesh;
+  private rail: THREE.Mesh | null = null;
   private cool = 0;
   private armT = 0;
   private z: number;
@@ -952,15 +964,20 @@ export class NutThrow {
   pelted = 0;
   finished = false;
 
-  constructor(private sc: THREE.Scene, private player: Person, private walker: Walker, private fx: Particles, private x0: number, private x1: number, wallZ: number, private onChange: () => void, private onDone: () => void) {
+  /** opts.rail: false si el balcón ya tiene su barandilla (el del Casino en Sant Joan, ver born.ts casinoRail). */
+  constructor(private sc: THREE.Scene, private player: Person, private walker: Walker, private fx: Particles, private x0: number, private x1: number, wallZ: number, private onChange: () => void, private onDone: () => void, opts: { rail?: boolean } = {}) {
     this.z = wallZ + 0.84;
-    const m = new Merger();
-    const rz = wallZ + 1.08;
-    m.add(G.box, 0x2a2a2a, (x0 + x1) / 2, this.y + 0.95, rz, 0, 0, 0, x1 - x0 + 0.8, 0.05, 0.05);
-    m.add(G.box, 0x2a2a2a, (x0 + x1) / 2, this.y + 0.08, rz, 0, 0, 0, x1 - x0 + 0.8, 0.04, 0.04);
-    for (let x = x0 - 0.4; x <= x1 + 0.4; x += 0.17) m.add(G.box, 0x2a2a2a, x, this.y + 0.5, rz, 0, 0, 0, 0.018, 0.9, 0.018);
-    this.rail = m.mesh();
-    sc.add(this.rail);
+    if (opts.rail !== false) {
+      const m = new Merger();
+      const rz = wallZ + 1.08;
+      const IRON = 0x1e1e1e;
+      m.add(G.box, IRON, (x0 + x1) / 2, this.y + 0.95, rz, 0, 0, 0, x1 - x0 + 0.8, 0.06, 0.07);
+      m.add(G.box, IRON, (x0 + x1) / 2, this.y + 0.08, rz, 0, 0, 0, x1 - x0 + 0.8, 0.05, 0.05);
+      // (barrotes de 3,5 cm: con 1,8 la tinta temblaba)
+      for (let x = x0 - 0.4; x <= x1 + 0.4; x += 0.17) m.add(G.box, IRON, x, this.y + 0.5, rz, 0, 0, 0, 0.035, 0.86, 0.035);
+      this.rail = m.mesh();
+      sc.add(this.rail);
+    }
     BAL.forEach((l, i) => {
       const p = makePerson(l, 1.12);
       const x = x0 + ((i + 0.5) / BAL.length) * (x1 - x0);
@@ -1015,8 +1032,9 @@ export class NutThrow {
       }
     }
     if (!t) {
-      toast(SIDE.nuts.far);
-      this.cool = 0.5;
+      // (lo dice Gas, como en la vida real: nada de avisos de «acércate»)
+      bark('Gas', SIDE.nuts.far);
+      this.cool = 0.8;
       return;
     }
     this.cool = 0.6;
@@ -1032,7 +1050,7 @@ export class NutThrow {
       const miss = Math.abs(who.p.root.position.x - to.x);
       if (miss > 0.62) {
         audio.knock(0.25, 1200, 0.05);
-        toast(SIDE.nuts.miss);
+        bark('Gas', SIDE.nuts.miss);
         return;
       }
       this.hits++;
@@ -1115,7 +1133,8 @@ export class NutThrow {
               audio.hit();
               this.walker.shake(0.2);
               vibrate(35);
-              toast(SIDE.nuts.pelted[this.pelted % SIDE.nuts.pelted.length]);
+              const l = SIDE.nuts.pelted[this.pelted % SIDE.nuts.pelted.length];
+              bark(l.who, l.text);
             }
           });
           f.fire = 2.8 + Math.random() * 2.6;
@@ -1159,7 +1178,7 @@ export class NutThrow {
   dispose() {
     for (const n of this.nuts) n.m.removeFromParent();
     for (const r of this.rings) r.m.removeFromParent();
-    this.rail.removeFromParent();
+    this.rail?.removeFromParent();
     for (const f of this.folk) {
       f.p.root.removeFromParent();
       f.mark.removeFromParent();
