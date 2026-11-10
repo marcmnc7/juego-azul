@@ -32,6 +32,8 @@ export function clock(sec: number) {
  * de sombras de las luces: sin esto, la memoria de vídeo crecía con cada capítulo jugado.
  */
 export function disposeObj(o: THREE.Object3D) {
+  // (los VRM del reparto no: los vuelve a usar otra persona o los suelta releaseVRMs al cambiar de capítulo)
+  if (o.userData.vrmOrig) return;
   const m = o as THREE.Mesh;
   m.geometry?.dispose();
   const mats = m.material ? (Array.isArray(m.material) ? m.material : [m.material]) : [];
@@ -49,6 +51,8 @@ export function disposeObj(o: THREE.Object3D) {
 
 /** Libera una escena entera: todo lo de dentro y su luz de entorno (cada escena genera la suya). */
 export function disposeScene(sc: THREE.Scene) {
+  // (marcada: sus personas ya no llevan su VRM, que queda libre para otra; ver takeVRM en rig.ts)
+  sc.userData.disposed = true;
   sc.traverse(disposeObj);
   // La luz de entorno es un render target: hay que liberarlo entero, no solo su textura
   const envRT = sc.userData.envRT as THREE.WebGLRenderTarget | undefined;

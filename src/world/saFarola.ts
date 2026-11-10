@@ -1,3 +1,4 @@
+import { castLook } from '../data/characters';
 import * as THREE from 'three';
 import { G, Merger, makeCar, makePerson, palmCrown, type Person } from '../entities/models';
 import { toon, glowTexture, makeSea, paintMat } from '../core/gfx';
@@ -290,8 +291,10 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
       { skin: 0xd9a27c, shirt: 0xd7263d, pants: 0x2d2d3a, hair: 0x2b1d14, hairStyle: 'long' as const, skirt: true },
       { skin: 0xf3d2b6, shirt: 0x5aa9e6, pants: 0xe8e0cc, hair: 0xbababa, hairStyle: 'short' as const },
     ];
+    // (el primero y el tercero, paseantes mayores, con su VRM si ya está hecho)
+    const castNames = ['extra_mayor_h', '', 'extra_mayor_m'];
     looks.forEach((lk, i) => {
-      const p = makePerson(lk);
+      const p = makePerson(castNames[i] ? castLook(lk, castNames[i]) : lk);
       p.root.position.set(-45 + i * 30, 0, COAST_Z + 3 + (i % 2));
       p.root.userData.dir = i % 2 ? 1 : -1;
       sc.add(p.root);

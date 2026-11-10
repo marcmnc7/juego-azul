@@ -69,6 +69,8 @@ export function fitoPrint() {
 
 /** Estampa `tex` en el pecho. size: ancho en metros; y, z: posición respecto al hueso del pecho. */
 export function shirtPrint(p: Person, tex: THREE.Texture, size = 0.25) {
+  // En un personaje de VRoid el estampado va pintado en la textura de su camiseta (ver docs/PLAN-reparto-vroid.md)
+  if (p.rig?.kind.startsWith('vrm:')) return;
   const woman = p.rig?.kind === 'woman';
   const geo = new THREE.PlaneGeometry(size, size, 8, 1);
   const P = geo.attributes.position as THREE.BufferAttribute;

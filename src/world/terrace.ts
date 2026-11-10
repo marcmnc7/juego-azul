@@ -3,7 +3,7 @@ import { audio } from '../core/audio';
 import { Sky, Sun, toon, vibrate, glowTexture } from '../core/gfx';
 import { rigPost, leanTorso } from '../entities/rig';
 import { twoBone } from '../entities/embrace';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { G, Merger, makePerson, makeScallop, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { canvasTex } from './deco';
@@ -253,8 +253,8 @@ export class Terrace {
     this.biteMeat = this.bite.children.slice(1);
 
     // Azul y Gas sentados uno frente al otro
-    this.azul = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.azul = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.48), 0); // asiento de la silla a 48 cm
       p.root.rotation.y = -sx * Math.PI / 2;

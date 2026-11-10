@@ -109,7 +109,7 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 }
 .big-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--sea), inset 0 3px 0 rgba(255,255,255,.55); }
 .big-btn[hidden] { display: none; }
-.link-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
 .link-btn {
   background: var(--paper); color: var(--sea); font-size: 15px; font-weight: 800; min-height: 44px;
   padding: 9px 16px; border-radius: 14px; border: 3px solid var(--sea); box-shadow: 0 4px 0 var(--sea);
@@ -124,7 +124,7 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 @keyframes wiggle { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg) translateY(-4px); } }
 
 /* ---------- Mapa de capítulos ---------- */
-.map-screen h1.display { margin-bottom: 4px; font-size: clamp(34px, 6vw, 56px); }
+
 .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px; width: min(980px, 100%); }
 .level-card {
   position: relative; min-height: 148px; padding: 14px 16px 14px; border-radius: var(--radius);
@@ -188,15 +188,7 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   transition: transform .08s ease, box-shadow .08s ease;
 }
 .action-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--sea); }
-.jump-btn {
-  position: fixed; right: calc(max(24px, env(safe-area-inset-right)) + 112px); bottom: max(34px, env(safe-area-inset-bottom));
-  width: 70px; height: 70px; border-radius: 50%; color: var(--sea); font-size: 13px; font-weight: 900;
-  background: rgba(255, 253, 246, .82); border: 4px solid var(--sea); box-shadow: 0 4px 0 var(--sea);
-  touch-action: none; transition: transform .08s ease; z-index: 3;
-}
-.jump-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--sea); background: var(--gold); }
-/* Nunca encima del mapa, los regalos, el crucigrama, la carta o el móvil */
-#ui:has(.screen, .gift-overlay, .phone-overlay) .jump-btn { display: none; }
+
 .action-btn.hidden { display: none; }
 .action-btn.pulse { animation: pulse .9s ease-in-out infinite; background: radial-gradient(circle at 35% 30%, #6fe0a3, var(--green) 60%, #1f7348); }
 @keyframes pulse { 0%, 100% { box-shadow: 0 5px 0 var(--sea), 0 0 0 0 rgba(47,157,98,.55); } 50% { box-shadow: 0 5px 0 var(--sea), 0 0 0 14px rgba(47,157,98,0); transform: scale(1.05); } }
@@ -312,10 +304,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   .level-card { min-height: 0; }
   .screen h1.display { font-size: clamp(34px, 7vw, 56px); }
 }
-.voucher-list { display: flex; flex-direction: column; gap: 12px; width: min(420px, 100%); }
-.voucher-list .voucher { padding: 14px; animation: none; }
-.voucher-list .voucher .icon { font-size: 38px; }
-.voucher-list .voucher h2 { font-size: 19px; }
 
 .rotate { display: none; }
 @media (orientation: portrait) and (max-width: 700px) {
@@ -331,11 +319,7 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .stats { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font: 11px monospace; color: white; opacity: .7; pointer-events: none !important; }
 
 /* Modo prueba */
-.debug-btn {
-  position: fixed; top: max(64px, calc(env(safe-area-inset-top) + 58px)); right: max(12px, env(safe-area-inset-right));
-  background: var(--gold); color: var(--ink); font-weight: 600; font-size: 13px; border-radius: 999px; padding: 6px 12px; min-height: 36px;
-  box-shadow: 0 6px 16px -6px rgba(0,0,0,.5); z-index: 31;
-}
+
 .debug-list {
   position: fixed; top: max(108px, calc(env(safe-area-inset-top) + 102px)); right: max(12px, env(safe-area-inset-right));
   display: flex; flex-direction: column; gap: 4px; z-index: 31; max-height: 70dvh; overflow-y: auto;
@@ -343,7 +327,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 }
 .debug-list[hidden] { display: none; }
 .debug-list button { background: var(--paper-2); color: var(--ink); border-radius: 10px; padding: 8px 12px; font-size: 14px; text-align: left; min-height: 40px; }
-.test-banner { background: var(--gold); color: var(--ink); border-radius: 999px; padding: 4px 14px; font-size: 13px; font-weight: 600; }
 
 /* ---------- Carta final ---------- */
 .letter {
@@ -414,9 +397,9 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   100% { transform: translate(var(--dx), 60vh) rotate(var(--r)); opacity: 0; }
 }
 .result { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.result-chapter { font-size: 13px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: var(--paper); text-shadow: 0 1px 2px rgba(0,0,0,.4); text-align: center; }
+
 /* El confeti va al final y es fixed: el botón es el último de verdad y cierra el centrado vertical */
-.chapter-result > .big-btn { margin-bottom: auto; }
+
 .stars { font-size: 44px; letter-spacing: 6px; }
 .stars span { color: rgba(255,255,255,.3); display: inline-block; -webkit-text-stroke: 2px var(--sea); paint-order: stroke fill; }
 .stars span.on { color: var(--gold); text-shadow: 0 0 22px rgba(255,207,92,.7); animation: starpop .5s cubic-bezier(.3,1.8,.5,1) both; }
@@ -524,7 +507,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   .memories-screen:not(.album) .polaroid { width: clamp(104px, 18vw, 140px); }
   .memories-screen:not(.album) .polaroid figcaption { font-size: 13px; }
 }
-.epilogue-screen { justify-content: flex-start; padding-top: 12vh; }
 
 /* ---------- Minijuego de punto justo (cocina) ---------- */
 .gauge {
@@ -624,16 +606,11 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 @keyframes nope { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 
 .princesa-screen { background: radial-gradient(80% 70% at 50% 40%, #2f8a5a, #1d5c3b); color: var(--paper); gap: 10px; }
-.princesa-screen p, .princesa-screen .pr-sub, .princesa-screen .pr-help { color: rgba(255,253,246,.85); }
+.princesa-screen p, .princesa-screen .pr-help { color: rgba(255,253,246,.85); }
 .princesa-screen::before { display: none; }
-.pr-head { display: flex; align-items: baseline; gap: 12px; }
-.pr-head h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 34px; color: var(--gold); -webkit-text-stroke: 2px var(--sea); paint-order: stroke fill; }
-.pr-sub { font-size: 13px; color: var(--muted); }
+
 .pr-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; min-height: 112px; }
-.pr-who { font-weight: 600; min-width: 54px; }
-.pr-disc { font-size: 20px; letter-spacing: 2px; min-width: 40px; opacity: .8; }
-.pr-mid { display: flex; gap: 14px; align-items: center; font-size: 14px; color: var(--muted); }
-.pr-deck { font-size: 18px; color: var(--paper); }
+
 .pr-log { min-height: 44px; max-width: 520px; font-size: 16px; font-weight: 700; padding: 10px 14px; border-radius: 14px; background: var(--paper); color: var(--ink); border: 3px solid var(--sea); }
 .pr-help { font-size: 13px; color: var(--muted); max-width: 520px; line-height: 1.45; min-height: 36px; }
 .pr-help b { color: var(--gold); }
@@ -643,7 +620,7 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
   background: var(--paper); color: var(--ink); border: 3px solid var(--sea); box-shadow: 0 4px 0 rgba(0,0,0,.3); transition: transform .15s ease;
 }
 .pr-card b { position: absolute; top: 5px; left: 8px; font-size: 15px; }
-.pr-card .pr-icon { font-size: 30px; }
+
 .pr-card .pr-name { font-size: 11px; font-weight: 600; }
 .pr-card.back { background: repeating-linear-gradient(45deg, var(--accent), var(--accent) 6px, #c83a40 6px, #c83a40 12px); }
 .pr-card.small { width: 50px; height: 70px; }
@@ -652,7 +629,6 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .pr-card.blocked { opacity: .45; outline-color: transparent; }
 .pr-guess { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 560px; padding: 12px; border-radius: 16px; background: var(--paper); color: var(--ink); border: 4px solid var(--sea); }
 .pr-guess > div { width: 100%; font-weight: 600; }
-
 
 /* Portada mientras se carga: el botón se va llenando */
 .big-btn.loading { opacity: .85; background-image: linear-gradient(90deg, rgba(255,255,255,.35) var(--p, 0%), transparent var(--p, 0%)); cursor: progress; }
@@ -668,9 +644,9 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .cine-sub { font-family: var(--display); font-size: clamp(16px, 3vw, 22px); opacity: .9; margin-top: 6px; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
 @keyframes cineTitle { 0% { opacity: 0; transform: scale(1.08); filter: blur(6px); } 18%, 78% { opacity: 1; transform: none; filter: none; } 100% { opacity: 0; transform: scale(.98); } }
 /* Mientras dura una escena de cine no se ven los mandos ni los contadores */
-#ui.filming .hud-top, #ui.filming .stick-base, #ui.filming .action-btn, #ui.filming .jump-btn, #ui.filming .lane-btn, #ui.filming .route, #ui.filming .hint-move, #ui.filming .minimap { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
+#ui.filming .hud-top, #ui.filming .stick-base, #ui.filming .action-btn, #ui.filming .lane-btn, #ui.filming .route, #ui.filming .hint-move { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
 /* Jugando a las cartas en las rocas: fuera el HUD del capítulo (la partida trae el suyo) */
-#ui:has(.ll) .hud-top, #ui:has(.ll) .stick-base, #ui:has(.ll) .action-btn, #ui:has(.ll) .jump-btn, #ui:has(.ll) .hint-move { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
+#ui:has(.ll) .hud-top, #ui:has(.ll) .stick-base, #ui:has(.ll) .action-btn, #ui:has(.ll) .hint-move { opacity: 0; pointer-events: none !important; transition: opacity .4s; }
 
 /* ---------- La carta final, como escena ---------- */
 .letter-cine {
@@ -744,8 +720,8 @@ body:has(.princesa-screen) .hud-top { display: none; }
 }
 
 /* ---------- Misiones: mientras dura una, el HUD del capítulo se esconde (queda el suyo) ---------- */
-#ui.mission-static .stick-base, #ui.mission-static .jump-btn, #ui.mission-static .hint-move { display: none !important; }
-#ui.mission > .hud-top:not(.m-hud), #ui.mission > .action-btn:not(.m-hud), #ui.mission > .hint-move:not(.m-hud), #ui.mission .minimap, #ui.mission .lane-btn, #ui.mission .route { display: none !important; }
+#ui.mission-static .stick-base, #ui.mission-static .hint-move { display: none !important; }
+#ui.mission > .hud-top:not(.m-hud), #ui.mission > .action-btn:not(.m-hud), #ui.mission > .hint-move:not(.m-hud), #ui.mission .lane-btn, #ui.mission .route { display: none !important; }
 .mission-card { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 40; pointer-events: none; text-align: center; animation: missionIn 3.2s ease both; }
 .mission-card .m-kicker { font-size: 12px; font-weight: 900; letter-spacing: .28em; color: var(--gold); text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .mission-card .m-title { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 5vw, 40px); color: var(--paper); -webkit-text-stroke: 1.5px var(--sea); paint-order: stroke fill; text-shadow: 0 3px 0 var(--sea), 0 0 24px rgba(0,0,0,.4); }
@@ -796,7 +772,7 @@ body:has(.princesa-screen) .hud-top { display: none; }
 /* ---------- Recuerdo escondido: la polaroid cae arriba y el juego sigue ---------- */
 .kp-pop { position: fixed; z-index: 7; top: calc(env(safe-area-inset-top) + 70px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; animation: kpIn .5s cubic-bezier(.2,1.3,.4,1) both; transition: opacity .45s, transform .45s; }
 .kp-pop.out { opacity: 0; transform: translate(-50%, -24px); }
-.kp-title { padding: 4px 12px; border-radius: 12px; background: rgba(24,14,22,.72); color: #f4d27a; font-size: 13px; font-weight: 800; white-space: nowrap; }
+
 .kp-pop .polaroid { width: clamp(150px, 42vw, 200px); animation: none; }
 @keyframes kpIn { from { opacity: 0; transform: translate(-50%, -40px) scale(.8); } }
 .album-sub { width: 100%; text-align: center; margin: 22px 0 10px; font-family: var(--display); font-size: 22px; color: var(--paper, #fff); }
@@ -810,7 +786,7 @@ body:has(.princesa-screen) .hud-top { display: none; }
 @keyframes quizNo { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 
 /* ---------- Lo que viene mañana ---------- */
-.teaser-screen { justify-content: center; text-align: center; gap: 14px; }
+
 .teaser-emoji { font-size: 74px; line-height: 1; filter: drop-shadow(0 6px 12px rgba(0,0,0,.3)); }
 .teaser-hint { max-width: 460px; margin: 0; padding: 0 18px; font-family: var(--display); font-style: italic; font-size: clamp(20px, 5vw, 28px); line-height: 1.2; color: var(--paper, #fff); }
 .level-card.locked .place { font-style: italic; }
@@ -819,7 +795,6 @@ body:has(.princesa-screen) .hud-top { display: none; }
 .chip-alert { background: #c0392b !important; color: #fff !important; animation: chipBeat .7s ease-in-out infinite; }
 @keyframes chipBeat { 50% { transform: scale(1.08); } }
 .wind-arrow { position: fixed; z-index: 5; top: 22%; left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 18px; background: rgba(20,30,48,.72); color: #fff; font-size: clamp(30px, 8vw, 46px); line-height: 1; pointer-events: none; transition: opacity .12s; animation: chipBeat .7s ease-in-out infinite; }
-
 
 /* ---------- Minijuegos de los capítulos ---------- */
 .side-panel { position: fixed; z-index: 6; left: 50%; top: calc(env(safe-area-inset-top) + 78px); transform: translateX(-50%); max-width: 86vw; pointer-events: none; }
@@ -883,16 +858,6 @@ body:has(.princesa-screen) .hud-top { display: none; }
 .chip { border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 800; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 
 /* Menú de pausa */
-.hud-menu {
-  position: fixed; z-index: 45; top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: max(10px, env(safe-area-inset-right));
-  display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 16px;
-  background: rgba(14, 20, 34, .82); border: 1px solid var(--glass-line); box-shadow: 0 14px 30px -10px rgba(0,0,0,.6);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); animation: dlgIn .15s ease both;
-}
-.hud-menu[hidden] { display: none; }
-.hm-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px; border-radius: 11px; background: transparent; color: var(--on-glass); font-size: 15px; font-weight: 700; text-align: left; }
-.hm-item:active { background: rgba(255,255,255,.12); }
-.hm-resume { color: var(--gold-soft); }
 
 /* Botón de acción: sigue siendo el protagonista, pero sin canto ni marco gordo */
 .action-btn {
@@ -960,13 +925,11 @@ body:has(.princesa-screen) .hud-top { display: none; }
 .side-info { font-size: 13.5px; padding: 7px 13px; background: var(--glass-2); border: 1px solid var(--glass-line); }
 .side-count { top: calc(max(8px, env(safe-area-inset-top)) + 50px); font-size: 20px; padding: 5px 14px; background: var(--glass-2); }
 .tray-meter { top: calc(max(8px, env(safe-area-inset-top)) + 92px); }
-.debug-btn { top: calc(max(8px, env(safe-area-inset-top)) + 46px); right: calc(max(10px, env(safe-area-inset-right)) + 48px); min-height: 30px; padding: 4px 10px; font-size: 12px; opacity: .8; }
 
 /* Escenas de cine, partidas de cartas y misiones: también fuera los contadores y el menú */
 #ui.filming .counters, #ui:has(.ll) .counters, #ui.mission > .counters:not(.m-hud) { opacity: 0; pointer-events: none !important; }
 #ui.mission > .counters:not(.m-hud) { display: none !important; }
 body:has(.princesa-screen) .counters { display: none; }
-#ui:has(.screen, .gift-overlay) .hud-menu { display: none; }
 
 /* Rótulo del capítulo con la barra de carga */
 .chapter-card { z-index: 60; }
@@ -1141,7 +1104,6 @@ body:has(.princesa-screen) .counters { display: none; }
 .ap-tab-i { font-size: 21px; line-height: 1; filter: grayscale(.6); opacity: .8; }
 .ap-tab.on { background: #eaf3fb; color: var(--sea); }
 .ap-tab.on .ap-tab-i { filter: none; opacity: 1; }
-.ap-badge { position: absolute; top: 4px; right: calc(50% - 22px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 10px; display: grid; place-items: center; }
 
 /* Hojas que suben desde abajo */
 .ap-sheet-back { position: fixed; inset: 0; z-index: 70; background: rgba(10, 24, 40, 0); transition: background .25s ease; display: flex; align-items: flex-end; justify-content: center; }
@@ -1225,7 +1187,6 @@ body:has(.princesa-screen) .counters { display: none; }
 .pause-debug summary { min-height: 50px; display: flex; align-items: center; font-weight: 800; font-size: 15px; color: #7a5a10; cursor: pointer; list-style: none; }
 .pause-debug-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; }
 .pause-debug-list button { text-align: left; padding: 10px 12px; border-radius: 12px; background: #fff; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px; }
-.debug-btn { display: none !important; }
 
 /* Botón de acción: píldora con el icono y el texto en una o dos líneas (en un círculo no cabían) */
 .action-btn {
@@ -1272,25 +1233,15 @@ body:has(.princesa-screen) .counters { display: none; }
 .tuto-bubble span { font-size: 13.5px; font-weight: 600; line-height: 1.3; opacity: .92; }
 .tuto.ok .tuto-bubble { background: rgba(47, 157, 98, .9); }
 /* Paso 1: el joystick (abajo a la izquierda) */
-.tuto.step0 .tuto-ring { left: calc(max(18px, env(safe-area-inset-left)) + 58px); top: calc(100dvh - max(22px, calc(env(safe-area-inset-bottom) + 8px)) - 58px); }
-.tuto.step0 .tuto-hand { left: calc(max(18px, env(safe-area-inset-left)) + 44px); top: calc(100dvh - max(22px, calc(env(safe-area-inset-bottom) + 8px)) - 52px); animation: tutoDrag 1.7s ease-in-out infinite; }
-.tuto.step0 .tuto-bubble { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(22px, calc(env(safe-area-inset-bottom) + 8px)) + 140px); }
+
 /* Paso 2: arrastrar por la derecha */
-.tuto.step1 .tuto-ring { display: none; }
-.tuto.step1 .tuto-hand { left: 66%; top: 58%; animation: tutoSwipe 1.8s ease-in-out infinite; }
-.tuto.step1 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); top: calc(58% - 120px); }
+
 /* Paso 3: el botón de acción (lo coloca el código) */
-.tuto.step2 .tuto-hand { animation: tutoTap 1s ease-in-out infinite; }
-.tuto.step2 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); bottom: calc(max(22px, calc(env(safe-area-inset-bottom) + 8px)) + 120px); }
+
 @keyframes tutoRing { 0% { transform: translate(-50%, -50%) scale(.8); opacity: .9; } 100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; } }
 @keyframes tutoDrag { 0%, 15% { transform: translate(0, 0); } 55%, 70% { transform: translate(22px, -46px); } 100% { transform: translate(0, 0); } }
 @keyframes tutoSwipe { 0%, 10% { transform: translateX(46px); } 50%, 60% { transform: translateX(-56px); } 100% { transform: translateX(46px); } }
 @keyframes tutoTap { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(10px) scale(.92); } }
-@media (max-height: 520px) {
-  .tuto.step0 .tuto-bubble { bottom: auto; top: 22%; }
-  .tuto.step1 .tuto-bubble { top: 18%; }
-  .tuto.step2 .tuto-bubble { bottom: auto; top: 22%; }
-}
 
 /* =====================================================================================================
    HUD mínimo: sin velos arriba, el objetivo se recoge en un icono, el joystick solo aparece al tocar y el
@@ -1315,7 +1266,7 @@ html, body { background: #000; }
 .ap-head { padding-top: calc(env(safe-area-inset-top) + 16px); }
 .ap-body { padding-top: calc(env(safe-area-inset-top) + 84px); }
 .hud-top { top: calc(env(safe-area-inset-top) + 10px); }
-.counters, .hud-menu { top: calc(env(safe-area-inset-top) + 56px); }
+.counters { top: calc(env(safe-area-inset-top) + 56px); }
 .side-panel, .side-count { top: calc(env(safe-area-inset-top) + 58px); }
 .kp-pop { top: calc(env(safe-area-inset-top) + 58px); }
 .screen { padding-top: calc(env(safe-area-inset-top) + 28px); }

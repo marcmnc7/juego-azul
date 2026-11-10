@@ -11,7 +11,7 @@ import { comicFlash, comicMood, LOOK_LIGHT } from '../core/comic';
 import { comicBulbTexture, comicStarTexture } from '../core/comicTiles';
 import { Lost } from '../core/lost';
 import { ECLIPSE } from '../data/story';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO, castLook } from '../data/characters';
 import { POT_CORE, G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, woodChair, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
@@ -148,10 +148,10 @@ const FERRY_V = 15;
 
 type Phase = 'kayak' | 'ferry' | 'arrive' | 'parents' | 'walk' | 'back' | 'toCar' | 'park' | 'marcParents' | 'hop' | 'cards' | 'eclipse' | 'done';
 
-const ERIC_LOOK: PersonLook = { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8, hair: 0xd9b56a, hairStyle: 'short', male: true };
+const ERIC_LOOK: PersonLook = castLook({ skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b6ea8, hair: 0xd9b56a, hairStyle: 'short', male: true }, 'eric');
 // Los padres de Gas: él y ella, de unos cincuenta, como los de Azul (sin moños)
-const MARC_DAD: PersonLook = { skin: 0xe2b08c, shirt: 0x6b8fb5, pants: 0x4a4a52, hair: 0x7d7672, hairStyle: 'short', male: true };
-const MARC_MOM: PersonLook = { skin: 0xeec4a2, shirt: 0xc85a6a, pants: 0x2d2d3a, hair: 0x5a3a26, hairStyle: 'straight' };
+const MARC_DAD: PersonLook = castLook({ skin: 0xe2b08c, shirt: 0x6b8fb5, pants: 0x4a4a52, hair: 0x7d7672, hairStyle: 'short', male: true }, 'padre_gas');
+const MARC_MOM: PersonLook = castLook({ skin: 0xeec4a2, shirt: 0xc85a6a, pants: 0x2d2d3a, hair: 0x5a3a26, hairStyle: 'straight' }, 'madre_gas');
 const WALK_BOUNDS: Box2 = { minX: -72, maxX: 40, minZ: 0.6, maxZ: 15.5 }; // (la calle y el patio: los muros cierran lo demás)
 /** En el patio, donde espera su padre. */
 const DAD_AT = new THREE.Vector3(-1.25, 0, 1.3);
@@ -464,8 +464,8 @@ export class LevelEclipse implements Level {
       if (i % 3 === 0) shore.add(G.crag, 0x8f7450, x + 1.5, -1.1, z - 2.2, 0, i, 0, 3, 1.4, 2.5); // escollos con alga
     }
     sc.add(shore.mesh());
-    this.player = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     this.boat = kayakBoat(this.player, this.gas);
     this.kayak = this.boat.root;
     // Saliendo de la bocana, por fuera de las rocas del faro, rumbo a Sa Caleta (hacia +x)
@@ -493,13 +493,13 @@ export class LevelEclipse implements Level {
     // Muros de los jardines vecinos
     for (const sx of [-1, 1]) this.colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: 10.1, maxZ: 10.5 });
     // Azul y Gas llegan juntos en el coche: hasta que aparca no se bajan
-    this.player = makePerson(MARGAUX_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
     this.player.root.position.set(5.2, 0, STREET_Z - 1.7);
     this.player.root.visible = false;
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI;
-    this.gas = makePerson(MARC_LOOK);
+    this.gas = makePerson(GAS_DIARIO);
     this.gas.root.visible = false;
     sc.add(this.gas.root);
     const dad = makePerson(DAD_LOOK);
@@ -620,8 +620,8 @@ export class LevelEclipse implements Level {
     this.parkZone.position.set((PARK.minX + PARK.maxX) / 2, 0.03, (PARK.minZ + PARK.maxZ) / 2);
     this.parkZone.userData.noCast = true;
     sc.add(this.parkZone);
-    this.player = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     this.player.root.visible = this.gas.root.visible = false;
     sc.add(this.player.root, this.gas.root);
     // La cámara, ya donde la pone el aparcamiento (sin viaje desde otro sitio en el primer fotograma)
@@ -737,9 +737,9 @@ export class LevelEclipse implements Level {
     sc.add(dad.root, mom.root);
     this.others = [{ p: dad, mode: 'idle' }, { p: mom, mode: 'idle' }];
     for (const p of [dad, mom]) this.colliders.push({ minX: p.root.position.x - 0.3, maxX: p.root.position.x + 0.3, minZ: p.root.position.z - 0.3, maxZ: p.root.position.z + 0.3 });
-    this.player = makePerson(MARGAUX_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
     this.player.root.position.set(-1.6, 0, D + 1.4);
-    this.gas = makePerson(MARC_LOOK);
+    this.gas = makePerson(GAS_DIARIO);
     this.gas.root.position.set(-2.4, 0, D + 2);
     sc.add(this.player.root, this.gas.root);
     this.walker = new Walker(this.player.root.position);
@@ -789,8 +789,8 @@ export class LevelEclipse implements Level {
     for (let i = 0; i < 9; i++) m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0xc9a36a : 0xb48a54, -14 + i * 3.6, -1.5, 5 + Math.sin(i * 2.3) * 2, i, i * 0.7, 0, 3 + (i % 3), 1.4, 2.6);
     // Sentados directamente en la roca (sin toalla), con las cartas de La Princesa delante
     sc.add(m.mesh());
-    this.player = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     for (const [p, x] of [[this.player, -0.45], [this.gas, 0.45]] as [Person, number][]) {
       // Sentados de verdad: la pose dobla las piernas, pero el cuerpo seguía a la altura de estar de pie
       // (las caderas a casi un metro de la roca). Se baja la altura de la cadera, como en el kayak,

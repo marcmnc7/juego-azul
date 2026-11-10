@@ -52,16 +52,6 @@ const CAM_SIDES: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 let jumpQueued = false;
 let jumpAt = 0;
 let jumpHeld = false;
-/** Botón o tecla de saltar: vale durante un instante (si se pulsa justo antes de tocar el suelo, salta igual). */
-export function requestJump() {
-  jumpQueued = true;
-  jumpHeld = true;
-  jumpAt = performance.now();
-}
-/** Se suelta el botón de saltar: si aún sube, el salto se queda corto. */
-export function releaseJump() {
-  jumpHeld = false;
-}
 /** Momento (performance.now) en que algún Walker se movió por última vez: para enseñar el botón de saltar. */
 export let walkerActiveAt = -1e9;
 /** Solo para el modo prueba: los últimos límites del área jugable. */

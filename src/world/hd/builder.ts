@@ -103,5 +103,4 @@ export class Builder {
 // Recortes del atlas de puertas (píxeles de una imagen de 1024, origen arriba a la izquierda)
 const px = (x0: number, y0: number, x1: number, y1: number): [number, number, number, number] => [x0 / 1024, 1 - y1 / 1024, x1 / 1024, 1 - y0 / 1024];
 export const ARCH_DOOR = px(4, 62, 505, 1000);
-export const PALACE_WIN = px(510, 6, 928, 588);
 export const BARRED_WIN = px(507, 600, 870, 1012);

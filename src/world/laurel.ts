@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Sky, Sun, toon } from '../core/gfx';
 import { comicBulbTexture } from '../core/comicTiles';
 import { TownHD } from './hd/townHD';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
 import { ROOF_GEO } from './ferreries';
@@ -211,8 +211,8 @@ export class Laurel {
       this.crowd.push({ p, dance: i % 3 === 0 });
     });
 
-    this.azul = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.azul = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     this.azul.root.position.set(-0.42, 0, 0);
     this.gas.root.position.set(0.42, 0, 0);
     this.azul.root.rotation.y = Math.PI / 2;

@@ -7,7 +7,7 @@ import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT, SIDE } from '../data/story';
 import { FITO_SONG, SONG_OF } from '../core/songs';
 import { BeerRun, BEERS_NEED, PeeAim, GlassesHunt } from './sideGames';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { MARC_LOOK, castLook, AZUL_DIARIO } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook, seatPose, seatedRootY } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
@@ -608,7 +608,6 @@ class Rhythm {
   }
 }
 
-
 export class Level3 implements Level {
   private scene = new THREE.Scene();
   private hud: Hud;
@@ -768,14 +767,14 @@ export class Level3 implements Level {
     this.fx = new Particles(sc);
     sc.add(this.fireworks.points);
 
-    this.azul = makePerson(MARGAUX_LOOK);
+    this.azul = makePerson(AZUL_DIARIO);
     this.player = this.azul;
     this.walker = new Walker(this.player.root.position);
     this.player.root.position.set(0, 0, -18);
     sc.add(this.player.root);
 
     // Gas vuela por su cuenta. Lleva su camiseta de Fito, azul y roja
-    this.gas = makePerson({ ...MARC_LOOK, shirt: 0x1f4fa8 });
+    this.gas = makePerson(castLook({ ...MARC_LOOK, shirt: 0x1f4fa8 }, 'gas_fito'));
     shirtPrint(this.gas, fitoPrint(), 0.3);
     markProps(this.gas);
     this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);
@@ -791,7 +790,7 @@ export class Level3 implements Level {
     this.buildQueue();
     this.buildFlash();
 
-    this.barman = makePerson({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short', male: true });
+    this.barman = makePerson(castLook({ skin: 0xc98e64, shirt: 0x111111, pants: 0x111111, hair: 0x1a1a1a, hairStyle: 'short', male: true }, 'camarero_fito'));
     this.barman.root.position.set(BAR_POS.x - 1.6, 0, BAR_POS.z);
     this.barman.root.rotation.y = Math.PI / 2;
     sc.add(this.barman.root);
@@ -1006,7 +1005,7 @@ export class Level3 implements Level {
       m.add(G.box, 0x14181f, x - 0.5, 1.33, AIR.maxZ + 0.32, -0.25, 0, 0, 0.46, 0.32, 0.03); // monitor
       m.add(G.box, 0xd7263d, x, 0.62, AIR.maxZ - 0.18, 0, 0, 0, 2.3, 0.2, 0.02);
       this.colliders.push({ minX: x - 1.3, maxX: x + 1.3, minZ: AIR.maxZ - 0.2, maxZ: AIR.maxZ + 0.6, low: true });
-      const staff = makePerson({ skin: s < 0 ? 0xe8b894 : 0xd9a27c, shirt: 0x1f2d4d, pants: 0x1f2d4d, hair: s < 0 ? 0x2b1d14 : 0x5a3a22, hairStyle: s < 0 ? 'short' : 'straight', male: s < 0 });
+      const staff = makePerson(castLook({ skin: s < 0 ? 0xe8b894 : 0xd9a27c, shirt: 0x1f2d4d, pants: 0x1f2d4d, hair: s < 0 ? 0x2b1d14 : 0x5a3a22, hairStyle: s < 0 ? 'short' : 'straight', male: s < 0 }, s < 0 ? 'agente_aeropuerto_h' : 'agente_aeropuerto_m'));
       // (la de la izquierda, junto al torno: es quien pide la tarjeta; mira a la cola)
       staff.root.position.set(s < 0 ? cx - 1.55 : x + 0.2, 0, AIR.maxZ + (s < 0 ? 1.05 : 1.0));
       staff.root.rotation.y = s < 0 ? Math.PI * 0.85 : Math.PI;
@@ -2120,7 +2119,7 @@ export class Level3 implements Level {
     const guitarist = this.fito.person;
     markProps(guitarist);
     // El bajista, con su bajo colgado como la guitarra de Fito y las dos manos en él
-    const bassist = makePerson({ skin: 0xd9a27c, shirt: 0x3a3a44, pants: 0x111111, hair: 0x5a3a22, hairStyle: 'long' });
+    const bassist = makePerson(castLook({ skin: 0xd9a27c, shirt: 0x3a3a44, pants: 0x111111, hair: 0x5a3a22, hairStyle: 'long' }, 'bajista'));
     bassist.root.position.set(-6, 1.6, 33);
     bassist.root.rotation.y = Math.PI;
     const bass = new THREE.Group();
@@ -2132,7 +2131,7 @@ export class Level3 implements Level {
         .add(G.box, 0x111111, 0, 1.04, 0, 0, 0, 0, 0.09, 0.16, 0.02)
         .mesh(),
     );
-    const sax = makePerson({ skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x111111, hair: 0x222222, hairStyle: 'short', male: true });
+    const sax = makePerson(castLook({ skin: 0xc98e64, shirt: 0xf4d35e, pants: 0x111111, hair: 0x222222, hairStyle: 'short', male: true }, 'saxofonista'));
     sax.root.position.set(6, 1.6, 33);
     sax.root.rotation.y = Math.PI;
     // El saxo (dorado): el tubo, la campana que sube y el cuello con la boquilla hacia la boca
@@ -2146,7 +2145,7 @@ export class Level3 implements Level {
         .add(G.cyl, 0x111111, -0.03, 0.43, 0.11, 1.1, 0, 0, 0.02, 0.06, 0.02)
         .mesh(),
     );
-    const drummer = makePerson({ skin: 0xe8b894, shirt: 0xffffff, pants: 0x111111, hair: 0x888888, hairStyle: 'short', male: true });
+    const drummer = makePerson(castLook({ skin: 0xe8b894, shirt: 0xffffff, pants: 0x111111, hair: 0x888888, hairStyle: 'short', male: true }, 'bateria'));
     // Sentado en su taburete (el asiento, a 55 cm de la tarima), detrás del bombo
     drummer.root.position.set(0, 1.6 + seatedRootY(drummer, 0.55), 37.25);
     drummer.root.rotation.y = Math.PI;

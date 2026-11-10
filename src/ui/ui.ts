@@ -985,80 +985,6 @@ function resultBlock(result: LevelResult) {
   return res;
 }
 
-/** Final de un capítulo sin vale: sus estrellas y sus números, con confeti, antes de las fotos o del mapa. */
-export function chapterResult(n: number, result: LevelResult, onClose: () => void) {
-  clearScreens();
-  const o = el('div', 'gift-overlay chapter-result');
-  o.append(el('div', 'result-chapter', `Capítulo ${n} · ${LEVELS[n - 1].name}`), el('h1', 'gift-title', '¡Capítulo superado!'), resultBlock(result));
-  const b = el('button', 'big-btn', 'Seguir');
-  b.onclick = () => {
-    o.remove();
-    onClose();
-  };
-  o.append(b);
-  root.append(o);
-  audio.fanfare();
-  cssConfetti(o, 40);
-}
-
-/** Al acabar un capítulo, lo que viene: cuándo se abre el siguiente y una pista. */
-export function teaserCard(next: number, onClose: () => void) {
-  const lv = LEVELS[next - 1];
-  const hint = TEASERS[next];
-  if (!lv || !hint) return onClose();
-  clearScreens();
-  const day = openDay(next - 1);
-  const now = new Date();
-  const left = Math.ceil((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
-  const when = left <= 0 ? 'Ya lo puedes abrir' : left === 1 ? 'Mañana' : `El ${day.getDate()} de ${MONTHS[day.getMonth()]}`;
-  const o = el('div', 'screen memories-screen teaser-screen');
-  o.append(el('div', 'eyebrow', `${when} · Capítulo ${next}`), el('div', 'teaser-emoji', lv.emoji), el('p', 'teaser-hint', hint));
-  const b = el('button', 'big-btn', 'Hasta entonces');
-  b.onclick = onClose;
-  o.append(b);
-  root.append(o);
-  audio.chime(1);
-}
-
-/** Regalo: primero una caja que tiembla, al tocarla se abre con confeti y aparece el vale. */
-export function showGift(g: Gift, onClose: () => void, result?: LevelResult) {
-  clearScreens();
-  const o = el('div', 'gift-overlay');
-  const title = el('h1', 'gift-title', 'Tienes un regalo');
-  const box = el('button', 'giftbox');
-  box.append(el('div', 'lid'), el('div', 'base'), el('div', 'ribbon'));
-  const tapHint = el('p', 'gift-hint', 'Toca la caja para abrirla');
-  if (result) o.append(resultBlock(result), title);
-  else o.append(title);
-  o.append(box, tapHint);
-  root.append(o);
-  audio.fanfare();
-  let opened = false;
-  box.onclick = () => {
-    if (opened) return;
-    opened = true;
-    box.classList.add('open');
-    o.classList.add('opened');
-    tapHint.remove();
-    audio.pop();
-    audio.cheer(0.35);
-    vibrate([30, 40, 60]);
-    cssConfetti(o);
-    setTimeout(() => {
-      box.remove();
-      title.innerHTML = '¡Regalo desbloqueado!';
-      const v = voucher(g);
-      const b = el('button', 'big-btn', 'Guardar y seguir');
-      b.onclick = () => {
-        o.remove();
-        onClose();
-      };
-      v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano 📸'), b);
-      o.append(v);
-    }, 650);
-  };
-}
-
 /** Rótulo de capítulo a pantalla completa que se desvanece (tapa también la carga de la escena). */
 /** Rótulo del capítulo. Tapa la pantalla mientras el capítulo se monta y compila; se va cuando pasan 2 s y está listo. */
 export interface ChapterLoading {
@@ -1120,23 +1046,6 @@ export function fadeFlash(mid: () => void, hold = 300) {
       setTimeout(() => f.remove(), 500);
     }, hold);
   }, 450);
-}
-
-export function giftList(save: SaveData, onClose: () => void) {
-  clearScreens();
-  const o = el('div', 'gift-overlay');
-  o.style.justifyContent = 'flex-start';
-  o.append(el('h1', '', '<span style="color:white;font-size:26px">Mis regalos</span>'));
-  const list = el('div', 'voucher-list');
-  GIFTS.forEach((g) => list.append(voucher(g, !save.giftsUnlocked.includes(g.id))));
-  o.append(list);
-  const b = el('button', 'big-btn', 'Volver');
-  b.onclick = () => {
-    o.remove();
-    onClose();
-  };
-  o.prepend(b);
-  root.append(o);
 }
 
 export function toast(text: string) {
@@ -1818,12 +1727,6 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
   };
 }
 
-export function rotateHint() {
-  const r = el('div', 'rotate active', '<div class="phone">📱</div><div>Gira el móvil para jugar en horizontal</div>');
-  r.style.pointerEvents = 'none';
-  root.append(r);
-}
-
 /** Rótulo de misión que entra y se va solo: «MISIÓN · título» y el objetivo (o «MISIÓN CUMPLIDA»). */
 export function missionCard(title: string, goal = '', done = false) {
   const c = el('div', 'mission-card' + (done ? ' done' : ''));
@@ -1836,7 +1739,6 @@ export function missionCard(title: string, goal = '', done = false) {
   } else audio.chime(1);
   setTimeout(() => c.remove(), 3300);
 }
-
 
 /**
  * Primeros pasos (capítulo 1, solo la primera vez): una mano animada enseña a andar, a mirar alrededor y el botón

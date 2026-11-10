@@ -406,7 +406,8 @@ export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
  */
 export function seatedRootY(p: { root: THREE.Object3D; rig?: { hipsHeight: number; kind?: string } }, seatTop: number) {
   // (ella, con los pantalones anchos, un poco más arriba: la tela se metía por debajo del asiento)
-  return p.rig ? seatTop + (p.rig.kind === 'woman' ? 0.1 : 0.07) - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
+  // (los de VRoid, como la Azul de antes: la cadera del modelo queda algo más alta que la de MakeHuman)
+  return p.rig ? seatTop + (p.rig.kind === 'woman' || String(p.rig.kind ?? '').startsWith('vrm:') ? 0.1 : 0.07) - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
 }
 
 /**

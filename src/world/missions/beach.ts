@@ -4,7 +4,7 @@ import { Sky, Sun, toon, makeSea, vibrate, quality } from '../../core/gfx';
 import { Surf } from '../../core/surfaces';
 import { beachBallTexture } from '../../core/physics';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
-import { MARGAUX_LOOK, MARC_LOOK } from '../../data/characters';
+import { MARGAUX_LOOK, MARC_LOOK, castLook } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, animatePerson, type Person } from '../../entities/models';
 import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
@@ -106,8 +106,8 @@ class BeachMission implements Mission {
     net.rotation.y = Math.PI / 2;
     sc.add(net);
 
-    this.me = makePerson({ ...MARGAUX_LOOK, shorts: true });
-    this.gas = makePerson({ ...MARC_LOOK, shorts: true });
+    this.me = makePerson(castLook({ ...MARGAUX_LOOK, shorts: true }, 'azul_playa'));
+    this.gas = makePerson(castLook({ ...MARC_LOOK, shorts: true }, 'gas_playa'));
     this.me.root.position.copy(ME);
     this.me.root.rotation.y = Math.PI / 2;
     this.gas.root.position.copy(GAS);

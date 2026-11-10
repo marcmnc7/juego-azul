@@ -21,8 +21,7 @@ import womanPartsUrl from '../assets/chars/woman_parts.png';
 import denimUrl from '../assets/chars/denim_tile.jpg';
 import knitUrl from '../assets/chars/knit_tile.jpg';
 import type { VRM } from '@pixiv/three-vrm';
-import { loadVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
-import { VRM_FILES } from '../data/characters';
+import { loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
 
 // Personajes de la prueba de concepto: modelos glTF con esqueleto (rig de Mixamo) y animaciones de
 // captura de movimiento (Mixamo), con el mismo retargeting en espacio mundo de la prueba.
@@ -62,36 +61,15 @@ interface ExtraSource { root: THREE.Object3D; rest: Pose; clips: THREE.Animation
 /** Los modelos de MakeHuman/Mixamo por tipo y, aparte, cada VRM de VRoid por su archivo ("vrm:<url>"). */
 type DataKey = Kind | `vrm:${string}`;
 let data: Partial<Record<DataKey, KindData>> = {};
-/** VRM cargados (uno por archivo; el modelo no se clona: lo usa un personaje cada vez). */
-const vrms = new Map<string, LoadedVRM>();
-const vrmOwner = new Map<string, Person>();
-let parts: Uint8ClampedArray | null = null;
-/** Parte del cuerpo de la mujer en una coordenada de textura (1 piel, 2 pelo, 3 top, 4 pantalón, 5 zapatos, 6 cara). */
-export const womanPartAt = (u: number, v: number) => {
-  if (!parts) return 0;
-  const x = Math.min(511, Math.max(0, Math.floor(u * 512)));
-  const y = Math.min(511, Math.max(0, Math.floor(v * 512)));
-  return Math.round(parts[(y * 512 + x) * 4] / 36);
-};
-const partsTexCache = new Map<string, THREE.DataTexture>();
 /**
- * La máscara de partes de la textura de ella en una textura (canal rojo = parte × 36), con las piernas
- * al aire si va con pantalón corto o mono: para recolorear cada parte en el shader (la multitud).
+ * VRM cargados por archivo: una o varias copias (una por persona viva que lo lleve; ver castFor en characters.ts) y
+ * quién lleva cada una. El modelo no se clona (romperia cara y pelo): cada copia es un VRM leído aparte.
  */
-export function womanPartsTexture(look: PersonLook) {
-  if (!parts) return null;
-  const k = look.jumpsuit ? 'j' : look.shorts ? 's' : '';
-  let t = partsTexCache.get(k);
-  if (t) return t;
-  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : null;
-  const d = new Uint8Array(512 * 512);
-  for (let i = 0; i < d.length; i++) d[i] = over && over[i] ? over[i] * 36 : parts[i * 4];
-  t = new THREE.DataTexture(d, 512, 512, THREE.RedFormat, THREE.UnsignedByteType);
-  t.magFilter = t.minFilter = THREE.NearestFilter;
-  t.needsUpdate = true;
-  partsTexCache.set(k, t);
-  return t;
-}
+const vrmPool = new Map<string, LoadedVRM[]>();
+const vrmOwner = new Map<LoadedVRM, Person>();
+/** Lo que hace falta para preparar un VRM nuevo (las capturas y su pose), guardado al cargar los personajes. */
+let vrmPrep: { anims: GLTF; aBind: ReturnType<typeof saveLocal>; dance: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }; extras: ExtraSource[] } | null = null;
+let parts: Uint8ClampedArray | null = null;
 let loading: Promise<void> | null = null;
 let ready = false;
 
@@ -372,7 +350,6 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
 
 /** Carga los modelos y prepara las animaciones (una vez). */
 
-
 export function preloadRig() {
   loading ??= (async () => {
     const [woman, anims, gas, manMh, womanMh, kidMh, ual1, ual2] = await Promise.all([
@@ -411,30 +388,18 @@ export function preloadRig() {
     data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
     data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
     data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
-    // Personajes de VRoid: si alguno no carga, ese personaje sale con su modelo de antes
-    for (const [url, height] of VRM_FILES) {
-      try {
-        const v = await loadVRM(url);
-        vrms.set(url, v);
-        data[`vrm:${url}`] = prepareKind('woman', v.gltf, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, height, extras);
-      } catch (e) {
-        console.warn('[rig] VRM no cargado', e);
-      }
-    }
+    // Personajes de VRoid: se cargan al empezar cada capítulo (ensureVRMs), solo los suyos
+    vrmPrep = { anims, aBind, dance: { clip: samba, rest: wRest, root: woman.scene }, extras };
     console.info(`[rig] personajes y animaciones preparados en ${Math.round(performance.now() - t0)} ms`);
     // (modo prueba: datos de animación a mano desde la consola, para medir y ajustar)
     if (location.hash === '#test') (globalThis as unknown as { __rigData: typeof data }).__rigData = data;
     ready = true;
   })().catch((e) => {
-    failed = true;
     console.warn('[rig] no se pudieron cargar los personajes', e);
   });
   return loading;
 }
 export const rigReady = () => ready;
-let failed = false;
-/** Si los modelos no cargan, el capítulo sigue con los muñecos de siempre. */
-export const rigFailed = () => failed;
 
 // ---------- Colores de cada personaje ----------
 
@@ -766,43 +731,6 @@ export const rigKind = (k: Kind) => data[k]!;
 
 // ---------- Pelo del hombre ----------
 
-const hairCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
-/** Casquete de pelo corto: los triángulos de la cabeza por encima del nacimiento del pelo, inflados. */
-export function hairGeometry(src: THREE.BufferGeometry) {
-  let g = hairCache.get(src);
-  if (g) return g;
-  const pos = src.attributes.position as THREE.BufferAttribute;
-  const nor = src.attributes.normal as THREE.BufferAttribute;
-  const box = new THREE.Box3().setFromBufferAttribute(pos);
-  const H = box.max.y - box.min.y;
-  const zc = (box.max.z + box.min.z) / 2;
-  const D = box.max.z - box.min.z;
-  // Nacimiento del pelo: alto en la frente, bajo en la nuca y a la altura de las orejas a los lados
-  const keep = (i: number) => {
-    const y = (pos.getY(i) - box.min.y) / H;
-    const z = (pos.getZ(i) - zc) / D; // -0.5 nuca … +0.5 cara
-    const front = THREE.MathUtils.smoothstep(z, -0.05, 0.35);
-    return y > 0.5 + 0.3 * front + 0.04 * Math.max(0, -z - 0.3);
-  };
-  const index = src.index ? Array.from(src.index.array) : [...Array(pos.count).keys()];
-  const out: number[] = [];
-  for (let t = 0; t < index.length; t += 3) {
-    const a = index[t], b = index[t + 1], c = index[t + 2];
-    if (keep(a) && keep(b) && keep(c)) out.push(a, b, c);
-  }
-  g = new THREE.BufferGeometry();
-  for (const k of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight']) if (src.attributes[k]) g.setAttribute(k, src.attributes[k].clone());
-  const p2 = g.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < p2.count; i++) {
-    const y = (pos.getY(i) - box.min.y) / H;
-    const puff = 0.006 + 0.01 * THREE.MathUtils.smoothstep(y, 0.75, 1); // más volumen arriba
-    p2.setXYZ(i, pos.getX(i) + nor.getX(i) * puff, pos.getY(i) + nor.getY(i) * puff, pos.getZ(i) + nor.getZ(i) * puff);
-  }
-  g.setIndex(out);
-  hairCache.set(src, g);
-  return g;
-}
-
 let hairN: THREE.Texture | null = null;
 /** Relieve de mechones finos para que el pelo no parezca un casco liso. */
 function hairNormal() {
@@ -837,6 +765,8 @@ export interface Rig {
   kind: DataKey;
   /** Personaje de VRoid: su cara (expresiones) y la física del pelo se actualizan aparte. */
   vrm?: VRM;
+  /** Ya ha estado en una escena (si luego se le saca de ella, su VRM queda libre para otro). */
+  shown?: boolean;
   face?: VRMFace;
   model: THREE.Object3D;
   mixer: THREE.AnimationMixer;
@@ -901,12 +831,76 @@ export function boneFrame(p: Person, bone: string, out: THREE.Quaternion) {
   return out.multiply(_q3.copy(data[r.kind]!.down.get(bone)!).invert());
 }
 
+/**
+ * Una copia libre del VRM: sin dueño, o con un dueño que ya no está (su escena se liberó, o lo sacaron de la escena
+ * después de haberse visto). Si el dueño anterior sigue en la lista, se le quita: dos personas no pueden mover los
+ * mismos huesos.
+ */
+function takeVRM(url: string): LoadedVRM | undefined {
+  const pool = vrmPool.get(url);
+  if (!pool || !data[`vrm:${url}`]) return undefined;
+  for (const v of pool) {
+    const o = vrmOwner.get(v);
+    if (o && !ownerGone(o)) continue;
+    if (o) people.delete(o);
+    return v;
+  }
+  if (location.hash === '#test') console.warn('[rig] no queda copia libre de', url, '(sube su número en castFor)');
+  return undefined;
+}
+
+function ownerGone(o: Person) {
+  if (!people.has(o)) return true;
+  let top: THREE.Object3D = o.root;
+  while (top.parent) top = top.parent;
+  if ((top as THREE.Scene).isScene) return !!top.userData.disposed;
+  return !!o.rig?.shown;
+}
+
+/**
+ * Deja cargados y preparados los VRM de un capítulo, con su número de copias (los que no existan o no carguen, esos
+ * personajes salen con su modelo de antes). Prepararlos (pasarles las capturas) se hace una vez por archivo.
+ */
+export async function ensureVRMs(need: [url: string, count: number, height: number][]) {
+  await (loading ?? preloadRig());
+  if (!vrmPrep) return;
+  const P = vrmPrep;
+  for (const [url, count, height] of need) {
+    try {
+      let pool = vrmPool.get(url);
+      if (!pool) {
+        const v = await loadVRM(url);
+        pool = [v];
+        vrmPool.set(url, pool);
+        data[`vrm:${url}`] = prepareKind('woman', v.gltf, P.anims, P.aBind, P.dance, height, P.extras);
+      }
+      while (pool.length < count) pool.push(await copyVRM(url, pool[0]));
+    } catch (e) {
+      console.warn('[rig] VRM no cargado', url, e);
+    }
+  }
+}
+
+/** Suelta los VRM que el capítulo siguiente no usa (memoria de vídeo y de los bytes del archivo). */
+export function releaseVRMs(keep: Set<string>) {
+  for (const [url, pool] of vrmPool) {
+    if (keep.has(url)) continue;
+    for (const v of pool) {
+      const o = vrmOwner.get(v);
+      if (o) people.delete(o);
+      vrmOwner.delete(v);
+      disposeVRM(v);
+    }
+    vrmPool.delete(url);
+    delete data[`vrm:${url}`];
+    forgetVRM(url);
+  }
+}
+
 /** Crea un personaje glTF con las mismas articulaciones (invisibles) que el muñeco de siempre. */
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
-  // Con su VRM de VRoid si lo tiene, está cargado y no lo lleva ya otro personaje de la escena
-  const owner = look.vrm ? vrmOwner.get(look.vrm) : undefined;
-  const vrmFree = !owner || !people.has(owner) || !owner.root.parent;
-  const loaded = look.vrm && vrmFree ? vrms.get(look.vrm) : undefined;
+  // Con su VRM de VRoid si lo tiene, está cargado y queda una copia libre (si no, su modelo de antes)
+  const loaded = look.vrm ? takeVRM(look.vrm) : undefined;
   const kind: DataKey = loaded ? `vrm:${look.vrm}` : look.gas ? 'gas' : look.kid ? 'kid' : look.male || look.beard ? 'man' : look.azul ? 'woman' : 'mhwoman';
   const D = data[kind]!;
   const mh = kind !== 'woman';
@@ -1051,7 +1045,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
   if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
-  if (loaded) vrmOwner.set(look.vrm!, p);
+  if (loaded) vrmOwner.set(loaded, p);
   people.add(p);
   return p;
 }
@@ -1080,13 +1074,7 @@ function legsMask() {
   return legs;
 }
 
-
-
-
 // ---------- Camiseta a rayas (la del Barça) ----------
-
-
-
 
 // ---------- Mono corto ----------
 
@@ -1675,8 +1663,6 @@ function straightHair(p: Person, look: PersonLook) {
   anchor.add(mesh);
 }
 
-
-
 /**
  * Punto pegado a un hueso (Head, Hips, Spine2...) con los ejes del personaje en reposo y en metros:
  * para colgar sombreros, delantales o un tambor que sigan al cuerpo animado.
@@ -2002,6 +1988,7 @@ export function updateRigPeople(dt: number) {
   for (const t of rigTickers) t(dt);
   for (const p of people) {
     if (!p.root.parent) continue;
+    p.rig!.shown = true;
     updateOne(p, dt);
   }
   for (const f of rigPost) f(dt);

@@ -13,7 +13,7 @@ import { boneAnchor, rigPost, carryHand } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
-import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM } from '../data/characters';
+import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM, castLook } from '../data/characters';
 import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
 import { embrace, hugFor, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
@@ -266,7 +266,7 @@ export class Level1 implements Level {
     // Esa noche, Margaux y Carme van con un mono negro de una pieza, ajustado
     const MONO = { shirt: 0x141418, pants: 0x141418, shoes: 0x111111, skirt: false, jumpsuit: true };
     // Con el mono, su modelo de VRoid (si otra variante le cambia la ropa, el de antes)
-    this.player = makePerson({ ...MARGAUX_LOOK, ...(V.outfit ?? { ...MONO, vrm: AZUL_VRM.ferreries }) });
+    this.player = makePerson(V.outfit ? castLook({ ...MARGAUX_LOOK, ...V.outfit }, 'azul_aniversario') : { ...MARGAUX_LOOK, ...MONO, vrm: AZUL_VRM.ferreries });
     this.player.root.position.copy(this.world.spawn);
     this.scene.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
@@ -276,7 +276,7 @@ export class Level1 implements Level {
 
     this.tofol = V.horses
       ? makePerson({ skin: 0xf0c8a6, shirt: 0xffffff, pants: 0x1f3a6b, hair: 0x6b3f22, hairStyle: 'long', skirt: true, eyes: 0x5a3a22 })
-      : makePerson({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x9a9a9a, hairStyle: 'short', beard: true, shorts: true });
+      : makePerson(castLook({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x9a9a9a, hairStyle: 'short', beard: true, shorts: true }, 'tofol'));
     this.tofol.root.position.copy(this.world.tofolPos);
     this.tofol.root.rotation.y = -Math.PI / 2; // detrás de la barra, mirando a la plaza
     // Delantal de Tòfol
@@ -291,10 +291,10 @@ export class Level1 implements Level {
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
-    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: 0x5aa9e6 } : V.findFirst ? MARC_LOOK : { ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }); // aquel día, con la del Barça
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: 0x5aa9e6 } : V.findFirst ? castLook(MARC_LOOK, 'gas_diario') : castLook({ ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }, 'gas_ferreries')); // aquel día, con la del Barça
     this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
-    this.carme = makePerson({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO });
+    this.carme = makePerson(castLook({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO }, 'carme'));
     this.carme.root.position.copy(this.world.marcPos);
     this.carme.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.carme.root);
@@ -315,7 +315,7 @@ export class Level1 implements Level {
     }
 
     // La fabiolera: toca el fabiol y el tamborí delante de la iglesia
-    this.fabiolera = makePerson({ skin: 0xf0c8a6, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x5a3a22, hairStyle: 'bun', shoes: 0x111111 });
+    this.fabiolera = makePerson(castLook({ skin: 0xf0c8a6, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x5a3a22, hairStyle: 'bun', shoes: 0x111111 }, 'fabiolera'));
     this.fabiolera.root.position.copy(this.world.fabioleraPos);
     this.fabiolera.root.rotation.y = Math.PI;
     if (this.fabiolera.rig) {
@@ -1515,8 +1515,10 @@ export class Level1 implements Level {
       { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x3b4a6b, hair: 0x8a5a2a, hairStyle: 'short', male: true, shorts: true },
     ];
     const gunCols = [0xff7a1a, 0x2bc4ff, 0x7ed321, 0xff3fa4, 0xffd21a];
+    // (los cuatro primeros, con su VRM si ya está hecho: extra_m1, extra_h1, extra_m2, extra_h2)
+    const castNames = ['extra_m1', 'extra_h1', 'extra_m2', 'extra_h2'];
     spots.forEach(([x, z], i) => {
-      const p = makePerson(looks[i % looks.length]);
+      const p = makePerson(i < castNames.length ? castLook(looks[i % looks.length], castNames[i]) : looks[i % looks.length]);
       p.root.position.set(x, 0, z);
       const yaw = Math.atan2(c.x - x, c.z - z);
       p.root.rotation.y = yaw;

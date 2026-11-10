@@ -1,3 +1,4 @@
+import { castLook } from '../data/characters';
 import * as THREE from 'three';
 import { makePerson, animatePerson, type Person } from './models';
 import { boneAnchor, rigPost } from './rig';
@@ -134,7 +135,7 @@ export class Fito {
   private fretSide: 'Left' | 'Right' | null = null;
 
   constructor(sc: THREE.Scene, x: number, y: number, z: number) {
-    this.person = makePerson({ skin: 0xe2b08c, shirt: 0x151515, pants: 0x1c2333, hair: 0x2a2420, hairStyle: 'short', male: true, beard: true, shoes: 0x111111 });
+    this.person = makePerson(castLook({ skin: 0xe2b08c, shirt: 0x151515, pants: 0x1c2333, hair: 0x2a2420, hairStyle: 'short', male: true, beard: true, shoes: 0x111111 }, 'fito'));
     const p = this.person;
     p.root.position.set(x, y, z);
     p.root.rotation.y = Math.PI;

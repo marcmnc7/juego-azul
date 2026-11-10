@@ -8,7 +8,7 @@ import { Walker } from '../../core/walker';
 import { steerTo, type SteerState } from '../../core/steer';
 import { beacon } from '../../core/beacon';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
-import { MARGAUX_LOOK, MARC_LOOK } from '../../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, animatePerson, type Person } from '../../entities/models';
 import { motoFleet } from '../../entities/vehiclesHD';
@@ -174,9 +174,9 @@ class ParkingMission implements Mission {
     }
 
     // Azul buscando (de noche, con el móvil en alto haciendo de linterna); Gas detrás
-    this.player = makePerson(MARGAUX_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
     this.player.root.position.set(-14, 0, 0);
-    this.gas = makePerson(MARC_LOOK);
+    this.gas = makePerson(GAS_DIARIO);
     this.gas.root.position.set(-15, 0, 0.8);
     sc.add(this.player.root, this.gas.root);
     this.walker = new Walker(this.player.root.position);

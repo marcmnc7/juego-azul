@@ -4,8 +4,6 @@ export interface Line {
   text: string;
 }
 
-export const NAMES = { player: 'Margaux', partner: 'Marc', playerNick: 'Azul', partnerNick: 'Gas', dog: 'Joy' };
-
 export interface LevelInfo {
   id: number;
   name: string;
@@ -197,7 +195,6 @@ export const ROAD = {
     { who: 'Narrador', text: 'Por el camino, un juego: parar a comer en el primer restaurante que empiece por M.' },
   ] as Line[],
   /** Una vaca en mitad de la carretera: se para, se la saluda y se le pregunta el camino. */
-  cowHint: '🐄 ¡Una vaca! Frena',
   cowBtn: '🐄 Saludar a la vaca',
   cowMissed: '¡Frena, frena, que es una vaca! 🛑',
   cows: [
@@ -224,12 +221,6 @@ export const ROAD = {
     { who: 'Narrador', text: '📷 Recuerdo desbloqueado: Cafetería Marcial.' },
   ] as Line[],
   named: [{ who: 'Narrador', text: 'Desde ese día, Marc es Gas.' }] as Line[],
-  regions: {
-    madrid: 'Saliendo de Madrid (sin helado)',
-    meseta: 'La meseta. Caminitos, no solo autopista',
-    cantabria: 'Cantabria: verde, verde y más verde',
-    rioja: 'La Rioja',
-  },
   arriveSV: [
     { who: 'Narrador', text: 'San Vicente de la Barquera.' },
     { who: 'Marc', text: 'Nos han habilitado aparcamiento especial. Y aparcacoches. Somos VIP.' },
@@ -383,14 +374,12 @@ export const NIGHT = {
     { who: 'Margaux', text: 'Tuvo su porqué.' },
   ] as Line[],
   lie: [{ who: 'Narrador', text: 'Toca las estrellas, empezando por la que parpadea.' }] as Line[],
-  sneakHint: 'Silencio full: despacio y por las losas, que la grava cruje',
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
   caught: [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga. Otra vez, despacito.' }] as Line[],
   /** En el agua: se enciende la luz de arriba y hay que quedarse quieta. */
   freeze: '💡 ¡La luz de arriba! Quieta, que no se mueva el agua',
   freezeMoved: 'Gas: «¡Shhh! ¡Quieta!»',
   freezeOff: 'Se apaga. Uf.',
-  freezeHint: '💡 ¡Quieta! Ni un chapoteo',
 };
 
 // Crucigrama antes de la carta: lo del final.
@@ -647,7 +636,6 @@ export const ECLIPSE = {
     { who: 'Narrador', text: 'Entre una cosa y otra, se os pasa la tarde.' },
   ] as Line[],
   backHint: '🏡',
-  byeHint: 'Despídete de tu padre',
   byeBtn: '👋 Despedirse',
   byeDad: [
     { who: 'Margaux', text: 'Papá, nos tenemos que ir, que si no, no llegamos a ver el eclipse.' },

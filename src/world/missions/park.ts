@@ -3,7 +3,7 @@ import { audio } from '../../core/audio';
 import { Sky, Sun, toon, vibrate } from '../../core/gfx';
 import { Surf } from '../../core/surfaces';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
-import { MARGAUX_LOOK, MARC_LOOK } from '../../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, makeDog, animatePerson, type Person, type Dog } from '../../entities/models';
 import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
@@ -108,8 +108,8 @@ class ParkMission implements Mission {
     m.add(G.box, 0xe8e2d0, 35, 0.9, -12, 0, 0, 0, 90, 0.06, 0.06);
     sc.add(m.mesh());
 
-    this.me = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.me = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     // Los dos de pie frente a Joy, que los mira sentada en el césped; la cámara, de lado
     this.me.root.position.set(1.5, 0, 1.6);
     this.gas.root.position.set(-0.4, 0, 1.7);

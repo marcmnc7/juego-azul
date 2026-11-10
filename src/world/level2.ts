@@ -22,7 +22,7 @@ import { Surf } from '../core/surfaces';
 import { comicScene } from '../core/comic';
 import { beacon } from '../core/beacon';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
-import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 
 // Capítulo 3 · La ruta de las zamburiñas, en el orden en que pasó:
 // Madrid → Cafetería Marcial → la noche del camping sin gas → San Vicente de la Barquera (la plancha y
@@ -197,7 +197,7 @@ export class Level2 implements Level {
   private fx: Particles;
   private phase: Phase = 'intro';
   // Su Ford Focus gris: conduce ella («el tuyo. Y conduces tú») y Marc va de copiloto
-  private car = makeCar(0x8d9298, { joy: false, driver: MARGAUX_LOOK, passenger: MARC_LOOK });
+  private car = makeCar(0x8d9298, { joy: false, driver: AZUL_DIARIO, passenger: GAS_DIARIO });
   private carZ = 0;
   private carX = 0;
   private carVX = 0;

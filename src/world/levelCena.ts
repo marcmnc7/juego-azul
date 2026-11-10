@@ -14,7 +14,7 @@ import { makeHelmet } from '../entities/helmet';
 import { rigPost } from '../entities/rig';
 import { TableMemory, TableDecor, tableLayout, shuffledLayout } from './sideGames';
 import { cinema } from '../core/cinema';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { araucaria, CarRig, G, Merger, makePerson, makeCar, makeMoto, animatePerson, seatedRootY, seatPose, Person, PersonLook } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
@@ -74,9 +74,9 @@ const GARDEN: Box2 = { minX: -5, maxX: 5, minZ: 0.6, maxZ: 9.7 };
 const ALARM_SECS = 12;
 const T = (h: number, m: number) => h * 60 + m;
 
-export const DAD_LOOK: PersonLook = { skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true };
-export const MOM_LOOK: PersonLook = { skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'straight', skirt: true };
-const NEIGHBOR_LOOK: PersonLook = { skin: 0xe8b894, shirt: 0x6a7a5a, pants: 0x3a3a40, hair: 0x4a3a2a, hairStyle: 'short', male: true };
+export const DAD_LOOK: PersonLook = castLook({ skin: 0xf0c8a8, shirt: 0x2c3e66, pants: 0xcbb994, hair: 0xb8b8b8, hairStyle: 'short', beard: true }, 'padre_azul');
+export const MOM_LOOK: PersonLook = castLook({ skin: 0xf2cdb0, shirt: 0xf4efe2, pants: 0x9a4d5e, hair: 0x7a5232, hairStyle: 'straight', skirt: true }, 'madre_azul');
+const NEIGHBOR_LOOK: PersonLook = castLook({ skin: 0xe8b894, shirt: 0x6a7a5a, pants: 0x3a3a40, hair: 0x4a3a2a, hairStyle: 'short', male: true }, 'vecino');
 
 // ---------------- La hora: del atardecer a la noche ----------------
 
@@ -198,7 +198,7 @@ export class LevelCena implements Level {
   private parentDriver: THREE.Object3D | null;
   private parentRig: CarRig;
   private parentDrive: Drive | null = null;
-  private moto = makeMoto(0x1b1d22, MARC_LOOK);
+  private moto = makeMoto(0x1b1d22, GAS_DIARIO);
   private motoDrive: Drive | null = null;
   private motoState: 'away' | 'arriving' | 'parked' | 'leaving' | 'gone' = 'away';
   private motoLean = 0;
@@ -317,7 +317,7 @@ export class LevelCena implements Level {
     this.helmet.userData.comicBent = true;
     sc.add(this.helmet);
 
-    this.player = makePerson(MARGAUX_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
     this.player.root.position.copy(WATCH);
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
@@ -329,7 +329,7 @@ export class LevelCena implements Level {
     this.phone.visible = true;
     this.player.handR.add(this.phone);
 
-    this.gas = makePerson(MARC_LOOK);
+    this.gas = makePerson(GAS_DIARIO);
     this.gas.root.visible = false;
     sc.add(this.gas.root);
     this.dad = makePerson(DAD_LOOK);

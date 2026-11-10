@@ -31,53 +31,103 @@ export interface LoadedVRM {
   vrm: VRM;
 }
 
-const cache = new Map<string, Promise<LoadedVRM>>();
+/** Los bytes de cada archivo, una vez (para sacar más copias sin volver a descargarlo). */
+const files = new Map<string, Promise<ArrayBuffer>>();
 
-/** Carga un .vrm (una vez por archivo) y lo deja listo para rig.ts. */
-export function loadVRM(url: string): Promise<LoadedVRM> {
-  let p = cache.get(url);
-  if (!p) {
-    p = bytes(url).then(async (buf) => {
-      const loader = new GLTFLoader();
-      loader.register((parser) => new VRMLoaderPlugin(parser));
-      // Igual que loadGLB: sin createImageBitmap, las texturas se cargan con <img> y blob:
-      const g = globalThis as unknown as { createImageBitmap?: unknown };
-      const saved = g.createImageBitmap;
-      g.createImageBitmap = undefined;
-      let gltf: GLTF;
-      try {
-        gltf = await loader.parseAsync(buf, '');
-      } finally {
-        g.createImageBitmap = saved;
-      }
-      const vrm = gltf.userData.vrm as VRM;
-      if (!vrm) throw new Error('no es un VRM: ' + url);
-      VRMUtils.removeUnnecessaryVertices(vrm.scene);
-      VRMUtils.combineSkeletons(vrm.scene);
-      // rig.ts mueve los huesos de verdad; el VRM no debe sobrescribirlos con su esqueleto normalizado
-      vrm.humanoid.autoUpdateHumanBones = false;
-      for (const [hb, name] of Object.entries(MIXAMO)) {
-        const node = vrm.humanoid.getRawBoneNode(hb as VRMHumanBoneName);
-        if (node) node.name = name!;
-      }
-      vrm.scene.traverse((o) => {
-        o.userData.vrmOrig = true;
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        // Su propio sombreado anime (MToon): ni el paso de cómic ni el de pintura lo tocan
-        m.userData.noComic = true;
-        m.castShadow = true;
-        m.receiveShadow = false;
-        m.userData.noReceive = true;
-        m.frustumCulled = false;
-      });
-      gltf.scene = vrm.scene;
-      gltf.animations = [];
-      return { gltf, vrm };
-    });
-    cache.set(url, p);
+/** Carga un .vrm y lo deja listo para rig.ts. Cada llamada es una copia nueva e independiente (cara, pelo, huesos). */
+export async function loadVRM(url: string): Promise<LoadedVRM> {
+  let f = files.get(url);
+  if (!f) {
+    f = bytes(url);
+    files.set(url, f);
   }
-  return p;
+  const buf = (await f).slice(0);
+  const loader = new GLTFLoader();
+  loader.register((parser) => new VRMLoaderPlugin(parser));
+  // Igual que loadGLB: sin createImageBitmap, las texturas se cargan con <img> y blob:
+  const g = globalThis as unknown as { createImageBitmap?: unknown };
+  const saved = g.createImageBitmap;
+  g.createImageBitmap = undefined;
+  let gltf: GLTF;
+  try {
+    gltf = await loader.parseAsync(buf, '');
+  } finally {
+    g.createImageBitmap = saved;
+  }
+  const vrm = gltf.userData.vrm as VRM;
+  if (!vrm) throw new Error('no es un VRM: ' + url);
+  VRMUtils.removeUnnecessaryVertices(vrm.scene);
+  VRMUtils.combineSkeletons(vrm.scene);
+  // rig.ts mueve los huesos de verdad; el VRM no debe sobrescribirlos con su esqueleto normalizado
+  vrm.humanoid.autoUpdateHumanBones = false;
+  for (const [hb, name] of Object.entries(MIXAMO)) {
+    const node = vrm.humanoid.getRawBoneNode(hb as VRMHumanBoneName);
+    if (node) node.name = name!;
+  }
+  vrm.scene.traverse((o) => {
+    o.userData.vrmOrig = true;
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    // Su propio sombreado anime (MToon): ni el paso de cómic ni el de pintura lo tocan
+    m.userData.noComic = true;
+    m.castShadow = true;
+    m.receiveShadow = false;
+    m.userData.noReceive = true;
+    m.frustumCulled = false;
+  });
+  gltf.scene = vrm.scene;
+  gltf.animations = [];
+  return { gltf, vrm };
+}
+
+/** Las mallas del propio VRM (no lo que le han colgado los niveles: un vaso en la mano, un casco…). */
+const meshesOf = (o: THREE.Object3D) => {
+  const out: THREE.Mesh[] = [];
+  o.traverse((x) => {
+    if ((x as THREE.Mesh).isMesh && x.userData.vrmOrig) out.push(x as THREE.Mesh);
+  });
+  return out;
+};
+const materialsOf = (m: THREE.Mesh) => (Array.isArray(m.material) ? m.material : [m.material]);
+function disposeMaterial(mat: THREE.Material) {
+  for (const v of Object.values(mat)) if ((v as THREE.Texture | null)?.isTexture) (v as THREE.Texture).dispose();
+  mat.dispose();
+}
+
+/**
+ * Otra copia del mismo VRM para otra persona: cara, pelo y huesos propios, pero la geometría, los materiales y las
+ * texturas de la primera (en la GPU solo cuesta su esqueleto). Si las dos no casan pieza a pieza, va entera.
+ */
+export async function copyVRM(url: string, first: LoadedVRM): Promise<LoadedVRM> {
+  const v = await loadVRM(url);
+  const a = meshesOf(first.vrm.scene), b = meshesOf(v.vrm.scene);
+  if (a.length === b.length && a.every((m, i) => m.geometry.attributes.position.count === b[i].geometry.attributes.position.count)) {
+    b.forEach((m, i) => {
+      m.geometry.dispose();
+      m.geometry = a[i].geometry;
+      for (const mat of materialsOf(m)) disposeMaterial(mat);
+      m.material = a[i].material;
+    });
+    v.vrm.scene.userData.sharedWith = first;
+  }
+  return v;
+}
+
+/** Libera un VRM que ya no se va a usar (al pasar a otro capítulo). Las copias no liberan lo que comparten. */
+export function disposeVRM(v: LoadedVRM) {
+  const shared = !!v.vrm.scene.userData.sharedWith;
+  for (const m of meshesOf(v.vrm.scene)) {
+    (m as THREE.SkinnedMesh).skeleton?.dispose();
+    if (shared) continue;
+    m.geometry.dispose();
+    for (const mat of materialsOf(m)) disposeMaterial(mat);
+  }
+  v.vrm.scene.removeFromParent();
+}
+
+/** Olvida los bytes de un archivo (ya no hará falta en este capítulo). */
+export function forgetVRM(url: string) {
+  files.delete(url);
 }
 
 /**

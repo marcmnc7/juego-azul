@@ -3,7 +3,7 @@ import { G, Merger, makePerson, animatePerson, vertexMat, CarRig, type Person, t
 import { seated } from '../entities/vehiclesHD';
 import { Sky, Sun, glowTexture, applyShadows, settleAmbient, toon, paintMat } from '../core/gfx';
 import { setSurface, Surf } from '../core/surfaces';
-import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
+import { MARGAUX_LOOK, castLook, AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { canvasTex, streetSignTexture } from './deco';
 
 // Sant Joan, de madrugada: el taxi por el Camí de sa Farola, como en Street View. Asfalto con la línea discontinua,
@@ -27,7 +27,7 @@ const FROM_Z = 8;
 const TO_Z = 232;
 const WALL_X = -7.3;
 
-const TAXI_DRIVER: PersonLook = { skin: 0xe2b08c, shirt: 0xf2f2ee, pants: 0x2a2a2a, hair: 0x4a4a4a, hairStyle: 'short', male: true };
+const TAXI_DRIVER: PersonLook = castLook({ skin: 0xe2b08c, shirt: 0xf2f2ee, pants: 0x2a2a2a, hair: 0x4a4a4a, hairStyle: 'short', male: true }, 'taxista');
 
 const ROAD_W = 15;
 
@@ -403,7 +403,7 @@ function carLamps(model: ReturnType<typeof carModel>) {
 }
 
 /** Taxi de Menorca: una berlina blanca, con su cajetín en el techo, su rótulo en la puerta y la luz verde de libre. */
-export function makeTaxi(opts: { back?: PersonLook } = {}) {
+export function makeTaxi(opts: { back?: PersonLook; front?: PersonLook } = {}) {
   const M = carMaterials();
   const spec = SPECS.sedan;
   const model = carModel(spec, false);
@@ -449,7 +449,7 @@ export function makeTaxi(opts: { back?: PersonLook } = {}) {
   const drv = seated(TAXI_DRIVER, 0.95, 0.9);
   if (drv.rig) drv.root.position.set(SEAT.driver[0], 0.6 - drv.rig.hipsHeight * 0.95, SEAT.driver[2]);
   body.add(drv.root);
-  const her = seated(MARGAUX_LOOK, 0.95, 0.35);
+  const her = seated(opts.front ?? MARGAUX_LOOK, 0.95, 0.35);
   if (her.rig) her.root.position.set(SEAT.front[0], 0.6 - her.rig.hipsHeight * 0.95, SEAT.front[2]);
   azul.add(her.root);
   body.add(azul);
@@ -533,7 +533,7 @@ export class TaxiRide {
   private sky: Sky;
   private sun: Sun;
   /** El taxi, con Gas detrás (cojo, estirado en el asiento de atrás). Va ocupado: luz verde apagada. */
-  readonly taxi = makeTaxi({ back: MARC_LOOK });
+  readonly taxi = makeTaxi({ front: AZUL_SANTJOAN, back: GAS_SANTJOAN });
   private rig!: CarRig;
   private t = 0;
   /** Por dónde va (z), a qué velocidad y su velocidad de crucero (la que hace que les dé tiempo a hablar). */

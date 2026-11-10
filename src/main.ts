@@ -21,10 +21,11 @@ import { LevelAniversario } from './world/levelAniversario';
 import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
-import { clearRigPeople, preloadRig, updateRigPeople } from './entities/rig';
+import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
 import { preloadCrowd } from './entities/crowdRig';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
+import { castFor } from './data/characters';
 import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } from './core/comic';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
@@ -380,6 +381,13 @@ async function buildLevel(n: number, card: ChapterLoading) {
   card.progress(0.08, 'Cargando personajes');
   if (!hdAssets) await rigLoading;
   if (stale()) return;
+  // Los personajes de VRoid de este capítulo (los que ya estén hechos); fuera los del anterior
+  if (hdAssets) {
+    const cast = castFor(n);
+    releaseVRMs(new Set(cast.map((c) => c[0])));
+    await ensureVRMs(cast);
+    if (stale()) return;
+  }
   // La canción se descodifica mientras tanto: así suena desde el primer segundo
   card.progress(0.2, 'Preparando la canción');
   const song = SONG_OF[n] ? audio.preloadTrack(SONG_OF[n]) : Promise.resolve();

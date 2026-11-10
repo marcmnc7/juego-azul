@@ -9,10 +9,10 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 | Parte | Quién | Qué |
 |---|---|---|
 | A · Crear los modelos | **Tú (la IA con clics)** | VRoid Studio: duplicar proyectos, cambiar cara, pelo, cuerpo y ropa según las fichas de este documento, exportar cada `.vrm` con el nombre exacto |
-| B · Prepararlos | Tú, en la terminal | Aligerar cada `.vrm` con `scripts/vrm_slim.py` y dejarlo en `src/assets/vrm/` |
-| C · Meterlos en el juego | Tú o Claude Code, en el repo | Registrar cada archivo y ponerlo en el `look` del personaje (sección 5); probar en el navegador |
+| B · Meterlos en el juego | Tú, en la terminal | Aligerar cada `.vrm` con `scripts/vrm_slim.py` **dejándolo directamente en `src/assets/vrm/<nombre>.vrm`**. Nada más: el juego lo encuentra por su nombre y lo usa en todos los sitios donde sale ese personaje |
+| C · Comprobar | Tú, en el navegador | Mirar al personaje en cada capítulo donde sale (sección 6) y enseñar capturas al dueño |
 
-Antes de la parte C hay **un cambio de código previo** (sección 5.1, lo hace Claude Code): hoy el juego solo sabe usar un mismo VRM una vez por escena.
+**No hay que tocar código.** El juego ya tiene cada personaje enlazado a su nombre de archivo (sección 5): mientras el archivo no existe, sale el modelo de antes; en cuanto existe, sale el de VRoid.
 
 ---
 
@@ -158,54 +158,45 @@ Distancia en el juego: **C** = de cerca (diálogos, escenas de cine), **M** = me
 
 ### 4.3 Extras (todos desde las bases, en lotes)
 
-Para cada lote: abre la base, **Guardar como** con el nombre, cambia solo lo de la tabla, exporta con atlas **1024**. Un archivo por fila: el juego no puede poner el mismo archivo dos veces en una escena hasta el cambio de la sección 5.1, y con él cada archivo cuesta igual de memoria, así que **no hagas más de los que pide la tabla**.
+Para cada lote: abre la base, **Guardar como** con el nombre, cambia solo lo de la tabla, exporta con atlas **1024**. Un archivo por fila; **no hagas más de los que pide la tabla** (el juego no buscaría los que no conoce).
 
 | Archivo | Base | Pelo | Ropa | Lo usan |
 |---|---|---|---|---|
-| `extra_m1.vrm` | B-MUJER | Melena larga castaña | Camiseta blanca, shorts vaqueros | Caps. 1, 3, 4, 6, 9 |
-| `extra_m2.vrm` | B-MUJER | Coleta negra | Camiseta amarilla (`#f4d35e`), pantalón corto marrón | Caps. 1, 4, 6, 9 |
-| `extra_m3.vrm` | B-MUJER | Moño, castaño claro | Camiseta roja (`#d7263d`), vaqueros | Caps. 3, 4, 6 |
-| `extra_m4.vrm` | B-MUJER | Corto, rubio | Vestido de verano estampado claro | Caps. 4, 6, 7 |
-| `extra_h1.vrm` | B-HOMBRE | Corto moreno | Camiseta verde azulado (`#1b998b`), pantalón corto negro | Caps. 1, 3, 4, 6, 9 |
-| `extra_h2.vrm` | B-HOMBRE | Corto castaño claro | Camiseta roja, pantalón corto vaquero | Caps. 1, 4, 6, 9 |
-| `extra_h3.vrm` | B-HOMBRE | Rapado, barba corta | Camiseta gris oscura, vaqueros | Caps. 3, 4, 5 (moteros y conductores) |
-| `extra_h4.vrm` | B-HOMBRE | Gorra (accesorio de VRoid) | Camiseta blanca, bermudas beige | Caps. 4, 5, 6 |
-| `extra_mayor_m.vrm` | B-MAYOR-M | Corto gris | Blusa azul, falda | Caps. 6, 7, 8 (paseantes) |
-| `extra_mayor_h.vrm` | B-MAYOR-H | Gris, entradas | Polo blanco, pantalón beige | Caps. 6, 7, 8 (paseantes) |
+| `extra_m1.vrm` | B-MUJER | Melena larga castaña | Camiseta blanca, shorts vaqueros | Cap. 1 y 9 (pistolas de agua), cap. 5 (conductora) |
+| `extra_m2.vrm` | B-MUJER | Coleta negra | Camiseta amarilla (`#f4d35e`), pantalón corto marrón | Caps. 1 y 9 (pistolas de agua) |
+| `extra_h1.vrm` | B-HOMBRE | Corto moreno | Camiseta verde azulado (`#1b998b`), pantalón corto negro | Caps. 1 y 9 (pistolas de agua) |
+| `extra_h2.vrm` | B-HOMBRE | Corto castaño claro | Camiseta roja (`#d7263d`), pantalón corto vaquero | Caps. 1 y 9 (pistolas de agua) |
+| `extra_h3.vrm` | B-HOMBRE | Rapado, barba corta | Chaqueta oscura (`#1b1b22`), vaqueros | Cap. 5 (motero de frente) |
+| `extra_h4.vrm` | B-HOMBRE | Corto castaño | Camiseta granate (`#8a2a2a`), pantalón oscuro | Cap. 5 (motero y conductor) |
+| `extra_mayor_m.vrm` | B-MAYOR-M | Corto gris | Camiseta azul clara (`#5aa9e6`), pantalón claro | Cap. 8 (paseante de Sa Farola) |
+| `extra_mayor_h.vrm` | B-MAYOR-H | Gris, entradas | Camiseta blanca, pantalón azul | Cap. 8 (paseante de Sa Farola) |
 | `nino_1.vrm` … `nino_3.vrm` | B-NIÑO / B-NIÑA | Corto castaño · coleta · rizado | Camisetas rosa, turquesa, naranja; pantalón corto | Cap. 1 (guerra de agua) |
+
+El resto de la gente (los viajeros de Barajas, el público, la calle Laurel, los burros de Ferreries, el Born de Sant Joan) va con las **multitudes** (abajo).
 
 **Multitudes** (cientos de personas en la plaza de Ferreries, el concierto y el Born de Sant Joan): no se hacen con VRM completos (el móvil no aguanta). Se hacen con **plantillas ligeras** a partir de 4 de los extras de arriba (`extra_m1`, `extra_m2`, `extra_h1`, `extra_h2`) con `scripts/crowd_lod.mjs`. Eso es trabajo de código (sección 5.3): tú solo exporta esos cuatro también **sin fusionar materiales**.
 
 ---
 
-## 5. Meterlos en el juego
+## 5. Meterlos en el juego (ya preparado en el código)
 
-### 5.1 Antes de nada (código, lo hace Claude Code)
-1. **Varias personas con el mismo VRM en una escena** (fase F1 de `docs/PLAN-personajes.md`): leer el archivo una vez y crear un VRM por persona. Hace falta porque el cap. 8 crea a Azul y a Gas en cinco escenas y el cap. 2 tiene dos versiones de cada uno.
-2. **Un registro por nombre** en `src/data/characters.ts`: que cada archivo de `src/assets/vrm/` se encuentre por su nombre (`castVrm('gas_diario')`) y que, si el archivo aún no existe, el personaje siga con su modelo de ahora. Así cada VRM nuevo se puede ir metiendo sin romper nada.
-3. Revisar lo que depende del modelo viejo (`kind === 'woman'` en `models.ts`, `print.ts`, sentarse): ver la sección 6 de `docs/PLAN-personajes.md`.
+Hecho por Claude Code el 10-nov-2026:
+- **Registro por nombre** (`src/data/characters.ts`): cada archivo de `src/assets/vrm/` se encuentra por su nombre sin extensión (`castVrm('tofol')`). Cada personaje del juego tiene puesto su nombre (`castLook(look, 'tofol')`); si el archivo no está, sale con su modelo de antes.
+- **Varias personas con el mismo VRM** (las dos Azul del cap. 3 en el coche y en el camping, los nueve caixers…): cada una lleva su propia copia (cara, pelo y huesos), y las copias comparten geometría y texturas, así que apenas gastan memoria.
+- **Carga por capítulo**: al empezar un capítulo se cargan solo sus VRM (lista `CAST_BY_CHAPTER` en `characters.ts`, con cuántas copias de cada uno) y se sueltan los del anterior.
+- La altura de cada uno sale de su nombre (`vrmHeight`): Azul 1,66; Gas 1,80; niños 1,30; mujeres 1,63; hombres 1,74; los de altura propia (Carme, Tòfol, Eric, los padres…) están en la tabla `HEIGHT`.
+- Los estampados que el juego pegaba en el pecho (caballo de Sant Joan, Fito) no se pegan en un VRM: **píntalos en la textura de la camiseta en VRoid**.
 
-### 5.2 Por cada archivo nuevo
-1. Que esté en `src/assets/vrm/<nombre>.vrm` (sección 2.3).
-2. En `src/data/characters.ts`, añadirlo al registro con su altura en metros (Azul 1,66; Gas 1,80; Carme 1,64; niños 1,30; el resto, la de la ficha o 1,72 hombres / 1,63 mujeres).
-3. Poner `vrm: castVrm('<nombre>')` en el `look` de quien lo usa:
+**Lo único que tienes que hacer tú por cada archivo:**
+```
+python3 scripts/vrm_slim.py ~/Desktop/characters/reparto/<nombre>.vrm src/assets/vrm/<nombre>.vrm
+```
+con el nombre **exacto** de la ficha (sección 8). Si el nombre no coincide, el juego no lo encuentra (no da error: sigue el modelo de antes).
 
-| Capítulo | Archivo del nivel | Quién (búscalo así) |
-|---|---|---|
-| 1 y 9 | `src/world/level1.ts`, `ferreries.ts` | `this.marc`, `this.carme`, `this.tofol`, `this.fabiolera`, los de las pistolas (`looks` de la guerra de agua), la variante del 9 en `levelAniversario.ts` (`outfit`) |
-| 2 | `src/world/level4.ts` | `this.player` y `this.gas` (vestidos), `this.looks.azul[1]` y `this.looks.gas[1]` (piscina), la tertulia del Imperi (`barPeople`) |
-| 3 | `level2.ts` (coche: `driver`/`passenger`), `camp.ts`, `terrace.ts`, `laurel.ts` (`azul`, `gas`, `CROWD`), `sideGames.ts` (`PinchoGame.waiter`) | |
-| 4 | `level3.ts` | `this.azul`, `this.gas` (camiseta de Fito), `this.barman`, `staff`, `LOOKS` (viajeros y cola), músicos (`bassist`, `sax`, `drummer`), `entities/fito.ts` |
-| 5 | `levelMoto.ts` | `AZUL_MOTO`, `GAS_MOTO`, `RIDERS` (moteros), `DRIVERS` (coches) |
-| 6 | `levelSantJoan.ts`, `camiFarola.ts`, `entities/donkeyHD.ts` | `this.player`, `this.gas`, `LOOKS` (gente), taxista y gente del camino (`looks` de `camiFarola.ts`), jinetes caixers |
-| 7 | `levelCena.ts` | `this.player`, `this.gas`, `DAD_LOOK`, `MOM_LOOK`, `NEIGHBOR_LOOK` |
-| 8 | `levelEclipse.ts`, `saFarola.ts`, `missions/parking.ts`, `kayak.ts` | Azul y Gas en cada escena, `DAD_LOOK`, `MOM_LOOK`, `MARC_DAD`, `MARC_MOM`, `ERIC_LOOK`, paseantes (`looks` de `saFarola.ts`) |
-| 9 (misiones) | `missions/beach.ts`, `missions/park.ts` | Azul y Gas |
+**Si un nombre necesita más copias** (en la consola del modo prueba sale `[rig] no queda copia libre de …`): sube su número en `CAST_BY_CHAPTER` de `src/data/characters.ts` y avisa a Claude Code.
 
-4. `npx tsc --noEmit` sin errores.
-
-### 5.3 Multitudes (código, lo hace Claude Code)
-Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a partir de los cuatro extras, conectar `crowdRig.ts` y medir fps en el móvil (≥ 30).
+### Multitudes (código, lo hace Claude Code)
+Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a partir de `extra_m1`, `extra_m2`, `extra_h1` y `extra_h2`, conectar `crowdRig.ts` y medir fps en el móvil (≥ 30).
 
 ---
 
@@ -228,9 +219,9 @@ Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a p
 2. Bases B-MUJER, B-HOMBRE, B-MAYOR-M, B-MAYOR-H, B-NIÑO, B-NIÑA.
 3. **Cap. 1** (20-nov): `gas_ferreries`, `tofol`, `carme`, `fabiolera`, `nino_1…3`, `extra_m1`, `extra_m2`, `extra_h1`, `extra_h2`.
 4. **Cap. 2** (21-nov): `azul_diario` (o el `Azul-Cap2` del dueño), `azul_piscina` (o `Azul-Nadar`), `gas_diario`, `gas_piscina`, los tres del Imperi.
-5. **Cap. 3** (22-nov): `camarero_laurel`, `extra_m3`, `extra_h3`.
-6. **Cap. 4** (23-nov): `gas_fito`, `camarero_fito`, agentes, `fito`, músicos, `extra_m4`, `extra_h4`.
-7. **Cap. 5** (24-nov): `azul_moto`, `gas_moto`.
+5. **Cap. 3** (22-nov): `camarero_laurel`.
+6. **Cap. 4** (23-nov): `gas_fito`, `camarero_fito`, `agente_aeropuerto_h`, `agente_aeropuerto_m`, `fito`, `bajista`, `saxofonista`, `bateria`.
+7. **Cap. 5** (24-nov): `azul_moto`, `gas_moto`, `extra_h3`, `extra_h4`.
 8. **Cap. 6** (25-nov): `azul_santjoan`, `gas_santjoan`, `taxista`, `caixer`, `extra_mayor_m`, `extra_mayor_h`.
 9. **Cap. 7** (26-nov): `padre_azul`, `madre_azul`, `vecino`.
 10. **Cap. 8** (27-nov): `padre_gas`, `madre_gas`, `eric`.
@@ -246,6 +237,6 @@ Después de cada capítulo: capturas al dueño y, solo con su permiso, commit. P
 
 **Con nombre (22):** tofol · carme · fabiolera · amigo_imperi · amiga_imperi_1 · amiga_imperi_2 · camarero_laurel · camarero_fito · agente_aeropuerto_h · agente_aeropuerto_m · fito · bajista · saxofonista · bateria · taxista · caixer · padre_azul · madre_azul · vecino · padre_gas · madre_gas · eric
 
-**Extras (13):** extra_m1 · extra_m2 · extra_m3 · extra_m4 · extra_h1 · extra_h2 · extra_h3 · extra_h4 · extra_mayor_m · extra_mayor_h · nino_1 · nino_2 · nino_3
+**Extras (11):** extra_m1 · extra_m2 · extra_h1 · extra_h2 · extra_h3 · extra_h4 · extra_mayor_m · extra_mayor_h · nino_1 · nino_2 · nino_3
 
 **Bases (6, no van al juego):** base_mujer · base_hombre · base_mayor_mujer · base_mayor_hombre · base_nino · base_nina

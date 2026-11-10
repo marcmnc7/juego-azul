@@ -3,7 +3,7 @@ import { Surf } from '../core/surfaces';
 import { audio } from '../core/audio';
 import { Sky, Sun, glowTexture, toon } from '../core/gfx';
 import { Lost } from '../core/lost';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
@@ -137,8 +137,8 @@ export class Camp {
     }
 
     // Azul y Gas, sentados uno frente al otro
-    this.azul = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.azul = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.44), 0); // asiento de la silla a 44 cm
       p.root.rotation.y = -sx * Math.PI / 2;

@@ -81,7 +81,7 @@ Cada fase termina con **criterios de aceptación**. No pases a la siguiente sin 
 
 **Aceptación:** el juego arranca en local y se ve a Azul VRM en el capítulo 1.
 
-### F1 · Varias personas con el mismo VRM (1 día)
+### F1 · Varias personas con el mismo VRM (1 día) — **hecho el 10-nov-2026**, con registro por nombre y carga por capítulo: ver `docs/PLAN-reparto-vroid.md`, sección 5
 Hoy un VRM = una persona por escena. Hace falta para extras, para las versiones "con/sin ropa" del mismo personaje y para que un secundario aparezca dos veces.
 - Opción recomendada: en `VRM_FILES`, un número de **instancias** por archivo (`[url, altura, instancias]`). En `preloadRig`, guardar el `ArrayBuffer` una vez (`bytes(url)`) y **parsearlo N veces** con `GLTFLoader.parseAsync` (cada parseo es un VRM independiente con su física de pelo y expresiones). `makeRigPerson` toma la primera instancia libre (no usada por una persona viva de la escena).
 - Cuidado con la memoria: cada instancia comparte nada con las otras; un VRM de 6,5 MB ocupa bastante más en GPU. Límite práctico en móvil: **≤ 8 VRM completos por escena**.

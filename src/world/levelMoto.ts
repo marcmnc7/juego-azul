@@ -7,7 +7,7 @@ import { comicFlash } from '../core/comic';
 import { setSurface, Surf } from '../core/surfaces';
 import { Lost } from '../core/lost';
 import { MOTO } from '../data/story';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { MARGAUX_LOOK, MARC_LOOK, castLook } from '../data/characters';
 import { G, Merger, makeMoto, makeCar, makePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
 import { ROOF_GEO } from './ferreries';
@@ -76,19 +76,19 @@ const ONCOMING_V = 12;
 /** Salen a esta distancia (lejos, ya casi en la niebla). */
 const SPAWN_AHEAD = 120;
 const RIDERS: PersonLook[] = [
-  { skin: 0xe2b08c, shirt: 0x1b1b22, pants: 0x2a3550, hair: 0x2b1d14, hairStyle: 'short', male: true },
-  { skin: 0xf0c8a6, shirt: 0x8a2a2a, pants: 0x1b1b22, hair: 0x6a4a2a, hairStyle: 'short', male: true },
+  castLook({ skin: 0xe2b08c, shirt: 0x1b1b22, pants: 0x2a3550, hair: 0x2b1d14, hairStyle: 'short', male: true }, 'extra_h3'),
+  castLook({ skin: 0xf0c8a6, shirt: 0x8a2a2a, pants: 0x1b1b22, hair: 0x6a4a2a, hairStyle: 'short', male: true }, 'extra_h4'),
 ];
 const DRIVERS: PersonLook[] = [
-  { skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x5a3a22, hairStyle: 'short', male: true },
-  { skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0xb07a3a, hairStyle: 'long' },
+  castLook({ skin: 0xe8b894, shirt: 0xffffff, pants: 0x3b4a6b, hair: 0x5a3a22, hairStyle: 'short', male: true }, 'extra_h4'),
+  castLook({ skin: 0xf0c8a6, shirt: 0x2e86ab, pants: 0x222222, hair: 0xb07a3a, hairStyle: 'long' }, 'extra_m1'),
 ];
 /**
  * Con el conjunto de moto de la lista (tejanos y chupa): la chupa, oscura. (El color es inventado; el modelo no
  * tiene chaqueta, solo cambia el color de arriba.)
  */
-export const AZUL_MOTO: PersonLook = { ...MARGAUX_LOOK, shirt: 0x2a2624 };
-export const GAS_MOTO: PersonLook = { ...MARC_LOOK, shirt: 0x24201e };
+export const AZUL_MOTO: PersonLook = castLook({ ...MARGAUX_LOOK, shirt: 0x2a2624 }, 'azul_moto');
+export const GAS_MOTO: PersonLook = castLook({ ...MARC_LOOK, shirt: 0x24201e }, 'gas_moto');
 
 // Colores con su dibujo de superficie
 const ASPHALT = 0x4a4a50;

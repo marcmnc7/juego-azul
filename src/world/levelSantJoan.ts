@@ -12,7 +12,7 @@ import { dust } from '../core/dust';
 import { Lost } from '../core/lost';
 import { TownHD } from './hd/townHD';
 import { SANTJOAN } from '../data/story';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, streetLamp, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
@@ -330,7 +330,7 @@ export class LevelSantJoan implements Level {
     this.fx = new Particles(sc);
 
     // Los dos con la misma camiseta: blanca, con un caballo dibujado (y pantalón corto, como todos)
-    this.player = makePerson({ ...MARGAUX_LOOK, shirt: 0xffffff, pants: 0x6f8fb8, skirt: false, shorts: true });
+    this.player = makePerson(AZUL_SANTJOAN);
     shirtPrint(this.player, horsePrint(), 0.23);
     markAccessories(this.player.root);
     this.player.root.position.copy(START);
@@ -338,7 +338,7 @@ export class LevelSantJoan implements Level {
     this.walker = new Walker(this.player.root.position);
     this.walker.yaw = this.walker.facing = -Math.PI / 2;
 
-    this.gas = makePerson({ ...MARC_LOOK, shirt: 0xffffff, pants: 0x2d3a55, shorts: true });
+    this.gas = makePerson(GAS_SANTJOAN);
     shirtPrint(this.gas, horsePrint(), 0.27);
     markAccessories(this.gas.root);
     this.gas.root.visible = false;
@@ -1591,7 +1591,7 @@ export class LevelSantJoan implements Level {
   /** El taxi de la Plaça Espanya, libre (luz verde), aparcado junto a la fachada. Uno solo, aunque se repita la fase. */
   private showPlazaTaxi(on: boolean) {
     if (on && !this.plazaTaxi) {
-      const taxi = makeTaxi();
+      const taxi = makeTaxi({ front: AZUL_SANTJOAN });
       taxi.azul.visible = false;
       taxiFree(taxi, true);
       taxi.root.position.copy(TAXI);
@@ -1731,7 +1731,8 @@ export class LevelSantJoan implements Level {
       this.gas.root.position.set(1.5, -0.45, STREET_Z);
       this.gas.root.visible = false;
       // Llega ya en marcha (a la velocidad del viaje) y frena hasta parar delante de la cancela; ocupado: sin luz verde
-      const taxi = makeTaxi({ back: MARC_LOOK });
+      // (los dos con la ropa de Sant Joan, como en la fiesta: antes, en el taxi, con la de diario)
+      const taxi = makeTaxi({ front: AZUL_SANTJOAN, back: GAS_SANTJOAN });
       taxi.azul.visible = true;
       taxiFree(taxi, false);
       taxi.root.rotation.y = -Math.PI / 2;

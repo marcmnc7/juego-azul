@@ -9,10 +9,10 @@ import type { Box2 } from '../world/ferreries';
 // Si Rapier no arranca en algún dispositivo, el Walker vuelve a la colisión simple de antes.
 
 let ready = false;
-export const physReady = RAPIER.init()
+// (arranca al importar el módulo: el Walker usa Rapier en cuanto está listo)
+void RAPIER.init()
   .then(() => void (ready = true))
   .catch((e) => console.warn('[phys] Rapier no arranca; se usa la colisión simple', e));
-export const isPhysReady = () => ready;
 
 // Grupos de interacción (16 bits de pertenencia << 16 | 16 bits de filtro)
 const G_SOLID = 0x0001;

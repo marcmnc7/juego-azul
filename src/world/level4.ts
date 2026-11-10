@@ -7,7 +7,7 @@ import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicStarTexture, comicBulbTexture } from '../core/comicTiles';
 import { NIGHT, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
-import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
+import { MARGAUX_LOOK, MARC_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { POT_CORE, woodChair, CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
 import { Door } from './door';
@@ -281,7 +281,7 @@ export class Level4 implements Level {
       [-16.55, 3.8, { skin: 0xd9a27c, shirt: 0x1b998b, pants: 0x222222, hair: 0x5a3a22, hairStyle: 'long', skirt: true }],
       [-17.3, 5.15, { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x2a2a2a, hair: 0xb07a3a, hairStyle: 'pony' }],
     ] as [number, number, PersonLook][]) {
-      const p = makePerson(look);
+      const p = makePerson(castLook(look, ['amigo_imperi', 'amiga_imperi_1', 'amiga_imperi_2'][this.barPeople.length]));
       p.root.position.set(B.x + lx, 0, B.z + lz);
       // mirando al centro del corro
       p.root.rotation.y = Math.atan2(FRIENDS.x - p.root.position.x, FRIENDS.z - p.root.position.z);
@@ -297,13 +297,13 @@ export class Level4 implements Level {
     this.placeCar(CAR_FAR_X);
     sc.add(this.car.root);
 
-    this.player = makePerson(MARGAUX_LOOK);
+    this.player = makePerson(AZUL_DIARIO);
     this.player.root.position.copy(BAR_START);
     sc.add(this.player.root);
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI / 2;
 
-    this.gas = makePerson(MARC_LOOK);
+    this.gas = makePerson(GAS_DIARIO);
     this.gas.root.position.copy(GAS_POOL);
     this.gas.root.rotation.y = Math.PI;
     this.gas.root.visible = false; // va en el coche
@@ -311,7 +311,7 @@ export class Level4 implements Level {
     // Versiones sin ropa para la piscina. Azul, con el cuerpo de mujer de MakeHuman en su versión sin ropa (con su piel,
     // su pelo y sus ojos): su modelo de siempre lleva la ropa en la misma malla y, pintada de piel, se veía un mono
     // blanco con el bulto de los pantalones
-    this.looks = { azul: [this.player, makePerson({ ...nude(MARGAUX_LOOK), azul: false })], gas: [this.gas, makePerson(nude(MARC_LOOK))] };
+    this.looks = { azul: [this.player, makePerson(castLook({ ...nude(MARGAUX_LOOK), azul: false }, 'azul_piscina'))], gas: [this.gas, makePerson(castLook(nude(MARC_LOOK), 'gas_piscina'))] };
     for (const p of [this.looks.azul[1], this.looks.gas[1]]) {
       p.root.visible = false;
       // (la sombra de pega se quedaría flotando dentro del agua)

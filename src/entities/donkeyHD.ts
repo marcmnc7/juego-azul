@@ -3,6 +3,7 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { loadGLB } from '../core/assets';
 import horseUrl from '../assets/chars/horse.glb';
 import { boneAnchor, makeRigPerson, rigTickers } from './rig';
+import { castLook } from '../data/characters';
 import type { Donkey } from './models';
 
 // Ases de la prueba de concepto: el caballo glTF de los ejemplos de three.js (galope con morph
@@ -243,7 +244,7 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   const R0 = riderN++;
   const rider = makeRigPerson(
     horse
-      ? { skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }
+      ? castLook({ skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }, 'caixer')
       : { skin: [0xe8b894, 0xd9a27c, 0xf0c8a6, 0xc98e64][R0 % 4], shirt: [0xffffff, 0x2f6b8a, 0xd7263d, 0xe9c75a][R0 % 4], pants: [0x3b4a6b, 0xc9b48a, 0x6f8fb8, 0x2d2d3a][R0 % 4], hair: [0x2a1d14, 0x6b3f22, 0x1f1610, 0x8a6a40][R0 % 4], hairStyle: 'short', male: true, shorts: true },
     1,
     new THREE.Object3D(),

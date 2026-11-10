@@ -23,3 +23,7 @@ declare module '*.png' {
   const src: string;
   export default src;
 }
+// import.meta.glob de Vite (sin traer todos los tipos de vite/client, que chocan con los de arriba)
+interface ImportMeta {
+  glob<T = unknown>(pattern: string, opts: { eager: true; query?: string; import?: string }): Record<string, T>;
+}

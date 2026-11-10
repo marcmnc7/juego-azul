@@ -4,7 +4,7 @@ import { cinema } from '../core/cinema';
 import { Sky, Sun, settleAmbient, applyShadows, makeSea, vibrate } from '../core/gfx';
 import { steerTo, type SteerState } from '../core/steer';
 import type { Walker } from '../core/walker';
-import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
+import { MARC_LOOK, MARGAUX_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { SIDE } from '../data/story';
 import { twoBone } from '../entities/embrace';
 import type { Particles } from '../entities/fx';
@@ -135,7 +135,8 @@ export class WaterFight {
     player.handR.add(this.gun);
     KIDS.forEach((look, i) => {
       // (un niño de verdad, no un adulto encogido)
-      const p = makePerson({ ...look, kid: true });
+      // (los tres primeros, con su VRM de niño si ya está hecho)
+      const p = makePerson(i < 3 ? castLook({ ...look, kid: true }, `nino_${i + 1}`) : { ...look, kid: true });
       const x = zone.minX + ((i + 0.5) / KIDS.length) * (zone.maxX - zone.minX);
       p.root.position.set(x, 0, (i % 2 ? 1 : -1) * 1.4);
       const g = toyGun(i % 2 ? 0xe2547a : 0x3b7bd8);
@@ -421,7 +422,7 @@ export class PinchoGame {
       this.items.push({ obj, at: new THREE.Vector3(x, y + 0.26, z + 0.08), btn, k: 0 });
     });
     sc.add(this.root);
-    this.waiter = makePerson({ skin: 0xe2b08c, shirt: 0xf6f6f2, pants: 0x1a1a1a, hair: 0x2b1d14, hairStyle: 'short', male: true, beard: true });
+    this.waiter = makePerson(castLook({ skin: 0xe2b08c, shirt: 0xf6f6f2, pants: 0x1a1a1a, hair: 0x2b1d14, hairStyle: 'short', male: true, beard: true }, 'camarero_laurel'));
     this.waiter.root.position.set(0.25, 0, z - 0.72);
     sc.add(this.waiter.root);
     this.box = el('div', 'side-panel');
@@ -1649,8 +1650,8 @@ export class RockHop {
     this.foam.userData.noCast = true;
     this.root.add(this.foam);
     sc.add(this.root);
-    this.azul = makePerson(MARGAUX_LOOK);
-    this.gas = makePerson(MARC_LOOK);
+    this.azul = makePerson(AZUL_DIARIO);
+    this.gas = makePerson(GAS_DIARIO);
     this.place(this.azul, 0);
     const end = HOP_ROCKS[HOP_ROCKS.length - 1];
     this.gas.root.position.set(end.x + 0.3, SAFE_Y + 0.02, end.z - 0.2);
