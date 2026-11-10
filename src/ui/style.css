@@ -1374,6 +1374,8 @@ html, body { background: #000; }
 .comic-mode .gauge-seg { color: var(--ink-c); font-weight: 700; }
 .comic-mode .pack-item { background: var(--paper-c); color: var(--ink-c); border: 2.5px solid var(--ink-c); border-radius: 8px; box-shadow: 3px 3px 0 var(--ink-c); }
 .comic-mode .pack-item.in { background: #d8f2c8; border-color: var(--ink-c); }
+.comic-mode .side-info, .comic-mode .table-item { background: var(--paper-c); color: var(--ink-c); border: 2.5px solid var(--ink-c); box-shadow: 3px 3px 0 var(--ink-c); font-family: 'Comic Neue', var(--font); }
+.comic-mode .table-item.sel { background: #ffd23f; border-color: var(--ink-c); }
 /* Onomatopeya: letras gordas de tebeo sobre un estallido, que saltan y se van */
 .pow {
   position: fixed; z-index: 8; pointer-events: none; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));

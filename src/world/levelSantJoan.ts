@@ -18,7 +18,7 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
-import { buildAzulHouse, STREET_Z, DOOR } from './levelCena';
+import { buildAzulHouse, STREET_Z, DOOR, GARLAND_OFF } from './levelCena';
 import type { Door } from './door';
 import { CHATS } from '../data/chats';
 import { canvasTex, mergedPlanes } from './deco';
@@ -1716,6 +1716,9 @@ export class LevelSantJoan implements Level {
       const place = buildAzulHouse(sc, colliders, false);
       place.steam.forEach((s) => (s.visible = false));
       this.sleepingHouse(sc);
+      // (a las tres de la mañana, los apliques y la guirnalda de la terraza, apagados: los padres duermen)
+      for (const l of place.wallLamps ?? []) l.visible = false;
+      if (place.garland) (place.garland.material as THREE.PointsMaterial).color.setHex(GARLAND_OFF);
       for (const sx of [-1, 1]) colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: 10.1, maxZ: 10.5 });
       sc.add(this.player.root, this.gas.root);
       const pp = this.player.root.position;
