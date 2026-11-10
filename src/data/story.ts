@@ -221,38 +221,79 @@ export const ROAD = {
   zamb: { served: '¡Al plato! Déjalo 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
 };
 
+// Capítulo 4. Lo marcado «(inventado)» no sale de los chats: Marc, cámbialo por lo que pasó de verdad.
+// Los avisos no van en letreros (no se ven): los dice alguien, en un bocadillo, como en la vida real.
 export const CONCERT = {
   barmanAgain: [{ who: 'Camarero', text: '¿Buscas sitio? Desde el pasillo del centro se ve a Fito de lujo.' }] as Line[],
-  smokeFound: '🚭 Tabaco a la papelera',
   airport: [
     { who: 'Narrador', text: 'Jueves 12 de marzo de 2026. Gas vuela desde Barcelona y tú, desde Madrid. Destino: Gran Canaria, a ver a Fito.' },
   ] as Line[],
-  airportHint: 'Barajas: esquiva las maletas y llega a la puerta 26. Asiento 26D, ✨pasillo✨',
-  burgerHit: ['🧳 ¡Uy! Una maleta', '🧳 «Tengo miedísimo de quedarme en Madrid»', '🧳 26 palo, pero D top ✨pasillo✨'],
-  /** La puerta 26 se cierra. */
-  gateLast: '📢 Última llamada para Las Palmas. Puerta 26',
-  gateClosing: '📢 «Pasajera Margaux, se cierra la puerta» ¡Corre!',
-  gateLate: 'Por los pelos',
+  /** A quien se le escapa la maleta de la tienda (inventado). */
+  suitcase: [
+    { who: 'Una señora', text: '¡Ay, perdona! Que se me ha escapado.' },
+    { who: 'Azul', text: '¡Uy! Otra maleta…' },
+    { who: 'Un señor', text: '¡Perdón, perdón! ¡Que no frena!' },
+  ] as Line[],
+  /** El tabaco de Azul, a la papelera de la terminal (opcional; Gas se fija al final). */
+  smokeBtn: 'Tirar el tabaco 🚭',
+  smokeDone: 'Se acabó. 🚭',
+  /** Megafonía de la puerta 26. */
+  gateLast: '📢 Última llamada para el vuelo a Las Palmas de Gran Canaria. Puerta 26.',
+  gateClosing: '📢 Pasajera Margaux, embarque inmediato por la puerta 26.',
+  /** En el torno de embarque (inventado). */
+  gateAsk: 'Tarjeta de embarque y DNI, por favor.',
+  gateRush: '¡Corre, que cerramos!',
+  gateThanks: 'Gracias. Buen vuelo.',
+  gateBtn: '🎫 Tarjeta y DNI',
+  gateLate: 'Por los pelos…',
   landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria.' }] as Line[],
+  /** En la cafetería de llegadas, donde la esperaba Gas («dentro aún»). Adaptado del chat de esa noche. */
+  arrivalsMeet: [
+    { who: 'Gas', text: 'Vas tarde.' },
+    { who: 'Azul', text: '¿VOY TARDE? Tú vas pronto.' },
+    { who: 'Gas', text: 'Nos han dado un coche mejor. Por vip.' },
+  ] as Line[],
   stadium: [
     { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
-    { who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas. Ahora juegas con él.' },
+    { who: 'Narrador', text: 'Ahora juegas con Gas.' },
   ] as Line[],
-  filmIntro: [{ who: 'Narrador', text: 'Grábaselo: mantén a Fito dentro del recuadro aunque la gente salte delante.' }] as Line[],
-  filmDone: '🎥 Vídeo guardado para Gas',
-  flashIntro: [
-    { who: 'Narrador', text: 'Gas ya ha salido, pero entre canción y canción está todo a oscuras y no te encuentra.' },
-    { who: 'Narrador', text: 'Enciende el flash cuando mire hacia ti.' },
+  /** Se apagan las luces y sale la banda (el saludo, inventado). */
+  showHello: '¡Buenas noches, Gran Canaria!',
+  showWc: [{ who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas.' }] as Line[],
+  filmIntro: [
+    { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en la cola del baño.' },
+    { who: 'Azul', text: 'Se lo grabo. Que no se me escape Fito del encuadre.' },
   ] as Line[],
-  flashHint: 'Enciende el flash cuando Gas mire hacia ti',
-  flashHit: ['📸 Te ha visto', '📸 Viene hacia ti', '📸 Ya casi', '📸 ¡Aquí!'],
-  flashWrong: ['Ahora no, que mira hacia otro lado', 'Gas va hacia otro flash', 'Has deslumbrado a un señor de Telde'],
-  gasFound: [
-    { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
-    { who: 'Azul', text: 'Te he grabado el temón. Toma.' },
-  ] as Line[],
+  /** (inventado) */
+  filmDone: 'Grabado. Ya lo verá.',
+  /** Gas, buscándola sin chat delante (inventado). */
+  seekAgain: '¿Dónde se ha metido ahora?',
+  /** Cada canción que pasa mientras la busca (inventado). */
+  songLost: ['Pfff. Otra canción que me pierdo.', 'Y otra… ¿Dónde está?', 'Fito ya va por la siguiente.'],
+  found: [
+    [
+      { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
+      { who: 'Azul', text: 'Te he grabado el temón. Toma.' },
+    ],
+    [{ who: 'Gas', text: '¡Aquí estás! Te has movido…' }],
+    [{ who: 'Gas', text: 'Ahora sí. No me muevo de aquí.' }],
+  ] as Line[][],
+  /** Antes de cada vuelta al baño (la segunda, a por las gafas: ver SIDE.glasses.intro). */
+  goAgain: [
+    [],
+    [{ who: 'Narrador', text: 'Dos canciones después, Gas se toca la cabeza: no lleva las gafas de sol.' }],
+    [
+      { who: 'Narrador', text: 'Y otra vez. La cola, eterna.' },
+      { who: 'Gas', text: 'La última, lo prometo.' },
+    ],
+  ] as Line[][],
+  glassesBtn: '🕶️ Mirar en las cabinas',
+  /** Los de la cola, al verle mirar las cabinas sin hacer cola (inventado). */
+  queueComplain: '¡Eh, mi niño, que hay cola!',
+  glassesReply: '¡Solo miro si están mis gafas!',
   gasSmoke: { who: 'Gas', text: '¿Y el tabaco? ¿A la papelera? Esa es mi Azul.' } as Line,
-  rhythm: 'Toca los botones cuando las notas lleguen a la línea',
+  /** Al acabar el ritmo (inventado). */
+  rhythmDone: (hits: number, total: number) => `¡${hits} de ${total}! Qué concierto.`,
   ending: [{ who: 'Narrador', text: 'Lunes 16 de marzo. Cada uno vuelve a su ciudad.' }] as Line[],
 };
 
@@ -686,13 +727,13 @@ export const SIDE = {
       { who: 'Gas', text: 'Pido tres, que por este pasillo alguna se cae.' },
       { who: 'Margaux', text: 'Con que lleguen dos me vale. Te espero aquí.' },
     ] as Line[],
-    hintBar: '🍺 Ve a la barra a por las cervezas',
-    hintCarry: '🍺 Llévaselas a Azul sin frenazos ni empujones',
     btn: '🍺 Tres, por favor',
     give: '🍺 Toma',
-    spilled: ['🍺 ¡Se te ha caído una! Te queda una', '🍺 ¡Se te ha caído una! Te quedan dos'],
-    empty: '🍺 ¡Ninguna! Vuelta a la barra',
-    bump: '¡Cuidado, que pasan!',
+    /** Lo dice Gas (bocadillo), al caérsele una. */
+    spilled: ['¡No! Otra al suelo. Me queda una.', '¡Uy! Una al suelo. Me quedan dos.'],
+    empty: 'Todas al suelo… Vuelta a la barra.',
+    /** Lo dice quien cruza el pasillo y se choca con él. */
+    bump: '¡Cuidado, que pasamos!',
     few: [{ who: 'Margaux', text: '¿Una? ¿Y la tuya? Anda, otra ronda.' }] as Line[],
     done: (n: number) => [{ who: 'Margaux', text: n === 3 ? '¡Las tres y sin derramar! Esta de más, para luego.' : 'Dos de tres. Una para cada uno, perfecto.' }] as Line[],
   },
@@ -747,7 +788,7 @@ export const SIDE = {
     end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
   },
   pee: {
-    first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con la mosca del urinario mirándole.' }] as Line[],
+    first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con la mosca pegada en el urinario de la cabina mirándole.' }] as Line[],
     again: [{ who: 'Narrador', text: 'Otra vez el urinario. Y otra cerveza más que la última.' }] as Line[],
     title: '🎯 Apunta a la mosca',
     hint: 'Arrastra el dedo para apuntar. Al final pierde fuerza: apunta más arriba',
@@ -765,7 +806,9 @@ export const SIDE = {
     title: '🕶️ ¿En qué cabina te las has dejado?',
     hint: 'Toca las puertas para mirar dentro',
     broken: 'Averiado. Esta ni se abre',
-    empty: ['Aquí no están', 'Tampoco. Qué asco, por cierto', 'Nada. Solo papel por el suelo'],
-    found: '🕶️ ¡Aquí estaban, encima de la cisterna!',
+    /** La voz de quien está dentro (inventado). */
+    occupied: '¡OCUPADO!',
+    empty: ['Aquí no están', 'Tampoco. Qué asco, por cierto', 'Nada. Solo papel por el suelo', 'Ni rastro'],
+    found: '🕶️ ¡Aquí estaban, en la repisa!',
   },
 };

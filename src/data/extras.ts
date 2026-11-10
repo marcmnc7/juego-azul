@@ -61,7 +61,8 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
       b('Gas', '(WhatsApp) Q puto asco el burguer. NUNCA más.'),
       b('Margaux', '26 palo, pero D top. Pasillo.'),
     ],
-    toWc: [b('Gas', 'Pfffff. Temón.'), b('Un señor de Telde', '¿Esta es la cola? Pues vaya tela.'), b('Gas', 'Justo ahora, tenía que ser.')],
+    // (el «pfffff temón» va en el chat, ya en la cola: aquí aún no ha empezado)
+    toWc: [b('Gas', 'Justo ahora, tenía que ser.'), b('Un señor de Telde', '¿Esta es la cola? Pues vaya tela.')],
     seek: [b('Gas', 'Flash, pls.'), b('Gas', 'Estoy. Xo no veo.'), b('Una de Telde', 'Permiso, mi niño.')],
   },
   5: {
