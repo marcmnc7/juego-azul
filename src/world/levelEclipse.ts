@@ -1,4 +1,4 @@
-import { Surf } from '../core/surfaces';
+import { Surf, setSurface } from '../core/surfaces';
 import * as THREE from 'three';
 import { Trail } from '../core/follow';
 import { RockHop } from './sideGames';
@@ -6,13 +6,16 @@ import { SIDE } from '../data/story';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker } from '../core/walker';
-import { Sky, Sun, toon, glowTexture, vibrate, applyShadows, makeSea } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, applyShadows, makeSea } from '../core/gfx';
+import { comicFlash, comicMood, LOOK_LIGHT } from '../core/comic';
+import { comicBulbTexture, comicStarTexture } from '../core/comicTiles';
+import { Lost } from '../core/lost';
 import { ECLIPSE } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { POT_CORE, G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, woodChair, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
 import { princesaGame, lostMoto, type LoveLetterStage } from '../ui/minis';
 import { cardCanvas } from '../ui/cards';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
@@ -27,47 +30,100 @@ import type { Box2 } from './ferreries';
 import { disposeScene, type Level, type LevelDone } from './level';
 import { cinema, headOf } from '../core/cinema';
 import { boneAnchor } from '../entities/rig';
-import { juice } from '../core/juice';
 import { beacon } from '../core/beacon';
 
+// Las rocas de la costa de Ciutadella (marès comido por el mar) con el dibujo de piedra, como la roca de Es
+// Castellar (surfaces.ts): por su color caían en «sillares de marès» y parecían paredes. Solo los usa este capítulo
+// (y las rocas de RockHop, que son de aquí)
+for (const c of [0xb8925c, 0xa58150, 0xd1ad74, 0xc9a36a, 0xb48a54, 0xa8845a, 0xc29c66, 0x8f7450, 0x8e7350, 0x9c8058]) setSurface(c, Surf.Stone);
+
+const INK = '#2b2233';
+
 /**
- * Corona del sol en la totalidad: un halo nacarado pegado al disco y cientos de rayos finos (más largos
- * hacia el ecuador del sol), dibujados una vez en un lienzo. El disco ocupa el 14 % del ancho.
+ * Corona del sol en la totalidad, de tebeo: rayos planos con su tinta, más largos hacia el ecuador del sol, una
+ * banda floja de serpentinas detrás, el anillo blanco pegado al disco y cuatro protuberancias rosas. Sin degradados
+ * ni mezcla aditiva. El disco (la luna) ocupa el 14 % del ancho y va aparte (sunTexture).
  */
 function coronaTexture() {
   const S = 512, c = S / 2, R = S * 0.14;
-  const t = canvasTex((g) => {
-    const halo = g.createRadialGradient(c, c, R * 0.92, c, c, c);
-    halo.addColorStop(0, 'rgba(255,255,255,0.95)');
-    halo.addColorStop(0.08, 'rgba(240,244,255,0.6)');
-    halo.addColorStop(0.3, 'rgba(210,222,255,0.16)');
-    halo.addColorStop(1, 'rgba(200,215,255,0)');
-    g.fillStyle = halo;
-    g.fillRect(0, 0, S, S);
-    let seed = 3;
+  return canvasTex((g) => {
+    g.clearRect(0, 0, S, S);
+    let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    g.lineCap = 'round';
-    for (let i = 0; i < 420; i++) {
-      const a = rnd() * Math.PI * 2;
-      // Serpentinas largas hacia el ecuador, plumas cortas en los polos
-      const eq = Math.abs(Math.cos(a));
-      const len = R * (0.25 + rnd() * (0.6 + eq * 1.9));
-      const bend = (rnd() - 0.5) * 0.25;
-      const x0 = c + Math.cos(a) * R * 0.97, y0 = c + Math.sin(a) * R * 0.97;
-      const x1 = c + Math.cos(a + bend) * (R + len), y1 = c + Math.sin(a + bend) * (R + len);
-      const gr = g.createLinearGradient(x0, y0, x1, y1);
-      const al = 0.05 + rnd() * 0.16;
-      gr.addColorStop(0, `rgba(255,255,255,${al})`);
-      gr.addColorStop(1, 'rgba(220,230,255,0)');
-      g.strokeStyle = gr;
-      g.lineWidth = 0.6 + rnd() * 2.4;
+    const spikes = (n: number, inner: number, len: (eq: number) => number, fill: string, ink: boolean) => {
       g.beginPath();
-      g.moveTo(x0, y0);
-      g.quadraticCurveTo(c + Math.cos(a) * (R + len * 0.5), c + Math.sin(a) * (R + len * 0.5), x1, y1);
+      for (let i = 0; i < n * 2; i++) {
+        const a = (i / (n * 2)) * Math.PI * 2 + (rnd() - 0.5) * 0.08;
+        const eq = Math.abs(Math.cos(a));
+        const r = i % 2 ? R * inner : R * (inner + len(eq) * (0.7 + rnd() * 0.6));
+        g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+      }
+      g.closePath();
+      g.fillStyle = fill;
+      g.fill();
+      if (ink) {
+        g.strokeStyle = INK;
+        g.lineWidth = 3;
+        g.lineJoin = 'round';
+        g.stroke();
+      }
+    };
+    // (como mucho 3,5 radios: más allá el lienzo los cortaría en recto)
+    spikes(12, 1.15, (eq) => 0.35 + eq * 1.4, 'rgba(214,224,255,0.38)', false);
+    spikes(26, 1.08, (eq) => 0.22 + eq * 0.85, 'rgba(246,247,255,0.95)', true);
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(c, c, R * 1.12, 0, Math.PI * 2);
+    g.fill();
+    // Protuberancias: llamitas rosas en el borde de la luna
+    for (const a of [0.5, 2.2, 3.9, 5.2]) {
+      const x = c + Math.cos(a) * R * 1.02, y = c + Math.sin(a) * R * 1.02;
+      g.fillStyle = '#ff6f91';
+      g.beginPath();
+      g.ellipse(x, y, R * 0.12, R * 0.07, a, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = INK;
+      g.lineWidth = 2;
       g.stroke();
     }
   }, S, S);
-  return t;
+}
+
+/** Anillo de diamante de tebeo: estrella blanca de ocho puntas (las de la cruz, largas) con su tinta. */
+function diamondTexture() {
+  return canvasTex((g, w) => {
+    const c = w / 2;
+    g.clearRect(0, 0, w, w);
+    g.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const r = i % 2 ? c * 0.12 : i % 4 === 0 ? c * 0.95 : c * 0.45;
+      g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fillStyle = '#ffffff';
+    g.fill();
+    g.strokeStyle = INK;
+    g.lineWidth = 4;
+    g.lineJoin = 'round';
+    g.stroke();
+  }, 256, 256);
+}
+
+/** Halo del sol bajo: dos bandas planas cálidas (antes, un brillo borroso aditivo). */
+function sunHaloTexture() {
+  return canvasTex((g, w) => {
+    const c = w / 2;
+    g.clearRect(0, 0, w, w);
+    g.fillStyle = 'rgba(255,214,150,0.16)';
+    g.beginPath();
+    g.arc(c, c, c * 0.98, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(255,226,170,0.22)';
+    g.beginPath();
+    g.arc(c, c, c * 0.55, 0, Math.PI * 2);
+    g.fill();
+  }, 256, 256);
 }
 
 // Capítulo 8 · El eclipse (12 de agosto de 2026). «Ready para un dia que vas a recordar toda tu vida?»
@@ -78,9 +134,16 @@ function coronaTexture() {
 // 3. Casa de Gas (la de la piscinita): aparcar marcha atrás dentro, por la corredera; entráis los dos y Azul conoce
 //    a sus padres en la cocina.
 // 4. Solos en las rocas: una partida a La Princesa (gana ella) y el eclipse con las gafas puestas.
+//
+// Horas (ver chats.ts y story.ts): el kayak es el plan de la mañana; Gas la recoge a las 12:28 y llegan a casa de
+// Azul a mediodía (sol alto por el sur-sureste); después del paseo se les pasa la tarde y se van hacia las 20:05
+// (el reloj de «faltan 26 min»), con el sol bajo por el oeste; la totalidad, a las 20:31, con el sol a 2° sobre el
+// mar. Perfiles de tebeo: día (kayak y casa de Azul), atardecer (la vuelta del paseo, la calle de Gas y las rocas)
+// e interior (la cocina). Las lámparas no iluminan nada: no hay ninguna luz de punto.
 
 /** Nivel del mar en Sa Farola (el plano del agua de buildSaFarola). */
 const WATER_Y = -0.4;
+const FERRY_V = 15;
 
 type Phase = 'kayak' | 'ferry' | 'arrive' | 'parents' | 'walk' | 'back' | 'toCar' | 'park' | 'marcParents' | 'hop' | 'cards' | 'eclipse' | 'done';
 
@@ -94,7 +157,76 @@ const DAD_AT = new THREE.Vector3(-1.25, 0, 1.3);
 const HOME_BOUNDS: Box2 = { minX: -9, maxX: 12, minZ: 0.6, maxZ: 15.5 };
 /** Cocina de casa de Gas: los padres, junto a la encimera. */
 const KITCHEN_PARENTS = new THREE.Vector3(0, 0, -1.6);
+/** Donde se va Joy a oler algo a la vuelta del faro: calle arriba, por donde habéis venido. */
+const JOY_SPOT = new THREE.Vector3(-43, 0, 13.4);
+/** Luz de las escenas de día como la del cap. 1: su hemisférica a 1,0 × 0,35. */
+const DAY_HEMI_SCALE = 0.35;
+/** El mar de las rocas al atardecer y en la totalidad. */
+const SEA_DUSK = 0x1d4f6e;
+const SEA_TOTAL = 0x0f2a40;
 const PARK = { minX: 1.7, maxX: 3.1, minZ: -17.9, maxZ: -16.5 };
+/** El coche de Gas llega a casa de Azul ya en marcha (a unos 40 km/h) y frena hasta parar en x = 6. */
+const ARRIVE_FROM = 30;
+const ARRIVE_T = 4.4;
+/** En la calle de Gas, el coche entra por el este ya en marcha (7 m/s) y para delante de casa, en x = 12. */
+const PARK_FROM = 30;
+const PARK_STOP = 12;
+const PARK_ARRIVE_T = 5.2;
+
+/** El sitio de aparcar: rectángulo de trazos blancos con su tinta, como pintado en el suelo. */
+/** La hoja del calendario de la cocina: agosto de 2026 (empieza en sábado), con el 12 rodeado. */
+function calendarTexture() {
+  return canvasTex((g, w, h) => {
+    g.fillStyle = '#fffdf6';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#c23030';
+    g.fillRect(0, 0, w, 64);
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 34px Georgia, serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('AGOST 2026', w / 2, 34);
+    g.fillStyle = INK;
+    g.font = 'bold 22px Georgia, serif';
+    const cw = w / 7;
+    for (let d = 1; d <= 31; d++) {
+      const cell = d + 4; // el 1 cae en sábado (columna 5 empezando en lunes)
+      const x = (cell % 7) * cw + cw / 2, y = 96 + Math.floor(cell / 7) * 44;
+      g.fillText(String(d), x, y);
+      if (d === 12) {
+        g.strokeStyle = '#c23030';
+        g.lineWidth = 4;
+        g.beginPath();
+        g.ellipse(x, y, 20, 17, 0, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
+    g.strokeStyle = INK;
+    g.lineWidth = 6;
+    g.strokeRect(3, 3, w - 6, h - 6);
+  }, 256, 340);
+}
+
+function parkZoneTexture() {
+  return canvasTex((g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const m = 10, t = 9;
+    const dash = (x: number, y: number, dw: number, dh: number) => {
+      g.fillStyle = INK;
+      g.fillRect(x - 2, y - 2, dw + 4, dh + 4);
+      g.fillStyle = '#ffffff';
+      g.fillRect(x, y, dw, dh);
+    };
+    for (let x = m; x < w - m - 20; x += 40) {
+      dash(x, m, 22, t);
+      dash(x, h - m - t, 22, t);
+    }
+    for (let y = m; y < h - m - 20; y += 40) {
+      dash(m, y, t, 22);
+      dash(w - m - t, y, t, 22);
+    }
+  }, 256, 384);
+}
 const WHEELBASE = 2.5;
 
 export class LevelEclipse implements Level {
@@ -110,6 +242,8 @@ export class LevelEclipse implements Level {
   private colliders: Box2[] = [];
   private marker = new THREE.Group();
   private v1 = new THREE.Vector3();
+  private c1 = new THREE.Color();
+  private c2 = new THREE.Color();
   private camLook = new THREE.Vector3();
 
   // Personajes de la escena actual
@@ -127,7 +261,8 @@ export class LevelEclipse implements Level {
   private boat: Kayak | null = null;
   private stroke = 0;
   private ferryT = 0;
-  private ferryV = 26;
+  /** Un ferry rápido de la línea de Alcúdia, unos 30 nudos (antes 26 m/s: 50 nudos, más que ninguno). */
+  private ferryV = FERRY_V;
   /** Cancela y puerta de casa de Azul (o la verja de casa de Gas): se abren a quien llega. */
   private doors: Door[] = [];
   private doorWho: THREE.Vector3[] = [];
@@ -141,7 +276,6 @@ export class LevelEclipse implements Level {
   private llCheerT = 0;
   private llWinner: Person | null = null;
   private cardTexs = new Map<string, THREE.Texture>();
-  private llFill: THREE.PointLight | null = null;
   private flipT = 0;
   private getOutT = -1;
   private getInT = -1;
@@ -172,17 +306,38 @@ export class LevelEclipse implements Level {
   // el eclipse coincidió con la puesta. El disco va un pelo más alto para que se vea entero.
   private sunDir = new THREE.Vector3(0.15, 0.046, 1).normalize();
   private sunDisk!: THREE.Mesh;
-  private moon!: THREE.Mesh;
   private corona!: THREE.Sprite;
   /** El anillo de diamante: el último punto de sol justo antes de la totalidad. */
   private diamond!: THREE.Sprite;
   private stars: THREE.Points | null = null;
   private hemi!: THREE.HemisphereLight;
+  /** El disco del sol con el mordisco de la luna, dibujado en un lienzo (se redibuja al avanzar). */
+  private sunCanvas = document.createElement('canvas');
+  private sunTex: THREE.CanvasTexture | null = null;
+  private sunKey = '';
+  private sunRight = new THREE.Vector3();
+  private venus: THREE.Sprite | null = null;
+  private halo: THREE.Sprite | null = null;
+  private sea: THREE.Mesh | null = null;
   private glasses = false;
+  /** En la totalidad: ya se ha quitado las gafas para mirar la corona. */
+  private bareTotal = false;
+  private offNagT = 0;
   private glassesEl: HTMLElement | null = null;
   private progress = 0;
   private bareT = 0;
   private totalT = -1;
+
+  // Pistas solo si se ha perdido (40 s sin avanzar) y cadenas que no deben pisar una fase saltada en el modo prueba
+  private lost = new Lost();
+  private gen = 0;
+  /** Joy a la vuelta del faro: 0 aún contigo, 1 se ha ido a oler algo, 2 ya ha vuelto. */
+  private joyRun = 0;
+  private dadWaveT = 0;
+  /** La tarde ya ha caído en casa de Azul (después del paseo). */
+  private late = false;
+  /** El coche llega por la calle de Gas, ya en marcha, antes de que se pueda aparcar. */
+  private parkArriveT = -1;
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -195,12 +350,48 @@ export class LevelEclipse implements Level {
     this.hud = hud(() => this.input.queueAction(), onMenu, 'Arrastra a la izquierda para andar · a la derecha para girar la cámara');
     this.buildKayak();
     this.updateHud();
-    later(() => dialogue(ECLIPSE.motoIntro, () => lostMoto(() => dialogue(ECLIPSE.afterMoto, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, () => this.startKayak()))))), 1800);
+    const go = this.chain(() => this.startKayak());
+    later(() => dialogue(ECLIPSE.motoIntro, () => lostMoto(() => dialogue(ECLIPSE.afterMoto, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, go))))), 1800);
     audio.startMusic('road');
   }
 
   get threeScene() {
     return this.scene;
+  }
+
+  /**
+   * Una continuación (fin de un diálogo, de un chat, de un minijuego) que solo vale si no se ha saltado de fase
+   * mientras tanto en el modo prueba: si no, al acabar volvía a montar la escena de antes encima de la nueva.
+   */
+  private chain<A extends unknown[]>(fn: (...a: A) => void) {
+    const g = this.gen;
+    return (...a: A) => {
+      if (g === this.gen) fn(...a);
+    };
+  }
+
+  /** Dónde habla quien no se ve de cuerpo entero (dentro del coche, en el minijuego de las rocas) o quien no es de la pareja. */
+  speakerPoint(who: string) {
+    // En una misión (la moto del aeropuerto) hablan los de la misión
+    const mission = stage.current as { speakerPoint?: (who: string) => THREE.Vector3 | null } | null;
+    if (mission) return mission.speakerPoint?.(who) ?? null;
+    const her = who === 'Margaux' || who === 'Azul';
+    const him = who === 'Gas' || who === 'Marc';
+    // En el coche, cada uno desde su asiento: él conduce (a la izquierda del coche), ella de copiloto
+    const inCar = (this.phase === 'park' || (this.phase === 'arrive' && !this.player.root.visible)) && this.car.root.parent;
+    if (inCar && (her || him)) return this.car.body.localToWorld(new THREE.Vector3(him ? 0.4 : -0.4, 1.6, -0.25));
+    if (this.phase === 'hop' && this.rockHop && (her || him)) return this.rockHop.head(her ? 'azul' : 'gas');
+    if (who === 'Eric') {
+      const e = this.others.find((o) => o.p.root.userData.eric)?.p ?? this.followers.find((f) => f.p.root.userData.eric)?.p;
+      return e && 'head' in e ? headOf(e as Person, 0.3) : null;
+    }
+    return null;
+  }
+
+  /** Hacia qué lado se abre el globo cuando van juntos (coche y kayak: él a un lado y ella al otro). */
+  speakerSide(who: string): 'l' | 'r' | undefined {
+    if (!['park', 'arrive', 'kayak', 'ferry'].includes(this.phase)) return undefined;
+    return who === 'Gas' || who === 'Marc' ? 'l' : who === 'Margaux' || who === 'Azul' ? 'r' : undefined;
   }
 
   // ---------------- Escenas ----------------
@@ -215,8 +406,10 @@ export class LevelEclipse implements Level {
     sc.fog = new THREE.Fog(fog, 110, 420);
     this.sky = new Sky(sky);
     sc.add(this.sky.group);
-    this.hemi = new THREE.HemisphereLight(0xd8e6ff, 0x6a5a48, 0.75);
+    // (como la del pueblo del cap. 1: 1,0 × 0,35; las escenas que no son de día cambian la escala)
+    this.hemi = new THREE.HemisphereLight(0xd8e6ff, 0x6a5a48, 1.0);
     sc.add(this.hemi);
+    sc.userData.hemiScale = DAY_HEMI_SCALE;
     this.sun = new Sun(sc, sunCol, sunI, dir, 26);
     this.fx = new Particles(sc);
     sc.add(this.marker);
@@ -225,6 +418,11 @@ export class LevelEclipse implements Level {
     this.carBox = null;
     this.others = [];
     this.followers = [];
+    this.rockHop?.dispose();
+    this.rockHop = null;
+    this.stars = null;
+    this.venus = this.halo = this.sea = null;
+    this.lost.reset();
     this.scene = sc;
     if (old !== sc && this.scenes.length) {
       old.remove(this.marker);
@@ -282,10 +480,13 @@ export class LevelEclipse implements Level {
 
   private buildAzul() {
     const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(0.4, 1, 0.6));
+    // (aquí solo se anda: sin líneas de acción al recolocar la cámara)
+    sc.userData.speedLines = 0;
     const place = buildAzulHouse(sc, this.colliders, true);
     this.doors = [place.gate, place.door];
     place.beam.visible = false;
     place.steam.forEach((s) => (s.visible = false));
+    this.dayHouse(sc, place.bulbs);
     this.walkers = place.walkers;
     // Muros de los jardines vecinos
     for (const sx of [-1, 1]) this.colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: 10.1, maxZ: 10.5 });
@@ -305,6 +506,7 @@ export class LevelEclipse implements Level {
     mom.root.position.set(1.05, 0, 1.3);
     const eric = makePerson({ ...ERIC_LOOK, kid: true }, 0.85);
     eric.root.position.set(1.4, 0, 1.6);
+    eric.root.userData.eric = true;
     // Joy espera dentro de casa: saldrá por la puerta cuando lleguéis
     const joy = makeDog();
     joy.root.position.set(0, 0, -1.3);
@@ -320,59 +522,122 @@ export class LevelEclipse implements Level {
     this.followers = [];
     this.car = makeCar(0x1f3a6b, { luggage: false, joy: false });
     this.car.root.rotation.y = -Math.PI / 2;
-    this.car.root.position.set(40, 0, STREET_Z + 0.6);
+    this.car.root.position.set(ARRIVE_FROM, 0, STREET_Z + 0.6);
     sc.add(this.car.root);
     this.carBox = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, low: true };
     this.colliders.push(this.carBox);
     this.rig = new CarRig(this.car);
     this.carT = 0;
+    this.getInT = -1;
+    this.joyRun = 0;
+    this.dadWaveT = 0;
+    this.late = false;
+  }
+
+  /**
+   * La casa de la cena, de día: la guirnalda de la pérgola apagada (bombillas de tebeo sin luz, del tamaño de una
+   * bombilla), las dos farolas de la calle apagadas y las ventanas de arriba sin luz (eran de la noche de la cena).
+   */
+  private dayHouse(sc: THREE.Scene, bulbs: THREE.SpriteMaterial) {
+    bulbs.map = comicBulbTexture();
+    bulbs.color.set(0xd9d2c0);
+    bulbs.blending = THREE.NormalBlending;
+    bulbs.alphaTest = 0.5;
+    bulbs.depthWrite = true;
+    bulbs.userData.comicGlow = true;
+    bulbs.needsUpdate = true;
+    const lit = new THREE.Color(0xffd9a0);
+    const pane = new THREE.Color(0x3a4250);
+    const c = new THREE.Color();
+    sc.traverse((o) => {
+      const sp = o as THREE.Sprite;
+      if (sp.isSprite && sp.material === bulbs) {
+        if (sp.scale.x > 1) sp.visible = false;
+        else sp.scale.setScalar(0.13);
+        return;
+      }
+      const m = o as THREE.Mesh;
+      const mat = m.material as THREE.MeshBasicMaterial;
+      if (!m.isMesh || !mat?.isMeshBasicMaterial || !mat.vertexColors || o.parent?.userData.sky) return;
+      const col = m.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+      if (!col) return;
+      for (let i = 0; i < col.count; i++) {
+        c.fromBufferAttribute(col, i);
+        if (Math.abs(c.r - lit.r) + Math.abs(c.g - lit.g) + Math.abs(c.b - lit.b) < 0.02) col.setXYZ(i, pane.r, pane.g, pane.b);
+      }
+      col.needsUpdate = true;
+    });
+  }
+
+  /**
+   * Se les pasa la tarde en casa de Azul: el sol baja hacia el oeste (-x) y la luz es de atardecer. Se llama en el
+   * fundido de después del paseo (no se salta nada que se pueda jugar: son horas de estar en casa).
+   */
+  private lateAfternoon() {
+    if (this.late) return;
+    this.late = true;
+    this.sky.setColors(0x3a68b8, 0xf0b27a, 0xffd9a8);
+    (this.scene.fog as THREE.Fog).color.set(0xf3d2b0);
+    this.sun.light.removeFromParent();
+    this.sun.light.target.removeFromParent();
+    this.sun.light.dispose();
+    this.sun = new Sun(this.scene, 0xffc98a, 1.7, new THREE.Vector3(-0.9, 0.42, -0.22), 26);
+    this.sun.light.shadow.normalBias = 0.08;
+    comicMood(this.scene, 'atardecer');
   }
 
   private buildMarc() {
-    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.8, new THREE.Vector3(-0.4, 1, -0.5));
-    const street = buildStreet(sc, { gateOpen: true });
+    // Hacia las ocho de la tarde: el sol ya bajo por el oeste (-x en esta calle), cielo azul arriba y dorado abajo
+    const sky = { top: 0x3a6ec0, mid: 0xb4cde6, bottom: 0xffd6a0, clouds: { count: 6, tint: 0xffe2c4 } };
+    const sc = this.newScene(sky, 0xf0dcc4, 0xffc98a, 1.7, new THREE.Vector3(-0.9, 0.42, -0.2));
+    sc.userData.comicLook = 'atardecer';
+    sc.userData.hemiScale = 0.4;
+    // (aparcando no hay velocidad: sin líneas de acción cuando la cámara sigue al coche)
+    sc.userData.speedLines = 0;
+    this.sun.light.shadow.normalBias = 0.08;
+    const street = buildStreet(sc, { gateOpen: true, day: true });
     this.doors = [street.slider, street.gate];
     street.lamps.visible = false;
     this.colliders.push(...street.colliders, { minX: -4.6, maxX: 4.6, minZ: -15.05, maxZ: -12 }, { minX: -40, maxX: 40, minZ: -28.2, maxZ: -27.8 });
+    // Llega por la calle ya en marcha y frena delante de casa; luego se aparca a mano
     this.car = makeCar(0x1f3a6b, { luggage: false, joy: false });
-    this.car.root.position.set(12, 0, -22.2);
+    this.car.root.position.set(PARK_FROM, 0, -22.2);
     this.car.root.rotation.y = -Math.PI / 2;
     sc.add(this.car.root);
     this.rig = new CarRig(this.car);
     this.carSpeed = 0;
     this.parkedT = 0;
+    this.parkArriveT = 0;
+    this.bumps = 0;
+    this.bumpT = 0;
+    // El sitio: un rectángulo pintado a trazos, como las plazas (antes, una mancha verde translúcida)
     this.parkZone = new THREE.Mesh(
       new THREE.PlaneGeometry(PARK.maxX - PARK.minX + 1.8, PARK.maxZ - PARK.minZ + 3.8).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x5cff8a, transparent: true, opacity: 0.35, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: parkZoneTexture(), color: 0xffffff, transparent: true, alphaTest: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     );
-    this.parkZone.position.set((PARK.minX + PARK.maxX) / 2, 0.06, (PARK.minZ + PARK.maxZ) / 2);
+    this.parkZone.position.set((PARK.minX + PARK.maxX) / 2, 0.03, (PARK.minZ + PARK.maxZ) / 2);
+    this.parkZone.userData.noCast = true;
     sc.add(this.parkZone);
     this.player = makePerson(MARGAUX_LOOK);
     this.gas = makePerson(MARC_LOOK);
     this.player.root.visible = this.gas.root.visible = false;
     sc.add(this.player.root, this.gas.root);
-    this.camera.position.set(12, 10, -32);
-    this.camLook.set(6, 0, -20);
+    // La cámara, ya donde la pone el aparcamiento (sin viaje desde otro sitio en el primer fotograma)
+    const c = this.car.root.position;
+    this.camera.position.set(c.x * 0.6 + 1, 11, Math.min(c.z - 7, -24.6));
+    this.camLook.set(c.x * 0.8 + 0.5, 0, c.z + 1);
+    this.camera.lookAt(this.camLook);
   }
 
   /** Cocina de casa de los padres de Gas: baldosa de barro, paredes encaladas, vigas, encimera, mesa y ventana. */
   private buildKitchen() {
-    const sc = this.newScene(this.daySky(), 0xd9ecf7, 0xfff1d8, 1.6, new THREE.Vector3(-0.5, 1, 0.6));
-    this.hemi.intensity = 0.62; // (con 1, la cocina salía quemada)
+    // Hacia las ocho y cuarto: el sol de la tarde, cálido, entra por el oeste. Perfil de interior (sin lámparas encendidas)
+    const sc = this.newScene(this.daySky(), 0xf0dcc4, 0xffd8a8, 1.3, new THREE.Vector3(-0.7, 1, 0.35));
+    sc.userData.comicLook = 'interior';
+    this.hemi.intensity = 0.62;
     const W = 4.6, D = 3.4, H = 2.8;
-    const tiles = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#9c5a3a';
-      ctx.fillRect(0, 0, w, h);
-      for (let y = 0; y < 4; y++)
-        for (let x = 0; x < 4; x++) {
-          const v = Math.random() * 30;
-          ctx.fillStyle = `rgb(${190 + v},${110 + v * 0.6},${74 + v * 0.4})`;
-          ctx.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
-        }
-    });
-    tiles.wrapS = tiles.wrapT = THREE.RepeatWrapping;
-    tiles.repeat.set(W, D);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, D * 2 + 2).rotateX(-Math.PI / 2), toon({ map: tiles, color: 0xffffff, roughness: 0.8 }));
+    // Baldosa de barro dibujada (la de tebeo de comicSurfaces), no un lienzo con ruido
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, D * 2 + 2).rotateX(-Math.PI / 2), toon({ color: 0xc4774e, surf: Surf.Terracotta }));
     floor.position.z = 1;
     floor.userData.noCast = true;
     sc.add(floor);
@@ -408,7 +673,8 @@ export class LevelEclipse implements Level {
       const cx = -3.2 + i * 1.3;
       m.add(G.box, 0x5f8f6a, cx, 1.9, -D + 0.2, 0, 0, 0, 1.2, 0.8, 0.35);
       // Dos puertas con su junta y su tirador
-      m.add(G.box, 0x37503c, cx, 1.9, -D + 0.378, 0, 0, 0, 0.012, 0.76, 0.006);
+      // (la junta, de 2 cm: a 6 mm la tinta la convertía en ruido)
+      m.add(G.box, 0x37503c, cx, 1.9, -D + 0.38, 0, 0, 0, 0.02, 0.76, 0.012);
       for (const s of [-1, 1]) m.add(G.box, 0xc8ccd0, cx + s * 0.07, 1.68, -D + 0.385, 0, 0, 0, 0.02, 0.12, 0.012);
     }
     m.add(G.rbox, 0xeeeeee, 3.6, 0.95, -D + 0.45, 0, 0, 0, 0.8, 1.9, 0.7);
@@ -431,11 +697,14 @@ export class LevelEclipse implements Level {
     m.add(G.sphere, 0xd9b45a, W - 0.15, 1.0, 0.15, 0, 0, 0, 0.06, 0.06, 0.06);
     m.add(G.cyl, 0xfbf7ee, 2.6, 2.3, -D + 0.12, Math.PI / 2, 0, 0, 0.36, 0.04, 0.36);
     m.add(G.box, 0x2a2a2e, 2.6, 2.36, -D + 0.15, 0, 0, 0, 0.02, 0.14, 0.01);
-    // Calendario: taco blanco con su borde y sus filas de días (antes, una raya roja suelta en la pared)
+    // Calendario: el tablero de madera y la hoja de agosto de 2026 dibujada, con el 12 marcado (antes, veinte
+    // cuadritos de 4 mm que la tinta convertía en ruido)
     m.add(G.box, 0x8a6a44, W - 0.105, 1.6, -1.6, 0, 0, 0, 0.012, 0.64, 0.46);
-    m.add(G.box, 0xfffdf6, W - 0.115, 1.58, -1.6, 0, 0, 0, 0.012, 0.56, 0.42);
-    m.add(G.box, 0xc23030, W - 0.125, 1.82, -1.6, 0, 0, 0, 0.012, 0.12, 0.42);
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) m.add(G.box, 0x4a4a50, W - 0.124, 1.68 - r * 0.09, -1.76 + c * 0.08, 0, 0, 0, 0.004, 0.04, 0.04);
+    const cal = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.56), toon({ map: calendarTexture() }));
+    cal.position.set(W - 0.118, 1.59, -1.6);
+    cal.rotation.y = -Math.PI / 2;
+    cal.userData.noCast = true;
+    sc.add(cal);
     // Lámpara colgando sobre la mesa y alfombra de esparto
     m.add(G.box, 0x333333, 0.4, 2.3, 0.9, 0, 0, 0, 0.02, 1.0, 0.02);
     m.add(G.cone, 0x2f6b46, 0.4, 1.72, 0.9, 0, 0, 0, 0.5, 0.3, 0.5);
@@ -457,9 +726,7 @@ export class LevelEclipse implements Level {
     m.add(G.sphere, 0xc23030, 0.85, 0.86, 0.9, 0, 0, 0, 0.13, 0.13, 0.13);
     this.colliders.push({ minX: -1.1, maxX: 1.9, minZ: 0.3, maxZ: 1.5 });
     sc.add(m.mesh());
-    const light = new THREE.PointLight(0xfff0d0, 3, 12, 1.4);
-    light.position.set(0.4, 2.5, 0.5);
-    sc.add(light);
+    // (sin luz de punto: la lámpara está apagada, es de día; la luz es la de la tarde)
     // Sus padres en la cocina; vosotros entráis por la puerta
     const dad = makePerson(MARC_DAD);
     const mom = makePerson(MARC_MOM);
@@ -479,19 +746,32 @@ export class LevelEclipse implements Level {
   }
 
   private buildRocks() {
-    const dusk = { top: 0x2b4a8a, mid: 0xf0985a, bottom: 0xffcf8a, clouds: { count: 5, tint: 0xffc9a0 }, stars: 600, avoid: this.sunDir };
+    // (en la totalidad solo salen las más brillantes: unas pocas, no un cielo de noche cerrada)
+    const dusk = { top: 0x2b4a8a, mid: 0xf0985a, bottom: 0xffcf8a, clouds: { count: 5, tint: 0xffc9a0 }, stars: 70, avoid: this.sunDir };
     const sc = this.newScene(dusk, 0xf3b27a, 0xffc98a, 1.8, this.sunDir.clone().setY(0.35));
-    // Con la calidad de la prueba: luz de un atardecer fotografiado, que se apaga con el eclipse
+    // Atardecer de tebeo, que se apaga con el eclipse (updateRocks baja también la hemisférica del cómic)
+    sc.userData.comicLook = 'atardecer';
     sc.userData.hemiScale = 0.4;
+    this.hemi.intensity = 0.75;
+    this.sun.light.shadow.normalBias = 0.08;
+    this.progress = 0;
+    this.totalT = -1;
+    this.bareT = 0;
+    this.bareTotal = false;
+    this.offNagT = 0;
+    this.sunKey = '';
     this.sky.group.traverse((o) => {
       if ((o as THREE.Points).isPoints) this.stars = o as THREE.Points;
     });
     if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = 0;
-    const sea = makeSea([900, 900], 0x1d4f6e, this.sunDir.clone().setY(0.35), { emissive: 0x2a1a20 });
+    const sea = makeSea([900, 900], SEA_DUSK, this.sunDir.clone().setY(0.35), { emissive: 0x2a1a20 });
     sea.position.y = -1.6;
     sc.add(sea);
+    this.sea = sea;
     const m = new Merger();
-    m.add(G.sphere, 0xc9a36b, 0, -1.6, 0, 0, 0, 0, 16, 3.2, 12);
+    // La roca de Es Castellar: una esfera aplastada de 32×16 segmentos (la de G.sphere, de pocas caras, salía en
+    // facetas en el tebeo y su superficie no coincidía con la cuenta de seatedRootY, que la supone lisa)
+    m.add(new THREE.SphereGeometry(0.5, 32, 16), 0xc9a36b, 0, -1.6, 0, 0, 0, 0, 16, 3.2, 12);
     // Piedras y grietas sueltas por encima: la roca no es una bola lisa
     for (let i = 0; i < 26; i++) {
       const a = i * 2.399, r = 1.6 + (i % 7) * 0.85;
@@ -520,8 +800,11 @@ export class LevelEclipse implements Level {
       // Gafas de eclipse (se ven cuando se las ponen): en los personajes con esqueleto, a la altura de
       // los ojos y pegadas a la cara; en los muñecos, como siempre
       if (p.rig) {
-        const g = new Merger().add(G.box, 0x111111, 0, 0.085, 0.1, 0, 0, 0, 0.15, 0.045, 0.02).add(G.box, 0x111111, 0.075, 0.085, 0.04, 0, 0, 0, 0.008, 0.012, 0.12).add(G.box, 0x111111, -0.075, 0.085, 0.04, 0, 0, 0, 0.008, 0.012, 0.12).mesh();
+        // (patillas de 12 mm: a 8 mm la tinta las hacía parpadear)
+        const g = new Merger().add(G.box, 0x111111, 0, 0.085, 0.1, 0, 0, 0, 0.15, 0.045, 0.02).add(G.box, 0x111111, 0.075, 0.085, 0.04, 0, 0, 0, 0.012, 0.014, 0.12).add(G.box, 0x111111, -0.075, 0.085, 0.04, 0, 0, 0, 0.012, 0.014, 0.12).mesh();
         g.name = 'gafas';
+        // Accesorio de persona (D6b): cuando comicScene lo respete en mallas normales, sin tinta interior ni sombra de decorado
+        g.userData.person = true;
         g.visible = false;
         boneAnchor(p, 'Head').add(g);
       } else {
@@ -531,57 +814,112 @@ export class LevelEclipse implements Level {
         p.head.add(g);
       }
     }
-    // Sol bajo sobre el mar, la luna que se le pone delante y la corona
+    // Sol bajo sobre el mar. De tebeo: un disco dibujado al que la luna le da un mordisco (sunTexture), la corona de
+    // rayos planos detrás, el anillo de diamante y, en la totalidad, Venus y unas pocas estrellas
     const dist = 300;
-    this.sunDisk = new THREE.Mesh(new THREE.CircleGeometry(9, 40), new THREE.MeshBasicMaterial({ color: 0xffe2a0, fog: false }));
+    const right = this.sunRight.crossVectors(this.sunDir, new THREE.Vector3(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(right, this.sunDir).normalize();
+    this.sunCanvas.width = this.sunCanvas.height = 256;
+    this.sunTex = new THREE.CanvasTexture(this.sunCanvas);
+    this.sunTex.colorSpace = THREE.SRGBColorSpace;
+    // (el lienzo es de 2,56 radios del sol: 9 m a 300 m, 3,4° en el cielo, seis veces el de verdad para que se vea)
+    this.sunDisk = new THREE.Mesh(new THREE.PlaneGeometry(9 * 2.56, 9 * 2.56), new THREE.MeshBasicMaterial({ map: this.sunTex, alphaTest: 0.5, fog: false }));
     this.sunDisk.position.copy(this.sunDir).multiplyScalar(dist);
     this.sunDisk.lookAt(0, 0, 0);
-    this.moon = new THREE.Mesh(new THREE.CircleGeometry(9.2 * 0.97, 40), new THREE.MeshBasicMaterial({ color: 0x0c0c14, fog: false }));
-    this.moon.lookAt(this.v1.copy(this.sunDir).multiplyScalar(-1));
-    this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTexture(), color: 0xeef2ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, opacity: 0 }));
-    this.corona.position.copy(this.sunDisk.position);
-    this.corona.scale.setScalar(9 / 0.14);
-    // El último punto de sol: por el lado por donde sale la luna (ver placeMoon)
-    const right = new THREE.Vector3().crossVectors(this.sunDir, new THREE.Vector3(0, 1, 0)).normalize();
-    const up = new THREE.Vector3().crossVectors(right, this.sunDir).normalize();
-    this.diamond = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, opacity: 0 }));
+    this.sunDisk.userData.comicBent = true;
+    this.drawSun(0);
+    // Detrás del disco (si no, se peleaban por la profundidad)
+    this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTexture(), color: 0xffffff, transparent: true, depthWrite: false, fog: false, opacity: 0 }));
+    this.corona.position.copy(this.sunDir).multiplyScalar(dist + 3);
+    this.corona.scale.setScalar((9 / 0.14) * ((dist + 3) / dist));
+    // El último punto de sol: por el lado contrario al que llega la luna (ver drawSun)
+    this.diamond = new THREE.Sprite(new THREE.SpriteMaterial({ map: diamondTexture(), color: 0xffffff, transparent: true, alphaTest: 0.1, depthWrite: false, fog: false, opacity: 0 }));
     this.diamond.position.copy(this.sunDisk.position).addScaledVector(right, 9 * 0.8).addScaledVector(up, -9 * 0.6).addScaledVector(this.sunDir, -2);
+    this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunHaloTexture(), color: 0xffffff, transparent: true, depthWrite: false, fog: false }));
+    this.halo.position.copy(this.sunDir).multiplyScalar(dist + 6);
+    this.halo.scale.setScalar(110);
+    // Venus, lo primero que se ve: el 12-8-2026 estaba casi en su máxima elongación (46° al este del sol), a la
+    // izquierda y por encima. Aquí, más cerca del sol para que entre en el plano
+    this.venus = new THREE.Sprite(new THREE.SpriteMaterial({ map: comicStarTexture(), color: 0xfff4d0, transparent: true, depthWrite: false, fog: false, opacity: 0 }));
+    this.venus.position.copy(this.sunDir).addScaledVector(right, -0.55).addScaledVector(up, 0.3).normalize().multiplyScalar(dist - 10);
+    this.venus.scale.setScalar(5);
+    this.halo.renderOrder = -7;
+    this.corona.renderOrder = -6;
+    this.sunDisk.renderOrder = -5;
     this.diamond.renderOrder = -4;
-    sc.add(this.diamond);
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    halo.position.copy(this.sunDisk.position);
-    halo.scale.setScalar(110);
-    halo.name = 'halo';
-    for (const o of [halo, this.sunDisk, this.moon, this.corona]) o.renderOrder = -5;
-    sc.add(halo, this.sunDisk, this.moon, this.corona);
-    this.placeMoon(0);
+    this.venus.renderOrder = -4;
+    sc.add(this.halo, this.corona, this.sunDisk, this.diamond, this.venus);
     this.camera.position.set(-1.6, 1.7, -3.4);
     this.camLook.set(0, 1.2, 6);
   }
 
-  private placeMoon(k: number) {
-    const right = this.v1.crossVectors(this.sunDir, new THREE.Vector3(0, 1, 0)).normalize();
-    const up = new THREE.Vector3().crossVectors(right, this.sunDir).normalize();
-    const off = (1 - k) * 22;
-    this.moon.position.copy(this.sunDir).multiplyScalar(291).addScaledVector(right, -off * 0.8).addScaledVector(up, off * 0.6);
+  /**
+   * El sol con el mordisco de la luna, dibujado: disco plano con su tinta y la luna (solo donde tapa el sol: fuera de él
+   * no se ve, como en la vida real) entrando desde arriba a la izquierda. Con las gafas, el sol se ve naranja y la luna,
+   * negra. En la totalidad, el disco negro de la luna (un 2 % más grande que el sol: por eso es total).
+   */
+  private drawSun(k: number) {
+    const total = this.totalT >= 0;
+    const key = `${Math.round(k * 300)}|${this.glasses}|${total}`;
+    if (key === this.sunKey || !this.sunTex) return;
+    this.sunKey = key;
+    const g = this.sunCanvas.getContext('2d')!;
+    const S = this.sunCanvas.width, c = S / 2, r = S / 2.56;
+    const circle = (x: number, y: number, rad: number) => {
+      g.beginPath();
+      g.arc(x, y, rad, 0, Math.PI * 2);
+    };
+    g.clearRect(0, 0, S, S);
+    const mr = r * 1.022;
+    if (total) {
+      circle(c, c, mr);
+      g.fillStyle = '#100c18';
+      g.fill();
+      g.strokeStyle = INK;
+      g.lineWidth = 3;
+      g.stroke();
+    } else {
+      // La luna se acerca en diagonal: 22 m a 291 m del centro, en radios del sol (9 m a 300 m)
+      const off = (((1 - k) * 22) / 291 / (9 / 300)) * r;
+      const mx = c - 0.8 * off, my = c - 0.6 * off;
+      circle(c, c, r);
+      g.fillStyle = this.glasses ? '#ff9b30' : '#fff0b8';
+      g.fill();
+      g.save();
+      circle(c, c, r);
+      g.clip();
+      circle(mx, my, mr);
+      g.fillStyle = this.glasses ? '#120a06' : '#24203a';
+      g.fill();
+      g.strokeStyle = INK;
+      g.lineWidth = 3;
+      g.stroke();
+      g.restore();
+      circle(c, c, r);
+      g.strokeStyle = INK;
+      g.lineWidth = 4;
+      g.stroke();
+    }
+    this.sunTex.needsUpdate = true;
   }
 
   // ---------------- Fases ----------------
 
   private updateHud() {
+    // Objetivos mínimos: un emoji o dos palabras, sin decir qué hacer (lo que hay que hacer lo dicen ellos)
     const o: Record<Phase, string> = {
       kayak: ECLIPSE.kayakHint,
-      ferry: ECLIPSE.ferryWarn,
-      arrive: ECLIPSE.arriveAzul[0].text,
+      ferry: '⛴️',
+      arrive: '🏡',
       parents: ECLIPSE.parentsHint,
-      walk: ECLIPSE.walkHint,
+      walk: this.joyRun === 1 ? '🐕' : ECLIPSE.walkHint,
       back: ECLIPSE.backHint,
       toCar: ECLIPSE.carHint,
       park: ECLIPSE.parkHint,
       marcParents: ECLIPSE.kitchenHint,
       hop: SIDE.hop.hint,
-      cards: 'En las rocas',
-      eclipse: this.glasses ? 'Mira cómo la luna tapa el sol' : ECLIPSE.glassesHint,
+      cards: '💌',
+      eclipse: this.totalT >= 0 ? '🌑' : this.glasses ? '🌘' : ECLIPSE.glassesHint,
       done: '12 de agosto de 2026',
     };
     this.hud.setObjective(o[this.phase]);
@@ -608,17 +946,12 @@ export class LevelEclipse implements Level {
   private sunk() {
     this.busy = true;
     this.hud.setAction(null);
-    fadeFlash(
-      () =>
-        dialogue(ECLIPSE.kayakEnd, () =>
-          phoneChat(CHATS.eclipseCoche, () => {
-            this.buildAzul();
-            applyShadows(this.scene);
-            this.startArrive();
-          }),
-        ),
-      600,
-    );
+    const go = this.chain(() => {
+      this.buildAzul();
+      applyShadows(this.scene);
+      this.startArrive();
+    });
+    fadeFlash(() => dialogue(ECLIPSE.kayakEnd, () => phoneChat(CHATS.eclipseCoche, go)), 600);
   }
 
   private startArrive() {
@@ -685,11 +1018,14 @@ export class LevelEclipse implements Level {
       if (!moving) {
         this.getOutT = -1;
         this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
-        dialogue(ECLIPSE.arriveAzul, () => {
-          this.phase = 'parents';
-          this.busy = false;
-          this.updateHud();
-        });
+        dialogue(
+          ECLIPSE.arriveAzul,
+          this.chain(() => {
+            this.phase = 'parents';
+            this.busy = false;
+            this.updateHud();
+          }),
+        );
       }
     }
   }
@@ -706,7 +1042,10 @@ export class LevelEclipse implements Level {
       }
       return;
     }
-    if (this.joyOutT >= 9) return;
+    if (this.joyOutT >= 9) {
+      this.updateJoyRun();
+      return;
+    }
     this.joyOutT += dt;
     if (this.houseDoor.open < 0.55) return;
     j.root.visible = true;
@@ -718,8 +1057,42 @@ export class LevelEclipse implements Level {
     if (j.root.position.z > 2.0) {
       this.joyOutT = 9;
       audio.pop();
-      this.followers.push({ p: j, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 });
+      this.joyFollows();
     }
+  }
+
+  private joyFollows() {
+    const j = this.joy!;
+    this.followers = this.followers.filter((f) => f.p !== j);
+    this.followers.push({ p: j, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 });
+  }
+
+  /**
+   * Paso nuevo del paseo (inventado, ver story.ts): llegando al faro, Joy se da la vuelta y se va calle arriba a oler
+   * algo. Hay que ir a por ella y llamarla; hasta que vuelve, no hay faro.
+   */
+  private updateJoyRun() {
+    const j = this.joy;
+    if (!j || this.phase !== 'walk') return;
+    const pp = this.player.root.position;
+    if (this.joyRun === 0 && !this.busy && pp.x < -56) {
+      this.joyRun = 1;
+      this.followers = this.followers.filter((f) => f.p !== j);
+      const spot = JOY_SPOT;
+      this.followers.push({ p: j, lead: () => spot, gap: 0.1, speed: 6.5 });
+      audio.pop();
+      bark('Gas', ECLIPSE.joyRuns);
+      this.updateHud();
+    }
+  }
+
+  /** Joy vuelve cuando la llamas de cerca. */
+  private callJoy() {
+    this.joyRun = 2;
+    this.joyFollows();
+    audio.pop();
+    bark('Margaux', ECLIPSE.joyCall);
+    this.updateHud();
   }
 
   private meetParents() {
@@ -727,17 +1100,20 @@ export class LevelEclipse implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
+    // (hablan mirándoos; nadie saluda con el brazo)
     for (const o of this.others) o.mode = 'talk';
-    this.others[0].mode = 'wave';
-    dialogue(ECLIPSE.meetAzulParents, () => {
-      for (const o of this.others) o.mode = 'idle';
-      // Eric se apunta al paseo con Gas
-      const eric = this.others.pop()!;
-      this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 1.0, speed: 4.4 });
-      this.phase = 'walk';
-      this.busy = false;
-      this.updateHud();
-    });
+    dialogue(
+      ECLIPSE.meetAzulParents,
+      this.chain(() => {
+        for (const o of this.others) o.mode = 'idle';
+        // Eric se apunta al paseo con Gas
+        const eric = this.others.pop()!;
+        this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 1.0, speed: 4.4 });
+        this.phase = 'walk';
+        this.busy = false;
+        this.updateHud();
+      }),
+    );
   }
 
   private walkDone() {
@@ -745,11 +1121,18 @@ export class LevelEclipse implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
-    dialogue(ECLIPSE.walkDone, () => {
-      this.phase = 'back';
-      this.busy = false;
-      this.updateHud();
-    });
+    dialogue(
+      ECLIPSE.walkDone,
+      this.chain(() =>
+        fadeFlash(() => {
+          // Se os pasa la tarde: el sol, ya bajo por el oeste
+          this.lateAfternoon();
+          this.phase = 'back';
+          this.busy = false;
+          this.updateHud();
+        }, 500),
+      ),
+    );
   }
 
   /** De vuelta en casa: se despiden de su padre. Joy y Eric se quedan con ellos. */
@@ -759,10 +1142,11 @@ export class LevelEclipse implements Level {
     this.walker.stop();
     this.hud.setAction(null);
     for (const o of this.others) o.mode = 'talk';
-    this.others[0].mode = 'wave';
-    dialogue(ECLIPSE.byeDad, () => {
+    dialogue(ECLIPSE.byeDad, this.chain(() => {
       for (const o of this.others) o.mode = 'idle';
+      // Su padre dice adiós con la mano un momento (luego se queda mirando)
       this.others[0].mode = 'wave';
+      this.dadWaveT = 2.6;
       // Eric, con su madre; Joy, a su lado: ya no os siguen
       const stay: [Person | Dog, THREE.Vector3][] = [];
       for (const f of this.followers) {
@@ -774,7 +1158,7 @@ export class LevelEclipse implements Level {
       this.phase = 'toCar';
       this.busy = false;
       this.updateHud();
-    });
+    }));
   }
 
   /** Puerta del copiloto, por la acera. */
@@ -816,17 +1200,26 @@ export class LevelEclipse implements Level {
       this.getInT = 99;
       fadeFlash(() => {
         this.getInT = -1;
-        this.buildMarc();
-        applyShadows(this.scene);
-        this.phase = 'park';
-        this.busy = true;
-        this.updateHud();
-        dialogue(ECLIPSE.driveIntro, () => {
-          this.busy = false;
-          toast('Arriba avanza · abajo, marcha atrás · los lados giran el volante');
-        });
+        this.startPark();
       }, 500);
     }
+  }
+
+  /** Calle de casa de Gas: el coche llega ya en marcha y, cuando para, se aparca a mano. */
+  private startPark() {
+    this.buildMarc();
+    applyShadows(this.scene);
+    this.phase = 'park';
+    this.busy = true;
+    this.updateHud();
+    // (los controles no se explican: arriba avanza, abajo marcha atrás; ella le guía desde el asiento de al lado)
+    dialogue(
+      ECLIPSE.driveIntro,
+      this.chain(() => {
+        this.busy = false;
+        bark('Margaux', ECLIPSE.parkGuide);
+      }),
+    );
   }
 
   private parked() {
@@ -836,7 +1229,8 @@ export class LevelEclipse implements Level {
     this.hud.setAction(null);
     this.parkZone.visible = false;
     audio.fanfare();
-    toast(ECLIPSE.parkOk);
+    comicWord('¡APARCADO!', 'perfect');
+    bark('Margaux', ECLIPSE.parkOk);
     later(
       () =>
         fadeFlash(() => {
@@ -845,7 +1239,7 @@ export class LevelEclipse implements Level {
           this.busy = false;
           this.updateHud();
         }, 400),
-      1300,
+      1800,
     );
   }
 
@@ -854,7 +1248,8 @@ export class LevelEclipse implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
-    this.others[0].mode = 'wave';
+    // (su padre espera quieto mirándola; habla cuando le toca)
+    this.others[0].mode = 'idle';
     this.others[1].mode = 'talk';
     // Se colocan para hablar: ella delante de sus padres y Gas a su lado, junto a la mesa
     fadeFlash(() => {
@@ -877,13 +1272,19 @@ export class LevelEclipse implements Level {
     later(() => {
       this.others[0].mode = 'talk';
     }, 2600);
-    dialogue(ECLIPSE.meetMarcParents, () => {
-      cinema.next();
-      dialogue(ECLIPSE.meetMarcParents2, () => {
-        cinema.stop();
-        fadeFlash(() => this.startRocks(), 500);
-      });
-    });
+    dialogue(
+      ECLIPSE.meetMarcParents,
+      this.chain(() => {
+        cinema.next();
+        dialogue(
+          ECLIPSE.meetMarcParents2,
+          this.chain(() => {
+            cinema.stop();
+            fadeFlash(() => this.startRocks(), 500);
+          }),
+        );
+      }),
+    );
   }
 
   private updateKitchen(dt: number) {
@@ -903,12 +1304,8 @@ export class LevelEclipse implements Level {
     const near = pp.distanceTo(KITCHEN_PARENTS) < 2.2;
     this.hud.setAction(free && near ? '👋 Saludar' : null, near);
     if (this.input.consumeAction() && free && near) this.meetMarcParents();
-    this.marker.visible = free && !near;
-    if (this.marker.visible) {
-      this.marker.position.set(KITCHEN_PARENTS.x, 2.4 + Math.sin(this.t * 3) * 0.12, KITCHEN_PARENTS.z);
-      this.marker.rotation.y += dt * 2;
-    }
-    this.hud.setArrow(null);
+    // (el marcador, solo si se ha perdido: 40 s en la cocina sin saludar)
+    this.hint(this.lost.tick(this.phase, dt, this.busy) && free && !near ? KITCHEN_PARENTS : null, dt, 2.4);
     this.walker.camera(this.camera, dt, [], 4.2, 2.9);
     this.sun.follow(pp);
   }
@@ -922,17 +1319,25 @@ export class LevelEclipse implements Level {
     this.busy = true;
     this.updateHud();
     audio.startMusic('night');
-    this.rockHop = new RockHop(this.scene, this.fx, -1.6, () => {
-      this.rockHop?.dispose();
-      this.rockHop = null;
-      this.busy = true;
-      this.hud.setAction(null);
-      fadeFlash(() => this.startCards(), 500);
-    });
-    dialogue(SIDE.hop.intro, () => {
-      this.busy = false;
-      this.updateHud();
-    });
+    this.rockHop = new RockHop(
+      this.scene,
+      this.fx,
+      -1.6,
+      this.chain(() => {
+        this.rockHop?.dispose();
+        this.rockHop = null;
+        this.busy = true;
+        this.hud.setAction(null);
+        fadeFlash(() => this.startCards(), 500);
+      }),
+    );
+    dialogue(
+      SIDE.hop.intro,
+      this.chain(() => {
+        this.busy = false;
+        this.updateHud();
+      }),
+    );
   }
 
   private startCards() {
@@ -941,18 +1346,27 @@ export class LevelEclipse implements Level {
     this.busy = true;
     this.updateHud();
     this.setupCards();
-    dialogue(ECLIPSE.rocks, () =>
-      princesaGame((rounds) => {
-        this.rounds = rounds;
-        this.endCards();
-        dialogue(ECLIPSE.afterCards, () => {
-          this.phase = 'eclipse';
-          this.busy = false;
-          this.progress = 0;
-          this.bareT = 0;
-          this.updateHud();
-        });
-      }, this.llStage ?? undefined),
+    dialogue(
+      ECLIPSE.rocks,
+      this.chain(() =>
+        princesaGame(
+          this.chain((rounds: number) => {
+            this.rounds = rounds;
+            this.endCards();
+            dialogue(
+              ECLIPSE.afterCards,
+              this.chain(() => {
+                this.phase = 'eclipse';
+                this.busy = false;
+                this.progress = 0;
+                this.bareT = 0;
+                this.updateHud();
+              }),
+            );
+          }),
+          this.llStage ?? undefined,
+        ),
+      ),
     );
   }
 
@@ -995,18 +1409,18 @@ export class LevelEclipse implements Level {
       p.root.position.z = 0.1;
       p.root.rotation.y = ry;
     }
-    // Con el sol de la tarde detrás quedaban a contraluz: una luz cálida de relleno desde la cámara
-    this.llFill = new THREE.PointLight(0xffd2a8, 5, 6, 1.4);
-    this.llFill.position.set(0, 1.5, -1.1);
-    this.scene.add(this.llFill);
+    // (sin luz de relleno: a contraluz los rellena la hemisférica del atardecer; no hay lámparas en las rocas)
     for (const p of [this.player, this.gas]) {
       const fan = new THREE.Group();
       fan.name = 'mano-cartas';
       p.handR.add(fan);
       this.handFans.set(p, fan);
     }
-    this.llStage = {
+    // (cada función comprueba que esta partida sigue en marcha: si se salta de fase, el juego de cartas que quede
+    // pendiente ya no pone cartas en la escena nueva)
+    const st: LoveLetterStage = {
       play: (who, v) => {
+        if (this.llStage !== st) return;
         const p = who === 'me' ? this.player : this.gas;
         const from = p.handR.getWorldPosition(new THREE.Vector3());
         const pile = this.llPiles[who];
@@ -1021,8 +1435,11 @@ export class LevelEclipse implements Level {
         audio.knock(0.25, 1800, 0.03);
         this.llPlayT.set(p, 0.5);
       },
-      turn: (who) => (this.llTurn = who),
+      turn: (who) => {
+        if (this.llStage === st) this.llTurn = who;
+      },
       hands: (me, gas) => {
+        if (this.llStage !== st) return;
         for (const [p, k] of [[this.player, me], [this.gas, gas]] as [Person, number][]) {
           const fan = this.handFans.get(p)!;
           while (fan.children.length > k) fan.remove(fan.children[fan.children.length - 1]);
@@ -1035,6 +1452,7 @@ export class LevelEclipse implements Level {
         }
       },
       reset: () => {
+        if (this.llStage !== st) return;
         for (const who of ['me', 'gas'] as const) {
           for (const c of this.llPiles[who]) c.removeFromParent();
           this.llPiles[who] = [];
@@ -1042,10 +1460,12 @@ export class LevelEclipse implements Level {
         this.flying = [];
       },
       end: (iWin) => {
+        if (this.llStage !== st) return;
         this.llCheerT = 2.2;
         this.llWinner = iWin ? this.player : this.gas;
       },
     };
+    this.llStage = st;
   }
 
   /** Recoge las cartas y vuelven a sentarse juntos mirando al mar para el eclipse. */
@@ -1054,9 +1474,6 @@ export class LevelEclipse implements Level {
     for (const fan of this.handFans.values()) fan.removeFromParent();
     this.handFans.clear();
     this.llStage = null;
-    this.llFill?.removeFromParent();
-    this.llFill?.dispose();
-    this.llFill = null;
     for (const [p, x] of [[this.player, -0.45], [this.gas, 0.45]] as [Person, number][]) {
       p.root.position.set(x, p.root.position.y, 0);
       p.root.rotation.y = 0;
@@ -1096,18 +1513,21 @@ export class LevelEclipse implements Level {
     this.camera.lookAt(this.camLook);
   }
 
-  private setGlasses(on: boolean) {
+  /** Las gafas en la cara de los dos (overlay: además, lo que se ve a través de ellas). */
+  private setGlasses(on: boolean, overlay = on) {
     this.glasses = on;
     for (const p of [this.player, this.gas]) {
-      const g = p.root.getObjectByName('gafas');
+      const g = p?.root.getObjectByName('gafas');
       if (g) g.visible = on;
     }
-    if (on && !this.glassesEl) {
+    if (overlay && !this.glassesEl) {
+      // A través de las gafas de eclipse no se ve nada más que el sol: negro plano con un agujero de borde duro
+      // donde está el disco (updateRocks lo mueve). Antes, una viñeta con degradado
       const e = document.createElement('div');
-      e.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle at 50% 45%, rgba(40,20,0,.55), rgba(10,5,0,.85));pointer-events:none;z-index:2;transition:opacity .4s';
+      e.style.cssText = 'position:fixed;inset:0;background:rgba(14,9,6,0.93);pointer-events:none;z-index:2;transition:opacity .3s';
       document.getElementById('ui')!.prepend(e);
       this.glassesEl = e;
-    } else if (!on && this.glassesEl) {
+    } else if (!overlay && this.glassesEl) {
       this.glassesEl.remove();
       this.glassesEl = null;
     }
@@ -1115,25 +1535,55 @@ export class LevelEclipse implements Level {
     this.updateHud();
   }
 
+  /** El agujero de las gafas, sobre el disco del sol en la pantalla. */
+  private placeGlassesHole() {
+    const e = this.glassesEl;
+    if (!e) return;
+    const p = this.v1.copy(this.sunDisk.position).project(this.camera);
+    let mask = 'none';
+    if (p.z < 1) {
+      const x = (p.x * 0.5 + 0.5) * window.innerWidth, y = (-p.y * 0.5 + 0.5) * window.innerHeight;
+      const edge = new THREE.Vector3().copy(this.sunDisk.position).addScaledVector(this.sunRight, 9.3).project(this.camera);
+      const r = Math.max(3, Math.abs(edge.x - p.x) * 0.5 * window.innerWidth);
+      mask = `radial-gradient(circle ${r.toFixed(1)}px at ${x.toFixed(1)}px ${y.toFixed(1)}px, transparent ${(r - 0.5).toFixed(1)}px, #000 ${(r + 0.5).toFixed(1)}px)`;
+    }
+    e.style.setProperty('-webkit-mask-image', mask);
+    e.style.setProperty('mask-image', mask);
+  }
+
   private takePhoto() {
     this.busy = true;
     this.hud.setAction(null);
+    // Para la foto, otra vez con las gafas puestas (así es la foto: ver ECLIPSE.end); sin mirar a través de ellas
+    this.setGlasses(true, false);
     audio.pop();
     vibrate(30);
+    comicWord('¡CLIC!', 'perfect');
     const f = document.createElement('div');
     f.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:.95;pointer-events:none;z-index:5;transition:opacity .6s';
     document.getElementById('ui')!.append(f);
-    later(() => (f.style.opacity = '0'), 60);
-    later(() => {
-      f.remove();
-      toast(ECLIPSE.photo);
-      later(() => this.finish(), 1400);
-    }, 700);
+    // (sin la «época» de later: si se salta de fase, el destello se quita igual y no se queda la pantalla en blanco)
+    window.setTimeout(() => (f.style.opacity = '0'), 60);
+    window.setTimeout(() => f.remove(), 760);
+    later(() => this.finish(), 1500);
+  }
+
+  /** Ya es total: ahora sí se pueden quitar las gafas para ver la corona (y solo ahora). */
+  private startTotality() {
+    this.totalT = 0;
+    this.bareTotal = false;
+    this.offNagT = 0;
+    comicWord('¡TOTAL!', 'fanfare');
+    comicFlash(0xffffff, 0.35);
+    audio.fanfare();
+    vibrate([40, 40, 120]);
+    bark('Gas', ECLIPSE.totality);
+    this.updateHud();
   }
 
   /**
-   * La totalidad, como en el cine: la corona con teleobjetivo (y el anillo de diamante), los dos de
-   * espaldas frente al mar con las gafas puestas, y su perfil iluminado por la corona.
+   * La totalidad, como en el cine: la corona con teleobjetivo (y el anillo de diamante), los dos de espaldas frente al
+   * mar y su perfil a la luz de la corona. Ya sin gafas.
    */
   private totalityScene() {
     const sun = this.sunDisk.position;
@@ -1141,30 +1591,32 @@ export class LevelEclipse implements Level {
     const horizon = this.sunDir.clone().multiplyScalar(30).setY(1.5);
     // Detrás de los dos y alineada con el sol: el eclipse queda entre sus cabezas
     const back = new THREE.Vector3(this.sunDir.x, 0, this.sunDir.z).normalize();
-    juice.fx?.flashScreen(0xffffff, 0.35);
-    // Los planos son de fuera: sin el oscurecido de mirar a través de las gafas (ellos las llevan puestas)
-    if (this.glassesEl) this.glassesEl.style.opacity = '0';
+    comicFlash(0xffffff, 0.25);
     cinema.play([
-      // La corona, de cerca: el último punto de sol y luego los rayos
+      // La corona, de cerca
       { dur: 4.2, pos: new THREE.Vector3(0, 1.4, -0.4), look: sun, fov: 7.5, fov2: 5.5 },
       // Los dos de espaldas, sentados en la roca, frente al eclipse sobre el mar
       { dur: 4.2, pos: back.clone().multiplyScalar(-2.6).setY(0.55), pos2: back.clone().multiplyScalar(-1.9).setY(0.72), look: horizon, fov: 42, focus: heads },
-      // De perfil, con las gafas, a la luz de la corona
+      // De perfil, a la luz de la corona
       { dur: 4, pos: new THREE.Vector3(2.3, 0.95, 0.8), pos2: new THREE.Vector3(1.9, 0.92, 0.55), look: heads, fov: 38, focus: heads },
-    ], () => {
-      if (this.glassesEl) this.glassesEl.style.opacity = '1';
-    });
+    ]);
   }
 
   private finish() {
     this.phase = 'done';
     this.busy = true;
     this.hud.setAction(null);
-    dialogue(ECLIPSE.end, () =>
-      phoneChat([CHATS.eclipseFin, CHATS.luna], () => {
-        this.setGlasses(false);
-        this.onComplete({ stars: 1 + (this.bumps <= 3 ? 1 : 0) + (this.rounds <= 5 ? 1 : 0), stats: ECLIPSE.stats(this.rounds, this.bumps) });
-      }),
+    dialogue(
+      ECLIPSE.end,
+      this.chain(() =>
+        phoneChat(
+          [CHATS.eclipseFin, CHATS.luna],
+          this.chain(() => {
+            this.setGlasses(false);
+            this.onComplete({ stars: 1 + (this.bumps <= 3 ? 1 : 0) + (this.rounds <= 5 ? 1 : 0), stats: ECLIPSE.stats(this.rounds, this.bumps) });
+          }),
+        ),
+      ),
     );
   }
 
@@ -1228,8 +1680,9 @@ export class LevelEclipse implements Level {
         this.ferry.visible = true;
         // Sale de mar abierto hacia la bocana del puerto: de frente contra el costado del kayak
         this.ferry.rotation.y = -Math.PI / 2;
-        this.ferry.position.set(k.x + 9, WATER_Y, k.z - 150);
-        toast(ECLIPSE.ferryWarn);
+        this.ferry.position.set(k.x + 9, WATER_Y, k.z - 115);
+        comicWord('¡¡FERRY!!', 'hit');
+        bark('Margaux', ECLIPSE.ferryWarn);
         audio.warn();
         vibrate([80, 60, 80]);
         this.updateHud();
@@ -1240,7 +1693,7 @@ export class LevelEclipse implements Level {
       // queda en el agua: nunca se mete en la costa (antes seguía de largo y cruzaba rocas y muros)
       const f = this.ferry;
       if (this.flipT === 0) {
-        this.ferryV = 26;
+        this.ferryV = FERRY_V;
         f.position.x += (k.x + 1.5 - f.position.x) * Math.min(1, dt * 0.8);
       } else {
         this.ferryV *= Math.exp(-dt * 2.6);
@@ -1297,15 +1750,33 @@ export class LevelEclipse implements Level {
     this.sun.follow(k);
   }
 
+  /** Marcador, flecha del HUD y columna sobre el objetivo (null: nada). Solo se llama con objetivo si se ha perdido. */
+  private hint(tgt: THREE.Vector3 | null, dt: number, h: number) {
+    const pp = this.player.root.position;
+    this.marker.visible = !!tgt;
+    if (!tgt) {
+      this.hud.setArrow(null);
+      beacon.at(null);
+      return;
+    }
+    this.marker.position.set(tgt.x, h + Math.sin(this.t * 3) * 0.15, tgt.z);
+    this.marker.rotation.y += dt * 2;
+    const close = Math.hypot(tgt.x - pp.x, tgt.z - pp.z) < 2.5;
+    const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
+    const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
+    this.hud.setArrow(close ? null : -rel);
+    beacon.at(close ? null : tgt);
+  }
+
   private updateAzul(dt: number) {
-    // El coche azul de Gas llega por la calle y aparca delante
-    if (this.carT < 4) {
+    // El coche azul de Gas llega por la calle ya en marcha (unos 40 km/h, no 60) y frena hasta parar delante
+    if (this.carT < ARRIVE_T) {
       const prev = this.car.root.position.x;
       this.carT += dt;
-      const e = Math.min(1, this.carT / 4);
-      this.car.root.position.x = 40 + (6 - 40) * (1 - (1 - e) * (1 - e));
+      const e = Math.min(1, this.carT / ARRIVE_T);
+      this.car.root.position.x = ARRIVE_FROM + (6 - ARRIVE_FROM) * (1 - (1 - e) * (1 - e));
       this.rig?.update(dt, (prev - this.car.root.position.x) / Math.max(dt, 1e-3), 0, 1.3);
-      if (this.carT >= 4 && this.phase === 'arrive') this.getOut();
+      if (this.carT >= ARRIVE_T && this.phase === 'arrive') this.getOut();
     } else this.rig?.update(dt, 0);
     if (this.getOutT >= 0) this.stepGetOut(dt);
     if (this.getInT >= 0 && this.getInT < 90) this.stepGetIn(dt);
@@ -1320,11 +1791,20 @@ export class LevelEclipse implements Level {
       w.rotation.y = (dir > 0 ? 1 : -1) * Math.PI / 2;
       animatePerson(p, dt, 'walk', 0.5);
     }
+    if (this.dadWaveT > 0) {
+      this.dadWaveT -= dt;
+      if (this.dadWaveT <= 0 && this.others[0]) this.others[0].mode = 'idle';
+    }
     for (const o of this.others) {
       o.p.root.rotation.y = Math.atan2(pp.x - o.p.root.position.x, pp.z - o.p.root.position.z);
       animatePerson(o.p, dt, o.mode);
     }
     this.moveFollowers(dt);
+    // Joy, mientras se ha ido a oler algo: quieta, con la cola
+    if (this.joyRun === 1 && this.joy) {
+      const j = this.joy.root.position;
+      if (Math.hypot(j.x - JOY_SPOT.x, j.z - JOY_SPOT.z) < 0.6) this.joy.tail.rotation.z = Math.sin(this.t * 9) * 0.7;
+    }
 
     const onFoot = this.phase === 'parents' || this.phase === 'walk' || this.phase === 'back' || this.phase === 'toCar';
     const free = !this.busy && onFoot;
@@ -1349,9 +1829,16 @@ export class LevelEclipse implements Level {
         label = '👋 Presentar';
         act = () => this.meetParents();
       }
+    } else if (this.phase === 'walk' && this.joyRun === 1 && this.joy) {
+      tgt = this.joy.root.position;
+      if (pp.distanceTo(tgt) < 2.2) {
+        label = ECLIPSE.joyBtn;
+        act = () => this.callJoy();
+      }
     } else if (this.phase === 'walk') {
       tgt = FAROLA_WALK;
-      if (pp.distanceTo(FAROLA_WALK) < 3) act = () => this.walkDone();
+      // (el faro cuenta cuando Joy ya ha vuelto; en el modo prueba «3b», sin Joy, directamente)
+      if (pp.distanceTo(FAROLA_WALK) < 3 && (this.joyRun === 2 || !this.joy?.root.visible)) act = () => this.walkDone();
     } else if (this.phase === 'back') {
       tgt = DAD_AT;
       if (Math.hypot(pp.x - DAD_AT.x, pp.z - DAD_AT.z) < 2.6) {
@@ -1365,23 +1852,14 @@ export class LevelEclipse implements Level {
         act = () => this.boardCar();
       }
     }
-    if (this.phase === 'walk' && act && !this.busy) act();
+    if (this.phase === 'walk' && act && !label && !this.busy) act();
     else {
       this.hud.setAction(free ? label : null, !!label);
       if (this.input.consumeAction() && act && free) act();
     }
-    this.marker.visible = !!tgt && free;
-    if (tgt && free) {
-      this.marker.position.set(tgt.x, 2.6 + Math.sin(this.t * 3) * 0.15, tgt.z);
-      this.marker.rotation.y += dt * 2;
-      const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
-      const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
-      this.hud.setArrow(pp.distanceTo(tgt) < 2.5 ? null : -rel);
-      beacon.at(pp.distanceTo(tgt) < 2.5 ? null : tgt);
-    } else {
-      this.hud.setArrow(null);
-      beacon.at(null);
-    }
+    // Pistas, solo si se ha perdido: marcador, flecha y columna a los 40 s sin avanzar
+    const lostNow = this.lost.tick(`${this.phase}|${this.joyRun}`, dt, this.busy || !free);
+    this.hint(lostNow && free ? tgt : null, dt, 2.6);
 
     // (en el patio de Azul, por debajo del toldo y de la buganvilla)
     const pz = this.player.root.position;
@@ -1410,7 +1888,18 @@ export class LevelEclipse implements Level {
 
   private updatePark(dt: number) {
     const c = this.car.root;
-    if (this.phase === 'park' && !this.busy) {
+    // Llega por la calle ya en marcha (7 m/s) y frena suave hasta parar delante de casa; hasta entonces no se conduce
+    if (this.parkArriveT >= 0) {
+      const prev = c.position.x;
+      this.parkArriveT += dt;
+      const e = Math.min(1, this.parkArriveT / PARK_ARRIVE_T);
+      c.position.x = PARK_FROM + (PARK_STOP - PARK_FROM) * (1 - (1 - e) * (1 - e));
+      this.carSpeed = (prev - c.position.x) / Math.max(dt, 1e-3);
+      if (e >= 1) {
+        this.parkArriveT = -1;
+        this.carSpeed = 0;
+      }
+    } else if (this.phase === 'park' && !this.busy) {
       const ax = this.input.axes();
       const want = ax.y * (ax.y > 0 ? 4.5 : 3);
       this.carSpeed += THREE.MathUtils.clamp(want - this.carSpeed, -dt * 6, dt * 6);
@@ -1423,7 +1912,8 @@ export class LevelEclipse implements Level {
           this.bumps++;
           this.bumpT = 0.8;
           this.clockMin = Math.max(4, this.clockMin - 2);
-          toast(ECLIPSE.clockHit);
+          comicWord('¡CLONC!', 'hit');
+          bark('Margaux', ECLIPSE.parkBump);
           audio.hit();
           vibrate(60);
           this.rig?.kick(0.4, 0.2);
@@ -1439,7 +1929,7 @@ export class LevelEclipse implements Level {
       // Aparcado: dentro de la zona, morro hacia la calle y casi parado
       const inZone = c.position.x > PARK.minX && c.position.x < PARK.maxX && c.position.z > PARK.minZ && c.position.z < PARK.maxZ;
       const facing = Math.abs(Math.atan2(Math.sin(c.rotation.y - Math.PI), Math.cos(c.rotation.y - Math.PI))) < 0.5;
-      (this.parkZone.material as THREE.MeshBasicMaterial).color.set(inZone && facing ? 0x5cff8a : inZone ? 0xffd23f : 0x5cff8a);
+      (this.parkZone.material as THREE.MeshBasicMaterial).color.set(inZone && facing ? 0x5cff8a : inZone ? 0xffd23f : 0xffffff);
       if (inZone && facing && Math.abs(this.carSpeed) < 0.8) {
         this.parkedT += dt;
         if (this.parkedT > 0.6) this.parked();
@@ -1470,53 +1960,78 @@ export class LevelEclipse implements Level {
         this.bareT = 0;
         this.progress = Math.min(1, this.progress + dt / 14);
         if (Math.floor(this.progress * 20) !== Math.floor((this.progress - dt / 14) * 20)) this.updateHud();
-        if (this.progress >= 1 && this.totalT < 0) {
-          this.totalT = 0;
-          toast(ECLIPSE.totality);
-          audio.fanfare();
-          vibrate([40, 40, 120]);
-          this.totalityScene();
-        }
+        if (this.progress >= 1 && this.totalT < 0) this.startTotality();
       } else {
         this.bareT += dt;
         if (this.bareT > 2) {
-          this.bareT = -2;
-          toast(ECLIPSE.noGlasses);
+          this.bareT = -4;
+          bark('Gas', ECLIPSE.noGlasses);
           audio.warn();
         }
       }
-    } else if (this.phase !== 'done') this.hud.setAction(null);
+    } else if (this.phase !== 'done' && this.totalT < 0) this.hud.setAction(null);
     if (this.totalT >= 0 && this.phase === 'eclipse') {
-      // En el máximo: una foto juntos, con las gafas puestas
+      // En la totalidad: primero fuera gafas (ahora sí se puede mirar) y, después de verla, la foto juntos
       this.totalT += dt;
-      if (this.totalT > 1.2 && !this.busy && !cinema.active) {
-        this.hud.setAction('📸 Foto juntos', true);
-        if (this.input.consumeAction()) this.takePhoto();
-      }
+      if (!this.busy && !cinema.active) {
+        if (!this.bareTotal) {
+          this.hud.setAction('🕶️ Quitarse las gafas', true);
+          this.offNagT += dt;
+          if (this.offNagT > 9) {
+            this.offNagT = 0;
+            bark('Gas', ECLIPSE.totalityNag);
+          }
+          if (this.input.consumeAction()) {
+            this.bareTotal = true;
+            this.setGlasses(false);
+            this.totalityScene();
+          }
+        } else {
+          this.hud.setAction('📸 Foto juntos', true);
+          if (this.input.consumeAction()) this.takePhoto();
+        }
+      } else this.hud.setAction(null);
     }
-    // La luna avanza y el cielo se oscurece; en el máximo, corona y estrellas
+    this.placeGlassesHole();
+    // La luna avanza y el cielo se oscurece. En la totalidad: azul de noche arriba, pero el horizonte sigue naranja
+    // todo alrededor (es un atardecer de 360°), y salen Venus y unas pocas estrellas
     const k = this.progress;
-    this.placeMoon(k);
-    const dark = Math.pow(k, 3);
+    this.drawSun(k);
+    const dark = this.totalT >= 0 ? 1 : Math.pow(k, 3) * 0.85;
     this.sky.setColors(
-      new THREE.Color(0x2b4a8a).lerp(new THREE.Color(0x070a1e), dark).getHex(),
-      new THREE.Color(0xf0985a).lerp(new THREE.Color(0x2a2a4a), dark).getHex(),
-      new THREE.Color(0xffcf8a).lerp(new THREE.Color(0xc06a40), dark).getHex(),
+      this.c1.setHex(0x2b4a8a).lerp(this.c2.setHex(0x101a50), dark).getHex(),
+      this.c1.setHex(0xf0985a).lerp(this.c2.setHex(0x34386a), dark).getHex(),
+      this.c1.setHex(0xffcf8a).lerp(this.c2.setHex(0xd07a48), dark).getHex(),
     );
-    this.hemi.intensity = 0.75 - dark * 0.5;
+    this.sky.overcast(dark * 0.7);
+    // Las dos hemisféricas (la de la escena, ya escalada por hemiScale, y la del cómic) y el sol bajan juntas
+    this.hemi.intensity = 0.75 * ((this.scene.userData.hemiScale as number | undefined) ?? 0.55) * (1 - dark * 0.6);
+    const ch = this.scene.userData.comicHemi as THREE.HemisphereLight | undefined;
+    if (ch) {
+      const L = LOOK_LIGHT.atardecer, N = LOOK_LIGHT.noche;
+      ch.intensity = L.hemi * (1 - dark * 0.45);
+      ch.color.setHex(L.sky).lerp(this.c2.setHex(N.sky), dark);
+      ch.groundColor.setHex(L.ground).lerp(this.c2.setHex(N.ground), dark);
+    }
     this.sun.light.intensity = 1.8 * (1 - dark * 0.9);
-    if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = dark;
-    // La corona solo se ve en la totalidad (antes la tapa el brillo del sol) y gira muy despacio
-    const cm = this.corona.material as THREE.SpriteMaterial;
-    cm.opacity = this.totalT >= 0 ? Math.min(1, this.totalT / 1.6) : Math.max(0, (k - 0.97) / 0.03) * 0.25;
+    const seaU = (this.sea?.material as THREE.ShaderMaterial | undefined)?.uniforms;
+    if (seaU) {
+      (seaU.uColor.value as THREE.Color).setHex(SEA_DUSK).lerp(this.c2.setHex(SEA_TOTAL), dark);
+      (seaU.uEmissive.value as THREE.Color).setHex(0x2a1a20).multiplyScalar(0.6 * (1 - dark));
+    }
+    if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = THREE.MathUtils.smoothstep(dark, 0.6, 1);
+    if (this.venus) this.venus.material.opacity = THREE.MathUtils.smoothstep(dark, 0.35, 0.8);
+    // La corona solo se ve en la totalidad (antes la tapa el sol) y gira muy despacio
+    const cm = this.corona.material;
+    cm.opacity = this.totalT >= 0 ? Math.min(1, this.totalT / 1.2) : 0;
     cm.rotation += dt * 0.01;
-    // Anillo de diamante: un destello al empezar la totalidad que se apaga en segundo y medio
-    const dm = this.diamond.material as THREE.SpriteMaterial;
+    // Anillo de diamante: justo antes de la totalidad y un segundo y medio después
+    const dm = this.diamond.material;
     const dk = this.totalT >= 0 ? Math.max(0, 1 - this.totalT / 1.5) : Math.max(0, (k - 0.95) / 0.05);
     dm.opacity = dk;
-    this.diamond.scale.setScalar(6 + dk * 34);
-    const halo = this.scene.getObjectByName('halo') as THREE.Sprite | undefined;
-    if (halo) (halo.material as THREE.SpriteMaterial).opacity = 1 - dark;
+    this.diamond.visible = dk > 0.01;
+    this.diamond.scale.setScalar(6 + dk * 26);
+    if (this.halo) this.halo.material.opacity = 1 - dark;
     if (!this.llStage) {
       this.camera.position.lerp(this.v1.set(-1.6, 1.7, -3.4), Math.min(1, dt * 2));
       this.camLook.lerp(this.phase === 'eclipse' || this.phase === 'done' ? this.v1.copy(this.sunDir).multiplyScalar(40) : new THREE.Vector3(0, 1.2, 6), Math.min(1, dt * 1.5));
@@ -1535,7 +2050,7 @@ export class LevelEclipse implements Level {
       if (Math.ceil(this.clockMin) !== before) this.updateHud();
       if (this.clockMin <= 10 && !this.clockSaid) {
         this.clockSaid = true;
-        toast(ECLIPSE.clockLow);
+        bark('Gas', ECLIPSE.clockLow);
         audio.warn();
       }
     }
@@ -1550,7 +2065,7 @@ export class LevelEclipse implements Level {
     else if (this.phase === 'arrive' || this.phase === 'parents' || this.phase === 'walk' || this.phase === 'back' || this.phase === 'toCar') this.updateAzul(dt);
     else if (this.phase === 'park') this.updatePark(dt);
     else if (this.phase === 'marcParents') this.updateKitchen(dt);
-    else if (this.rockHop) {
+    else if (this.phase === 'hop' && this.rockHop) {
       this.rockHop.update(dt, this.camera, this.busy);
       if (this.rockHop) {
         const can = !this.busy && this.rockHop.canJump;
@@ -1562,13 +2077,46 @@ export class LevelEclipse implements Level {
   }
 
   debug(): DebugItem[] {
+    // Saltar de fase deja todo como al empezar esa fase: sin diálogos, chats, cartas, gafas, botones ni pistas de
+    // la anterior, y sin que una cadena pendiente (fin de un diálogo, del minijuego) vuelva a poner su fase
     const reset = () => {
+      this.gen++;
       this.busy = false;
       this.input.reset();
-      this.setGlasses(false);
       if (this.llStage) this.endCards();
+      this.setGlasses(false);
       stage.end();
-      document.querySelectorAll('.dialogue, .phone-overlay, .princesa-screen, .panel-overlay').forEach((e) => e.remove());
+      cinema.stop();
+      document.querySelectorAll('.dialogue, .phone-overlay, .princesa-screen, .panel-overlay, .bark, .pow').forEach((e) => e.remove());
+      this.hud.setAction(null);
+      this.hint(null, 0, 0);
+      this.lost.reset();
+      this.flipT = 0;
+      this.getOutT = this.getInT = -1;
+      this.parkArriveT = -1;
+      this.totalT = -1;
+      this.bareTotal = false;
+      this.progress = 0;
+      this.clockMin = 26;
+      this.clockSaid = false;
+      this.bumps = 0;
+    };
+    /** Casa de Azul con el coche ya aparcado y los dos fuera (para las fases del paseo). */
+    const azulOnFoot = (late: boolean) => {
+      this.buildAzul();
+      applyShadows(this.scene);
+      if (late) this.lateAfternoon();
+      this.carT = ARRIVE_T;
+      this.car.azul.visible = false;
+      this.car.root.position.x = 6;
+      this.player.root.visible = this.gas.root.visible = true;
+    };
+    const withJoy = (x: number, z: number) => {
+      const j = this.joy!;
+      j.root.visible = true;
+      j.root.position.set(x, 0, z);
+      this.joyOutT = 9;
+      this.joyFollows();
     };
     return [
       { label: '1 · Kayak', run: () => { reset(); this.buildKayak(); applyShadows(this.scene); this.startKayak(); } },
@@ -1577,41 +2125,26 @@ export class LevelEclipse implements Level {
         label: '3 · El paseo',
         run: () => {
           reset();
-          this.buildAzul();
-          applyShadows(this.scene);
-          this.carT = 4;
-          this.car.azul.visible = false;
-          this.car.root.position.x = 6;
-          this.player.root.visible = this.gas.root.visible = true;
+          azulOnFoot(false);
           this.gas.root.position.set(0.6, 0, 6);
           this.player.root.position.set(0, 0, 11.5);
           this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
+          withJoy(1.2, 10.5);
           this.phase = 'walk';
           this.updateHud();
         },
       },
       {
-        label: '3c · Vuelta a casa',
+        label: '3a · Joy se escapa',
         run: () => {
           reset();
-          this.buildAzul();
-          applyShadows(this.scene);
-          this.carT = 4;
-          this.car.azul.visible = false;
-          this.car.root.position.x = 6;
-          this.player.root.visible = this.gas.root.visible = true;
-          this.player.root.position.set(-30, 0, 13.5);
-          this.gas.root.position.set(-29, 0, 13.5);
+          azulOnFoot(false);
+          this.player.root.position.set(-52, 0, 13.5);
+          this.gas.root.position.set(-50.6, 0, 13.5);
           this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
-          const eric = this.others.pop()!;
-          eric.p.root.position.set(-28, 0, 13.5);
-          this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 1, speed: 4.4 });
-          this.joy!.root.visible = true;
-          this.joy!.root.position.set(-27, 0, 13.5);
-          this.joyOutT = 9;
-          this.followers.push({ p: this.joy!, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 });
-          this.walker.facing = this.walker.yaw = Math.PI / 2;
-          this.phase = 'back';
+          withJoy(-50, 12.6);
+          this.walker.facing = this.walker.yaw = -Math.PI / 2;
+          this.phase = 'walk';
           this.updateHud();
         },
       },
@@ -1619,21 +2152,45 @@ export class LevelEclipse implements Level {
         label: '3b · Sa Farola',
         run: () => {
           reset();
-          this.buildAzul();
-          applyShadows(this.scene);
-          this.carT = 4;
-          this.car.azul.visible = false;
-          this.car.root.position.x = 6;
-          this.player.root.visible = true;
+          azulOnFoot(false);
+          this.gas.root.visible = false;
           this.player.root.position.set(-19, 0, -32);
           this.walker.facing = this.walker.yaw = Math.PI + 0.35;
+          this.joyRun = 2;
           this.phase = 'walk';
           this.updateHud();
         },
       },
-      { label: '4 · Aparcar', run: () => { reset(); this.buildMarc(); applyShadows(this.scene); this.phase = 'park'; this.updateHud(); } },
+      {
+        label: '3c · Vuelta a casa (tarde)',
+        run: () => {
+          reset();
+          azulOnFoot(true);
+          this.player.root.position.set(-30, 0, 13.5);
+          this.gas.root.position.set(-29, 0, 13.5);
+          this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
+          const eric = this.others.pop()!;
+          eric.p.root.position.set(-28, 0, 13.5);
+          this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 1, speed: 4.4 });
+          withJoy(-27, 13.5);
+          this.joyRun = 2;
+          this.walker.facing = this.walker.yaw = Math.PI / 2;
+          this.phase = 'back';
+          this.updateHud();
+        },
+      },
+      { label: '4 · Aparcar', run: () => { reset(); this.startPark(); } },
       { label: '5 · La cocina', run: () => { reset(); this.buildKitchen(); applyShadows(this.scene); this.phase = 'marcParents'; this.updateHud(); } },
       { label: '6 · Las rocas', run: () => { reset(); this.startRocks(); } },
+      {
+        label: '6b · Love Letter',
+        run: () => {
+          reset();
+          this.buildRocks();
+          applyShadows(this.scene);
+          this.startCards();
+        },
+      },
       {
         label: '7 · El eclipse',
         run: () => {
@@ -1643,6 +2200,18 @@ export class LevelEclipse implements Level {
           this.phase = 'eclipse';
           this.progress = 0.8;
           this.updateHud();
+        },
+      },
+      {
+        label: '7b · Totalidad',
+        run: () => {
+          reset();
+          this.buildRocks();
+          applyShadows(this.scene);
+          this.phase = 'eclipse';
+          this.progress = 1;
+          this.setGlasses(true);
+          this.startTotality();
         },
       },
       { label: '✓ Completar capítulo', run: () => { reset(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },

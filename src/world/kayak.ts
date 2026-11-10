@@ -38,32 +38,68 @@ function hullGeo(L: number, B: number, D: number, H: number) {
   return g;
 }
 
-/** Estela en V: espuma que se abre detrás del kayak. */
+/**
+ * Estela en V de tebeo: dos brazos de espuma blanca plana, a trazos que se abren y se acortan hacia atrás, con su
+ * tinta (antes, cientos de puntitos con degradado). Lo estrecho, arriba (pegado a la popa).
+ */
 function wakeTexture() {
   return canvasTex((ctx, w, h) => {
     ctx.clearRect(0, 0, w, h);
-    for (let k = 0; k < 220; k++) {
-      const v = Math.random();
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const spread = 0.08 + v * 0.38;
-      const x = w / 2 + side * spread * w + (Math.random() - 0.5) * 10 * (0.4 + v);
-      const y = v * h;
-      ctx.fillStyle = `rgba(255,255,255,${(1 - v) * 0.55 * Math.random()})`;
-      ctx.beginPath();
-      ctx.ellipse(x, y, 2 + v * 6, 1 + v * 2, side * 0.6, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 9; i++) {
+        const v0 = i / 9 + 0.02, v1 = v0 + 0.07 - i * 0.004;
+        const x0 = w / 2 + side * (0.06 + v0 * 0.36) * w, x1 = w / 2 + side * (0.06 + v1 * 0.36) * w;
+        const y0 = v0 * h, y1 = v1 * h;
+        const lw = 9 - i * 0.7;
+        ctx.strokeStyle = '#2b2233';
+        ctx.lineWidth = lw + 4;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = lw;
+        ctx.stroke();
+      }
     }
-    const gr = ctx.createLinearGradient(0, 0, 0, h);
-    gr.addColorStop(0, 'rgba(255,255,255,0.35)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.47, 0);
-    ctx.lineTo(w * 0.53, 0);
-    ctx.lineTo(w * 0.62, h);
-    ctx.lineTo(w * 0.38, h);
-    ctx.fill();
   }, 128, 256);
+}
+
+/** Ola de proa del ferry, de tebeo: bigote de espuma blanca plana con el borde festoneado y su tinta. */
+function bowFoamTexture() {
+  return canvasTex((ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    // Lo estrecho a la izquierda del lienzo (en la roda), abriéndose hacia la derecha por los dos costados
+    ctx.moveTo(w * 0.04, h / 2);
+    for (let i = 0; i <= 10; i++) {
+      const x = w * (0.04 + i * 0.09), y = h / 2 - (0.06 + i * 0.038) * h;
+      ctx.quadraticCurveTo(x + w * 0.045, y - h * 0.05, x + w * 0.09, y);
+    }
+    ctx.lineTo(w * 0.94, h / 2 - h * 0.36);
+    for (let i = 10; i >= 0; i--) {
+      const x = w * (0.04 + i * 0.09), y = h / 2 - (0.06 + i * 0.038) * h + h * 0.07;
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.moveTo(w * 0.04, h / 2);
+    for (let i = 0; i <= 10; i++) {
+      const x = w * (0.04 + i * 0.09), y = h / 2 + (0.06 + i * 0.038) * h;
+      ctx.quadraticCurveTo(x + w * 0.045, y + h * 0.05, x + w * 0.09, y);
+    }
+    ctx.lineTo(w * 0.94, h / 2 + h * 0.36);
+    for (let i = 10; i >= 0; i--) {
+      const x = w * (0.04 + i * 0.09), y = h / 2 + (0.06 + i * 0.038) * h - h * 0.07;
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#2b2233';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }, 256, 256);
 }
 
 function paddleMesh() {
@@ -95,6 +131,8 @@ const _e = new THREE.Euler();
 
 export function buildKayak(front: Person, back: Person): Kayak {
   const root = new THREE.Group();
+  // (se mueve, vuelca y lleva los remos: el cómic no lo dobla a mano alzada donde nace, ni a nada de dentro)
+  root.userData.comicBent = true;
   const roll = new THREE.Group();
   root.add(roll);
   const hull = new THREE.Mesh(
@@ -123,7 +161,7 @@ export function buildKayak(front: Person, back: Person): Kayak {
   deck.castShadow = true;
   roll.add(deck);
   // Estela
-  const wakeMat = new THREE.MeshBasicMaterial({ map: wakeTexture(), transparent: true, depthWrite: false, opacity: 0, fog: true });
+  const wakeMat = new THREE.MeshBasicMaterial({ map: wakeTexture(), transparent: true, alphaTest: 0.05, depthWrite: false, opacity: 0, fog: true });
   const wake = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 7), wakeMat);
   wake.rotation.set(-Math.PI / 2, 0, Math.PI); // lo estrecho pegado a la popa
   wake.position.set(0, 0.03, -5.4);
@@ -259,15 +297,17 @@ export function buildFerry() {
   // Mástil
   m.add(G.cyl, 0xdddddd, -6, 16.5, 0, 0, 0, 0, 0.2, 6, 0.2);
   const g = new THREE.Group();
+  // (navega y vira: sin doblar a mano alzada, como los coches)
+  g.userData.comicBent = true;
   const mesh = m.mesh();
   mesh.castShadow = true;
   g.add(mesh);
-  // Ola de proa
+  // Ola de proa: el bigote de espuma, con lo estrecho en la roda (la proa mira a +x)
   const foam = new THREE.Mesh(
     new THREE.PlaneGeometry(26, 18),
-    new THREE.MeshBasicMaterial({ map: wakeTexture(), transparent: true, depthWrite: false, opacity: 0.9 }),
+    new THREE.MeshBasicMaterial({ map: bowFoamTexture(), transparent: true, alphaTest: 0.05, depthWrite: false }),
   );
-  foam.rotation.set(-Math.PI / 2, 0, -Math.PI / 2); // lo estrecho en la roda
+  foam.rotation.set(-Math.PI / 2, 0, Math.PI); // lo estrecho del lienzo (su izquierda) hacia +x, en la roda
   foam.position.set(22, 0.4, 0);
   foam.userData.noCast = true;
   g.add(foam);
