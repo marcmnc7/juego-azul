@@ -513,6 +513,8 @@ export class BeerRun {
   private cross: { p: Person; z: number; x0: number; x1: number; u: number; v: number; hit: number }[] = [];
   private tilt = new THREE.Vector2();
   rounds = 0;
+  /** Quien se acaba de chocar con Gas (para que su bocadillo salga de él: Level3.speakerPoint). */
+  lastBump: Person | null = null;
 
   /** Las cervezas son para Azul (estaban los dos solos): se las lleva hasta su sitio del pasillo. */
   constructor(sc: THREE.Scene, private gas: Person, private walker: Walker, private fx: Particles, readonly friendAt: THREE.Vector3, aisleX: number, zs: number[], private onChange: () => void) {
@@ -595,16 +597,19 @@ export class BeerRun {
     this.level = 0.42;
     const c = this.cups.find((x) => x.visible);
     if (c) c.visible = false;
-    this.fx.burst(this.tray.position.clone(), '🍺', 6, 1.8, 0.6);
+    // (salpicadura dibujada con su tinta: el emoji de la cerveza era el del sistema)
+    this.fx.burst(this.tray.position.clone(), '💥', 5, 1.6, 0.6);
+    comicWord('¡CHOF!', 'splash');
     audio.hit();
     vibrate(60);
     this.walker.shake(0.2);
     this.onChange();
+    // (los avisos los dice Gas: los letreros sueltos no se ven en el tebeo)
     if (this.cupsLeft <= 0) {
-      toast(SIDE.beers.empty);
+      bark('Gas', SIDE.beers.empty);
       this.reset();
       this.onChange();
-    } else toast(SIDE.beers.spilled[Math.min(this.cupsLeft - 1, 1)]);
+    } else bark('Gas', SIDE.beers.spilled[Math.min(this.cupsLeft - 1, 1)]);
   }
 
   update(dt: number, busy: boolean) {
@@ -617,12 +622,14 @@ export class BeerRun {
       const x = c.x0 + (c.x1 - c.x0) * k;
       const dx = x - c.p.root.position.x;
       c.p.root.position.x = x;
-      if (Math.abs(dx) > 1e-4) c.p.root.rotation.y = dx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      // (se da la vuelta girando, no de golpe)
+      if (Math.abs(dx) > 1e-4) c.p.root.rotation.y += wrap((dx > 0 ? Math.PI / 2 : -Math.PI / 2) - c.p.root.rotation.y) * Math.min(1, dt * 7);
       animatePerson(c.p, dt, 'walk', 0.6);
       if (this.stage === 'carry' && c.hit <= 0 && Math.hypot(pp.x - x, pp.z - c.z) < 0.85) {
         c.hit = 1.4;
         this.level += 0.62;
-        toast(SIDE.beers.bump);
+        this.lastBump = c.p;
+        bark('Uno que pasa', SIDE.beers.bump);
         audio.knock(0.4, 240, 0.08);
       }
     }
@@ -1765,7 +1772,11 @@ export class PeeAim {
     if (this.drag && e.pointerId === this.drag.id) this.drag = null;
   };
 
-  /** Dibuja el fondo una vez (azulejos, urinario, suelo) a la medida de la pantalla. */
+  /**
+   * Dibuja el fondo una vez a la medida de la pantalla: el interior de una cabina portátil como las del estadio
+   * (paredes de plástico azul con nervios, suelo de plástico, el urinario de plástico de la pared con su
+   * pegatina de la mosca y la rejilla de ventilación), en tebeo: colores planos y contorno de tinta.
+   */
   private layout = () => {
     const W = (this.W = window.innerWidth), H = (this.H = window.innerHeight);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -1785,90 +1796,126 @@ export class PeeAim {
     this.floorY = Math.min(H * 0.86, top + uh + S * 0.12);
     const g = this.bg.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Azulejos blancos algo gastados, con su junta
-    g.fillStyle = '#dfe4e6';
-    g.fillRect(0, 0, W, H);
-    const tile = Math.max(26, S * 0.11);
-    for (let y = 0; y < this.floorY; y += tile)
-      for (let x = (Math.floor(y / tile) % 2) * -tile * 0.5; x < W; x += tile) {
-        const v = 226 + ((x * 7 + y * 13) % 17) - 8;
-        g.fillStyle = `rgb(${v},${v + 3},${v + 5})`;
-        g.fillRect(x + 1.5, y + 1.5, tile - 3, tile - 3);
-      }
-    // Suelo de gres oscuro, en perspectiva
-    const fg = g.createLinearGradient(0, this.floorY, 0, H);
-    fg.addColorStop(0, '#6f6a64');
-    fg.addColorStop(1, '#3f3b37');
-    g.fillStyle = fg;
-    g.fillRect(0, this.floorY, W, H - this.floorY);
-    g.strokeStyle = 'rgba(0,0,0,.25)';
-    g.lineWidth = 1;
-    for (let i = -8; i <= 8; i++) {
+    g.lineJoin = g.lineCap = 'round';
+    const INK = '#141018';
+    // Pared de plástico azul con sus nervios verticales (luz a un lado, sombra al otro, raya de tinta)
+    g.fillStyle = '#86acd6';
+    g.fillRect(0, 0, W, this.floorY);
+    const rib = Math.max(34, S * 0.14);
+    for (let x = (cx % rib) - rib; x < W; x += rib) {
+      g.fillStyle = '#a3c3e4';
+      g.fillRect(x, 0, rib * 0.18, this.floorY);
+      g.fillStyle = '#6d93be';
+      g.fillRect(x + rib * 0.78, 0, rib * 0.22, this.floorY);
+      g.fillStyle = 'rgba(20,16,24,.55)';
+      g.fillRect(x + rib * 0.78, 0, 1.5, this.floorY);
+    }
+    // Rejilla de ventilación arriba
+    g.fillStyle = '#5d7fa8';
+    g.fillRect(cx - S * 0.2, S * 0.04, S * 0.4, S * 0.08);
+    g.strokeStyle = INK;
+    g.lineWidth = 3;
+    g.strokeRect(cx - S * 0.2, S * 0.04, S * 0.4, S * 0.08);
+    g.lineWidth = 2;
+    for (let i = 1; i < 6; i++) {
       g.beginPath();
-      g.moveTo(cx + i * tile * 0.6, this.floorY);
-      g.lineTo(cx + i * tile * 2.4, H);
+      g.moveTo(cx - S * 0.2 + (i * S * 0.4) / 6, S * 0.05);
+      g.lineTo(cx - S * 0.2 + (i * S * 0.4) / 6, S * 0.11);
       g.stroke();
     }
-    // Sombra del urinario en la pared
-    g.fillStyle = 'rgba(40,50,60,.18)';
-    g.beginPath();
-    g.ellipse(cx + S * 0.03, top + uh * 0.5, uw * 0.56, uh * 0.56, 0, 0, Math.PI * 2);
-    g.fill();
-    // Tubo y pulsador
-    g.fillStyle = '#b9c0c4';
-    g.fillRect(cx - S * 0.018, 0, S * 0.036, top + 4);
-    g.fillStyle = '#9aa2a7';
-    g.fillRect(cx - S * 0.03, top - S * 0.05, S * 0.06, S * 0.03);
-    // La porcelana: cuerpo redondeado con un poco de volumen
-    const pg = g.createLinearGradient(cx - uw / 2, 0, cx + uw / 2, 0);
-    pg.addColorStop(0, '#d9dfe2');
-    pg.addColorStop(0.35, '#ffffff');
-    pg.addColorStop(0.8, '#eef2f3');
-    pg.addColorStop(1, '#c6cdd1');
-    g.fillStyle = pg;
-    g.beginPath();
-    g.moveTo(cx - uw * 0.42, top);
-    g.quadraticCurveTo(cx, top - uh * 0.08, cx + uw * 0.42, top);
-    g.bezierCurveTo(cx + uw * 0.56, top + uh * 0.35, cx + uw * 0.55, top + uh * 0.8, cx + uw * 0.3, top + uh);
-    g.quadraticCurveTo(cx, top + uh * 1.07, cx - uw * 0.3, top + uh);
-    g.bezierCurveTo(cx - uw * 0.55, top + uh * 0.8, cx - uw * 0.56, top + uh * 0.35, cx - uw * 0.42, top);
-    g.fill();
-    g.strokeStyle = 'rgba(90,100,110,.35)';
+    // Suelo de plástico oscuro con nervios en perspectiva
+    g.fillStyle = '#4c535c';
+    g.fillRect(0, this.floorY, W, H - this.floorY);
+    g.strokeStyle = 'rgba(20,16,24,.6)';
     g.lineWidth = 2;
+    for (let i = -8; i <= 8; i++) {
+      g.beginPath();
+      g.moveTo(cx + i * rib * 0.5, this.floorY);
+      g.lineTo(cx + i * rib * 2, H);
+      g.stroke();
+    }
+    g.strokeStyle = INK;
+    g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(0, this.floorY);
+    g.lineTo(W, this.floorY);
     g.stroke();
-    // La taza: hueco en sombra
+    // El rollo de papel, a un lado
+    const rx = cx + uw * 0.78, ry = top + uh * 0.42, rr = S * 0.07;
+    g.fillStyle = '#f6f2e8';
+    g.beginPath();
+    g.ellipse(rx, ry, rr, rr * 1.15, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = INK;
+    g.lineWidth = 3;
+    g.stroke();
+    g.fillStyle = '#9aa4ad';
+    g.beginPath();
+    g.ellipse(rx, ry, rr * 0.35, rr * 0.4, 0, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    // El urinario de plástico: cuerpo plano, una franja de sombra en un lado y contorno de tinta gordo
+    const body = () => {
+      g.beginPath();
+      g.moveTo(cx - uw * 0.42, top);
+      g.quadraticCurveTo(cx, top - uh * 0.08, cx + uw * 0.42, top);
+      g.bezierCurveTo(cx + uw * 0.56, top + uh * 0.35, cx + uw * 0.55, top + uh * 0.8, cx + uw * 0.3, top + uh);
+      g.quadraticCurveTo(cx, top + uh * 1.07, cx - uw * 0.3, top + uh);
+      g.bezierCurveTo(cx - uw * 0.55, top + uh * 0.8, cx - uw * 0.56, top + uh * 0.35, cx - uw * 0.42, top);
+    };
+    body();
+    g.fillStyle = '#eef1f2';
+    g.fill();
+    g.save();
+    body();
+    g.clip();
+    g.fillStyle = '#cdd5da';
+    g.fillRect(cx + uw * 0.22, 0, uw, H);
+    g.restore();
+    body();
+    g.strokeStyle = INK;
+    g.lineWidth = 5;
+    g.stroke();
+    // La taza: hueco plano en un tono más oscuro
     const b = this.bowl;
-    const bg2 = g.createRadialGradient(b.x, b.y - b.ry * 0.4, b.rx * 0.1, b.x, b.y, b.rx * 1.1);
-    bg2.addColorStop(0, '#f4f7f8');
-    bg2.addColorStop(0.7, '#d4dade');
-    bg2.addColorStop(1, '#aeb6bb');
-    g.fillStyle = bg2;
+    g.fillStyle = '#d3dbe0';
     g.beginPath();
     g.ellipse(b.x, b.y, b.rx, b.ry, 0, 0, Math.PI * 2);
     g.fill();
-    g.strokeStyle = 'rgba(80,90,100,.4)';
+    g.fillStyle = '#bfc9cf';
+    g.beginPath();
+    g.ellipse(b.x, b.y + b.ry * 0.25, b.rx * 0.8, b.ry * 0.7, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = INK;
+    g.lineWidth = 3;
+    g.beginPath();
+    g.ellipse(b.x, b.y, b.rx, b.ry, 0, 0, Math.PI * 2);
     g.stroke();
     // Rejilla del desagüe
-    g.fillStyle = '#8d969c';
+    g.fillStyle = '#7d878e';
     g.beginPath();
     g.ellipse(b.x, b.y + b.ry * 0.62, b.rx * 0.22, b.ry * 0.12, 0, 0, Math.PI * 2);
     g.fill();
-    g.strokeStyle = '#5f676c';
-    g.lineWidth = 1.2;
+    g.lineWidth = 2;
+    g.stroke();
     for (let i = -2; i <= 2; i++) {
       g.beginPath();
       g.moveTo(b.x + i * b.rx * 0.07, b.y + b.ry * 0.53);
       g.lineTo(b.x + i * b.rx * 0.07, b.y + b.ry * 0.71);
       g.stroke();
     }
-    // La mosca pintada (la de los urinarios de verdad)
+    // La pegatina de la mosca
     const f = this.fly;
-    g.fillStyle = 'rgba(160,190,210,.55)';
-    g.beginPath();
-    g.ellipse(f.x - f.r * 0.6, f.y - f.r * 0.3, f.r * 0.8, f.r * 0.45, -0.5, 0, Math.PI * 2);
-    g.ellipse(f.x + f.r * 0.6, f.y - f.r * 0.3, f.r * 0.8, f.r * 0.45, 0.5, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#1d1f22';
+    g.fillStyle = '#bcd8ea';
+    g.strokeStyle = INK;
+    g.lineWidth = 1.5;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(f.x + s * f.r * 0.6, f.y - f.r * 0.3, f.r * 0.8, f.r * 0.45, s * 0.5, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
+    g.fillStyle = INK;
     g.beginPath();
     g.ellipse(f.x, f.y, f.r * 0.42, f.r * 0.7, 0, 0, Math.PI * 2);
     g.fill();
@@ -1926,40 +1973,50 @@ export class PeeAim {
 
   private draw(ox: number, oy: number, press: number, inBowl: boolean) {
     const g = this.ctx;
+    const INK = '#141018';
     g.clearRect(0, 0, this.W, this.H);
     g.drawImage(this.bg, 0, 0, this.W, this.H);
-    // Charcos
-    g.fillStyle = 'rgba(232,206,90,.28)';
+    // Charcos: manchas planas
+    g.fillStyle = 'rgba(226,196,70,.42)';
     for (const p of this.puddles) {
       g.beginPath();
       g.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.5, 0, 0, Math.PI * 2);
       g.fill();
     }
-    // El chorro: un arco que sale de abajo, más fino cuanto menos fuerza
+    // El chorro: un arco que sale de abajo, más fino cuanto menos fuerza; en tebeo, trazo de tinta y color plano
     const mx = (ox + this.hit.x) / 2, my = Math.min(oy, this.hit.y) - this.S * 0.1 * press;
     const wide = 2 + press * 4;
     g.lineCap = 'round';
-    g.strokeStyle = 'rgba(236,200,60,.55)';
-    g.lineWidth = wide + 3;
     g.beginPath();
     g.moveTo(ox, oy);
     g.quadraticCurveTo(mx, my, this.hit.x, this.hit.y);
+    g.strokeStyle = INK;
+    g.lineWidth = wide + 5;
     g.stroke();
-    g.strokeStyle = 'rgba(255,240,170,.85)';
-    g.lineWidth = Math.max(1, wide * 0.45);
+    g.strokeStyle = '#f2cf3a';
+    g.lineWidth = wide + 1;
     g.stroke();
-    // Gotas
+    g.strokeStyle = '#fff3b0';
+    g.lineWidth = Math.max(1, wide * 0.35);
+    g.stroke();
+    // Gotas, con su contorno
+    g.lineWidth = 1.5;
+    g.strokeStyle = INK;
     for (const d of this.drops) {
-      g.fillStyle = d.out ? 'rgba(236,200,60,.8)' : 'rgba(255,248,210,.85)';
+      g.fillStyle = d.out ? '#e8c43a' : '#fff6cc';
       g.beginPath();
-      g.arc(d.x, d.y, 2.2, 0, Math.PI * 2);
+      g.arc(d.x, d.y, 2.6, 0, Math.PI * 2);
       g.fill();
+      g.stroke();
     }
     // La mira: dónde estás apuntando (y si cae dentro)
-    g.strokeStyle = inBowl ? 'rgba(80,200,120,.9)' : 'rgba(230,80,70,.9)';
-    g.lineWidth = 2;
+    g.strokeStyle = INK;
+    g.lineWidth = 6;
     g.beginPath();
     g.arc(this.aim.x, this.aim.y, 13, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = inBowl ? '#5fcf80' : '#e2543a';
+    g.lineWidth = 3;
     g.stroke();
   }
 
@@ -1968,12 +2025,16 @@ export class PeeAim {
     this.done = true;
     cancelAnimationFrame(this.raf);
     const q = this.total > 0 ? this.inside / this.total : 0;
-    toast((q > 0.85 ? SIDE.pee.great : q > 0.6 ? SIDE.pee.ok : SIDE.pee.bad) + (this.onFly > 1.4 ? SIDE.pee.fly : ''));
-    audio.knock(0.3, 300, 0.2); // la cisterna
+    // (el resultado, en el propio panel y con su onomatopeya: los avisos sueltos no se ven en el tebeo)
+    const say = (q > 0.85 ? SIDE.pee.great : q > 0.6 ? SIDE.pee.ok : SIDE.pee.bad) + (this.onFly > 1.4 ? SIDE.pee.fly : '');
+    const title = this.wrap.querySelector('.pee-title');
+    if (title) title.textContent = say;
+    comicWord(q > 0.85 ? '¡PERFECTO!' : q > 0.6 ? '¡UF!' : '¡UPS!', q > 0.85 ? 'perfect' : 'hit');
+    audio.knock(0.3, 300, 0.2); // la tapa de la cabina
     later(() => {
       this.dispose();
       this.onDone(q);
-    }, 900);
+    }, 1700);
   }
 
   dispose() {
@@ -1989,7 +2050,11 @@ export class PeeAim {
 
 // ---------------- Capítulo 4: las gafas de sol en el baño ----------------
 
-/** Fila de cabinas: se abren tocándolas; dos están averiadas y en una, encima de la cisterna, las gafas. */
+/**
+ * La fila de cabinas portátiles del estadio, la misma que se ve en 3D (cuántas, cuáles averiadas y cuáles ocupadas
+ * las dice el nivel): se abren tocándolas; las averiadas no se abren, en las ocupadas contestan desde dentro y en
+ * una, en la repisa, las gafas.
+ */
 export class GlassesHunt {
   private wrap = el('div', 'gh-game');
   private say: HTMLElement;
@@ -1997,11 +2062,13 @@ export class GlassesHunt {
   private done = false;
   private timers: number[] = [];
 
-  constructor(private onDone: () => void) {
-    const N = 5;
-    const broken = [1, 3];
-    const working = [0, 2, 4];
-    // Nunca en la primera que se mira: se decide al tocar la segunda que funciona
+  constructor(private onDone: () => void, opts: { n?: number; broken?: number[]; occupied?: number[] } = {}) {
+    const N = opts.n ?? 5;
+    const broken = opts.broken ?? [1, 3];
+    // (como mucho una ocupada: si no, podía no quedar ninguna libre donde mirar)
+    const occupied = (opts.occupied ?? []).filter((i) => !broken.includes(i) && i < N).slice(0, 1);
+    const free = Array.from({ length: N }, (_, i) => i).filter((i) => !broken.includes(i) && !occupied.includes(i));
+    // Nunca en la primera que se mira: se decide al tocar la segunda libre (o en la única que haya)
     let opened = 0;
     this.wrap.append(el('div', 'gh-title', SIDE.glasses.title), el('div', 'gh-hint', SIDE.glasses.hint));
     const row = el('div', 'gh-row');
@@ -2010,24 +2077,28 @@ export class GlassesHunt {
       const inside = el('div', 'gh-inside');
       inside.append(el('i', 'gh-cistern'), el('span', 'gh-wc', '🚽'));
       const panel = el('div', 'gh-panel');
-      panel.append(el('span', 'gh-sign', broken.includes(i) ? 'AVERIADO' : 'WC'), el('i', 'gh-handle'));
+      const busy = occupied.includes(i);
+      const sign = el('span', 'gh-sign', broken.includes(i) ? 'AVERIADO' : busy ? 'OCUPADO' : 'LIBRE');
+      // (el indicador de la puerta, como el de las cabinas de verdad: rojo ocupado, verde libre)
+      if (!broken.includes(i)) sign.style.background = busy ? '#c0392b' : '#2e9e5b';
+      panel.append(sign, el('i', 'gh-handle'));
       d.append(inside, panel);
       d.onpointerdown = (e) => {
         e.stopPropagation();
         e.preventDefault();
         if (this.done || d.classList.contains('open')) return;
-        if (broken.includes(i)) {
+        if (broken.includes(i) || busy) {
           d.classList.remove('shake');
           void d.offsetWidth;
           d.classList.add('shake');
-          this.line(SIDE.glasses.broken);
-          audio.knock(0.4, 160, 0.08);
+          this.line(busy ? SIDE.glasses.occupied : SIDE.glasses.broken);
+          audio.knock(0.4, busy ? 240 : 160, 0.08);
           return;
         }
         d.classList.add('open');
         audio.knock(0.25, 420, 0.06);
         opened++;
-        const isIt = opened >= 2 || (opened === 1 && working.length === 1);
+        const isIt = opened >= 2 || free.length === 1;
         if (isIt) {
           inside.append(el('span', 'gh-glasses', '🕶️'));
           this.found();
