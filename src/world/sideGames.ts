@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { cinema } from '../core/cinema';
-import { Sky, Sun, settleAmbient, applyShadows, glowTexture, makeSea, vibrate } from '../core/gfx';
+import { Sky, Sun, settleAmbient, applyShadows, makeSea, vibrate } from '../core/gfx';
 import { steerTo, type SteerState } from '../core/steer';
 import type { Walker } from '../core/walker';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
@@ -1422,6 +1422,33 @@ const LOW_Y = -1.32;
 const SWELL_EVERY = 4.1;
 const SWELL_SPEED = 8;
 
+/**
+ * Ola de tebeo para RockHop: una cresta de espuma blanca plana con el borde festoneado y su tinta, y debajo una banda
+ * de agua más clara (antes, el brillo borroso de las farolas estirado en un plano).
+ */
+function hopFoamTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(170,220,235,0.75)';
+  g.fillRect(34, 0, 60, 256);
+  g.beginPath();
+  g.moveTo(52, 0);
+  for (let y = 0; y <= 256; y += 16) g.quadraticCurveTo(30 + ((y / 16) % 2) * 8, y + 8, 46, y + 16);
+  g.lineTo(84, 256);
+  for (let y = 256; y >= 0; y -= 16) g.quadraticCurveTo(100 - ((y / 16) % 2) * 8, y - 8, 82, y - 16);
+  g.closePath();
+  g.fillStyle = '#ffffff';
+  g.fill();
+  g.strokeStyle = '#2b2233';
+  g.lineWidth = 4;
+  g.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export class RockHop {
   private root = new THREE.Group();
   private azul: Person;
@@ -1447,8 +1474,9 @@ export class RockHop {
     });
     this.root.add(m.mesh());
     const fg = new THREE.PlaneGeometry(2.6, 7).rotateX(-Math.PI / 2);
-    const foamTex = glowTexture();
-    this.foam = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ map: foamTex, color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.foam = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ map: hopFoamTexture(), color: 0xffffff, transparent: true, alphaTest: 0.05, depthWrite: false }));
+    // (se mueve: que no se doble a mano alzada donde nace)
+    this.foam.userData.comicBent = true;
     this.foam.visible = false;
     this.foam.userData.noCast = true;
     this.root.add(this.foam);
@@ -1460,6 +1488,13 @@ export class RockHop {
     this.gas.root.position.set(end.x + 0.3, SAFE_Y + 0.02, end.z - 0.2);
     this.gas.root.rotation.y = -Math.PI / 2;
     sc.add(this.azul.root, this.gas.root);
+  }
+
+  /** De dónde sale el bocadillo de cada uno (el nivel lo usa en su speakerPoint). */
+  head(who: 'azul' | 'gas') {
+    const p = who === 'azul' ? this.azul : this.gas;
+    const h = (p.rig?.bones.get('Head') ?? p.head).getWorldPosition(new THREE.Vector3());
+    return h.setY(h.y + 0.32);
   }
 
   private y(i: number) {
@@ -1491,10 +1526,12 @@ export class RockHop {
     this.idx = back;
     this.splashT = 0.7;
     const p = this.azul.root.position;
-    this.fx.burst(p.clone().setY(this.seaY + 0.6), '💦', 12, 2.6, 1.4);
+    this.fx.burst(p.clone().setY(this.seaY + 0.6), 'spray', 16, 2.6, 1.4);
     audio.hit();
     vibrate([50, 30, 50]);
-    toast(SIDE.hop.fall[this.falls % SIDE.hop.fall.length]);
+    // (los letreros no se ven en el tebeo: el golpe, con su onomatopeya, y lo demás lo dice Gas)
+    comicWord('¡CHOF!', 'splash');
+    bark('Gas', SIDE.hop.fall[this.falls % SIDE.hop.fall.length]);
     this.place(this.azul, back);
   }
 
@@ -1517,7 +1554,6 @@ export class RockHop {
         this.swellX -= SWELL_SPEED * dt;
         const seaBob = 0.55;
         this.foam.position.set(this.swellX, this.seaY + seaBob * 0.7, 1.7);
-        (this.foam.material as THREE.MeshBasicMaterial).opacity = 0.85;
         if (this.swellX < -26) {
           this.swellX = null;
           this.foam.visible = false;
@@ -1548,7 +1584,8 @@ export class RockHop {
     if (this.hop) {
       az.armL.rotation.x = az.armR.rotation.x = -1.1;
     }
-    animatePerson(this.gas, dt, this.over ? 'cheer' : 'wave');
+    // Gas la espera quieto, mirándola (sin saludar con el brazo); al llegar ella, lo celebra
+    animatePerson(this.gas, dt, this.over ? 'cheer' : 'idle');
     this.gas.root.rotation.y = Math.atan2(cur.x - this.gas.root.position.x, cur.z - this.gas.root.position.z);
     // La cámara, de lado, un poco por delante de ella
     const cam = camera as THREE.PerspectiveCamera;

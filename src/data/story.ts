@@ -474,13 +474,15 @@ export const MOTO = {
 };
 
 // Capítulo 8: el día del eclipse, 12 de agosto de 2026. Chats: eclipseReady, eclipseCoche, eclipseFin, luna.
+// Los avisos ya no son letreros (en el tebeo no se ven): los dice alguien en su bocadillo. Los objetivos, mínimos.
+// «(inventado)»: textos nuevos que no salen de la historia, para cambiarlos por lo que pasó de verdad.
 export const ECLIPSE = {
   motoIntro: [{ who: 'Narrador', text: '2 de agosto, en el parking del aeropuerto. Gas no tiene ni idea de dónde dejó la moto.' }] as Line[],
   kayakIntro: [
     { who: 'Narrador', text: 'El plan de Gas: ver el eclipse desde el mar, en kayak, de Sa Farola hacia Sa Caleta.' },
   ] as Line[],
-  kayakHint: 'Rema: toca 🛶 sin parar hasta Sa Caleta',
-  ferryWarn: '⛴️ ¡¡Un ferry!!',
+  kayakHint: '🛶 Sa Caleta',
+  ferryWarn: '¡¡Un ferry!! ⛴️',
   kayakEnd: [
     { who: 'Gas', text: 'Tu padre tenía razón.' },
     { who: 'Narrador', text: 'Vale. Ese plan nunca pasó: al final no hubo kayak.' },
@@ -490,18 +492,24 @@ export const ECLIPSE = {
     { who: 'Narrador', text: 'Vais juntos en su coche a casa de tus padres. Hoy los conoce.' },
   ] as Line[],
   afterMoto: [{ who: 'Narrador', text: 'Diez días después, el 12 de agosto.' }] as Line[],
-  parentsHint: 'Saluda a tus padres con Gas',
+  parentsHint: '👋',
   meetAzulParents: [
     { who: 'Gas', text: 'Hola, encantado. Soy Marc.' },
     { who: 'Narrador', text: 'Tus padres le miran de arriba abajo. Aprobado. Creo.' },
     { who: 'Margaux', text: 'Vamos a dar una vuelta con Joy y Eric.' },
   ] as Line[],
-  walkHint: 'Da una vuelta con Joy y Eric hasta la farola',
+  walkHint: 'Sa Farola',
+  /** (inventado) Llegando al faro, Joy se va calle arriba a oler algo y hay que ir a por ella. */
+  joyRuns: '¡Joy! ¿Adónde vas? Se ha ido a oler algo 🙄',
+  joyBtn: '🐕 ¡Joy, ven!',
+  joyCall: '¡Joy! Ven aquí, bonita.',
   walkDone: [
     { who: 'Narrador', text: 'Eric quiere ir a hombros. Joy quiere ir a todas partes.' },
     { who: 'Margaux', text: 'Venga, para casa, que se nos hace tarde.' },
+    // (inventado) para el salto de horas: llegan a mediodía y se van hacia las ocho
+    { who: 'Narrador', text: 'Entre una cosa y otra, se os pasa la tarde.' },
   ] as Line[],
-  backHint: 'Volved a casa de tus padres con Joy y Eric',
+  backHint: '🏡',
   byeHint: 'Despídete de tu padre',
   byeBtn: '👋 Despedirse',
   byeDad: [
@@ -510,15 +518,16 @@ export const ECLIPSE = {
     { who: 'Padre de Azul', text: 'Id, id. Y nada de kayak, ¿eh?' },
     { who: 'Gas', text: 'Nada de kayak.' },
   ] as Line[],
-  carHint: 'Sube al coche: a casa de Gas',
+  carHint: '🚗',
   carBtn: '🚗 Subir al coche',
   driveIntro: [{ who: 'Narrador', text: 'Ahora, a casa de Gas. Toca aparcar marcha atrás dentro, en la entrada.' }] as Line[],
-  parkHint: 'Marcha atrás: mete el coche dentro de la entrada',
+  parkHint: '🅿️',
+  /** (inventado) Ella le guía desde el asiento de al lado. */
+  parkGuide: 'Marcha atrás y por la corredera. Yo te aviso 😏',
   parkBump: 'Uy, el muro 😬',
   parkOk: 'Aparcado. A la primera (casi) 🅿️',
   /** El reloj: en cuanto os vais, cuenta hacia atrás hasta el eclipse. */
-  clockLow: 'Gas: «Que no llegamos, eh»',
-  clockHit: '💥 Dos minutos menos',
+  clockLow: 'Que no llegamos, eh',
   meetMarcParents: [
     { who: 'Narrador', text: 'Entráis los dos. Sus padres están en la cocina.' },
     { who: 'Margaux', text: 'Hola, soy Margaux.' },
@@ -540,12 +549,16 @@ export const ECLIPSE = {
     { who: 'Gas', text: '¿Una partida a Love Letter mientras tanto?' },
   ] as Line[],
   afterCards: [{ who: 'Narrador', text: 'Le has ganado. Como siempre. Y empieza el eclipse.' }] as Line[],
-  glassesHint: 'Ponte las gafas de eclipse 🕶️',
-  noGlasses: '¡Sin gafas no! Ponte las gafas 🕶️',
-  photo: '📸 Los dos, con las gafas puestas, en el momento exacto',
-  kitchenHint: 'Entra con Gas: sus padres están en la cocina',
-  totality: '🌘 Ya está',
-  end: [{ who: 'Narrador', text: 'La luna tapa el sol. Se hace de noche un momento.' }] as Line[],
+  glassesHint: '🕶️',
+  noGlasses: '¡Sin gafas no, que te quemas los ojos! 🕶️',
+  kitchenHint: '👋',
+  /** (inventado) En la totalidad, y solo entonces, se pueden quitar las gafas para ver la corona. */
+  totality: '¡Ya está! Ahora sí: fuera gafas, que se puede mirar 😎',
+  totalityNag: 'Quítatelas, que dura nada',
+  end: [
+    { who: 'Narrador', text: 'La luna tapa el sol. Se hace de noche un momento.' },
+    { who: 'Narrador', text: 'Y una foto de los dos, con las gafas puestas, en el momento exacto.' },
+  ] as Line[],
   stats: (rounds: number, parkTries: number) => [['Rondas de Love Letter', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
 };
 
@@ -615,13 +628,13 @@ export const MINIS = {
   },
   moto: {
     title: '¿Dónde está la moto?',
-    hint: 'Busca la moto de Gas con la linterna',
-    goal: 'Busca con la linterna la moto de Gas: negra, con su casco rojo encima',
-    check: '🔦 ¿Es esta?',
+    hint: 'Busca la moto de Gas',
+    goal: 'Negra, con su casco rojo encima',
+    check: '👀 ¿Es esta?',
     found: '¡Ahí está! 🏍️',
     nope: 'Esa no es…',
-    hint1: 'Gas: «Era negra. Y con mi casco encima, eso seguro»',
-    hint2: 'Gas: «¡Ahora me acuerdo! Al fondo, cerca de una farola». Mira la luz',
+    hint1: 'Era negra. Y con mi casco encima, eso seguro',
+    hint2: '¡Ahora me acuerdo! Al fondo, cerca de una farola',
   },
   tricks: {
     title: 'Adiestrar a Joy',
@@ -740,12 +753,14 @@ export const SIDE = {
   },
   hop: {
     intro: [
-      { who: 'Gas', text: 'El mejor sitio está en aquellas rocas. Yo ya he cruzado. Salta cuando no venga ola.' },
+      // («en las altas no te pilla»: inventado, para decir la regla de las olas en su boca)
+      { who: 'Gas', text: 'El mejor sitio está en aquellas rocas. Yo ya he cruzado. Salta cuando no venga ola: en las altas no te pilla.' },
       { who: 'Margaux', text: 'Si me mojo el vestido, te tiro al agua.' },
     ] as Line[],
-    hint: '🪨 Salta de roca en roca. Espera las olas en las rocas altas',
+    hint: '🪨',
     btn: '🪨 Saltar',
-    fall: ['💦 ¡La ola! A la última roca alta', '💦 ¡Otra vez! Espera a que pase', '💦 ¡Que está fría!'],
+    /** Lo dice Gas cuando la ola la pilla (y vuelve a la última roca alta). */
+    fall: ['¡La ola! Espera en las altas 💦', '¡Otra vez! Deja que pase 💦', '¿Está fría? 😂'],
     end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
   },
   pee: {
