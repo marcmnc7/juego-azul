@@ -370,4 +370,14 @@ Comprobado:
 
 **F1 (capítulo 2), hecho el 9-nov-2026:** ver `docs/estilo-comic/progreso-cap2.md`.
 
-**Siguiente: F2 (capítulo 3, se abre el 22-nov).**
+**F2–F9 (capítulos 3 a 9, misiones y carta), hechos el 10-nov-2026** a la vez, siguiendo `docs/estilo-comic/GUIA-migracion.md` (lo aprendido en el cap. 2, más lo que salió en el 3). Cada uno tiene su `progreso-capN.md`. Lo común que se hizo por el camino:
+- `rig.fidget` (sin gestos de asentir para nadie), saludo sin codo roto, `core/lost.ts` (pistas solo al perderse).
+- Los `toast` no se ven en el cómic: todos los capítulos los pasan a bocadillos u onomatopeyas.
+- `scene.userData.speedLines`, `speakerSide(who)` en los niveles, `Sky.overcast(k)`.
+- `Surf.Rock`: roca natural dibujada (antes, sillares) en acantilados, calas y rocas del mar.
+- Paneles de minijuego de tebeo (punto justo abajo, mochila, ritmo, bandeja, gafas, mesa).
+- `comicScene` pinta como persona todo lo marcado `userData.person` (cascos, sombreros, accesorios).
+- Fuegos artificiales en estrellas con tinta que se apagan por alfa.
+- Al volver a una escena ya convertida, `main.ts` le vuelve a poner su perfil de luz.
+
+**Siguiente: F10 (repaso global)**: una partida entera de cada capítulo y fps en el móvil.
