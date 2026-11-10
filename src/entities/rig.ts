@@ -860,6 +860,11 @@ export interface Rig {
   fidKey?: string;
   /** Sin gestos sueltos (en un abrazo o un beso, que mueven la cabeza y los brazos a mano). */
   noFidget?: boolean;
+  /**
+   * Gestos sueltos de pie (asentir, decir que sí) cada pocos segundos. Apagados para todos desde el cap. 2: el dueño
+   * los veía sin sentido («¿por qué hacen el gesto ese siempre?»). Solo si un capítulo los pide para alguien.
+   */
+  fidget?: boolean;
   /** Altura de la cadera en reposo, en metros (sin la escala del personaje). */
   hipsHeight: number;
   /** Inclinación de cintura para arriba (ver leanTorso). */
@@ -1814,8 +1819,8 @@ function updateOne(p: Person, dt: number) {
     // Hablando: el clip de hablar gesticulando (si no lo hay, el muñeco mueve el brazo)
     const still = r.mode === 'talk' && r.act.talk ? 'talk' : 'idle';
     tw[still] += rest;
-    // Nadie está quieto del todo: de pie, de vez en cuando asiente, dice que sí o que no, como charlando
-    if (r.mode === 'idle' && !r.noFidget) {
+    // De pie, de vez en cuando asiente o dice que sí, como charlando: solo quien lo tenga pedido (`fidget`)
+    if (r.mode === 'idle' && r.fidget && !r.noFidget) {
       r.fidNext ??= 1 + Math.random() * 6;
       r.fidNext -= dt;
       if (r.fidNext <= 0 && !(r.fidLeft! > 0) && moving < 0.1) {

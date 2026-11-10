@@ -748,13 +748,17 @@ export function animatePerson(p: Person, dt: number, mode: PersonMode, move = 0,
       break;
     }
     case 'wave': {
-      // El brazo arriba y la mano saluda desde el codo
-      p.armR.rotation.z = 2.5;
-      p.armR.rotation.x = -0.2;
-      p.elbowR.rotation.z = Math.sin(t * 7) * 0.45;
-      p.elbowR.rotation.x = -0.2;
-      p.head.rotation.z = Math.sin(t * 2) * 0.06;
-      p.body.rotation.z = -0.03;
+      // Saludo de lejos: el brazo arriba, casi recto, y la mano va de lado a lado desde el hombro. Antes la mano
+      // saludaba torciendo el codo de lado (z), que un codo de verdad no hace: con esqueleto quedaba un brazo roto.
+      const s = Math.sin(t * 5.5);
+      p.armR.rotation.z = 2.5 + s * 0.3;
+      p.armR.rotation.x = -0.12;
+      p.armR.rotation.y = 0;
+      p.elbowR.rotation.z = 0;
+      p.elbowR.rotation.x = -0.3;
+      p.armL.rotation.z = -0.1;
+      p.head.rotation.z = Math.sin(t * 2) * 0.05;
+      p.body.rotation.z = -0.03 + s * 0.012;
       p.kneeL.rotation.x = 0.08;
       p.body.position.y = Math.sin(t * 2) * 0.008;
       break;

@@ -23,6 +23,7 @@ import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
+import { Lost } from '../core/lost';
 import { menorcaTrim, menorcaWindow, LOUVRE_GREEN, LOUVRE_WHITE } from './menorcaHouse';
 import { DRIVE_PATH, DRIVE, ROAD_KEEP_OUT, buildCountryRoad, farFromRoad } from './countryRoad';
 
@@ -194,8 +195,8 @@ export class Level4 implements Level {
   private gasPlanT = 0;
   private gasWalk: [number, number][] = [];
   /** Sin pistas en pantalla: la flecha y la columna de luz solo salen si lleva un buen rato sin dar con ello. */
-  private lostT = 0;
-  private lostKey = '';
+  /** Pistas (flecha, marcador, columna) solo a los 40 s sin avanzar. */
+  private lost = new Lost();
   /** Gente en la terraza del Imperi (un bar abierto un 27 de agosto no está vacío). */
   private barPeople: Person[] = [];
   /** Cuánto lleva cada uno tumbado (para asentarlo en la toalla mientras la postura termina de llegar). */
@@ -1052,12 +1053,7 @@ export class Level4 implements Level {
 
     // Pistas, solo si se ha perdido: la flecha, la columna de luz y la del HUD salen a los 40 s sin avanzar
     const key = `${this.phase}|${this.pickedUp}|${this.saidBye}|${this.towelsTaken}|${this.swimOut}|${this.gasPlan}`;
-    if (key !== this.lostKey) {
-      this.lostKey = key;
-      this.lostT = 0;
-    }
-    if (!this.busy) this.lostT += dt;
-    const tgt = this.lostT > 40 ? this.target() : null;
+    const tgt = this.lost.tick(key, dt, this.busy) ? this.target() : null;
     this.marker.visible = !!tgt && !this.busy;
     if (tgt) {
       this.marker.position.set(tgt.x, 2.4 + Math.sin(this.t * 3) * 0.15, tgt.z);
@@ -2225,7 +2221,7 @@ export class Level4 implements Level {
       this.towelPile.visible = false;
       for (const t of this.lawnTowels) t.visible = true;
       this.gasPlan = 'none';
-      this.lostT = 0;
+      this.lost.reset();
     };
     return [
       {
