@@ -1,19 +1,22 @@
 import * as THREE from 'three';
 import { audio } from '../../core/audio';
-import { Sky, Sun, toon, makeSea, vibrate } from '../../core/gfx';
+import { Sky, Sun, toon, makeSea, vibrate, quality } from '../../core/gfx';
 import { Surf } from '../../core/surfaces';
 import { beachBallTexture } from '../../core/physics';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { MARGAUX_LOOK, MARC_LOOK } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, animatePerson, type Person } from '../../entities/models';
-import { hud, toast, missionCard, type Hud } from '../../ui/ui';
+import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
 import { canvasTex } from '../deco';
 import { disposeScene } from '../level';
 
 // Misión del capítulo 9 (lo que vino después): septiembre, vóley playa «nivel 6» con Gas. Ella a un lado
 // de la red y él al otro; la pelota va y viene y hay que darle justo cuando llega. Tres al suelo y se
 // acaba (y si aguantáis doce pases, también: nivel 6 de verdad).
+// Con la receta del capítulo 1: cielo pintado (mismos azules y horizonte crema), luz de las 11 con el reparto de
+// ambiente de Ferreries (hemisférica 1,0 × 0,35 y sol con su tope de tebeo), mar de tebeo y arena dibujada.
+// Nada de toast (no se ven en el cómic): los aciertos y fallos, onomatopeyas; el resultado, en la tarjeta.
 
 const ME = new THREE.Vector3(-3.6, 0, 0);
 const GAS = new THREE.Vector3(3.6, 0, 0);
@@ -46,12 +49,15 @@ class BeachMission implements Mission {
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
     const T = MINIS.voley;
+    // (sol alto y de lado: la sombra de la pelota se ve en la arena)
     const sunDir = new THREE.Vector3(-0.3, 0.75, 0.6);
-    sc.fog = new THREE.Fog(0xcfe3ee, 40, 220);
-    this.sky = new Sky({ top: 0x3d82d0, mid: 0x8cc2ec, bottom: 0xe2f0f7, sun: { color: 0xfff2c8, dir: sunDir, size: 50 }, clouds: { count: 7, tint: 0xffffff } });
+    sc.fog = new THREE.Fog(0xcfe0ee, 70, 220);
+    this.sky = new Sky({ top: 0x2a6fd0, mid: 0x7fbdf2, bottom: 0xf6ead2, sun: { color: 0xfff4dc, dir: sunDir, size: 70 }, clouds: { count: 9, tint: 0xffffff } });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xdcecff, 0xb89a68, 0.8));
-    this.sun = new Sun(sc, 0xfff0d0, 1.9, sunDir, 18);
+    // El ambiente, repartido como en Ferreries (ver settleAmbient): si no, las sombras salían planas
+    sc.userData.hemiScale = 0.35;
+    sc.add(new THREE.HemisphereLight(0xeaf2ff, 0x8a7a64, 1.0));
+    this.sun = new Sun(sc, 0xfff1dc, 3.4, sunDir, 18);
     const sand = new THREE.Mesh(new THREE.PlaneGeometry(120, 60).rotateX(-Math.PI / 2), toon({ color: 0xd2b07a, surf: Surf.Sand }));
     sand.position.z = -14;
     sand.userData.noCast = true;
@@ -112,10 +118,12 @@ class BeachMission implements Mission {
     sc.add(this.ball);
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.2, 16).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }));
     this.shadow.position.y = 0.01;
+    // (la sombra de mentira, solo sin sombras de verdad: con las dos, la pelota tenía dos sombras)
+    this.shadow.visible = !quality.shadows;
     sc.add(this.shadow);
 
     this.hud = hud(() => ctx.input.queueAction(), () => {}, 'Toca el botón cuando la pelota llegue a ti', true);
-    this.hud.setObjective(T.hint);
+    this.hud.setObjective('🏐');
     this.updateHud();
     ctx.camera.position.set(-3.2, 2.7, -8.2);
     ctx.camera.lookAt(0, 1.3, 0.5);
@@ -193,7 +201,7 @@ class BeachMission implements Mission {
           this.launch(ME, GAS);
         } else {
           this.cool = 0.4;
-          toast(this.flight < 0.8 ? T.early : T.late);
+          comicWord(this.flight < 0.8 ? T.early : T.late, 'hit');
         }
       }
       if (this.flight >= 1 && !this.toMe) {
@@ -204,7 +212,7 @@ class BeachMission implements Mission {
         this.misses++;
         this.dropT = 0;
         audio.boo();
-        toast(T.miss);
+        comicWord(T.miss, 'hit');
         this.updateHud();
       }
     }
@@ -236,8 +244,8 @@ class BeachMission implements Mission {
   private finish() {
     this.endT = 0;
     this.hud.setAction(null);
-    toast(MINIS.voley.done(this.passes));
-    missionCard(MINIS.voley.title, '', true);
+    // (el resultado, en la tarjeta de misión cumplida: el toast no se ve)
+    missionCard(MINIS.voley.title, MINIS.voley.done(this.passes), true);
   }
 
   dispose() {

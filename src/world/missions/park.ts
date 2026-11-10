@@ -6,12 +6,15 @@ import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { MARGAUX_LOOK, MARC_LOOK } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, makeDog, animatePerson, type Person, type Dog } from '../../entities/models';
-import { hud, toast, missionCard, type Hud } from '../../ui/ui';
+import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
 import { disposeScene } from '../level';
 
 // Misión del capítulo 9 (octubre): Joy, campeona de agility. Primero, en el césped del parque, Gas da las
 // órdenes y Azul hace el gesto correcto (Joy obedece… o no); luego el circuito: Joy corre sola y hay que
 // decirle «¡salta!» en las vallas y los aros, pero no en los túneles (por ahí se pasa por dentro).
+// Con la receta del capítulo 1: cielo pintado, ambiente repartido como en Ferreries (× 0,35) y sol con su tope de
+// tebeo; hierba dibujada. Sin toast (no se ven): los fallos, onomatopeyas; las órdenes y el paso al circuito, en
+// el bocadillo de Gas; el resultado, en la tarjeta.
 
 type Kind = 'valla' | 'rueda' | 'tunel';
 const COURSE: Kind[] = ['valla', 'valla', 'rueda', 'tunel', 'valla', 'valla', 'rueda', 'valla', 'tunel', 'valla'];
@@ -54,11 +57,12 @@ class ParkMission implements Mission {
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
     const sunDir = new THREE.Vector3(0.5, 0.6, -0.4);
-    sc.fog = new THREE.Fog(0xd8e8f0, 40, 160);
-    this.sky = new Sky({ top: 0x4a86cc, mid: 0x9cc8ea, bottom: 0xe6f0f2, sun: { color: 0xfff0c8, dir: sunDir, size: 40 }, clouds: { count: 8, tint: 0xffffff } });
+    sc.fog = new THREE.Fog(0xcfe0ee, 60, 160);
+    this.sky = new Sky({ top: 0x2a6fd0, mid: 0x7fbdf2, bottom: 0xf6ead2, sun: { color: 0xfff4dc, dir: sunDir, size: 60 }, clouds: { count: 9, tint: 0xffffff } });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xdcecff, 0x5a7a3a, 0.9));
-    this.sun = new Sun(sc, 0xfff2d8, 2.0, sunDir, 26);
+    sc.userData.hemiScale = 0.35;
+    sc.add(new THREE.HemisphereLight(0xeaf2ff, 0x5a7a3a, 1.0));
+    this.sun = new Sun(sc, 0xfff1dc, 3.4, sunDir, 26);
     const grass = new THREE.Mesh(new THREE.PlaneGeometry(160, 80).rotateX(-Math.PI / 2), toon({ color: 0x6f9a48, surf: Surf.Grass }));
     grass.position.x = 30;
     grass.userData.noCast = true;
@@ -135,7 +139,7 @@ class ParkMission implements Mission {
     root.append(this.bar, this.bubble);
 
     this.hud = hud(() => ctx.input.queueAction(), () => {}, T.hint, true);
-    this.hud.setObjective(T.hint);
+    this.hud.setObjective('🐕');
     ctx.camera.position.set(4.2, 1.5, 3.6);
     ctx.camera.lookAt(0.5, 0.55, 0.7);
     this.order = Array.from({ length: 6 }, (_, i) => (i + Math.floor(Math.random() * 4)) % T.commands.length);
@@ -155,16 +159,22 @@ class ParkMission implements Mission {
     this.cmdT = 0;
     this.updateHud();
     if (this.cmd >= this.order.length) {
-      toast(MINIS.tricks.done(this.ok));
       this.startCourse();
+      // (lo dice Gas, en su bocadillo: «N trucos. Ahora, el circuito»)
+      this.say(MINIS.tricks.done(this.ok));
       return;
     }
     const c = MINIS.tricks.commands[this.order[this.cmd]];
-    this.bubble.textContent = `Gas: «¡${c.say}!»`;
+    this.say(`¡${c.say}!`);
+    audio.talk();
+  }
+
+  /** Lo que dice Gas, en su bocadillo de abajo. */
+  private say(text: string) {
+    this.bubble.textContent = `Gas: «${text}»`;
     this.bubble.classList.remove('pop');
     void this.bubble.offsetWidth;
     this.bubble.classList.add('pop');
-    audio.talk();
   }
 
   private answer(i: number) {
@@ -176,7 +186,7 @@ class ParkMission implements Mission {
       audio.pickup();
       vibrate(15);
     } else {
-      toast(MINIS.tricks.wrong);
+      comicWord(MINIS.tricks.wrong, 'hit');
       audio.boo();
     }
     this.cmdT = -1.3; // un momento para que se vea el truco antes de la siguiente orden
@@ -215,8 +225,7 @@ class ParkMission implements Mission {
   private startCourse() {
     this.phase = 'course';
     this.bar.remove();
-    this.bubble.textContent = MINIS.agility.hint;
-    this.hud.setObjective(MINIS.agility.hint);
+    this.hud.setObjective('🏁');
     this.joy.root.position.set(START_X, 0, 0);
     this.joy.root.rotation.set(0, Math.PI / 2, 0);
     missionCard(MINIS.agility.title, MINIS.agility.hint);
@@ -248,7 +257,7 @@ class ParkMission implements Mission {
         audio.pickup();
       } else {
         audio.boo();
-        toast(o.kind === 'tunel' ? MINIS.agility.overTunnel : MINIS.agility.knock);
+        comicWord(o.kind === 'tunel' ? MINIS.agility.overTunnel : MINIS.agility.knock, 'hit');
         if (o.bar) o.bar.rotation.x = 0.9; // la barra, tirada
       }
       this.updateHud();
@@ -260,8 +269,7 @@ class ParkMission implements Mission {
       this.phase = 'end';
       this.endT = 0;
       this.hud.setAction(null);
-      toast(MINIS.agility.done(this.hits));
-      missionCard(MINIS.agility.title, '', true);
+      missionCard(MINIS.agility.title, MINIS.agility.done(this.hits), true);
     }
   }
 
@@ -272,7 +280,7 @@ class ParkMission implements Mission {
     if (this.phase === 'tricks') {
       this.cmdT += dt;
       if (this.cmdT > 3.4) {
-        toast(MINIS.tricks.slow);
+        comicWord(MINIS.tricks.slow, 'luck');
         this.cmdT = 0;
         this.nextCmd();
       }

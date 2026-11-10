@@ -83,6 +83,30 @@ const KIDS: PersonLook[] = [
 ];
 const WET_NEED = 2;
 
+let warnTex: THREE.CanvasTexture | null = null;
+/** El «!» de tebeo de un crío que va a disparar (disco amarillo con su aro de tinta, como el de los burros). */
+function warnTexture() {
+  if (warnTex) return warnTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#ffd23f';
+  ctx.strokeStyle = '#2a1a2e';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(64, 64, 54, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#2a1a2e';
+  ctx.font = 'bold 92px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', 64, 70);
+  warnTex = new THREE.CanvasTexture(c);
+  warnTex.colorSpace = THREE.SRGBColorSpace;
+  return warnTex;
+}
+
 function toyGun(c: number) {
   return new Merger(false)
     .add(G.rbox, c, 0, 0, 0.05, 0, 0, 0, 0.05, 0.08, 0.2)
@@ -92,7 +116,7 @@ function toyGun(c: number) {
 }
 
 export class WaterFight {
-  private kids: { p: Person; st: SteerState; goal: THREE.Vector3; goalT: number; wet: number; fireT: number; warn: number; out: boolean; flinch: number }[] = [];
+  private kids: { p: Person; st: SteerState; goal: THREE.Vector3; goalT: number; wet: number; fireT: number; warn: number; out: boolean; flinch: number; alert: THREE.Sprite }[] = [];
   private drops: Droplets;
   private cool = 0;
   private armT = 0;
@@ -118,7 +142,13 @@ export class WaterFight {
       g.position.set(0, -0.05, 0.05);
       p.handR.add(g);
       sc.add(p.root);
-      this.kids.push({ p, st: {}, goal: p.root.position.clone(), goalT: 0, wet: 0, fireT: 1.6 + i * 0.7, warn: 0, out: false, flinch: 0 });
+      // (el aviso de que va a disparar: un «!» de tebeo encima de la cabeza; antes, el emoji del sistema)
+      const alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: warnTexture(), depthTest: false, transparent: true }));
+      alert.scale.setScalar(0.55);
+      alert.renderOrder = 5;
+      alert.visible = false;
+      sc.add(alert);
+      this.kids.push({ p, st: {}, goal: p.root.position.clone(), goalT: 0, wet: 0, fireT: 1.6 + i * 0.7, warn: 0, out: false, flinch: 0, alert });
     });
   }
 
@@ -173,14 +203,15 @@ export class WaterFight {
           if (k.out || k.p.root.position.distanceTo(moved) > 1.15) return;
           k.wet++;
           k.flinch = 0.5;
-          this.fx.burst(k.p.root.position.clone().setY(1), '💦', 5, 1.6, 0.8);
+          this.fx.burst(k.p.root.position.clone().setY(1), 'spray', 10, 1.6, 0.8);
           audio.pop();
           vibrate(18);
           if (k.wet >= WET_NEED) {
             k.out = true;
             this.out++;
-            toast(SIDE.water.out[Math.min(this.out - 1, SIDE.water.out.length - 1)]);
             audio.luck();
+            // (los toast no se ven en el cómic: la cuenta, como onomatopeya; el contador del HUD dice cuántos)
+            comicWord(SIDE.water.out[Math.min(this.out - 1, SIDE.water.out.length - 1)], 'splash');
             this.onChange();
             if (this.out >= KIDS.length) this.finish();
           }
@@ -212,6 +243,12 @@ export class WaterFight {
     for (const k of this.kids) {
       const r = k.p.root;
       k.flinch -= dt;
+      k.alert.visible = k.warn > 0 && !k.out && !busy;
+      if (k.alert.visible) {
+        k.p.head.getWorldPosition(k.alert.position);
+        k.alert.position.y += 0.55;
+        k.alert.scale.setScalar(0.5 + Math.abs(Math.sin(k.warn * 18)) * 0.12);
+      }
       if (k.out) {
         // Rendido: se aparta a un lado, celebrando que le han mojado
         animatePerson(k.p, dt, 'cheer');
@@ -248,10 +285,10 @@ export class WaterFight {
               if (Math.hypot(pp.x - land.x, pp.z - land.z) > 1) return;
               this.soaked++;
               this.walker.shake(0.22);
-              this.fx.burst(pp.clone().setY(1.5), '💦', 5, 1.6, 0.8);
+              this.fx.burst(pp.clone().setY(1.5), 'spray', 10, 1.6, 0.8);
               audio.hit();
               vibrate(40);
-              toast(SIDE.water.soaked);
+              comicWord(SIDE.water.soaked, 'splash');
             },
           });
           k.fireT = 2.4 + Math.random() * 2.4;
@@ -259,10 +296,7 @@ export class WaterFight {
         continue;
       }
       k.fireT -= dt;
-      if (k.fireT <= 0 && d < 8) {
-        k.warn = 0.65;
-        this.fx.burst(r.position.clone().setY(1.5), '❗', 1, 0.2, 0.6);
-      }
+      if (k.fireT <= 0 && d < 8) k.warn = 0.65;
       steerTo(r, k.st, k.goal.x, k.goal.z, 3.1, dt, this.people as never, 6, 0.26, undefined, this.colliders as Box2[]);
       animatePerson(k.p, dt, 'walk', 0.9);
     }
@@ -280,7 +314,10 @@ export class WaterFight {
   dispose() {
     this.drops.dispose();
     this.gun.removeFromParent();
-    for (const k of this.kids) k.p.root.removeFromParent();
+    for (const k of this.kids) {
+      k.p.root.removeFromParent();
+      k.alert.removeFromParent();
+    }
     this.kids.length = 0;
   }
 }
