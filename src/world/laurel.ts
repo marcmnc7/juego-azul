@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { Sky, Sun, glowTexture, toon } from '../core/gfx';
+import { Sky, Sun, toon } from '../core/gfx';
+import { comicBulbTexture } from '../core/comicTiles';
 import { TownHD } from './hd/townHD';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } from '../entities/models';
@@ -41,20 +42,27 @@ export class Laurel {
 
   constructor() {
     const sc = this.scene;
-    sc.fog = new THREE.Fog(0x1a1430, 22, 80);
-    this.sky = new Sky({ top: 0x0b1030, mid: 0x1b1f4a, bottom: 0x5a3050, stars: 700 });
+    sc.fog = new THREE.Fog(0x1a1430, 26, 90);
+    // La noche del cap. 2 (perfil noche, poco ambiente, luna azulada con sombras), con el suelo algo cálido: los
+    // bares están abiertos. Sin luces de punto: las lámparas solo se ven encendidas
+    sc.userData.comicLook = 'noche';
+    sc.userData.hemiScale = 0.32;
+    this.sky = new Sky({ top: 0x0b1030, mid: 0x1b1f4a, bottom: 0x3a2f5a, stars: 700 });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0xb0a8d8, 0x7a5a44, 1.05)); // (con el suelo cálido: de abajo llega la luz de los bares y las caras no se quedan grises)
-    new Sun(sc, 0xb0c0ff, 0.35, new THREE.Vector3(-0.3, 1, 0.3), 14);
+    sc.add(new THREE.HemisphereLight(0x7f84c8, 0x4a3a34, 1.1));
+    const moon = new Sun(sc, 0xb8c8ff, 2.0, new THREE.Vector3(-0.3, 1, 0.3), 14);
+    moon.light.shadow.normalBias = 0.16;
+    moon.light.shadow.bias = -0.0012;
 
     const m = new Merger();
     const L = 44;
     const W = 3.4; // media anchura de la calle
     const hd = new TownHD();
     // Suelo de losa, con su canal de agua en medio y los bordes de piedra
-    if (hd) hd.b.box(hd.M.slabs, [0, -0.05, 0], [W * 2, 0.1, L * 2], { tile: 2 });
+    // (las losas a la escala del cap. 1: 3,2 m por repetición)
+    if (hd) hd.b.box(hd.M.slabs, [0, -0.05, 0], [W * 2, 0.1, L * 2], { tile: 3.2 });
     else m.add(G.box, 0x6b6660, 0, -0.05, 0, 0, 0, 0, W * 2, 0.1, L * 2);
-    m.add(G.box, 0x4c4843, 0, 0.004, 0, 0, 0, 0, 0.22, 0.01, L * 2);
+    m.add(G.box, 0x625d56, 0, 0.004, 0, 0, 0, 0, 0.22, 0.01, L * 2);
     for (const s of [-1, 1]) m.add(G.box, 0x8a8378, s * (W - 0.17), 0.018, 0, 0, 0, 0, 0.34, 0.04, L * 2);
 
     const signs: { name: string; x: number; z: number; s: number; board: string }[] = [];
@@ -166,14 +174,16 @@ export class Laurel {
     }
 
     // Guirnaldas cruzando la calle, con su cable
-    const bulb = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd38a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    // (bombillas de tebeo: un círculo de color con su aro de tinta; antes, halos aditivos)
+    const bulb = new THREE.SpriteMaterial({ map: comicBulbTexture(), color: 0xffd38a, alphaTest: 0.5 });
+    bulb.userData.comicGlow = true;
     const cable = new Merger(false);
     for (let z = -36; z <= 36; z += 6) {
       for (let k = 0; k <= 10; k++) {
         const b = new THREE.Sprite(bulb);
         const u = k / 10;
         b.position.set(-W + u * W * 2, 5.2 - Math.sin(u * Math.PI) * 0.8, z);
-        b.scale.setScalar(0.3);
+        b.scale.setScalar(0.16);
         sc.add(b);
         if (k < 10) {
           const u2 = (k + 1) / 10;
@@ -185,11 +195,6 @@ export class Laurel {
     const cm = cable.mesh();
     cm.userData.noCast = true;
     sc.add(cm);
-    for (const z of [-12, 0, 12]) {
-      const l = new THREE.PointLight(0xffb878, 26, 22, 1.5);
-      l.position.set(0, 4.4, z);
-      sc.add(l);
-    }
 
     // La gente, con su vaso: unos bailan y otros hablan
     const glass = new THREE.CylinderGeometry(0.035, 0.03, 0.12, 8);
@@ -213,6 +218,18 @@ export class Laurel {
     this.azul.root.rotation.y = Math.PI / 2;
     this.gas.root.rotation.y = -Math.PI / 2;
     sc.add(this.azul.root, this.gas.root);
+  }
+
+  /** Quita la barra de pinchos a medias (al saltar de fase en el modo prueba: sus botones se quedaban en pantalla). */
+  stopPinchos() {
+    this.pinchos?.dispose();
+    this.pinchos = null;
+  }
+
+  /** Cabeza del camarero de los pinchos (de ahí salen sus bocadillos), o null si no está sirviendo. */
+  waiterHead() {
+    const w = this.pinchos?.waiter;
+    return w ? (w.rig?.bones.get('Head') ?? w.head).getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.3, 0)) : null;
   }
 
   /** Plano medio de los dos. */

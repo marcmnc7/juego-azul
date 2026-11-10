@@ -135,11 +135,15 @@ export interface SkyOptions {
 }
 
 /** Cúpula de cielo con degradado, sol con halo, nubes de tebeo y estrellas. Sigue a la cámara. */
+const STORM_CLOUD = new THREE.Color(0x7a828c);
+
 export class Sky {
   group = new THREE.Group();
   private colors: THREE.BufferAttribute;
   private ys: Float32Array;
   private clouds: THREE.Sprite[] = [];
+  private sunSprite: THREE.Sprite | null = null;
+  private overcastK = 0;
 
   constructor(opts: SkyOptions) {
     const geo = new THREE.SphereGeometry(420, 32, 16);
@@ -165,6 +169,7 @@ export class Sky {
       s.scale.setScalar(opts.sun.size ?? 120);
       s.renderOrder = -9;
       this.group.add(s);
+      this.sunSprite = s;
     }
     if (opts.clouds) {
       // Nubes de tebeo con su contorno: opacas, bajas y no muy grandes (una nube enorme encima del pueblo pesa mucho)
@@ -186,6 +191,7 @@ export class Sky {
         sp.renderOrder = -8;
         sp.userData.a = a;
         sp.userData.r = r;
+        sp.userData.tint = new THREE.Color(opts.clouds.tint);
         this.clouds.push(sp);
         this.group.add(sp);
       }
@@ -218,6 +224,20 @@ export class Sky {
       this.colors.setXYZ(i, c.r, c.g, c.b);
     }
     this.colors.needsUpdate = true;
+  }
+
+  /**
+   * Nublado: 0 despejado, 1 tormenta. El sol se apaga y las nubes se vuelven grises (en la tromba del cap. 3 seguían
+   * el sol y las nubes blancas de un día de verano).
+   */
+  overcast(k: number) {
+    if (Math.abs(k - this.overcastK) < 0.01) return;
+    this.overcastK = k;
+    if (this.sunSprite) {
+      this.sunSprite.material.opacity = 1 - k;
+      this.sunSprite.visible = k < 0.98;
+    }
+    for (const s of this.clouds) s.material.color.copy(s.userData.tint as THREE.Color).lerp(STORM_CLOUD, k * 0.8);
   }
 
   update(cam: THREE.Camera, dt: number) {

@@ -157,7 +157,7 @@ export const ROAD = {
   /** Una vaca en mitad de la carretera: se para, se la saluda y se le pregunta el camino. */
   cowHint: '🐄 ¡Una vaca! Frena',
   cowBtn: '🐄 Saludar a la vaca',
-  cowMissed: '🛑 ¡Frena, frena, que es una vaca!',
+  cowMissed: '¡Frena, frena, que es una vaca! 🛑',
   cows: [
     [
       { who: 'Margaux', text: 'Hola, vaca. ¿Hacia dónde vamos?' },
@@ -209,16 +209,17 @@ export const ROAD = {
   ] as Line[],
   arriveLogrono: [{ who: 'Narrador', text: 'Logroño. Calle Laurel. Vais de fiesta.' }] as Line[],
   logronoEnd: [{ who: 'Narrador', text: '3 de noviembre. Él ya va en el primer tren a Barcelona.' }] as Line[],
-  hit: ['¡Buu!', '¡Buu! Cuidado', '¡Buu buu!', 'Marc: «Como negocias, eh»'],
-  smoke: ['Marc: «¿Otra vez?» 🚭', 'Marc: «Eso no es una foto, es un paquete de tabaco…» 🚭', 'Marc: «Te lo requiso. Por tu bien.» 🚭'],
-  turbo: '¡Gasolina de 98 octanos! ⛽ Turbo',
-  nearMiss: '¡Por los pelos! +1 📸',
-  combo: (n: number) => `¡Racha de ${n} fotos! 📸`,
+  hit: ['¡BUU!', '¡PUMBA!', '¡BUU BUU!'],
+  hitLine: 'Como negocias, eh',
+  smoke: ['¿Otra vez? 🚭', 'Eso no es una foto, es un paquete de tabaco… 🚭', 'Te lo requiso. Por tu bien. 🚭'],
+  turbo: '¡TURBO!',
+  nearMiss: '¡POR LOS PELOS!',
+  combo: (n: number) => `¡${n} FOTOS!`,
   stops: ['Madrid', 'San Vicente', 'Logroño'],
   /** «Si da lluvia, coshe»: la tromba de Cantabria. */
-  storm: '🌧️ Tromba. Se ve fatal y el coche patina',
-  stormOff: '🌤️ Ya escampa',
-  zamb: { served: '¡Al plato! Déjalo 😋', burnt: '¡Buu! Quemada', raw: 'Todavía está cruda' },
+  storm: 'Madre mía, qué tromba. No veo nada…',
+  stormOff: 'Ya escampa ☀️',
+  zamb: { served: '¡AL PLATO!', burnt: '¡QUEMADA!', raw: 'Todavía está cruda', rule: 'Cuando estén doraditas, al plato. Ni antes ni después.' },
 };
 
 export const CONCERT = {
@@ -673,10 +674,11 @@ export const SIDE = {
       { who: 'Camarero', text: '¡Va, que hay cola! Te canto la ronda y me la sacas en orden.' },
       { who: 'Gas', text: 'Si aciertas, la siguiente la pago yo.' },
     ] as Line[],
-    listen: (r: number, of: number) => `Ronda ${r} de ${of}: escucha al camarero…`,
-    yourTurn: (i: number, n: number) => `Sírvelos en el mismo orden (${i}/${n})`,
-    wrong: ['«Ese no era, majo.» Otra vez', '«Pero bueno.» Otra vez', '«Que no, que no.» Otra vez'],
-    good: '¡Esa ronda, bien!',
+    listen: (r: number, of: number) => `🍢 ${r}/${of}`,
+    yourTurn: (i: number, n: number) => `👉 ${i}/${n}`,
+    /** Lo dice el camarero, en su bocadillo (y vuelve a cantar la ronda). */
+    wrong: ['Ese no era, majo. Otra vez.', 'Pero bueno… Otra vez.', 'Que no, que no. Otra vez.'],
+    good: '¡RONDA!',
     won: '¡Todas servidas! 🍢',
     end: [{ who: 'Camarero', text: 'Con este ritmo te contrato. ¡Hala, a bailar!' }] as Line[],
   },

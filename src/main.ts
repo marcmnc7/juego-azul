@@ -175,11 +175,13 @@ setSpeakerResolver((who) => {
   const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
   if (!L) return null;
   // El nivel puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
-  const hook = (level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null }).speakerPoint?.(who);
+  // (y hacia qué lado se abre el globo: en un coche, cada uno desde su asiento)
+  const lv = level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined };
+  const hook = lv.speakerPoint?.(who);
   if (hook) {
     _head.copy(hook).project(camera);
     if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
-    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight };
+    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight, side: lv.speakerSide?.(who) };
   }
   for (const f of SPEAKERS[who] ?? []) {
     const p = L[f];
@@ -608,9 +610,13 @@ function frame() {
     }
     // Lo que aparece a mitad de capítulo (escenas nuevas, gente que llega) también se pasa a cómic
     if (sc !== comicScened || clock.elapsedTime - comicAt > 1) {
+      const switched = sc !== comicScened;
       comicScened = sc;
       comicAt = clock.elapsedTime;
       comicScene(sc);
+      // Al volver a una escena ya convertida (del camping de noche a la carretera de día), su perfil otra vez: si no,
+      // se quedaba el de la última escena (ventanas «encendidas» a pleno sol)
+      if (switched && sc.userData.comicHemi && !mission) comicMood(sc, (sc.userData.comicLook as ComicLook | undefined) ?? comic.look);
     }
     draw(sc);
     if (shotReq) {

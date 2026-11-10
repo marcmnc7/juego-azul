@@ -6,9 +6,9 @@ import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, wood
 import { ROOF_GEO } from './ferreries';
 import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
-import { Sky, Sun, toon, vibrate, applyShadows, makeSea } from '../core/gfx';
+import { Sky, Sun, toon, vibrate, applyShadows, makeSea, paintMat } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, toast, fadeFlash, Hud, DebugItem, later, phoneChat } from '../ui/ui';
+import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
@@ -225,8 +225,10 @@ export class Level2 implements Level {
   private scatters: Scatter[] = [];
   private ground: THREE.Mesh;
   private road: THREE.Mesh;
-  private roadTex: THREE.Texture;
-  private groundTex: THREE.Texture;
+  private edges: THREE.Mesh;
+  private dashes: THREE.Mesh;
+  /** Las líneas de velocidad del tebeo: solo con el turbo (a 26 m/s salían todo el viaje). */
+  private lineK = 0;
   private sea: THREE.Mesh;
   private sky: THREE.Color;
   private skyTop: THREE.Color;
@@ -290,52 +292,34 @@ export class Level2 implements Level {
     });
     sc.add(this.skyDome.group);
     sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.6));
-    this.sun = new Sun(sc, 0xfff1d6, 2.3, new THREE.Vector3(0.5, 1, 0.4), 26);
+    this.sun = new Sun(sc, 0xfff1d6, 2.1, new THREE.Vector3(0.5, 1, 0.4), 26);
 
-    // Manchas grandes y suaves (hierba más verde, tierra más clara, rodadas): el detalle fino lo pone
-    // la textura de superficie (hierba o tierra) que se proyecta encima
-    this.groundTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#e8e8e8';
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 70; i++) {
-        const x = Math.random() * w, y = Math.random() * h, r = 12 + Math.random() * 46;
-        const v = Math.random() < 0.5 ? 180 + Math.random() * 40 : 245 + Math.random() * 10;
-        for (const ox of [-w, 0, w])
-          for (const oy of [-h, 0, h]) {
-            const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-            g.addColorStop(0, `rgba(${v},${v},${v},0.55)`);
-            g.addColorStop(1, `rgba(${v},${v},${v},0)`);
-            ctx.fillStyle = g;
-            ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-          }
-      }
-    });
-    this.groundTex.wrapS = this.groundTex.wrapT = THREE.RepeatWrapping;
-    this.groundTex.repeat.set(5, 5);
+    // El campo: color de la región y el dibujo de hierba o tierra (en coordenadas del mundo: pasa bajo el coche
+    // aunque la malla le siga). Antes llevaba un lienzo de manchas que, pasado a tebeo, viajaba con el coche.
     const gg = new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2);
     gg.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(gg.attributes.position.count).fill(Surf.Grass), 1));
-    this.ground = new THREE.Mesh(gg, toon({ map: this.groundTex, color: REGION_STYLE.madrid.ground }));
+    this.ground = new THREE.Mesh(gg, toon({ color: REGION_STYLE.madrid.ground }));
     sc.add(this.ground);
 
-    this.roadTex = canvasTex((ctx, w, h) => {
-      ctx.fillStyle = '#4a4a50';
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 300; i++) {
-        ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.06})`;
-        ctx.fillRect(Math.random() * w, Math.random() * h, 3, 3);
-      }
-      ctx.fillStyle = '#f2f2f2';
-      ctx.fillRect(6, 0, 8, h);
-      ctx.fillRect(w - 14, 0, 8, h);
-      ctx.fillRect(w / 3 - 3, 0, 6, h / 2);
-      ctx.fillRect((2 * w) / 3 - 3, 0, 6, h / 2);
-    });
-    this.roadTex.wrapS = this.roadTex.wrapT = THREE.RepeatWrapping;
-    this.roadTex.repeat.set(1, 400 / 8);
-    this.road = new THREE.Mesh(new THREE.PlaneGeometry(9, 400).rotateX(-Math.PI / 2), toon({ map: this.roadTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    // La carretera: asfalto dibujado (también en coordenadas del mundo) y la pintura plana encima, como en el cap. 2.
+    // Las líneas de borde son continuas (siguen al coche); las discontinuas de los carriles van fijas en el suelo y
+    // la malla salta de 12 en 12 m, así se ven pasar. Antes era un lienzo con las líneas que, pasado a tebeo, salían
+    // negras y quietas respecto al coche: no había sensación de avance.
+    const rg = new THREE.PlaneGeometry(9, 400).rotateX(-Math.PI / 2);
+    rg.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(rg.attributes.position.count).fill(Surf.Asphalt), 1));
+    this.road = new THREE.Mesh(rg, toon({ color: 0x4a4a50, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     this.road.position.y = 0.02;
-    this.ground.userData.noCast = this.road.userData.noCast = true;
     sc.add(this.road);
+    const edges = new Merger();
+    for (const sx of [-1, 1]) edges.add(G.box, 0xf2f2ec, sx * 4.15, 0.025, 0, 0, 0, 0, 0.16, 0.001, 400);
+    this.edges = new THREE.Mesh(edges.build(), paintMat(2));
+    sc.add(this.edges);
+    const dashes = new Merger();
+    // (autovía: trazo de 3,5 m y hueco de 8,5; entre los tres carriles)
+    for (let i = 0; i < 22; i++) for (const x of [-1.3, 1.3]) dashes.add(G.box, 0xf2f2ec, x, 0.025, i * 12, 0, 0, 0, 0.14, 0.001, 3.5);
+    this.dashes = new THREE.Mesh(dashes.build(), paintMat(2));
+    sc.add(this.dashes);
+    this.ground.userData.noCast = this.road.userData.noCast = this.edges.userData.noCast = this.dashes.userData.noCast = true;
 
     this.sea = makeSea([300, 400], 0x175f86, new THREE.Vector3(0.3, 1, 0.4));
     this.sea.position.set(170, 0.05, 0);
@@ -357,19 +341,26 @@ export class Level2 implements Level {
     sc.add(this.grill);
 
     this.logSign = makeSign(['LOGROÑO', 'Calle Laurel ↗'], '#7a1f3d');
-    this.logSign.position.set(8, 0, LEG1 + 40 + LEG2 + 2);
+    this.logSign.position.set(-8, 0, LEG1 + 40 + LEG2 + 2);
     sc.add(this.logSign);
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
-    sv.position.set(6, 0, LEG1 - 20);
+    sv.position.set(-6, 0, LEG1 - 20);
     sc.add(sv);
     for (const e of EATERIES) {
       const r = this.buildEatery(e.name, !!e.m);
       r.position.set(0, 0, e.z);
       sc.add(r);
     }
+    // (las señales, a la derecha, como en España)
     const a1 = makeSign(['A-1 Burgos', 'Santander 390'], '#1f5fbf');
-    a1.position.set(6, 0, 80);
+    a1.position.set(-6, 0, 80);
     sc.add(a1);
+    // Al cambiar de comunidad, su cartel (antes lo decía un aviso de texto que ni se veía)
+    for (const [z, name] of [[420, 'CASTILLA Y LEÓN'], [1000, 'CANTABRIA'], [LEG1 + 70, 'LA RIOJA']] as const) {
+      const b = makeSign([name], '#1f4fa8');
+      b.position.set(-6, 0, z);
+      sc.add(b);
+    }
 
     this.hud = hud(() => this.input.queueAction(), onMenu, 'Desliza o toca ◀ ▶ para cambiar de carril');
     this.makeLaneButtons();
@@ -397,6 +388,8 @@ export class Level2 implements Level {
           dialogue(ROAD.introTrain, () =>
             phoneChat([CHATS.muyJusto, CHATS.helado, CHATS.aparcao], () =>
               dialogue(ROAD.introGo, () => {
+                // (si en el modo prueba ya se ha saltado a otra fase, no volver a la salida de Madrid)
+                if (this.phase !== 'intro') return;
                 this.phase = 'drive1';
                 this.updateHud();
               }),
@@ -600,13 +593,26 @@ export class Level2 implements Level {
       .add(G.cyl, 0x1a1a1a, -0.8, 0.8, -0.6, 0, 0, Math.PI / 2, 1.6, 0.5, 1.6)
       .add(G.cyl, 0x1a1a1a, 0.8, 0.8, -0.6, 0, 0, Math.PI / 2, 1.6, 0.5, 1.6)
       .build();
-    const barrel = new Merger().add(G.cyl, 0x8a5a36, 0, 0.6, 0, 0, 0, 0, 1, 1.2, 1).add(G.cyl, 0x333333, 0, 0.3, 0, 0, 0, 0, 1.03, 0.08, 1.03).add(G.cyl, 0x333333, 0, 0.9, 0, 0, 0, 0, 1.03, 0.08, 1.03).build();
+    // Camión de la autovía (en la A-1 no hay tractores): cabina, caja y ruedas gemelas
+    const truck = new Merger()
+      .add(G.rbox, 0xe9e9ec, 0, 1.55, 2.6, 0, 0, 0, 2.4, 2.3, 1.9)
+      .add(G.box, 0x2b3a48, 0, 2.05, 3.56, -0.08, 0, 0, 2.1, 0.9, 0.04)
+      .add(G.box, 0x9a2a2a, 0, 2.2, -1.6, 0, 0, 0, 2.5, 2.9, 6.6)
+      .add(G.box, 0xf2f2ec, 0, 2.2, -1.6, 0, 0, 0, 2.52, 0.5, 6.4)
+      .add(G.box, 0x2a2a2e, 0, 0.55, -1.2, 0, 0, 0, 2.3, 0.3, 8.4)
+      .add(G.rbox, 0xd0202a, -0.95, 0.85, -4.92, 0, 0, 0, 0.34, 0.16, 0.04)
+      .add(G.rbox, 0xd0202a, 0.95, 0.85, -4.92, 0, 0, 0, 0.34, 0.16, 0.04)
+      .add(G.box, 0xf4f4f0, 0, 0.7, -4.93, 0, 0, 0, 0.52, 0.12, 0.02);
+    for (const z of [2.7, -2.8, -4.0]) for (const sx of [-1, 1]) truck.add(G.cyl, 0x151515, sx * 1.05, 0.5, z, 0, 0, Math.PI / 2, 1.0, 0.4, 1.0);
+    const truckGeo = truck.build();
     // speed > 0: va en nuestro sentido, más lento que nosotros
     return {
       madrid: [{ geo: cone, speed: 0 }, { geo: otherCar(0x2f4f86, 'sedan'), speed: 10 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }, { geo: otherCar(0x9a9ea6, 'hatch'), speed: 12 }],
-      meseta: [{ geo: otherCar(0x1d1f24, 'suv'), speed: 11 }, { geo: tractor, speed: 5 }, { geo: cone, speed: 0 }, { geo: otherCar(0xc8c2b4, 'sedan'), speed: 12 }],
+      // (en la autovía, camiones; los tractores, en las carreteras de Cantabria y La Rioja)
+      meseta: [{ geo: otherCar(0x1d1f24, 'suv'), speed: 11 }, { geo: truckGeo, speed: 7 }, { geo: cone, speed: 0 }, { geo: otherCar(0xc8c2b4, 'sedan'), speed: 12 }],
       cantabria: [{ geo: tractor, speed: 5 }, { geo: otherCar(0x3d5a4a, 'suv'), speed: 10 }, { geo: otherCar(0xf2f2f2, 'hatch'), speed: 11 }],
-      rioja: [{ geo: barrel, speed: 0 }, { geo: otherCar(0x6e1a2e, 'sedan'), speed: 11 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }],
+      // (antes, un barril de vino plantado en mitad de la carretera)
+      rioja: [{ geo: tractor, speed: 5 }, { geo: otherCar(0x6e1a2e, 'sedan'), speed: 11 }, { geo: otherCar(0xe9e9ec, 'van'), speed: 9 }],
     };
   }
 
@@ -754,14 +760,14 @@ export class Level2 implements Level {
     if (drive) {
       const total = this.phase === 'drive1' ? LEG1 : LEG2;
       const left = Math.max(0, Math.round((total - this.dist) / 10));
-      h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} a ${left} km`);
+      h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} · ${left} km`);
       h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
     } else if (this.phase === 'terrace') {
       this.showLaneButtons(false);
-      h.setObjective('Cómete una zamburiña en la terraza');
+      h.setObjective('🐚');
       h.setCounters('');
     } else if (this.phase === 'grill') {
-      h.setObjective('Toca cada zamburiña cuando esté dorada');
+      h.setObjective('🔥');
       h.setCounters(`<span class="chip">🐚 ${this.served}/${NEED_ZAMB}</span>`);
     } else {
       h.setObjective('Madrid → San Vicente → Logroño');
@@ -815,6 +821,8 @@ export class Level2 implements Level {
       const d = defs[Math.floor(Math.random() * defs.length)];
       const o = new THREE.Mesh(d.geo, vertexMat());
       o.castShadow = true;
+      // (la geometría es la misma para todos los de su tipo: si el tebeo la doblara, se doblaría otra vez con cada uno)
+      o.userData.comicBent = d.geo.userData.comicBent = true;
       o.position.set(LANES[lanes[0]], 0, z);
       this.scene.add(o);
       this.things.push({ obj: o, kind: 'obstacle', lane: lanes[0], z, speed: d.speed, alive: true });
@@ -849,12 +857,12 @@ export class Level2 implements Level {
     this.wet += (want - this.wet) * Math.min(1, dt * 1.5);
     if (drive && this.stormSaid === 0 && want > 0.3) {
       this.stormSaid = 1;
-      toast(ROAD.storm);
+      bark('Margaux', ROAD.storm, 'l');
       audio.warn();
       vibrate(40);
     } else if (drive && this.stormSaid === 1 && z > STORM_Z1 - 10) {
       this.stormSaid = 2;
-      toast(ROAD.stormOff);
+      bark(this.him(), ROAD.stormOff, 'r');
     }
     if (this.wet > 0.004 || this.rain?.visible) {
       if (!this.rain) {
@@ -891,7 +899,11 @@ export class Level2 implements Level {
       fog.near = 60 - 46 * this.wet;
       fog.far = 190 - 128 * this.wet;
     }
-    this.sun.light.intensity = 2.3 * (1 - 0.6 * this.wet);
+    // (el tope del sol de tebeo es 2,1: antes se reescribía a 2,3 cada fotograma y quemaba)
+    this.sun.light.intensity = 2.1 * (1 - 0.6 * this.wet);
+    this.skyDome.overcast(this.wet);
+    // Los Picos van sin niebla (si no, de lejos desaparecen): en plena tromba, que no se vean
+    if (this.phase === 'drive1' || this.phase === 'cow') this.scatters[7].mesh.visible = this.wet < 0.35;
   }
 
   update(dt: number) {
@@ -958,9 +970,10 @@ export class Level2 implements Level {
 
     // Mundo que sigue al coche
     this.ground.position.z = this.carZ;
-    this.groundTex.offset.y = -this.carZ / 20;
-    this.road.position.z = this.carZ + 100;
-    this.roadTex.offset.y = (this.carZ + 100) / 8;
+    this.road.position.z = this.edges.position.z = this.carZ + 100;
+    this.dashes.position.z = Math.floor((this.carZ - 30) / 12) * 12;
+    this.lineK += ((turbo ? 1 : 0) - this.lineK) * Math.min(1, dt * 3);
+    this.scene.userData.speedLines = this.lineK;
     this.sea.position.z = this.carZ;
     this.sun.follow(this.car.root.position);
     for (const s of this.scatters) s.update(this.carZ, this.scatterAt);
@@ -977,7 +990,6 @@ export class Level2 implements Level {
     const reg = this.regionAt(this.carZ + 30);
     if (reg !== this.region) {
       this.region = reg;
-      if (drive) toast(ROAD.regions[reg]);
     }
     const st = REGION_STYLE[this.region];
     const k = Math.min(1, dt * 0.8);
@@ -1035,7 +1047,7 @@ export class Level2 implements Level {
           audio.pickup();
           this.fx.burst(at, '✨', 4, 1.5);
           if (this.combo % 5 === 0) {
-            toast(ROAD.combo(this.combo));
+            comicWord(ROAD.combo(this.combo), 'fanfare');
             audio.fanfare();
             this.fx.burst(at, '📸', 5, 1.8);
           }
@@ -1044,12 +1056,12 @@ export class Level2 implements Level {
           audio.whoosh();
           audio.perfect();
           vibrate(30);
-          toast(ROAD.turbo);
+          comicWord(ROAD.turbo, 'perfect');
           this.fx.burst(at, '⚡', 6, 2);
         } else if (th.kind === 'smoke') {
           this.photos = Math.max(0, this.photos - 1);
           audio.boo();
-          toast(ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)]);
+          bark(this.him(), ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)], 'r');
           this.fx.burst(at, '💨', 5, 1.5);
         } else if (this.hitT <= 0) {
           this.hitT = 1.2;
@@ -1062,7 +1074,8 @@ export class Level2 implements Level {
           audio.boo();
           vibrate(120);
           this.fx.burst(at, '💥', 4, 1.6);
-          toast(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)]);
+          comicWord(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)], 'hit');
+          if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'r'), 500);
         }
         this.updateHud();
       } else if (drive && th.kind === 'obstacle' && !th.passed && th.z < this.carZ - 2.5) {
@@ -1072,7 +1085,7 @@ export class Level2 implements Level {
           this.nearMisses++;
           this.photos++;
           audio.whoosh();
-          toast(ROAD.nearMiss);
+          comicWord(ROAD.nearMiss, 'luck');
           this.updateHud();
         }
       }
@@ -1123,6 +1136,27 @@ export class Level2 implements Level {
     this.input.enabled = false;
     window.addEventListener('pointerdown', this.onTap);
     this.updateHud();
+    // (la regla, en boca de él y no en el objetivo)
+    later(() => this.phase === 'grill' && bark(this.him(), ROAD.zamb.rule), 700);
+  }
+
+  /** Antes de la noche del camping todavía es Marc; desde entonces, Gas. */
+  private him() {
+    return this.campDone ? 'Gas' : 'Marc';
+  }
+
+  /** De dónde salen los bocadillos en el coche: ella conduce (asiento izquierdo) y él va al lado. */
+  speakerPoint(who: string) {
+    if (who === 'Camarero' && this.phase === 'logrono') return this.laurel?.waiterHead() ?? null;
+    if (!['drive1', 'drive2', 'cow', 'marcial'].includes(this.phase)) return null;
+    const her = who === 'Margaux' || who === 'Azul';
+    if (!her && !['Gas', 'Marc'].includes(who)) return null;
+    return this.car.body.localToWorld(new THREE.Vector3(her ? 0.4 : -0.4, 1.6, -0.25));
+  }
+
+  speakerSide(who: string): 'l' | 'r' | undefined {
+    if (who === 'Camarero') return undefined;
+    return who === 'Margaux' || who === 'Azul' ? 'l' : 'r';
   }
 
   private tapGrill(e: PointerEvent) {
@@ -1149,14 +1183,14 @@ export class Level2 implements Level {
     if (s.p >= 0.62 && s.p <= 1) {
       this.served++;
       audio.pickup();
-      toast(ROAD.zamb.served);
+      comicWord(ROAD.zamb.served, 'perfect');
       s.p = 0;
       s.wait = 0.6;
       s.speed = 0.18 + Math.random() * 0.12;
       this.updateHud();
       if (this.served >= NEED_ZAMB) this.finishGrill();
     } else if (s.p < 0.62) {
-      toast(ROAD.zamb.raw);
+      bark(this.him(), ROAD.zamb.raw);
     }
   }
 
@@ -1217,12 +1251,12 @@ export class Level2 implements Level {
       this.scene.add(this.roadCow.root);
     }
     if (d < COW_BRAKE) {
-      toast(ROAD.cowMissed);
+      bark(this.him(), ROAD.cowMissed, 'r');
       this.photos = Math.max(0, this.photos - 1);
       audio.boo();
       this.stopForCow();
     } else if (d < COW_NEAR) {
-      this.hud.setAction(ROAD.cowBtn, true);
+      this.hud.setAction(ROAD.cowBtn, false);
       if (acted) this.stopForCow();
     }
   }
@@ -1281,7 +1315,7 @@ export class Level2 implements Level {
         audio.startMusic('night');
         this.camp.startWalk(this.camera);
         this.input.reset();
-        this.hud.setObjective('Entra en la cabaña de leña');
+        this.hud.setObjective('🏕️');
         this.hud.setCounters('');
         dialogue([night], () => {
           this.busy = false;
@@ -1364,7 +1398,8 @@ export class Level2 implements Level {
           dialogue(ROAD.arriveLogrono, () => {
             // Antes de bailar, una ronda en la barra: sin servirla bien no se sigue
             cinema.stop();
-            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 2.25, -15.7), look: new THREE.Vector3(0, 1.02, -19.5), fov: 44 }]);
+            // (desde más arriba: más abajo, el frente de la barra tapaba media pantalla)
+            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 3.0, -17.6), look: new THREE.Vector3(0, 1.0, -19.5), fov: 48 }]);
             dialogue(SIDE.pinchos.intro, () =>
               l.startPinchos(() => {
                 cinema.stop();
@@ -1481,10 +1516,15 @@ export class Level2 implements Level {
     }
     m.add(G.box, 0x4a4a50, 7, 0.025, 0, 0, 0, 0, 5.8, 0.03, 14);
     for (let z = -6; z <= 6; z += 3) m.add(G.box, 0xdcd8cc, 7, 0.045, z, 0, 0, 0, 5, 0.006, 0.1);
-    g.add(m.mesh());
-    hd?.finish(g);
+    // Se conduce por la derecha: el restaurante, a la derecha de la carretera (x negativa), que es hacia donde se
+    // aparta el coche para parar. Se construye a la izquierda y se refleja (el rótulo, aparte, para no leerlo al revés)
+    const body = new THREE.Group();
+    body.scale.x = -1;
+    body.add(m.mesh());
+    hd?.finish(body);
+    g.add(body);
     const sign = makeSign(isM ? ['CAFETERÍA', 'MARCIAL'] : name.split(' ').length > 2 ? [name.split(' ')[0], name.split(' ').slice(1).join(' ')] : [name], isM ? '#b8322a' : '#5a4632');
-    sign.position.set(6.2, 0, -6);
+    sign.position.set(-6.2, 0, -6);
     g.add(sign);
     return g;
   }
@@ -1493,20 +1533,21 @@ export class Level2 implements Level {
   private updateEateries(acted: boolean) {
     const near = EATERIES.find((e) => e.z - this.carZ < 55 && e.z - this.carZ > -4);
     if (near && !this.eateryTried.has(near.name)) {
-      this.hud.setAction(`🍴 ¡Parar en ${near.name}!`, !!near.m);
+      // (sin parpadear en el de la M: era chivarse del juego)
+      this.hud.setAction(`🍴 ¡Parar en ${near.name}!`, false);
       if (acted) {
         this.eateryTried.add(near.name);
         if (near.m) this.stopMarcial();
         else {
           audio.boo();
-          toast(ROAD.notM(near.name));
+          bark(this.him(), ROAD.notM(near.name), 'r');
           this.hud.setAction(null);
         }
       }
     } else this.hud.setAction(null);
     // Si se pasa de largo, Gas frena igualmente: es la primera con M
     if (!this.marcialDone && this.carZ > MARCIAL_Z + 6) {
-      toast(ROAD.missedM);
+      bark(this.him(), ROAD.missedM, 'r');
       this.stopMarcial();
     }
   }
@@ -1567,7 +1608,7 @@ export class Level2 implements Level {
       if (s.p > 1.35) {
         audio.boo();
         this.burnt++;
-        toast(ROAD.zamb.burnt);
+        comicWord(ROAD.zamb.burnt, 'hit');
         s.p = 0;
         s.wait = 0.8;
       }
@@ -1609,6 +1650,7 @@ export class Level2 implements Level {
       this.dropCow();
       window.removeEventListener('pointerdown', this.onTap);
       this.input.enabled = true;
+      this.laurel?.stopPinchos();
     };
     return [
       {

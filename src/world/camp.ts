@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Surf } from '../core/surfaces';
 import { audio } from '../core/audio';
 import { Sky, Sun, glowTexture, toon } from '../core/gfx';
+import { Lost } from '../core/lost';
 import { MARGAUX_LOOK, MARC_LOOK } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { makeCarHD } from '../entities/vehiclesHD';
@@ -24,9 +25,9 @@ export class Camp {
   private fx: Particles;
   readonly azul: Person;
   readonly gas: Person;
-  private lamp: THREE.PointLight;
   private glow: THREE.Sprite;
   private t = 0;
+  private lost = new Lost();
   private colliders: Box2[] = [];
   private door!: Door;
   private walker: Walker | null = null;
@@ -44,18 +45,23 @@ export class Camp {
 
   constructor() {
     const sc = this.scene;
-    sc.fog = new THREE.Fog(0x1a2347, 25, 120);
+    sc.fog = new THREE.Fog(0x1a2347, 30, 130);
+    // La noche del cap. 2: se ve de noche, pero sin oscuridad exagerada (luna azulada con sombras, poco ambiente)
+    sc.userData.comicLook = 'noche';
+    sc.userData.hemiScale = 0.32;
     this.colliders.push({ minX: -0.55, maxX: 0.55, minZ: -0.36, maxZ: 0.36 }); // la mesa
-    // Noche de octubre: estrellas y, al fondo, el último resplandor en el horizonte
-    this.sky = new Sky({ top: 0x1a2f72, mid: 0x34509a, bottom: 0x9a7090, stars: 2200 });
+    // Noche de finales de octubre: a la hora de cenar ya no queda resplandor en el horizonte, solo estrellas
+    this.sky = new Sky({ top: 0x0a1440, mid: 0x1a2a66, bottom: 0x34437a, stars: 2200 });
     sc.add(this.sky.group);
-    sc.add(new THREE.HemisphereLight(0x7f8fd8, 0x2a2230, 0.6));
-    new Sun(sc, 0xb0c0ff, 0.6, new THREE.Vector3(-0.4, 1, 0.5), 12);
+    sc.add(new THREE.HemisphereLight(0x6f7fc0, 0x1a2030, 1.1));
+    const moon = new Sun(sc, 0xb8c8ff, 2.0, new THREE.Vector3(-0.4, 1, 0.5), 12);
+    moon.light.shadow.normalBias = 0.16;
+    moon.light.shadow.bias = -0.0012;
     this.fx = new Particles(sc);
 
     const m = new Merger();
     // Tierra, el claro de grava y matorral bajo alrededor, menos donde está la mesa
-    m.add(G.box, 0x5e4a38, 0, -0.05, 0, 0, 0, 0, 160, 0.1, 160);
+    m.add(G.box, 0x7d6649, 0, -0.05, 0, 0, 0, 0, 160, 0.1, 160);
     m.add(G.cyl, 0x8a7a68, 0, -0.03, 0, 0, 0, 0, 7, 0.06, 7);
     // El matorral, instanciado y de pocos polígonos (es mucho: con esferas normales la escena iba a tirones)
     const vines: THREE.Matrix4[] = [];
@@ -116,9 +122,7 @@ export class Camp {
     const lampGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 12), new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xffc070, emissiveIntensity: 2.4 }));
     lampGlass.position.set(-0.32, 0.83, 0.16);
     sc.add(lampGlass);
-    this.lamp = new THREE.PointLight(0xffc27a, 9, 9, 1.6);
-    this.lamp.position.set(-0.32, 0.95, 0.16);
-    sc.add(this.lamp);
+    // (sin luz de punto: como en el cap. 2, una lámpara solo se ve encendida; su luz pintaba dianas en la mesa)
     this.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb060, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 }));
     this.glow.position.copy(lampGlass.position);
     this.glow.scale.setScalar(0.9);
@@ -252,11 +256,15 @@ export class Camp {
       this.who.length = 0;
       this.who.push(pp, this.gas.root.position);
       this.door.update(dt, this.who, camera.position);
-      if (input) {
+      // Pistas, solo si se ha perdido (40 s sin entrar): la flecha y la columna sobre la puerta
+      if (this.lost.tick('cabin', dt, !input) && pp.z < -3.6) {
         const ang = Math.atan2(-pp.x, -2 - pp.z);
         const rel = Math.atan2(Math.sin(ang - w.yaw), Math.cos(ang - w.yaw));
-        hud.setArrow(pp.z > -2.6 ? null : -rel);
-        beacon.at(pp.z > -3.6 ? null : new THREE.Vector3(0, 0, -3));
+        hud.setArrow(-rel);
+        beacon.at(new THREE.Vector3(0, 0, -3));
+      } else {
+        hud.setArrow(null);
+        beacon.at(null);
       }
       // Pasada la puerta, ya estás dentro
       if (pp.z > -2 && Math.abs(pp.x) < 3 && !this.inside) this.inside = true;
@@ -278,8 +286,6 @@ export class Camp {
     }
     // La llama del farolillo tiembla un poco
     const fl = 1 + Math.sin(this.t * 13) * 0.04 + Math.sin(this.t * 7.3) * 0.05;
-    // (desde fuera no se ve: la luz no tiene paredes y salpicaba los troncos)
-    this.lamp.intensity = (this.walker && this.azul.root.position.z < -3.2 ? 0 : 9) * fl;
     this.glow.scale.setScalar(0.9 * fl);
     this.sky.update(camera, dt);
   }

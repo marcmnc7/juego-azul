@@ -1186,7 +1186,8 @@ export function bark(who: string, text: string, side?: 'l' | 'r') {
       const w = t.offsetWidth, h = t.offsetHeight;
       // De lado (dos que hablan uno junto al otro, como en el coche): el globo se abre hacia su lado y el rabito
       // apunta a quien habla
-      const want = side === 'l' ? at.x - w + 30 : side === 'r' ? at.x - 30 : at.x - w / 2;
+      const sd = side ?? at.side;
+      const want = sd === 'l' ? at.x - w + 30 : sd === 'r' ? at.x - 30 : at.x - w / 2;
       const left = Math.min(Math.max(want, 10), W - w - 10);
       t.style.left = `${left}px`;
       t.style.top = `${Math.max(at.y - h - 16, 72)}px`;
@@ -1246,7 +1247,7 @@ export function later(fn: () => void, ms: number) {
 }
 
 /** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */
-let speakerAt: (who: string) => { x: number; y: number } | null = () => null;
+let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r' } | null = () => null;
 export function setSpeakerResolver(fn: typeof speakerAt) {
   speakerAt = fn;
 }

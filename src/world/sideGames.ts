@@ -10,7 +10,7 @@ import { twoBone } from '../entities/embrace';
 import type { Particles } from '../entities/fx';
 import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } from '../entities/models';
 import { rigPost } from '../entities/rig';
-import { bark, dialogue, later, timingGauge, toast } from '../ui/ui';
+import { bark, comicWord, dialogue, later, timingGauge, toast } from '../ui/ui';
 import type { Box2 } from './ferreries';
 
 // Los minijuegos que hay que pasar para seguir con la historia. Fallar nunca hace perder: se repite ahí mismo.
@@ -339,7 +339,7 @@ const PINCHO_ROUNDS = [3, 4, 5];
 
 export class PinchoGame {
   private root = new THREE.Group();
-  private waiter: Person;
+  readonly waiter: Person;
   private items: { obj: THREE.Mesh; at: THREE.Vector3; btn: HTMLButtonElement; k: number }[] = [];
   private t = 0;
   private round = 0;
@@ -436,8 +436,9 @@ export class PinchoGame {
       this.showButtons(false);
       audio.boo();
       vibrate(40);
-      this.info.textContent = SIDE.pinchos.wrong[this.errors % SIDE.pinchos.wrong.length];
-      this.wait(1500, () => this.startRound());
+      this.info.textContent = '';
+      bark('Camarero', SIDE.pinchos.wrong[this.errors % SIDE.pinchos.wrong.length]);
+      this.wait(1900, () => this.startRound());
       return;
     }
     audio.pickup();
@@ -456,7 +457,8 @@ export class PinchoGame {
           dialogue(SIDE.pinchos.end, this.onDone);
         });
       } else {
-        this.info.textContent = SIDE.pinchos.good;
+        this.info.textContent = '';
+        comicWord(SIDE.pinchos.good, 'perfect');
         this.wait(1300, () => this.startRound());
       }
     }

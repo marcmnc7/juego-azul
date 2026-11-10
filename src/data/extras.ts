@@ -45,14 +45,14 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
   },
   3: {
     drive1: [
-      b('Gas', 'Si no da lluvia, moto. Si da lluvia, coshe.'),
-      b('Gas', 'Y lo del helado, eso sí que no te lo podré perdonar.'),
+      b('Marc', 'Si no da lluvia, moto. Si da lluvia, coshe.'),
+      b('Marc', 'Y lo del helado, eso sí que no te lo podré perdonar.'),
       b('Margaux', 'Te invito a una cerve.'),
-      b('Gas', 'A una langosta.'),
+      b('Marc', 'A una langosta.'),
       b('Margaux', 'Muy bien. Humilde. Me gusta.'),
-      b('Gas', 'Caminitos, no solo autopista.'),
+      b('Marc', 'Caminitos, no solo autopista.'),
     ],
-    camp: [b('Gas', 'Lo llevo todo. Cartas, hornillo…'), b('Margaux', '¿Seguro que todo?')],
+    camp: [b('Marc', 'Lo llevo todo. Cartas, hornillo…'), b('Margaux', '¿Seguro que todo?')],
     drive2: [b('Gas', 'No habrá mejor zamburiña en el mundo.'), b('Margaux', 'Déjalo.'), b('Gas', 'Solo digo.')],
   },
   4: {

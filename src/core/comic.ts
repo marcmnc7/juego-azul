@@ -746,7 +746,9 @@ export function drawComic(renderer: THREE.WebGLRenderer, scene: THREE.Scene, cam
   lastT = now;
   lastCam.copy(camera.position);
   // (un salto de cámara de un plano a otro no es velocidad)
-  const target = v > 40 ? speedAmt : THREE.MathUtils.smoothstep(v, 5, 11) * 0.7;
+  // (una escena puede bajarlas: en la ruta del cap. 3 el coche va a 26 m/s todo el viaje y solo salen con el turbo)
+  const lineK = (scene.userData.speedLines as number | undefined) ?? 1;
+  const target = v > 40 ? speedAmt : THREE.MathUtils.smoothstep(v, 5, 11) * 0.7 * lineK;
   speedAmt += (target - speedAmt) * Math.min(1, dt * 4);
   burst = Math.max(0, burst - dt * 3);
   u.action.value = Math.max(speedAmt, burst);
