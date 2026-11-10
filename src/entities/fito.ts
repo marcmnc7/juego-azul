@@ -166,6 +166,8 @@ export class Fito {
     this.spot.castShadow = false;
     this.fill = new THREE.PointLight(0xffc8a0, 7, 9, 1);
     this.back = new THREE.PointLight(0x9fb8ff, 9, 8, 1);
+    // (en el tebeo las lámparas no iluminan nada: el relleno y el contraluz, apagados; le da la luz de la escena)
+    this.fill.visible = this.back.visible = false;
     sc.add(this.spot, this.spot.target, this.fill, this.back);
   }
 

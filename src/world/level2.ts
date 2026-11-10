@@ -19,6 +19,7 @@ import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
 import { Surf } from '../core/surfaces';
+import { comicScene } from '../core/comic';
 import { beacon } from '../core/beacon';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { MARC_LOOK, MARGAUX_LOOK } from '../data/characters';
@@ -341,7 +342,8 @@ export class Level2 implements Level {
     sc.add(this.grill);
 
     this.logSign = makeSign(['LOGROÑO', 'Calle Laurel ↗'], '#7a1f3d');
-    this.logSign.position.set(-8, 0, LEG1 + 40 + LEG2 + 2);
+    // (antes de donde se para el coche: justo allí tapaba media pantalla en el plano de llegada)
+    this.logSign.position.set(-7, 0, LEG1 + 40 + LEG2 - 45);
     sc.add(this.logSign);
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
     sv.position.set(-6, 0, LEG1 - 20);
@@ -705,7 +707,10 @@ export class Level2 implements Level {
       new Merger()
         .add(G.box, 0x8d9096, 0, 0.45, 0, 0, 0, 0, 1.6, 0.9, 0.9)
         .add(G.box, 0xb4b7bc, 0, 0.91, 0, 0, 0, 0, 1.66, 0.03, 0.96)
-        .add(G.box, 0x24242a, -0.14, 0.93, 0, 0, 0, 0, 1.06, 0.02, 0.76)
+        // (la plancha, gris acero oscuro con su brillo: en negro puro era un agujero en el dibujo)
+        .add(G.box, 0x4a4c54, -0.14, 0.93, 0, 0, 0, 0, 1.06, 0.02, 0.76)
+        .add(G.box, 0x8a8e98, -0.14, 0.9405, -0.3, 0, 0, 0, 0.9, 0.002, 0.05)
+        .add(G.box, 0x6e727c, -0.14, 0.9405, -0.22, 0, 0, 0, 0.6, 0.002, 0.03)
         .add(G.cyl, 0xffffff, 0.62, 0.935, 0, 0, 0, 0, 0.26, 0.015, 0.26) // plato
         .add(G.sphere, 0xf0dc4a, -0.08, 0.955, 0.33, 0, 0, 0, 0.055, 0.045, 0.045) // limón
         .add(G.cyl, 0x6a7f3a, 0.62, 0.95, -0.28, 0, 0, 0, 0.08, 0.05, 0.08) // perejil picado
@@ -845,6 +850,11 @@ export class Level2 implements Level {
       s.position.set(LANES[lane], 1.2, pz);
       this.scene.add(s);
       this.things.push({ obj: s, kind: turbo ? 'turbo' : 'smoke', lane, z: pz, speed: 0, alive: true });
+    }
+    // (ya en tebeo al nacer: si no, el primer segundo salían con el material de antes y su halo al 100 %)
+    for (const th of this.things) if (!th.obj.userData.comicDone) {
+      comicScene(th.obj);
+      th.obj.userData.comicDone = true;
     }
     // En la tromba, el tráfico se apelotona
     this.nextSpawn += (22 + Math.random() * 14) * (z > STORM_Z0 && z < STORM_Z1 ? 0.68 : 1);
@@ -1148,7 +1158,8 @@ export class Level2 implements Level {
   /** De dónde salen los bocadillos en el coche: ella conduce (asiento izquierdo) y él va al lado. */
   speakerPoint(who: string) {
     if (who === 'Camarero' && this.phase === 'logrono') return this.laurel?.waiterHead() ?? null;
-    if (!['drive1', 'drive2', 'cow', 'marcial'].includes(this.phase)) return null;
+    // (también llegando a San Vicente y a Logroño, mientras se ve el coche; en la Laurel ya no: es otra escena)
+    if (!['drive1', 'drive2', 'cow', 'marcial', 'arriveSV'].includes(this.phase) && !(this.phase === 'logrono' && !this.laurel)) return null;
     const her = who === 'Margaux' || who === 'Azul';
     if (!her && !['Gas', 'Marc'].includes(who)) return null;
     return this.car.body.localToWorld(new THREE.Vector3(her ? 0.4 : -0.4, 1.6, -0.25));

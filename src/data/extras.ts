@@ -38,7 +38,8 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
     findMarc: [b('Carme', 'Som aquí! Sa Font és per aquí!'), b('Tòfol', 'Vés, vés, que es jaleo no espera.')],
   },
   2: {
-    atBar: [b('Gas', 'Bale tabiso ara.'), b('Gas', 'Arranco!')],
+    // (Gas no está en el bar: viene en coche; lo suyo son mensajes, no un bocadillo flotando por el Born)
+    atBar: [b('Gas', '(WhatsApp) Bale tabiso ara.'), b('Gas', '(WhatsApp) Arranco!')],
     toPool: [b('Gas', 'Silencio full, eh.'), b('Gas', 'Ni respires, eh.'), b('Gas', 'Molaría mazo que no se enteraran.')],
     swim: [b('Gas', 'Muy pequeñita ella, pero sí, funciona.'), b('Gas', 'Y se le puede llamar piscina. Como tal.')],
     toTowels: [b('Gas', 'Mira qué cielo.'), b('Margaux', 'Soy una mujer con muchas sorpresas.')],

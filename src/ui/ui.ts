@@ -1154,8 +1154,19 @@ export function comicWord(text: string, kind: string) {
   const w = el('div', `pow pow-${kind}`);
   w.append(el('span', '', text));
   const W = window.innerWidth, H = window.innerHeight;
-  const x = W * (0.5 + (Math.random() - 0.5) * 0.36);
-  const y = H * (0.3 + Math.random() * 0.12);
+  // Donde no tape un bocadillo, el diálogo ni un panel (antes caía encima del «¡Sienta!» de Gas en el parque)
+  const busy = [...root.querySelectorAll('.bark, .trick-say, .dialogue, .gauge, .side-panel, .objective, .kp-pop, .rhythm')]
+    .map((n) => n.getBoundingClientRect())
+    .filter((r) => r.width > 4 && r.height > 4);
+  const hw = Math.min(150, W * 0.3), hh = 50;
+  let x = W / 2, y = H * 0.36;
+  for (let i = 0; i < 12; i++) {
+    const cx = W * (0.5 + (Math.random() - 0.5) * (i < 6 ? 0.36 : 0.6));
+    const cy = H * (i < 6 ? 0.3 + Math.random() * 0.12 : 0.22 + Math.random() * 0.4);
+    x = cx;
+    y = cy;
+    if (!busy.some((r) => cx + hw > r.left && cx - hw < r.right && cy + hh > r.top && cy - hh < r.bottom)) break;
+  }
   w.style.left = `${x}px`;
   w.style.top = `${y}px`;
   w.style.setProperty('--rot', `${(Math.random() - 0.5) * 22}deg`);
@@ -1166,7 +1177,12 @@ export function comicWord(text: string, kind: string) {
 let barkEnd = 0;
 let barkRaf = 0;
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
-export function bark(who: string, text: string, side?: 'l' | 'r') {
+export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
+  // Con un diálogo abierto, el comentario espera a que acabe (salían los dos a la vez, uno encima del otro)
+  if (root.querySelector('.dialogue')) {
+    if (waited < 8000) later(() => bark(who, text, side, waited + 300), 300);
+    return;
+  }
   root.querySelectorAll('.bark').forEach((n) => n.remove());
   cancelAnimationFrame(barkRaf);
   const wa = text.startsWith('(WhatsApp) ');
@@ -1261,6 +1277,8 @@ const whoClass = (who: string) =>
  */
 export function dialogue(lines: Line[], onDone: () => void) {
   closeDialogue();
+  // (el comentario suelto que hubiera, fuera: el diálogo manda)
+  root.querySelectorAll('.bark').forEach((n) => n.remove());
   const box = el('div', 'dialogue');
   const who = el('div', 'who');
   const text = el('div', 'text');

@@ -171,7 +171,13 @@ class ParkMission implements Mission {
 
   /** Lo que dice Gas, en su bocadillo de abajo. */
   private say(text: string) {
-    this.bubble.textContent = `Gas: «${text}»`;
+    // (como un bocadillo de tebeo: el nombre arriba y la frase, sin comillas)
+    this.bubble.innerHTML = '';
+    const who = document.createElement('b');
+    who.textContent = 'Gas';
+    const say = document.createElement('span');
+    say.textContent = text;
+    this.bubble.append(who, say);
     this.bubble.classList.remove('pop');
     void this.bubble.offsetWidth;
     this.bubble.classList.add('pop');

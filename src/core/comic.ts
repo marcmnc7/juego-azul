@@ -492,6 +492,13 @@ export function comicScene(scene: THREE.Object3D) {
           pm.blending = THREE.NormalBlending;
           pm.transparent = true;
           pm.depthWrite = false;
+          // (con tope de tamaño en pantalla: una farola a 3 m de la cámara era un disco que tapaba media imagen)
+          if (p.isPoints) {
+            pm.onBeforeCompile = (sh) => {
+              sh.vertexShader = sh.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n  gl_PointSize = min(gl_PointSize, 140.0);');
+            };
+            pm.customProgramCacheKey = () => 'comicHaloClamp';
+          }
           pm.needsUpdate = true;
         } else if (p.isPoints && pm.size >= 0.6) {
           // halos de las farolas: de día, en un tebeo, no se dibujan

@@ -73,7 +73,8 @@ const BURGERS: [number, number][] = [[302.6, -4.75], [289.4, 2.75], [302.6, 17.7
 // Llegadas del aeropuerto de Gran Canaria, esa noche (otra zona del mismo mundo, también x > 100: luz de interior)
 const ARR = { minX: 393, maxX: 407, minZ: -12, maxZ: 12 };
 const ARR_WALK = { minX: ARR.minX + 0.4, maxX: ARR.maxX - 0.4, minZ: ARR.minZ + 0.6, maxZ: ARR.maxZ - 0.7 };
-const ARR_START = new THREE.Vector3(398, 0, -10.6);
+// (a 5 m de la pared del fondo: pegada a ella, la cámara no cabía detrás y se quedaba encima mirando al suelo)
+const ARR_START = new THREE.Vector3(398, 0, -7);
 const CAFE_GAS = new THREE.Vector3(404.2, 0, 3.3);
 // La mesa de sonido (FOH) en medio de la pista, como en todos los conciertos de estadio
 const FOH = new THREE.Vector3(-1, 0, -12);
@@ -1709,7 +1710,7 @@ export class Level3 implements Level {
     this.gas.root.visible = true;
     this.gas.root.position.copy(CAFE_GAS);
     this.gas.root.rotation.y = Math.atan2(ARR_START.x - CAFE_GAS.x, ARR_START.z - CAFE_GAS.z);
-    this.camera.position.set(ARR_START.x, 3.4, ARR_START.z - 0.2);
+    this.camera.position.set(ARR_START.x, 2.6, ARR_START.z - 3.8);
     this.camera.lookAt(CAFE_GAS);
   }
 

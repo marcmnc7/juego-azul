@@ -47,6 +47,14 @@ Lo aprendido en las siete pasadas del capítulo 2 (`progreso-cap2.md`), escrito 
 - **Coherencia de lado**: en España se conduce por la derecha; lo que está «a la derecha del conductor» es x negativa si el coche va hacia +z y la cámara está detrás (en pantalla, +x sale a la izquierda).
 - **Saltos de fase**: una cadena de diálogos de la intro que acaba poniendo una fase debe comprobar que sigue en la intro (si no, al saltar de fase en el modo prueba vuelve atrás).
 
+### Lo que salió en la revisión final (10-nov)
+- **Halos de noche con tope de tamaño** en pantalla (una farola pegada a la cámara tapaba media imagen).
+- **Interfaz**: con un diálogo o el móvil abierto no se pintan encima el objetivo, la pausa, los contadores, el botón de acción, los carriles ni la ruta; los comentarios sueltos esperan a que acabe el diálogo; las onomatopeyas buscan un hueco que no tape bocadillos ni paneles.
+- **Lo que nace durante el juego** (recogibles de la carretera) se pasa a tebeo al crearlo.
+- **Mensajes de alguien que no está** (Gas en camino): `(WhatsApp) …`, no un bocadillo flotando.
+- **Negro puro** (planchas, telones) se lee como un agujero: gris oscuro con un brillo.
+- Para revisar: `__audit` (materiales sin tebeo, luces de punto, aditivos) y `__uiAudit` (solapes de la interfaz, globos sin anclar) recorriendo todas las fases; ver `progreso-revision-final.md`.
+
 ### Por capítulo
 | Problema | Receta | Ejemplo |
 |---|---|---|

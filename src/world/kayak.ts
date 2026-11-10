@@ -301,6 +301,9 @@ export function buildFerry() {
   g.userData.comicBent = true;
   const mesh = m.mesh();
   mesh.castShadow = true;
+  // (sin recibir sombras: el sol rasante sobre el casco largo y liso pintaba rayas verticales de acné)
+  mesh.receiveShadow = false;
+  mesh.userData.noReceive = true;
   g.add(mesh);
   // Ola de proa: el bigote de espuma, con lo estrecho en la roda (la proa mira a +x)
   const foam = new THREE.Mesh(
