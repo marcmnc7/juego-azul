@@ -317,35 +317,55 @@ export const CENA = {
   intro: [{ who: 'Narrador', text: 'Sa Farola, 13 de julio de 2026. Tus padres salen a cenar. Gas espera en un lugar estratégico, con la moto.' }] as Line[],
   /** Lo que le vas escribiendo mientras tus padres no acaban de irse (mensajes tuyos de esa noche). */
   waitEvents: ['Aun estan', 'Sale mi padre ahora', 'Que hace mi padre top', 'Tio'],
+  // Gas llega y espera en la cancela. (La primera sale del chat de esa tarde, «Cuando me digas voy y tardo 30 sec»;
+  // las otras dos son inventadas: Marc, cámbialas por lo que dijisteis)
+  atGate: 'Ya estoy. Treinta segundos, dije.',
+  atGateWait: 'Ábreme, que me van a ver los vecinos.',
+  letIn: 'Shhh. Pasa, pasa.',
   // Tal cual en el chat: el del bacon era él, y la italiana es ella
   cookIntro: [
     { who: 'Gas', text: 'Bacon iba bien si tenías.' },
     { who: 'Margaux', text: '¿Qué dices? Guanciale. Y ni se te ocurra la nata.' },
     { who: 'Gas', text: 'Vale, vale. El 10 es la carbonara.' },
   ] as Line[],
+  /** Lo que dice Gas mientras cocinas (los dice él, en su bocadillo). */
   steps: {
     guanciale: 'Toca cuando el guanciale esté dorado 🥓',
     pasta: 'Escurre la pasta al dente ⏱️',
     mix: 'Mezcla fuera del fuego: que no se cuaje 🥚',
-    nata: 'Gas: «¿Nata? ¿Tú? ¿La italiana?» 🙄',
-    scrambled: '¡Buu! Huevos revueltos',
-    burnt: '¡Buu! Guanciale quemado',
-    raw: 'Todavía está dura',
+    nata: '¿Nata? ¿Tú? ¿La italiana? 🙄',
+    scrambled: 'Buu. Huevos revueltos.',
+    burnt: 'Buu. Guanciale quemado.',
+    raw: 'Todavía está dura.',
   },
+  /** La nota de Gas (en su bocadillo). */
   grade: (n: number) =>
-    n >= 10 ? 'Gas: «El 10 es la carbonara.»'
-    : n >= 9 ? `Gas: «Un ${n}. Casi casi.»`
-    : n >= 7 ? `Gas: «Un ${n}. Regulín.»`
-    : n === 6 ? 'Gas: «Un 6’75.» Otra vez.'
-    : `Gas: «Un ${n}…» Otra vez.`,
-  dinner: [{ who: 'Narrador', text: 'Cenáis con un ojo en la puerta y otro en el reloj.' }] as Line[],
+    n >= 10 ? 'El 10 es la carbonara.'
+    : n >= 9 ? `Un ${n}. Casi casi.`
+    : n >= 7 ? `Un ${n}. Regulín.`
+    : n === 6 ? 'Un 6’75. Otra vez.'
+    : `Un ${n}… Otra vez.`,
+  // Antes de cenar, la guirnalda de la terraza (inventado: Marc, cámbialo si no fue así)
+  lightsHint: '¿Encendemos las lucecitas?',
+  lightsOn: 'Así sí.',
+  // La cena: lo que hablaron por el chat esa tarde (cenaPlan, 16:10), dicho en la mesa
+  dinner: [
+    { who: 'Narrador', text: 'Cenáis con un ojo en la puerta y otro en el reloj.' },
+    { who: 'Margaux', text: 'Si a las 9.30 se sientan, imposible que terminen antes de las 11.30.' },
+    { who: 'Gas', text: 'A partir de las 22.50 yo lo pasaré mal.' },
+    { who: 'Margaux', text: 'Tranqui, le diré a mi madre que me avise.' },
+  ] as Line[],
+  /** Se acaba la cena (del mismo chat: «A partir de 22.50 yo lo pasaré mal»). */
+  lateNow: 'Casi las 22.50…',
   /** Unos faros en la calle: ¿son tus padres? (No lo eran: volvieron a la 1.30.) */
   alarm: [
     { who: 'Gas', text: '¿Eso es un coche?' },
     { who: 'Margaux', text: '¡Son mis padres! ¡Recoge, recoge!' },
   ] as Line[],
-  alarmHint: '🚗 ¡Unos faros! Quita de en medio los platos, la sartén y el casco de Gas',
-  alarmItems: { plates: '🍽️ Platos, fuera', pan: '🍳 Sartén, fuera', helmet: '🪖 Casco escondido' },
+  // Gas, nada más levantarse (inventado; antes era un aviso de texto)
+  alarmHint: '¡Los platos, la sartén… y mi casco!',
+  /** Lo que dice ella al quitar cada cosa de en medio. */
+  alarmItems: { plates: '🍽️ ¡Platos, fuera!', pan: '🍳 ¡Sartén, fuera!', helmet: '🪖 Casco escondido.' },
   falseAlarm: [
     { who: 'Narrador', text: 'El coche pasa de largo. Era el del vecino.' },
     { who: 'Gas', text: 'Casi me da algo.' },
@@ -356,10 +376,13 @@ export const CENA = {
     { who: 'Gas', text: 'Casi me da algo.' },
     { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
   ] as Line[],
-  leave: [
-    { who: 'Narrador', text: '22:50. Gas se va en la moto justo a tiempo.' },
-    { who: 'Narrador', text: 'Tú subes a la cama. Tus padres siguen sin volver.' },
-  ] as Line[],
+  // Antes de irse, su casco (inventado: Marc, cámbialo por lo que dijisteis al despediros)
+  helmetAsk: '¿Y mi casco?',
+  helmetNag: 'Sin casco no me voy, eh.',
+  bye: 'Toma. Corre, que no vuelvan.',
+  /** Al irse en la moto, antes de dejar la mesa como estaba. */
+  gone: [{ who: 'Narrador', text: '22:50. Gas se va en la moto justo a tiempo.' }] as Line[],
+  leave: [{ who: 'Narrador', text: 'Tú subes a la cama. Tus padres siguen sin volver.' }] as Line[],
 };
 
 export interface CrossClue {

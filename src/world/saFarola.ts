@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { G, Merger, makePerson, palmCrown, type Person } from '../entities/models';
-import { toon, glowTexture, makeSea } from '../core/gfx';
+import { G, Merger, makeCar, makePerson, palmCrown, type Person } from '../entities/models';
+import { toon, glowTexture, makeSea, paintMat } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 
@@ -80,8 +80,22 @@ export interface SaFarola {
   walkers: Person[];
 }
 
+/**
+ * Lo que se arregló para el cómic al migrar el cap. 7 (de noche). De día (el cap. 8) sale como antes salvo que su
+ * capítulo lo pida aquí: así el 8 no cambia hasta que se migre.
+ */
+export interface SaFarolaOpts {
+  /** La discontinua del Camí pintada a ras del asfalto (sin grosor: la tinta no le dibuja dientes de sierra). Por defecto, de noche. */
+  paintLine?: boolean;
+  /** Coches de verdad (los HD de los demás capítulos) en vez de los de cajas. Por defecto no: desde la casa no se ven. */
+  hdCars?: boolean;
+  /** Torre del faro partida en altura, para que se combe como las paredes. Por defecto, de noche. */
+  bentTower?: boolean;
+}
+
 /** Construye la calle, el paseo y el faro. day: colores de día (el eclipse) o de noche (la cena). */
-export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, faro = LIGHTHOUSE): SaFarola {
+export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, faro = LIGHTHOUSE, opts: SaFarolaOpts = {}): SaFarola {
+  const { paintLine = !day, hdCars = false, bentTower = !day } = opts;
   const m = new Merger();
   // Como en Street View: la calle de la casa baja hasta el Camí de sa Farola, que va pegado al mar
   // (asfalto gastado, arcén de tierra y un pretil bajo de marès sobre las rocas) con casas detrás de
@@ -91,7 +105,15 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   const ROAD_Z = COAST_Z + 5.5;
   m.add(G.box, 0x4a4a50, -20, -0.03, -15.3, 0, 0, 0, 6, 0.1, 51.4); // calle que baja al mar (hasta la acera de la calle de Azul)
   m.add(G.box, 0x4a4a50, 13, -0.02, ROAD_Z, 0, 0, 0, 74, 0.1, 6); // Camí de sa Farola
-  for (let x = -22; x < 50; x += 3) m.add(G.box, 0xe8e4da, x, 0.035, ROAD_Z, 0, 0, 0, 1.6, 0.01, 0.12); // línea discontinua
+  if (paintLine) {
+    // Línea discontinua pintada en el asfalto: un plano a ras de suelo, sin grosor
+    const paint = new Merger();
+    const flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    for (let x = -22; x < 50; x += 3) paint.add(flat, 0xe8e4da, x, 0.032, ROAD_Z, 0, 0, 0, 1.6, 1, 0.12);
+    const pm = new THREE.Mesh(paint.build(), paintMat());
+    pm.userData.noCast = true;
+    sc.add(pm);
+  } else for (let x = -22; x < 50; x += 3) m.add(G.box, 0xe8e4da, x, 0.035, ROAD_Z, 0, 0, 0, 1.6, 0.01, 0.12); // línea discontinua
   m.add(G.box, 0xc9b48a, 13, -0.01, COAST_Z + 1.85, 0, 0, 0, 74, 0.1, 1.3); // arcén de tierra
   // Pretil bajo de marès sobre las rocas
   m.add(G.box, 0xc9b48f, 13, 0.25, COAST_Z + 1.0, 0, 0, 0, 74, 0.5, 0.45);
@@ -143,9 +165,17 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   }
   // Coches aparcados en el lado de las casas
   for (const [x, c] of [[-2, 0x2a2e3a], [11, 0xf0f0f0], [33, 0x8a2a2a]] as [number, number][]) {
-    m.add(G.rbox, c, x, 0.7, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.7, 0.9, 3.9);
-    m.add(G.rbox, 0x9fb8c8, x - 0.2, 1.35, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.5, 0.5, 2.1);
-    for (const dx of [-1.3, 1.3]) for (const dz of [-0.85, 0.85]) m.add(G.cyl, 0x1e1e22, x + dx, 0.32, LAND_Z - 1.2 + dz, Math.PI / 2, 0, 0, 0.64, 0.2, 0.64);
+    if (hdCars) {
+      // Los mismos coches que en el resto del juego, vacíos y aparcados
+      const car = makeCar(c, { luggage: false, joy: false, empty: true });
+      car.root.rotation.y = Math.PI / 2;
+      car.root.position.set(x, 0, LAND_Z - 1.2);
+      sc.add(car.root);
+    } else {
+      m.add(G.rbox, c, x, 0.7, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.7, 0.9, 3.9);
+      m.add(G.rbox, 0x9fb8c8, x - 0.2, 1.35, LAND_Z - 1.2, 0, Math.PI / 2, 0, 1.5, 0.5, 2.1);
+      for (const dx of [-1.3, 1.3]) for (const dz of [-0.85, 0.85]) m.add(G.cyl, 0x1e1e22, x + dx, 0.32, LAND_Z - 1.2 + dz, Math.PI / 2, 0, 0, 0.64, 0.2, 0.64);
+    }
     colliders.push({ minX: x - 2, maxX: x + 2, minZ: LAND_Z - 2.1, maxZ: LAND_Z - 0.3, low: true });
   }
   // Postes de madera con el cable a lo largo del camino, y un par de farolas
@@ -158,7 +188,8 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
     m.add(G.sphere, 0xf4f0e0, x + 0.8, 5.5, LAND_Z - 1.4, 0, 0, 0, 0.3, 0.2, 0.3);
     lampPos.push(x + 0.8, 5.4, LAND_Z - 1.4);
   }
-  m.add(G.box, 0x1e1e22, 18, 8.0, LAND_Z - 0.7, 0, 0, 0, 56, 0.03, 0.03);
+  // (de noche, el cable algo más grueso: con 3 cm la tinta lo hacía parpadear)
+  m.add(G.box, 0x1e1e22, 18, 8.0, LAND_Z - 0.7, 0, 0, 0, 56, day ? 0.03 : 0.05, day ? 0.03 : 0.05);
   if (!day) {
     const lamps = new THREE.Points(
       new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lampPos, 3)),
@@ -217,13 +248,14 @@ export function buildSaFarola(sc: THREE.Scene, colliders: Box2[], day: boolean, 
   m.add(G.box, 0xe8e0cc, L.x - 2.5, 4.15, L.z + 0.5, 0, 0, 0, 6.7, 0.2, 5.7);
   for (const s of [-1, 1]) m.add(G.box, 0x30384a, L.x - 2.5 + s * 1.6, 2.4, L.z + 3.26, 0, 0, 0, 0.9, 1.1, 0.05);
   colliders.push({ minX: L.x - 6, maxX: L.x + 2.2, minZ: L.z - 3, maxZ: L.z + 3.3 });
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.25, 11, 24, 1, true), toon({ map: stripeTexture(), color: 0xffffff }));
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.25, 11, 24, bentTower ? 10 : 1, true), toon({ map: stripeTexture(), color: 0xffffff }));
   tower.position.set(L.x + 1.2, 6.5, L.z);
   sc.add(tower);
   m.add(G.cyl, 0x2b2f36, L.x + 1.2, 9.4, L.z, 0, 0, 0, 2.9, 0.15, 2.9); // galería baja
   m.add(G.cyl, 0x2b2f36, L.x + 1.2, 12.1, L.z, 0, 0, 0, 2.7, 0.15, 2.7); // galería alta
   m.add(G.cyl, 0xf4f2ec, L.x + 1.2, 11.2, L.z, 0, 0, 0, 1.9, 1.7, 1.9);
-  m.add(G.cyl, 0x9fd3e8, L.x + 1.2, 12.9, L.z, 0, 0, 0, 1.4, 1.4, 1.4); // linterna
+  // La linterna: de día, cristal; de noche, encendida (un color que brilla solo, sin sombra; la luz no alumbra nada)
+  m.add(G.cyl, day ? 0x9fd3e8 : 0xfff4b0, L.x + 1.2, 12.9, L.z, 0, 0, 0, 1.4, 1.4, 1.4); // linterna
   m.add(G.sphere, 0x2b2f36, L.x + 1.2, 13.7, L.z, 0, 0, 0, 1.5, 0.8, 1.5);
   // Castell de Sant Nicolau al otro lado de la bocana
   for (let i = 0; i < 8; i++) {

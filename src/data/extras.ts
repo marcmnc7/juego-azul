@@ -177,6 +177,8 @@ export interface Keepsake {
 }
 
 const M1 = ['talkTofol', 'collect', 'returnTofol', 'findMarc'];
+/** Cap. 7: las fases en las que se anda por el jardín (abrir a Gas, cocina, mesa, susto, el casco y a dormir). */
+const C7 = ['toGate', 'toKitchen', 'toTable', 'alarm', 'seeOff', 'toBed'];
 
 /** Recuerdos escondidos: fotos reales y trozos literales de los chats, fuera del camino que marca la luz. */
 export const KEEPSAKES: Keepsake[] = [
@@ -205,9 +207,9 @@ export const KEEPSAKES: Keepsake[] = [
   { id: 'c6-ubi', chapter: 6, phases: ['hunt', 'exact', 'coming', 'be'], x: 34, z: 3.6, chat: CHATS.ubi.msgs.slice(0, 5), caption: 'Tuuuu maldito' },
   { id: 'c6-sueno', chapter: 6, phases: ['be'], x: 124, z: 9, chat: CHATS.arranco.msgs.slice(0, 2), caption: '23 de junio de 2026' },
   // La cena
-  { id: 'c7-pasta', chapter: 7, phases: ['toKitchen', 'toTable', 'alarm'], x: 4, z: 1.6, chat: CHATS.cenaMenu.msgs.slice(0, 4), caption: 'Todo esto lo hago por una pasta' },
-  { id: 'c7-hora', chapter: 7, phases: ['toKitchen', 'toTable', 'alarm'], x: -3.5, z: 8, chat: CHATS.cenaPlan.msgs.slice(8, 10), caption: 'A partir de las 22.50' },
-  { id: 'c7-carita', chapter: 7, phases: ['toKitchen', 'toTable', 'alarm'], x: 4.2, z: 8.8, src: STICKERS.carita, sticker: true, caption: 'Esa cara' },
+  { id: 'c7-pasta', chapter: 7, phases: C7, x: 4, z: 1.6, chat: CHATS.cenaMenu.msgs.slice(0, 4), caption: 'Todo esto lo hago por una pasta' },
+  { id: 'c7-hora', chapter: 7, phases: C7, x: -3.5, z: 8, chat: CHATS.cenaPlan.msgs.slice(8, 10), caption: 'A partir de las 22.50' },
+  { id: 'c7-carita', chapter: 7, phases: C7, x: 4.2, z: 8.8, src: STICKERS.carita, sticker: true, caption: 'Esa cara' },
   // El día del eclipse
   { id: 'c8-ready', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, chat: CHATS.eclipseReady.msgs.slice(0, 2), caption: '12 de agosto de 2026' },
   { id: 'c8-luna', chapter: 8, phases: ['walk', 'back'], x: -70, z: 11.5, chat: CHATS.luna.msgs, caption: '16 de agosto de 2026' },
