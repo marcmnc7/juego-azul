@@ -494,7 +494,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
+      level: () => level, start: (n: number) => startLevel(n), letter: () => startLetter(), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */

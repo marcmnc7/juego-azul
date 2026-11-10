@@ -23,6 +23,9 @@ export class LetterScene implements Level {
   private fwT = -1;
   private ui: HTMLElement;
   private moonGlow: THREE.Sprite;
+  /** El reflejo de la luna en el mar: trazos blancos cortos en fila hacia ella, que cambian a saltos. */
+  private moonPath: THREE.Mesh[] = [];
+  private pathT = 0;
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -44,10 +47,20 @@ export class LetterScene implements Level {
     light.position.copy(moonDir).multiplyScalar(50);
     sc.add(light);
     const sea = makeSea([600, 600], 0x14305a, moonDir, { night: true });
-    // Mar en calma: con el oleaje normal, los halos de las fotos se reflejaban a trozos
-    const su = (sea.material as THREE.ShaderMaterial).uniforms;
-    if (su?.distortionScale) su.distortionScale.value = 0.22;
     sc.add(sea);
+    // (como en un tebeo: rayas horizontales, más anchas cuanto más lejos, sin degradado)
+    const dashMat = new THREE.MeshBasicMaterial({ color: 0xe6ecff, fog: false });
+    const dashGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 46; i++) {
+      const d = 12 + i * i * 0.12;
+      const m = new THREE.Mesh(dashGeo, dashMat);
+      m.userData.d = d;
+      m.userData.dx = (Math.sin(i * 12.9) * 0.5) * (0.6 + d * 0.035);
+      m.scale.set(0.5 + d * 0.05 + Math.abs(Math.sin(i * 3.1)) * 0.6, 1, 0.07 + d * 0.004);
+      m.renderOrder = 1;
+      sc.add(m);
+      this.moonPath.push(m);
+    }
     sc.add(this.fireworks.points);
 
     // Las fotos de la historia, flotando sobre el mar a los lados del camino de la cámara
@@ -150,6 +163,15 @@ export class LetterScene implements Level {
       }
     }
     this.fireworks.update(dt);
+    const cam = this.camera.position;
+    this.pathT -= dt;
+    const flip = this.pathT <= 0;
+    if (flip) this.pathT = 0.14;
+    for (const m of this.moonPath) {
+      const d = m.userData.d as number;
+      m.position.set(cam.x + d * 0.15 + (m.userData.dx as number), 0.12, cam.z + d);
+      if (flip) m.visible = Math.random() < 0.7;
+    }
     this.sky.update(this.camera, dt);
   }
 
