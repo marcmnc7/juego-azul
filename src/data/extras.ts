@@ -64,14 +64,8 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
     toWc: [b('Gas', 'Pfffff. Temón.'), b('Un señor de Telde', '¿Esta es la cola? Pues vaya tela.'), b('Gas', 'Justo ahora, tenía que ser.')],
     seek: [b('Gas', 'Flash, pls.'), b('Gas', 'Estoy. Xo no veo.'), b('Una de Telde', 'Permiso, mi niño.')],
   },
-  5: {
-    ride: [
-      b('Gas', 'Tú acompaña. Si yo me inclino, tú también.'),
-      b('Gas', 'Más pegaítos, con el aire en la cara.'),
-      b('Margaux', 'Ay, que eres lo mejor, te juro.'),
-      b('Gas', '¿Ves? Ni tacones ni secador.'),
-    ],
-  },
+  // 5: lo que se dicen en la moto va en MOTO.talk (story.ts): el nivel lo reparte por el viaje, cada uno desde su
+  // asiento y sin pisar los saludos ni las fotos
   6: {
     hunt: [
       b('Gas', '(WhatsApp) Llevo 30’ dando vueltas.'),
