@@ -64,17 +64,23 @@ export const FERRERIES = {
     { who: 'Carme', text: 'Perquè no mires, Marc.' },
     { who: 'Marc', text: 'Pues bienvenida otra vez. Aquí se baila como se puede.' },
   ] as Line[],
+  // (los toast no se ven en el cómic: lo que va entre ¡…! en mayúsculas es una onomatopeya (`comicWord`); lo demás,
+  // un bocadillo de quien lo diría)
   hints: {
-    pomada: '¡Pomada! 🍋',
-    luck: '¡Caricia de la suerte! 🍀',
-    dropped: '¡Uiii! Un burro te ha empujado y se te ha caído la pomada',
+    pomada: '¡POMADA!',
+    luck: '¡SUERTE!',
+    /** Lo dice ella, en su bocadillo. */
+    dropped: '¡Uiii! Se me ha caído la pomada…',
+    /** Etiqueta del botón de acción (solo se ve el icono). */
     rear: '¡Ahora! Hazle una caricia',
-    perfect: '¡Caricia perfecta! ✨🍀',
-    late: 'Por los pelos 🍀',
-    allLuck: '¡Tres caricias! Toda la plaza te aplaude 👏',
-    /** Con las tres en la mano, los burros se desbocan: hasta Tòfol sin derramar. */
-    stampede: '🫏 ¡Se han desbocado! Llévale las pomadas a Tòfol sin derramarlas',
-    spilled: ['🍋 ¡Se te ha derramado una!', '🍋 ¡Otra por el suelo!'],
+    perfect: '¡PERFECTA!',
+    late: '¡POR LOS PELOS!',
+    allLuck: '¡OLÉ!',
+    /** Con las tres en la mano, los burros se desbocan: hasta Tòfol sin derramar. Lo dice ella. */
+    stampede: '¡Que se desbocan! Sin derramar, sin derramar…',
+    stampedeWord: '¡HIIIAAA!',
+    /** Ella, cada vez que se le derrama una. */
+    spilled: ['¡Nooo! Se me ha derramado una…', '¡Otra! Esto no llega entero…'],
     arrived: (n: number) =>
       n === 2
         ? [{ who: 'Margaux', text: 'Toma… las que han llegado.' }, { who: 'Tòfol', text: 'Dues de tres. Bé, amb dues ja faig via.' }]
@@ -563,22 +569,38 @@ export const ANIVERSARIO = {
   tofolDone: [
     { who: 'Margaux', text: 'Toma, tus pomadas. Otro año más.' },
     { who: 'Tòfol', text: 'Ja sou més de Ferreries que jo.' },
-    { who: 'Tòfol', text: 'I ara, que és Sant Bartomeu, un petó.' },
+    // (inventado: antes era «I ara, que és Sant Bartomeu, un petó»; ahora el beso llega bailando en Sa Font)
+    { who: 'Tòfol', text: 'I ara, cap a Sa Font a ballar, que allà va començar tot.' },
   ] as Line[],
   tofolAgain: [{ who: 'Tòfol', text: 'Encara aquí? Vinga, que es jaleo no espera!' }] as Line[],
   september: [{ who: 'Narrador', text: 'Septiembre. Gas se apunta a vóley playa.' }] as Line[],
   october: [{ who: 'Narrador', text: 'Octubre. Joy, lista para campeonatos.' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ell és per aquí. Segueix sa ubicació!' }] as Line[],
-  gasMoves: ['📍 Ubicación nueva', '📍 Y otra', '📍 «Tengo bocata»'],
   marcMeet: [
     { who: 'Marc', text: 'Ya era hora. Un año justo, ¿eh?' },
-    { who: 'Margaux', text: 'Un año. Y sigues bailando igual.' },
+    // (inventado: antes «Y sigues bailando igual»; cuando le encuentra está con su bocata, como en el chat)
+    { who: 'Margaux', text: 'Un año. Y tú, con tu bocata.' },
   ] as Line[],
   smallTalk: [
     { who: 'Marc', text: 'El año pasado tuve que hablar con Carme para presentarme.' },
     { who: 'Marc', text: 'Este año ya no me hace falta excusa.' },
   ] as Line[],
-  hints: { ...FERRERIES.hints, allLuck: 'Tres caricias, y esta vez juntos 👏' },
+  hints: { ...FERRERIES.hints },
+};
+
+/**
+ * Capítulo 9: lo que dice Gas cuando va al lado de Azul y lo de la búsqueda por ubicaciones. Todo inventado
+ * (salvo «Tres caricias, y esta vez juntos», que ya estaba) para que el dueño lo cambie por lo que pasó.
+ */
+export const ANIVERSARIO_GAS = {
+  /** Si tarda en llegar a la ubicación, se la vuelve a mandar. */
+  again: '(WhatsApp) 📍 Ubicación',
+  /** Llega a la primera ubicación y ya no está. */
+  notHere: 'Aquí no está… ¿Dónde se ha metido?',
+  allLuck: 'Tres caricias, y esta vez juntos 👏',
+  stampede: '¡Que se desbocan! Agárralas fuerte 😂',
+  toFont: '¿Vamos? Donde nos conocimos 💙',
+  carmeAfter: [{ who: 'Carme', text: 'Mira-los! Un any ja… Vinga, a ballar!' }] as Line[],
 };
 
 // Minijuegos cortos que salen al acabar algunos capítulos (y desde el mapa).
@@ -632,25 +654,28 @@ export const MINIS = {
       { say: 'Pata', label: 'Pata', icon: '🐾' },
       { say: 'Gira', label: 'Gira', icon: '🔄' },
     ],
-    wrong: 'Joy te mira sin entender nada',
-    slow: 'Joy se ha ido a oler algo',
+    /** Onomatopeyas (`comicWord`): Joy no entiende la orden o se despista. */
+    wrong: '¿¿GUAU??',
+    slow: '¡SNIF, SNIF!',
     done: (ok: number) => `${ok} trucos. Ahora, el circuito 🏁`,
   },
   agility: {
     title: 'Joy, campeona de agility',
     hint: 'Toca para saltar vallas y aros. En los túneles, no saltes',
     btn: '🐕 ¡Salta!',
-    knock: '¡Uy, la barra!',
-    overTunnel: 'Por el túnel se pasa por dentro 😅',
+    /** Onomatopeyas (`comicWord`). */
+    knock: '¡CLONC!',
+    overTunnel: '¡POR DENTRO!',
     done: (hits: number) => `Joy: ${hits} obstáculos perfectos. A campeonatos 🏆`,
   },
   voley: {
     title: 'Vóley playa nivel 6',
     hint: 'Dale justo cuando la pelota te llegue',
     btn: '🏐 ¡Toca!',
-    miss: '¡Al suelo!',
-    early: 'Muy pronto',
-    late: 'Tarde',
+    /** Onomatopeyas (`comicWord`): los toast no se ven en el cómic. */
+    miss: '¡AL SUELO!',
+    early: '¡PRONTO!',
+    late: '¡TARDE!',
     done: (passes: number) => `${passes} pases. Nivel 6 (apuntado al 3) 🧐`,
   },
 };
@@ -661,12 +686,14 @@ export const SIDE = {
     intro: [
       { who: 'Narrador', text: 'Pistolas de agua por todas partes. Unos críos te cortan el paso.' },
       { who: 'Un crío', text: 'D\'aquí no passes si no ens mulles!' },
-      { who: 'Narrador', text: 'Te han prestado una pistola. Moja a los cinco: dos veces cada uno.' },
+      // (inventado: antes lo contaba el narrador; ahora la regla la dice el crío)
+      { who: 'Un crío', text: 'Té, una pistola. Som cinc: dues mullades a cada un!' },
     ] as Line[],
-    hint: '💦 Moja a los críos: dos veces a cada uno',
+    hint: '💦',
     btn: '💦 Disparar',
-    out: ['¡Uno rendido! 💦', '¡Dos!', '¡Tres! Ya huyen', '¡Solo queda uno!', '¡Todos mojados!'],
-    soaked: '💦 ¡Te han dado!',
+    /** Onomatopeyas (`comicWord`) de cada crío rendido. */
+    out: ['¡UNO!', '¡DOS!', '¡TRES!', '¡CUATRO!', '¡TODOS!'],
+    soaked: '¡CHOF!',
     end: [{ who: 'Un crío', text: 'Vale, vale! Passa, passa.' }] as Line[],
   },
   pinchos: {

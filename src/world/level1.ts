@@ -1,5 +1,5 @@
 import { WaterFight } from './sideGames';
-import { SIDE } from '../data/story';
+import { SIDE, type Line } from '../data/story';
 import * as THREE from 'three';
 import { camWorld } from '../core/camWorld';
 import { steerTo, type SteerState } from '../core/steer';
@@ -14,12 +14,13 @@ import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type 
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM } from '../data/characters';
-import { hud, dialogue, toast, phoneChat, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
 import { embrace, hugFor, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { cinema, headOf, rel } from '../core/cinema';
 import { beacon } from '../core/beacon';
+import { Lost } from '../core/lost';
 
 // Nivel 1 · Jaleo d'ases (Ferreries), con todos los textos en menorquín.
 // Bucle: hablar con Tòfol → 3 pomadas + 3 caricias a los ases esquivando sus empujones → volver a Tòfol →
@@ -41,8 +42,20 @@ export interface JaleoVariant {
   endChats?: ChatFrag[];
   /** Capítulo del año siguiente: Azul ya no va con el mono negro. */
   outfit?: Partial<PersonLook>;
-  /** Un año después: primero se busca a Gas por sus ubicaciones y luego se hace el jaleo con él al lado. */
-  findFirst?: { found: ChatFrag[] };
+  /**
+   * Un año después: primero se busca a Gas por las ubicaciones que manda al móvil (son la pista: un 📍 sobre el
+   * sitio, nada de flecha) y luego se hace el jaleo con él al lado. Cada trozo es del chat real de esa tarde.
+   */
+  findFirst?: {
+    /** Primera ubicación que manda: cuando llegas, ya no está allí. */
+    first: THREE.Vector3;
+    /** El trozo del chat que llega allí (y trae la ubicación buena). */
+    atFirst: ChatFrag;
+    /** El trozo del chat de cuando por fin le ves. */
+    found: ChatFrag[];
+    /** Lo que dicen Gas y Carme (inventado, ver ANIVERSARIO_GAS en story.ts). */
+    lines: { again: string; notHere: string; allLuck: string; stampede: string; toFont: string; carmeAfter: Line[] };
+  };
   /** Algo que pasa al final del capítulo, antes de cerrarlo (p. ej. un minijuego). */
   afterEnd?: (next: () => void) => void;
   /** Ferreries: la mirada a cámara lenta, el baile juntos, el beso y el número. */
@@ -53,21 +66,23 @@ export const FERRERIES_VARIANT: JaleoVariant = {
   text: FERRERIES,
   guide: 'Tòfol',
   item: '🍋',
+  // (objetivos mínimos: un emoji o dos palabras; lo que hay que hacer lo cuenta la gente)
   hud: {
-    talk: 'Habla con Tòfol, en el bar de la plaza',
-    collectItems: 'Busca las pomadas que faltan por los bares',
-    collectLuck: 'Acaricia a los burros cuando se paren',
-    collect: 'Pomadas por los bares y caricias a los burros cuando se paren',
-    back: '¡Ya está! Vuelve con Tòfol',
-    find: 'Ve a bailar al bar de Sa Font, con Carme',
+    talk: '🍻 Tòfol',
+    collectItems: '🍋',
+    collectLuck: '🫏',
+    collect: '🍋 🫏',
+    back: '🍋 → Tòfol',
+    find: '💃 Sa Font',
     give: '💃 Bailar',
   },
-  bumped: '¡Uiii! Cuidado con los burros 🫏',
+  bumped: '¡Uiii!',
   statHits: 'Empujones de burro',
   meetScene: FERRERIES_MEET,
 };
 
-type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
+// toFont: capítulo 9, después del jaleo, a bailar juntos a Sa Font (donde se conocieron) antes del beso
+type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'toFont' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
 const REAR = 1.8;
@@ -91,6 +106,33 @@ interface Pomada {
   mesh: THREE.Object3D;
   home: THREE.Vector3;
   taken: boolean;
+}
+
+let pinTex: THREE.Texture | null = null;
+/** El 📍 de la ubicación que manda Gas, de tebeo: gota roja con su punto blanco y su contorno de tinta. */
+function pinTexture() {
+  if (pinTex) return pinTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.beginPath();
+  g.arc(64, 48, 34, Math.PI * 0.82, Math.PI * 0.18);
+  g.lineTo(64, 120);
+  g.closePath();
+  g.fillStyle = '#e0303e';
+  g.fill();
+  g.strokeStyle = '#2a1a2e';
+  g.lineWidth = 8;
+  g.lineJoin = 'round';
+  g.stroke();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.arc(64, 48, 13, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  pinTex = new THREE.CanvasTexture(c);
+  pinTex.colorSpace = THREE.SRGBColorSpace;
+  return pinTex;
 }
 
 let alertTex: THREE.Texture | null = null;
@@ -195,6 +237,15 @@ export class Level1 implements Level {
   private marcBox: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
   /** Gas va al lado de Azul (capítulo 9, después de encontrarle). */
   private together = false;
+  /** Capítulo 9: 0, camino de la primera ubicación; 1, camino de la buena (donde está); 2, encontrado. */
+  private gasStep = 0;
+  /** Capítulo 9: dónde se queda Gas comiéndose el bocata, y el bocata. */
+  private gasHome = new THREE.Vector3();
+  private bocata: THREE.Object3D | null = null;
+  /** El 📍 de la última ubicación (capítulo 9). */
+  private pin: THREE.Sprite;
+  /** Pistas (flecha, marcador, columna) solo a los 40 s sin avanzar. */
+  private lost = new Lost();
 
   // temporales reutilizables
   private v1 = new THREE.Vector3();
@@ -233,6 +284,8 @@ export class Level1 implements Level {
       const apron = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.5, 0.012), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2a7a50), roughness: 0.85 }));
       apron.position.set(0, -0.14, 0.135);
       apron.castShadow = true;
+      // (va con la persona: rampa de persona y sin tinta por dentro, ver D6b)
+      apron.userData.person = true;
       boneAnchor(this.tofol, 'Hips').add(apron);
     } else if (!V.horses) this.tofol.body.add(new Merger().add(G.box, 0x2a7a50, 0, 0.92, 0.17, 0, 0, 0, 0.42, 0.5, 0.04).mesh());
     this.scene.add(this.tofol.root);
@@ -249,6 +302,17 @@ export class Level1 implements Level {
     this.marc.root.position.copy(this.world.marcPos).add(new THREE.Vector3(3.2, 0, 1.4));
     this.marc.root.rotation.y = Math.atan2(-this.world.marcPos.x, 14 - this.world.marcPos.z);
     this.scene.add(this.marc.root);
+    this.gasHome.copy(this.marc.root.position);
+    if (V.findFirst) {
+      // Un año después, cuando le encuentra está con su bocata («Tengo bocata. Y patatas»): un trozo de barra con
+      // su relleno, en la mano, de pie junto a Sa Font
+      this.bocata = new Merger()
+        .add(G.cyl, 0xd9a35a, 0, 0, 0, 0, 0, Math.PI / 2, 0.075, 0.22, 0.075)
+        .add(G.box, 0xb0452a, 0, 0.018, 0, 0, 0, 0, 0.2, 0.02, 0.05)
+        .mesh();
+      this.bocata.userData.comicBent = true;
+      this.scene.add(this.bocata);
+    }
 
     // La fabiolera: toca el fabiol y el tamborí delante de la iglesia
     this.fabiolera = makePerson({ skin: 0xf0c8a6, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x5a3a22, hairStyle: 'bun', shoes: 0x111111 });
@@ -279,7 +343,10 @@ export class Level1 implements Level {
       drum.rotation.z = Math.PI / 2;
       drum.position.set(-0.2, -0.02, 0.1);
       boneAnchor(this.fabiolera, 'Hips').add(drum);
-      for (const o of [crown, brim, shell, hoop]) o.castShadow = true;
+      for (const o of [crown, brim, shell, hoop, fabiol]) {
+        o.castShadow = true;
+        o.userData.person = true;
+      }
     } else this.fabiolera.body.add(
       new Merger()
         .add(G.cyl, 0x111111, 0, 2.08, 0, 0, 0, 0, 0.62, 0.18, 0.62) // bombín
@@ -383,6 +450,11 @@ export class Level1 implements Level {
         this.tofol.handR.getWorldPosition(this.tofolCup.position);
         this.tofolCup.position.y -= 0.06;
       }
+      if (this.bocata?.visible) {
+        this.marc.handR.getWorldPosition(this.bocata.position);
+        this.bocata.position.y -= 0.03;
+        this.bocata.rotation.y = this.marc.root.rotation.y;
+      }
     };
     rigPost.add(this.cupPost);
 
@@ -394,7 +466,15 @@ export class Level1 implements Level {
     this.marker.add(cone, stem);
     // pequeña: una pista, no un letrero
     this.marker.scale.setScalar(0.45);
+    this.marker.visible = false;
     this.scene.add(this.marker);
+    // La ubicación que manda Gas (cap. 9): un 📍 alto sobre el sitio, que se ve por encima de los tejados
+    this.pin = new THREE.Sprite(new THREE.SpriteMaterial({ map: pinTexture(), depthTest: false, transparent: true }));
+    this.pin.center.set(0.5, 0);
+    this.pin.scale.setScalar(1.5);
+    this.pin.renderOrder = 6;
+    this.pin.visible = false;
+    this.scene.add(this.pin);
 
     this.confetti.mesh.visible = false;
     this.confetti.active = false;
@@ -408,8 +488,11 @@ export class Level1 implements Level {
     later(() => {
       if (this.stage !== 'intro') return;
       const go = () => {
+        // (si en el modo prueba se ha saltado a otra fase mientras duraban la intro o los chats, no volver atrás)
+        if (this.stage !== 'intro') return;
         this.busy = false;
         this.stage = V.findFirst ? 'findMarc' : 'talkTofol';
+        this.gasStep = 0;
         this.updateHud();
         if (!V.findFirst) this.startWater();
       };
@@ -435,6 +518,7 @@ export class Level1 implements Level {
       () => {
         this.water?.dispose();
         this.water = null;
+        if (this.stage !== 'water') return;
         this.busy = false;
         this.stage = 'talkTofol';
         this.updateHud();
@@ -445,8 +529,8 @@ export class Level1 implements Level {
   }
 
   private updateHud() {
-    // (sin el objetivo escrito arriba: lo que hay que hacer se descubre hablando con la gente; quedan los contadores)
-    const h = { setObjective: (_t: string) => this.hud.setObjective(''), setCounters: (c: string) => this.hud.setCounters(c) };
+    // (objetivos mínimos, un emoji o dos palabras: lo que hay que hacer se descubre hablando con la gente)
+    const h = this.hud;
     const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
     switch (this.stage) {
       case 'water':
@@ -454,6 +538,9 @@ export class Level1 implements Level {
         h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span>`);
         break;
       case 'intro':
+        h.setObjective('');
+        h.setCounters('');
+        break;
       case 'talkTofol':
         h.setObjective(this.V.hud.talk);
         h.setCounters('');
@@ -472,6 +559,10 @@ export class Level1 implements Level {
         h.setObjective(this.V.hud.find);
         h.setCounters('');
         break;
+      case 'toFont':
+        h.setObjective('💃 Sa Font');
+        h.setCounters('');
+        break;
       case 'kiss':
       case 'kissing':
         h.setObjective('💋');
@@ -484,7 +575,7 @@ export class Level1 implements Level {
       case 'barDance':
       case 'meet':
       case 'eyes':
-        h.setObjective('…');
+        h.setObjective('');
         h.setCounters('');
         break;
       default:
@@ -501,6 +592,9 @@ export class Level1 implements Level {
       case 'returnTofol':
         return this.world.tofolPos;
       case 'findMarc':
+        if (this.V.findFirst) return this.gasStep === 0 ? this.V.findFirst.first : this.marc.root.position;
+        return this.world.marcPos;
+      case 'toFont':
         return this.world.marcPos;
       case 'collect': {
         if (this.pomadaCount < 3) {
@@ -617,17 +711,18 @@ export class Level1 implements Level {
             lost.taken = false;
             lost.mesh.visible = true;
           }
-          toast(this.T.hints.dropped);
+          // (los toast no se ven en el cómic: lo dice ella; el «¡PAF!» ya lo pone el golpe)
+          bark('Margaux', this.T.hints.dropped);
           this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 5);
           this.updateHud();
         } else if (this.stage === 'returnTofol' && this.spilled < 2) {
           // Le queda siempre al menos una: se derrama, pero no hay que volver a empezar
-          toast(FERRERIES.hints.spilled[this.spilled]);
+          bark('Margaux', FERRERIES.hints.spilled[this.spilled]);
           this.spilled++;
           this.fx.burst(this.v1.copy(pp).setY(1.4), '🍋', 7);
           this.updateHud();
-        } else {
-          toast(this.V.bumped);
+        } else if (this.hits === 1) {
+          bark('Margaux', this.V.bumped);
         }
       }
     }
@@ -659,7 +754,11 @@ export class Level1 implements Level {
       talkTofol: [`¿Buscas a ${g}? Siempre está detrás de la barra del Bar Es Pla, en la plaza.`, `${g} andaba preguntando por ti. Está en el Es Pla, el de la plaza de la iglesia.`],
       collect: ['Dicen que si acaricias a un ase justo cuando se para, da suerte todo el año.', 'Las pomadas las ponen en las barras de los bares. Hay tres bares por aquí.', 'Cuidado con los burros, que cuando se encabritan empujan. Espera a que se paren.'],
       returnTofol: [`${g} estaba esperando sus pomadas, ¿no?`],
-      findMarc: ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
+      findMarc: this.V.findFirst
+        ? // (un año después no lleva la del Barça, y le busca por sus ubicaciones)
+          ['¿Buscas a alguien? Mira el móvil, que con tanta gente aquí no se encuentra nadie.', 'Si te ha mandado la ubicación, ve a ver. Aunque aquí todo el mundo se mueve…']
+        : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
+      toFont: ['¿A Sa Font? Al fondo de la plaza, al lado de la iglesia.'],
     };
     const chatter = [
       '¡Qué calor! Pero el jaleo no me lo pierdo por nada.',
@@ -688,21 +787,32 @@ export class Level1 implements Level {
     s.ring.visible = false;
     this.luckCount++;
     this.pet = { s, t: 1.1 };
-    later(() => this.fx.burst(this.v1.copy(s.d.root.position).setY(2.1), '💕', 4, 1.6, 0.9), 350);
+    // (corazón dibujado, no el emoji 💕 del sistema)
+    later(() => this.fx.burst(this.v1.copy(s.d.root.position).setY(2.1), '❤️', 4, 1.6, 0.9), 350);
     const at = this.v1.copy(s.d.root.position).setY(2.4);
+    // (los toast no se ven en el cómic: onomatopeyas)
     if (perfect) {
       this.perfects++;
       audio.perfect();
-      toast(this.T.hints.perfect);
+      comicWord(this.T.hints.perfect, 'perfect');
       this.fx.burst(at, '✨', 10, 3.5, 1.4);
       vibrate([20, 30, 20]);
     } else {
       audio.luck();
-      toast(k < 0.4 ? this.T.hints.late : this.T.hints.luck);
+      comicWord(k < 0.4 ? this.T.hints.late : this.T.hints.luck, 'luck');
       vibrate(25);
     }
     this.fx.burst(at, '🍀', perfect ? 12 : 8);
-    if (this.luckCount === 3) later(() => toast(this.T.hints.allLuck), 1200);
+    if (this.luckCount === 3)
+      later(() => {
+        // (si con esta ya lo tenía todo, manda la estampida: que no se pisen los bocadillos)
+        if (this.stage !== 'collect') return;
+        if (this.together && this.V.findFirst) bark('Gas', this.V.findFirst.lines.allLuck);
+        else {
+          audio.cheer(0.5);
+          comicWord(this.T.hints.allLuck, 'cheer');
+        }
+      }, 1200);
     this.checkCollectDone();
   }
 
@@ -712,8 +822,10 @@ export class Level1 implements Level {
     ph.walls = W.colliders.filter((c) => c.maxX - c.minX < 60 && c.maxZ - c.minZ < 60);
     ph.bounds = W.bounds;
     const geo = new THREE.CylinderGeometry(0.07, 0.05, 0.17, 14);
-    // Vasos de plástico transparentes de pomada (gin con limonada): alguno con un culo de limonada
-    const mats = [toon({ color: 0xf4f7f2, roughness: 0.15, transparent: true, opacity: 0.55 }), toon({ color: 0xf1ecb0, roughness: 0.2, transparent: true, opacity: 0.7 })];
+    // Vasos de plástico de pomada (gin con limonada): alguno con un culo de limonada
+    // (opacos, de un blanco algo azulado: transparentes no escribían profundidad, se quedaban sin tinta y casi no se
+    // veían; es uno de los defectos del cap. 1)
+    const mats = [toon({ color: 0xe6eef0, roughness: 0.15 }), toon({ color: 0xefe3a0, roughness: 0.2 })];
     const B = W.bounds;
     let n = 0;
     for (let i = 0; i < 600 && n < 36; i++) {
@@ -885,8 +997,13 @@ export class Level1 implements Level {
 
     const dT = pp.distanceTo(this.world.tofolPos);
     if (this.stage === 'findMarc' && this.gasMovesLeft > 0 && !this.busy && pp.distanceTo(this.world.marcPos) < 6) this.moveGas();
+    const F = this.V.findFirst;
+    // Capítulo 9: llega a la primera ubicación que le mandó y ya no está
+    if (F && this.stage === 'findMarc' && !this.busy && this.gasStep === 0 && Math.hypot(pp.x - F.first.x, pp.z - F.first.z) < 4) this.atFirstSpot();
     const dM = pp.distanceTo(this.world.marcPos);
-    animatePerson(this.tofol, dt, dT < 5 && !ending && !this.cupsGiven ? 'wave' : 'idle');
+    const dG = pp.distanceTo(this.marc.root.position);
+    // (Tòfol ya no saluda con el brazo: espera quieto detrás de la barra y se gira hacia ella)
+    animatePerson(this.tofol, dt, 'idle');
     if (this.tofolCup) {
       // Con su pomada en la mano, y de vez en cuando un trago
       const sip = Math.max(0, Math.sin(this.t * 0.55) - 0.82) / 0.18;
@@ -908,6 +1025,7 @@ export class Level1 implements Level {
       }
     } else if (this.stage === 'meet') animatePerson(this.marc, dt, 'talk');
     else if (this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.marc, dt, 'idle');
+    else if (F && (this.stage === 'intro' || this.stage === 'findMarc')) this.gasEats(dt, pp);
     else animatePerson(this.marc, dt, 'dance', 0, this.t * 8 + 1);
     if (this.carmeTo) {
       const cp = this.carme.root.position, d = this.v2.subVectors(this.carmeTo, cp).setY(0), l = d.length();
@@ -920,7 +1038,7 @@ export class Level1 implements Level {
         animatePerson(this.carme, dt, this.stage === 'ending' ? 'dance' : 'idle', 0, this.t * 7);
       }
     } else animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
-    if (this.together && !this.marcTo && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol')) {
+    if (this.together && !this.marcTo && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'toFont')) {
       // Gas la sigue a un paso
       const mp = this.marc.root.position;
       const dx = pp.x - mp.x, dz = pp.z - mp.z, d = Math.hypot(dx, dz);
@@ -986,7 +1104,7 @@ export class Level1 implements Level {
           this.pomadaCount++;
           audio.pickup();
           vibrate(20);
-          toast(this.T.hints.pomada);
+          comicWord(this.T.hints.pomada, 'luck');
           this.fx.burst(this.v1.copy(p.home), '✨', 8);
           this.checkCollectDone();
         }
@@ -1014,10 +1132,14 @@ export class Level1 implements Level {
       } else if (dT < 3.5) {
         label = 'Hablar';
         this.pendingAction = () => this.talkTofol();
-      } else if (this.V.findFirst && this.stage === 'findMarc' && this.gasMovesLeft <= 0 && dM < 3.5) {
+      } else if (F && this.stage === 'findMarc' && this.gasMovesLeft <= 0 && this.gasStep === 1 && dG < 3.2) {
         label = '📍 Aquí!';
         pulse = true;
         this.pendingAction = () => this.foundGas();
+      } else if (this.stage === 'toFont' && dM < 4) {
+        label = this.V.hud.give;
+        pulse = true;
+        this.pendingAction = () => this.startPairDance();
       } else if (dM < 3.5 && this.stage === 'findMarc' && !this.V.findFirst) {
         label = this.V.hud.give;
         pulse = true;
@@ -1026,7 +1148,7 @@ export class Level1 implements Level {
         label = 'Hablar';
         this.pendingAction = () => {
           this.busy = true;
-          dialogue(this.T.carme, () => (this.busy = false));
+          dialogue(F && this.together ? F.lines.carmeAfter : this.T.carme, () => (this.busy = false));
         };
       } else if (this.stage !== 'water' && !this.sit) {
         // Con cualquiera de la gente: una charla corta (y, a veces, una pista de lo que toca)
@@ -1047,15 +1169,35 @@ export class Level1 implements Level {
     this.hud.setAction(label, pulse);
     if (this.input.consumeAction() && this.pendingAction) this.pendingAction();
 
-    // Marcador de objetivo
-    const tgt = this.target();
-    // (sin pistas: ni flecha encima del objetivo ni flecha en pantalla; se descubre hablando y explorando)
-    this.marker.visible = false;
+    // Capítulo 9: la pista es la ubicación que manda Gas, un 📍 sobre el sitio (nada de flecha)
+    const searching = !!F && this.stage === 'findMarc' && this.gasStep < 2;
+    this.pin.visible = searching && !this.busy;
+    if (searching) {
+      const at = this.gasStep === 0 ? F!.first : this.marc.root.position;
+      this.pin.position.set(at.x, 3.4 + Math.abs(Math.sin(this.t * 2.2)) * 0.35, at.z);
+      // (más grande cuanto más lejos, para que se lea desde la otra punta de la calle)
+      this.pin.scale.setScalar(Math.max(1.5, Math.hypot(at.x - pp.x, at.z - pp.z) * 0.045));
+    }
+    // Pistas, solo si se ha perdido: el marcador, la flecha del HUD y la columna de luz salen a los 40 s sin avanzar
+    // (hablar con la gente cuenta como avanzar: es como se entera de lo que toca)
+    const key = `${this.stage}|${this.pomadaCount}|${this.luckCount}|${this.water?.out ?? 0}|${this.gasStep}|${this.chats}`;
+    const lostNow = this.lost.tick(key, dt, this.busy || ending || close0 || !!this.sit);
+    let tgt: THREE.Vector3 | null = null;
+    if (lostNow && searching) {
+      // (perdida buscándole: Gas le vuelve a mandar la ubicación)
+      bark('Gas', F!.lines.again);
+      audio.pop();
+      this.lost.reset();
+    } else if (lostNow) tgt = this.target();
+    this.marker.visible = !!tgt && !this.busy;
     if (tgt) {
       this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 0.7 : 2.6) + Math.sin(this.t * 3) * 0.1, tgt.z);
       this.marker.rotation.y += dt * 2;
-      this.hud.setArrow(null);
-      beacon.at(null);
+      const ang = Math.atan2(tgt.x - pp.x, tgt.z - pp.z);
+      const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
+      const near = Math.hypot(tgt.x - pp.x, tgt.z - pp.z) < 2;
+      this.hud.setArrow(near ? null : -rel);
+      beacon.at(near ? null : tgt);
     } else {
       this.hud.setArrow(null);
       beacon.at(null);
@@ -1115,7 +1257,7 @@ export class Level1 implements Level {
     const moves = this.T.gasMoves ?? [];
     const i = moves.length - this.gasMovesLeft;
     this.gasMovesLeft--;
-    toast(moves[i]);
+    bark('Gas', `(WhatsApp) ${moves[i]}`);
     audio.whoosh();
     const c = this.world.plazaCenter;
     const spots = [new THREE.Vector3(c.x - 9, 0, c.z - 6), new THREE.Vector3(c.x + 9, 0, c.z + 2)];
@@ -1139,7 +1281,13 @@ export class Level1 implements Level {
       this.stampede = true;
       this.spilled = 0;
       this.invuln = 1.5; // un respiro para arrancar
-      toast(FERRERIES.hints.stampede);
+      // (antes un toast, que no se ve: la onomatopeya y lo dice quien va con las pomadas, o Gas a su lado)
+      comicWord(FERRERIES.hints.stampedeWord, 'hit');
+      later(() => {
+        if (this.stage !== 'returnTofol') return;
+        if (this.together && this.V.findFirst) bark('Gas', this.V.findFirst.lines.stampede);
+        else bark('Margaux', FERRERIES.hints.stampede);
+      }, 700);
       audio.warn();
       audio.cheer(0.5);
       vibrate([60, 40, 60]);
@@ -1163,7 +1311,8 @@ export class Level1 implements Level {
       this.stampede = false;
       // Si se han derramado, Tòfol lo nota
       const lines = this.spilled ? [...FERRERIES.hints.arrived(3 - this.spilled), ...this.T.tofolDone.slice(2)] : this.T.tofolDone;
-      dialogue(lines, this.V.findFirst ? () => { this.busy = false; this.faceToFace(); this.stage = 'kiss'; this.updateHud(); } : done('findMarc'));
+      // (capítulo 9: antes del beso, a bailar juntos a Sa Font, donde se conocieron; antes el beso era ahí mismo)
+      dialogue(lines, this.V.findFirst ? () => this.goToFont() : done('findMarc'));
     } else dialogue(this.T.tofolAgain, done());
   }
 
@@ -1234,7 +1383,7 @@ export class Level1 implements Level {
         // Contraplano: la cara de él, hasta que pasa su frase
         { dur: Infinity, slow: 0.2, move: 3, pos: () => rel(mc(), az(), -0.9, -0.2, 0.02), pos2: () => rel(mc(), az(), -0.7, -0.18, 0.02), look: mc, fov: 40, focus: mc },
       ]);
-      later(() => dialogue(M.eyes, () => {
+      later(() => this.stage === 'eyes' && dialogue(M.eyes, () => {
         cinema.stop();
         this.stage = 'meet';
         this.updateHud();
@@ -1257,25 +1406,93 @@ export class Level1 implements Level {
     this.marc.root.rotation.y = Math.atan2(dir.x, dir.z);
   }
 
-  /** Capítulo 9: por fin le encuentras; a partir de aquí va contigo. */
+  /** Capítulo 9: llega a la primera ubicación y ya no está; le escribe y él contesta (con la buena). */
+  private atFirstSpot() {
+    const F = this.V.findFirst!;
+    this.busy = true;
+    this.walker.stop();
+    this.input.reset();
+    this.hud.setAction(null);
+    bark('Margaux', F.lines.notHere);
+    later(() => {
+      if (this.stage !== 'findMarc' || this.gasStep !== 0) return;
+      phoneChat(F.atFirst, () => {
+        if (this.stage !== 'findMarc' || this.gasStep !== 0) return;
+        this.busy = false;
+        this.gasStep = 1;
+        this.lost.reset();
+        this.updateHud();
+      });
+    }, 1700);
+  }
+
+  /** Capítulo 9: Gas, de pie junto a Sa Font, con su bocata (de vez en cuando, un mordisco); si ella se acerca, la mira. */
+  private gasEats(dt: number, pp: THREE.Vector3) {
+    const mp = this.marc.root.position;
+    animatePerson(this.marc, dt, 'idle');
+    if (Math.hypot(pp.x - mp.x, pp.z - mp.z) < 9) {
+      const want = Math.atan2(pp.x - mp.x, pp.z - mp.z);
+      const r = this.marc.root.rotation;
+      r.y += Math.atan2(Math.sin(want - r.y), Math.cos(want - r.y)) * Math.min(1, dt * 3);
+    }
+    if (this.bocata?.visible && this.gasStep < 2) {
+      // (el mismo gesto que Tòfol con su pomada: el vaso, aquí el bocata, a la boca)
+      const bite = Math.max(0, Math.sin(this.t * 0.7) - 0.8) / 0.2;
+      this.marc.armR.rotation.x = -0.75 - bite * 1.15;
+      this.marc.elbowR.rotation.x = -0.9 - bite * 0.7;
+    }
+  }
+
+  /** Capítulo 9: por fin le ve. Primero el «Estoy» del chat; luego el abrazo, la charla y a partir de aquí va con ella. */
   private foundGas() {
+    const F = this.V.findFirst!;
     this.busy = true;
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
+    this.gasStep = 2;
+    this.lost.reset();
     const pp = this.player.root.position;
     const mp = this.marc.root.position;
     this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
     this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
-    hugFor(this.player, this.marc, 3);
-    dialogue([...this.T.marcMeet, ...this.T.smallTalk], () =>
-      phoneChat(this.V.findFirst!.found, () => {
+    phoneChat(F.found, () => {
+      if (this.stage !== 'findMarc') return;
+      if (this.bocata) this.bocata.visible = false;
+      hugFor(this.player, this.marc, 3);
+      dialogue([...this.T.marcMeet, ...this.T.smallTalk], () => {
+        if (this.stage !== 'findMarc') return;
         this.together = true;
         this.busy = false;
         this.stage = 'talkTofol';
         this.updateHud();
-      }),
-    );
+      });
+    });
+  }
+
+  /** Capítulo 9: Tòfol les manda a Sa Font, donde se conocieron; Gas va a su lado. */
+  private goToFont() {
+    if (this.stage !== 'returnTofol') return;
+    this.busy = false;
+    this.stage = 'toFont';
+    this.updateHud();
+    later(() => this.stage === 'toFont' && bark('Gas', this.V.findFirst!.lines.toFont), 600);
+  }
+
+  /** Capítulo 9: en Sa Font bailan juntos un rato, como el año pasado, y luego llega el beso. */
+  private startPairDance() {
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.faceToFace();
+    // Carme se aparta a un lado para dejarles sitio
+    const pp = this.player.root.position, mp = this.marc.root.position;
+    const dir = this.v1.subVectors(pp, mp).setY(0).normalize();
+    const mid = this.v2.copy(pp).lerp(mp, 0.5);
+    this.carmeTo = new THREE.Vector3(mid.x - dir.z * 2.2 + dir.x * 0.6, 0, mid.z + dir.x * 2.2 + dir.z * 0.6);
+    this.stage = 'pairDance';
+    this.pairT = 0;
+    this.updateHud();
   }
 
   /** La primera mirada: desde detrás del hombro de Marc, la cámara se acerca despacio a los ojos de ella. */
@@ -1312,14 +1529,18 @@ export class Level1 implements Level {
       const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05), plastic);
       grip.position.set(0, -0.07, -0.01);
       grip.rotation.x = -0.25;
-      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 14), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xbfe8ff), roughness: 0.1, transparent: true, opacity: 0.6 }));
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 14), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xa9dcf5), roughness: 0.1 }));
       tank.rotation.x = Math.PI / 2;
       tank.position.set(0, 0.07, 0.04);
       const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.1, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xffffff), roughness: 0.4 }));
       barrel.rotation.x = Math.PI / 2;
       barrel.position.z = 0.22;
       gun.add(body, grip, tank, barrel);
-      gun.traverse((o) => (o.castShadow = true));
+      // (en la mano: rampa de persona y sin tinta por dentro; el depósito, opaco, que transparente no tenía tinta)
+      gun.traverse((o) => {
+        o.castShadow = true;
+        o.userData.person = true;
+      });
       this.scene.add(gun);
       this.shooters.push({ p, gun, yaw, aim: yaw, fireT: 0.5 + i * 0.6, turnT: 1 + Math.random() * 2 });
       this.world.people.push({ x, z, r: 0.35 });
@@ -1450,11 +1671,68 @@ export class Level1 implements Level {
   }
 
   debug(): DebugItem[] {
+    const F = this.V.findFirst;
     const tp = (x: number, z: number) => {
       this.player.root.position.set(x, 0, z);
       this.walker.knock.set(0, 0, 0);
     };
+    /** Deja todo como al empezar una fase: sin escenas a medias, sin minijuegos, sin vasos en la mano… */
+    const reset = () => {
+      cinema.stop();
+      if (this.kissLight) this.scene.remove(this.kissLight);
+      this.kissLight = null;
+      this.kiss?.stop();
+      this.kiss = null;
+      for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;
+      if (this.water) {
+        this.water.dispose();
+        this.water = null;
+      }
+      this.marcTo = this.carmeTo = null;
+      this.marcSteer = {};
+      this.carmeSteer = {};
+      this.pet = null;
+      this.sit = null;
+      this.player.body.position.y = 0;
+      this.stampede = false;
+      this.spilled = 0;
+      this.invuln = 0;
+      this.endingT = this.pairT = this.barT = this.kissT = 0;
+      this.confetti.active = false;
+      this.donkeys.forEach((d) => {
+        d.ring.visible = d.alert.visible = false;
+        d.warnT = d.rearT = 0;
+      });
+      this.walker.stop();
+      this.lost.reset();
+      // (Carme y, en el cap. 1, Marc, en su sitio de Sa Font: la escena del bar los mueve)
+      this.carme.root.position.copy(this.world.marcPos);
+      if (!F) this.marc.root.position.copy(this.gasHome);
+    };
+    /** Las pomadas: dadas a Tòfol (él con su vaso) o todavía no. */
+    const cups = (given: boolean) => {
+      if (given) this.giveCups();
+      else {
+        this.cupsGiven = false;
+        if (this.tofolCup) this.scene.remove(this.tofolCup);
+        this.tofolCup = null;
+      }
+    };
+    /** Capítulo 9: Gas, todavía en su sitio con el bocata, o ya con ella. */
+    const gas = (withHer: boolean, step = withHer ? 2 : 0) => {
+      if (!F) return;
+      this.gasStep = step;
+      this.together = withHer;
+      if (this.bocata) this.bocata.visible = !withHer;
+      const mp = this.world.marcPos;
+      if (this.marcBox) Object.assign(this.marcBox, { minX: mp.x - 0.35, maxX: mp.x + 0.35, minZ: mp.z - 0.35, maxZ: mp.z + 0.35 });
+      if (withHer) {
+        const pp = this.player.root.position;
+        this.marc.root.position.set(pp.x - 1.3, 0, pp.z);
+      } else this.marc.root.position.copy(this.gasHome);
+    };
     const go = (stage: Stage, setup?: () => void) => () => {
+      reset();
       this.busy = false;
       this.input.reset();
       setup?.();
@@ -1462,34 +1740,96 @@ export class Level1 implements Level {
       if (stage !== 'collect') this.pomadas.forEach((p) => (p.mesh.visible = false));
       this.updateHud();
     };
-    return [
-      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => tp(8.2, 9)) },
+    const collect = (done: boolean) => {
+      this.pomadaCount = this.luckCount = done ? 3 : 0;
+      if (!done) this.perfects = this.hits = 0;
+      this.pomadas.forEach((p) => {
+        p.taken = done;
+        p.mesh.visible = false;
+      });
+      this.donkeys.forEach((d) => (d.touched = done));
+    };
+    const tofolSpot = () => tp(8.2, 9);
+    const fontSpot = () => tp(this.world.marcPos.x + 2.2, this.world.marcPos.z - 1.4);
+    const items: DebugItem[] = [];
+    if (F) {
+      items.push(
+        { label: 'A · Buscar a Gas (1.ª ubicación)', run: go('findMarc', () => { cups(false); collect(false); gas(false, 0); tp(this.world.spawn.x, this.world.spawn.z); }) },
+        { label: 'B · 2.ª ubicación (está en Sa Font)', run: go('findMarc', () => { cups(false); collect(false); gas(false, 1); tp(F.first.x - 2, F.first.z); }) },
+      );
+    } else {
+      items.push({
+        label: '0 · Pistolas de agua',
+        run: () => {
+          go('intro', () => { cups(false); collect(false); tp(this.world.spawn.x, this.world.spawn.z); })();
+          this.startWater();
+        },
+      });
+    }
+    items.push(
+      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => { cups(false); collect(false); tofolSpot(); gas(true); }) },
+      { label: '2 · Pomadas y ases', run: go('collect', () => { cups(false); collect(false); tp(0, 6); gas(true); }) },
       {
-        label: '2 · Pomadas y ases',
-        run: go('collect', () => {
-          this.pomadaCount = this.luckCount = this.perfects = this.hits = 0;
-          this.pomadas.forEach((p) => (p.taken = false));
-          this.donkeys.forEach((d) => (d.touched = false));
-          tp(0, 6);
+        label: `3 · Volver a ${this.V.guide}`,
+        run: go('returnTofol', () => {
+          cups(false);
+          collect(true);
+          tp(-6, 2);
+          gas(true);
+          this.stampede = true;
+          this.invuln = 1.5;
         }),
       },
-      { label: `3 · Volver a ${this.V.guide}`, run: go('returnTofol', () => { this.pomadaCount = this.luckCount = 3; tp(8.2, 9); }) },
-      { label: '4 · Ir al bar', run: go('findMarc', () => tp(this.world.marcPos.x + 2.2, this.world.marcPos.z - 1.4)) },
-      {
-        label: '5 · Ver el final',
-        run: () => {
-          go('findMarc', () => tp(this.world.marcPos.x + 2.2, this.world.marcPos.z - 1.4))();
-          this.startBarDance();
+    );
+    if (F) {
+      items.push(
+        { label: 'C · A Sa Font', run: go('toFont', () => { cups(true); collect(true); tofolSpot(); gas(true); }) },
+        {
+          label: 'D · Bailar juntos y beso',
+          run: () => {
+            go('toFont', () => { cups(true); collect(true); fontSpot(); gas(true); })();
+            this.startPairDance();
+          },
         },
+      );
+    } else {
+      items.push(
+        { label: '4 · Ir al bar', run: go('findMarc', () => { cups(true); collect(true); this.marc.root.position.copy(this.gasHome); fontSpot(); }) },
+        {
+          label: '5 · Ver el final',
+          run: () => {
+            go('findMarc', () => { cups(true); collect(true); this.marc.root.position.copy(this.gasHome); fontSpot(); })();
+            this.startBarDance();
+          },
+        },
+      );
+    }
+    items.push(
+      {
+        label: '6 · El beso',
+        run: go('kiss', () => {
+          cups(true);
+          collect(true);
+          if (F) {
+            fontSpot();
+            gas(true);
+          } else {
+            this.marc.root.position.copy(this.gasHome);
+            fontSpot();
+          }
+          this.faceToFace();
+        }),
       },
       {
         label: '✓ Completar capítulo',
         run: () => {
+          reset();
           this.stage = 'done';
           this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] });
         },
       },
-    ];
+    );
+    return items;
   }
 
   dispose() {

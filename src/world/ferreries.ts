@@ -312,7 +312,8 @@ function bar(m: Merger, x: number, z: number, rot: number, awning: number, colli
   })();
   // Un tablero de verdad (con canto) sobre la parte de delante del toldo, con dos patas
   const edge = new THREE.MeshLambertMaterial({ color: darken(awning) });
-  const face = new THREE.MeshBasicMaterial({ map: tex });
+  // (con luz: sin ella, el cartel brillaba solo, sin la sombra de tebeo de lo de alrededor; defecto del cap. 1)
+  const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 });
   const sign = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 0.07), [edge, edge, edge, edge, face, face]);
   sign.position.set(wx(0, 0.45), 3.47, wz(0, 0.45));
   sign.rotation.y = rot;
@@ -617,10 +618,10 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     group.add(c);
   }
 
-  // Placas de calle
-  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu') }));
+  // Placas de calle (con luz, como las de piedra del cap. 2: sin ella brillaban solas a pleno sol)
+  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu'), roughness: 0.9 }));
   sign1.position.set(-43.6, 2.78, -4.86); // (por debajo de la cornisa y sin ninguna farola delante)
-  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshBasicMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església") }));
+  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església"), roughness: 0.9 }));
   sign2.position.set(-11.86, 3.0, 14.6);
   sign2.rotation.y = Math.PI / 2;
   const sign3 = sign2.clone();
@@ -667,7 +668,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   for (let k = -14; k <= 14; k++) m.add(G.box, 0x222222, AX - 0.9, 4.55, 18 + k * 0.2, 0, 0, 0, 0.05, 0.6, 0.05);
   m.add(G.box, 0x222222, AX - 0.9, 4.85, 18, 0, 0, 0, 0.07, 0.07, 6);
   colliders.push({ minX: AX - 0.2, maxX: 20, minZ: 13, maxZ: 21.2 });
-  const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshBasicMaterial({ map: letteringTexture(town ? 'AJUNTAMENT DE CIUTADELLA' : 'AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true }));
+  const ajLetters = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.55), new THREE.MeshStandardMaterial({ map: letteringTexture(town ? 'AJUNTAMENT DE CIUTADELLA' : 'AJUNTAMENT DE FERRERIES', '#5a3a22'), transparent: true, roughness: 0.9 }));
   ajLetters.position.set(AX - 0.1, 7.3, 18);
   ajLetters.rotation.y = -Math.PI / 2;
   group.add(ajLetters);

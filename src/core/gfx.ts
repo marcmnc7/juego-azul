@@ -364,32 +364,67 @@ export class Glitter {
   }
 }
 
-/** Fuegos artificiales con un único THREE.Points y mezcla aditiva. */
+/**
+ * Fuegos artificiales de tebeo con un único THREE.Points: cada chispa es una estrella plana de color con su
+ * contorno de tinta. Se apagan haciéndose transparentes y más pequeñas de golpe al final, nunca oscureciendo el
+ * color (antes, con la bombilla del cómic, acababan como discos negros). Ya nacen de tebeo: `comicGlow` hace que
+ * la conversión del cómic no los toque.
+ */
 export class Fireworks {
   points: THREE.Points;
   private pos: Float32Array;
+  /** Color y transparencia de cada chispa (rgba: el material usa la transparencia por vértice). */
   private col: Float32Array;
   private vel: Float32Array;
   private life: Float32Array;
   private base: Float32Array;
   private next = 0;
   private N = 600;
+  private static LIFE = 1.6;
+  private static tex: THREE.CanvasTexture | null = null;
+
+  /** Estrella de cinco puntas blanca (se tiñe con el color de cada chispa) con su aro de tinta. */
+  private static starTexture() {
+    if (Fireworks.tex) return Fireworks.tex;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const g = cv.getContext('2d')!;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 ? 12 : 27;
+      g.lineTo(32 + Math.cos(a) * r, 33 + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fillStyle = '#ffffff';
+    g.fill();
+    g.strokeStyle = '#2b2233';
+    g.lineWidth = 4;
+    g.lineJoin = 'round';
+    g.stroke();
+    Fireworks.tex = new THREE.CanvasTexture(cv);
+    Fireworks.tex.colorSpace = THREE.SRGBColorSpace;
+    return Fireworks.tex;
+  }
 
   constructor() {
     const g = new THREE.BufferGeometry();
     this.pos = new Float32Array(this.N * 3).fill(-999);
-    this.col = new Float32Array(this.N * 3);
+    this.col = new Float32Array(this.N * 4);
     this.vel = new Float32Array(this.N * 3);
     this.life = new Float32Array(this.N);
     this.base = new Float32Array(this.N * 3);
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
-    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 4));
+    const mat = new THREE.PointsMaterial({ size: 1.1, map: Fireworks.starTexture(), vertexColors: true, transparent: true, alphaTest: 0.04, depthWrite: false, fog: false });
+    mat.userData.comicGlow = true;
+    this.points = new THREE.Points(g, mat);
     this.points.frustumCulled = false;
   }
 
   burst(at: THREE.Vector3) {
-    const c = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
+    // colores de imprenta: tono al azar, muy saturado y claro (de día tienen que leerse sobre el cielo azul)
+    const c = new THREE.Color().setHSL(Math.random(), 0.95, 0.62);
     for (let k = 0; k < 80; k++) {
       const i = this.next;
       this.next = (this.next + 1) % this.N;
@@ -399,21 +434,29 @@ export class Fireworks {
       this.pos.set([at.x, at.y, at.z], i * 3);
       this.vel.set([Math.sin(ph) * Math.cos(th) * sp, Math.cos(ph) * sp, Math.sin(ph) * Math.sin(th) * sp], i * 3);
       this.base.set([c.r, c.g, c.b], i * 3);
-      this.life[i] = 1.6;
+      this.life[i] = Fireworks.LIFE * (0.85 + Math.random() * 0.3);
     }
   }
 
   update(dt: number) {
     for (let i = 0; i < this.N; i++) {
-      if (this.life[i] <= 0) continue;
+      if (this.life[i] <= 0) {
+        this.col[i * 4 + 3] = 0;
+        continue;
+      }
       this.life[i] -= dt;
-      const k = Math.max(0, this.life[i] / 1.6);
       this.vel[i * 3 + 1] -= 6 * dt;
       for (let a = 0; a < 3; a++) {
         this.vel[i * 3 + a] *= 1 - dt * 1.5;
         this.pos[i * 3 + a] += this.vel[i * 3 + a] * dt;
-        this.col[i * 3 + a] = this.base[i * 3 + a] * k;
+        // (el color, siempre pleno: oscurecerlo es lo que dejaba los discos negros)
+        this.col[i * 4 + a] = this.base[i * 3 + a];
       }
+      // Se apaga en el último medio segundo, por transparencia; el último cuarto, a saltos (parpadeo de tebeo)
+      const left = Math.max(0, this.life[i]);
+      const fade = Math.min(1, left / 0.5);
+      this.col[i * 4 + 3] = left < 0.25 && Math.floor(left * 24) % 2 ? 0 : fade;
+      if (this.life[i] <= 0) this.pos[i * 3 + 1] = -999;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
