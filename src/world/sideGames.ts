@@ -10,7 +10,7 @@ import { twoBone } from '../entities/embrace';
 import type { Particles } from '../entities/fx';
 import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } from '../entities/models';
 import { rigPost } from '../entities/rig';
-import { bark, comicWord, dialogue, later, timingGauge, toast } from '../ui/ui';
+import { bark, comicWord, dialogue, later, timingGauge } from '../ui/ui';
 import type { Box2 } from './ferreries';
 import { disposeScene } from './level';
 

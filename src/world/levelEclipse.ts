@@ -35,7 +35,8 @@ import { beacon } from '../core/beacon';
 // Las rocas de la costa de Ciutadella (marès comido por el mar) con el dibujo de piedra, como la roca de Es
 // Castellar (surfaces.ts): por su color caían en «sillares de marès» y parecían paredes. Solo los usa este capítulo
 // (y las rocas de RockHop, que son de aquí)
-for (const c of [0xb8925c, 0xa58150, 0xd1ad74, 0xc9a36a, 0xb48a54, 0xa8845a, 0xc29c66, 0x8f7450, 0x8e7350, 0x9c8058]) setSurface(c, Surf.Stone);
+// (roca natural de la costa, no sillares: ver Surf.Rock)
+for (const c of [0xb8925c, 0xa58150, 0xd1ad74, 0xc9a36a, 0xc9a36b, 0xb48a54, 0xa8845a, 0xc29c66, 0x8f7450, 0x8e7350, 0x9c8058]) setSurface(c, Surf.Rock);
 
 const INK = '#2b2233';
 
@@ -451,7 +452,8 @@ export class LevelEclipse implements Level {
   private buildKayak() {
     const sc = this.newScene(this.daySky(), 0xcfe6f4, 0xfff4e0, 2.2, new THREE.Vector3(0.4, 1, 0.6));
     // La costa de verdad: el Camí de sa Farola, las rocas de marès y el faro, vistos desde el agua
-    const sf = buildSaFarola(sc, this.colliders, true, LIGHTHOUSE_SEA);
+    // (de día también: la discontinua pintada a ras de asfalto, coches de verdad y la torre partida para que se combe)
+    const sf = buildSaFarola(sc, this.colliders, true, LIGHTHOUSE_SEA, { paintLine: true, hdCars: true, bentTower: true });
     for (const w of sf.walkers) w.root.parent?.remove(w.root);
     // Desde el agua se ve la costa baja de marès: una franja de rocas comidas por el mar
     const shore = new Merger();
@@ -2018,6 +2020,8 @@ export class LevelEclipse implements Level {
     if (seaU) {
       (seaU.uColor.value as THREE.Color).setHex(SEA_DUSK).lerp(this.c2.setHex(SEA_TOTAL), dark);
       (seaU.uEmissive.value as THREE.Color).setHex(0x2a1a20).multiplyScalar(0.6 * (1 - dark));
+      // (en la totalidad el mar de lejos ya no refleja un cielo claro: salía gris plata con el cielo de noche)
+      seaU.uNight.value = dark > 0.55 ? 1 : 0;
     }
     if (this.stars) (this.stars.material as THREE.PointsMaterial).opacity = THREE.MathUtils.smoothstep(dark, 0.6, 1);
     if (this.venus) this.venus.material.opacity = THREE.MathUtils.smoothstep(dark, 0.35, 0.8);
