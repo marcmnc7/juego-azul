@@ -39,6 +39,14 @@ Lo aprendido en las siete pasadas del capítulo 2 (`progreso-cap2.md`), escrito 
 - **Halos de tebeo de las lámparas**: automáticos de noche (`comicHaloTexture`); bombillas de guirnalda, `comicBulbTexture`; estrellas, `comicStarTexture`.
 - **Polvo de los pasos**: `dust.tint(noche)` lo hace `setLook`.
 
+### Lo que se descubrió en el cap. 3
+- **Los `toast` no se ven nunca** (`.comic-mode .toast { display: none; }` en `style.css`). Todo lo que un capítulo cuente con un toast se pierde. Lo que diría alguien → `bark(quién, texto)`; aciertos, golpes y fallos → `comicWord('¡TEXTO!', 'perfect' | 'luck' | 'fanfare' | 'hit')`; los nombres de sitio → un cartel en el mundo; lo demás, fuera.
+- **Líneas de velocidad**: `scene.userData.speedLines` (0 a 1) las baja. En un viaje largo y rápido, a 0 en crucero y a 1 solo en los acelerones (turbo, golpe).
+- **Lado del globo**: el nivel puede tener `speakerSide(who)` además de `speakerPoint(who)`; así hasta los comentarios sueltos (`extras.ts`) salen cada uno desde su asiento.
+- **Cielo nublado**: `Sky.overcast(k)` apaga el sol y pone grises las nubes (tormentas).
+- **Coherencia de lado**: en España se conduce por la derecha; lo que está «a la derecha del conductor» es x negativa si el coche va hacia +z y la cámara está detrás (en pantalla, +x sale a la izquierda).
+- **Saltos de fase**: una cadena de diálogos de la intro que acaba poniendo una fase debe comprobar que sigue en la intro (si no, al saltar de fase en el modo prueba vuelve atrás).
+
 ### Por capítulo
 | Problema | Receta | Ejemplo |
 |---|---|---|
