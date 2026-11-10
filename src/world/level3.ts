@@ -2070,6 +2070,20 @@ export class Level3 implements Level {
       const p = new Merger().add(G.box, 0x22222a, x, 2.4, 30.2, 0, 0, 0, 0.3, 4.8, 0.3).mesh();
       sc.add(p);
     }
+    // Y la grande del fondo, encima del telón (sin ella, el telón negro de 26 m parecía un agujero en el dibujo)
+    {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.screenCtx.push(c.getContext('2d')!);
+      this.screenTex.push(tex);
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(15, 7.5), new THREE.MeshBasicMaterial({ map: tex, fog: false }));
+      s.position.set(0, 6.6, 38.42);
+      s.rotation.y = Math.PI;
+      sc.add(s);
+    }
     this.drawScreens(0, 0);
 
     // Láseres que barren el cielo durante el concierto: rayos de color opacos y finos, con su tinta

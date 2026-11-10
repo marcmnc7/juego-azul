@@ -1376,6 +1376,17 @@ html, body { background: #000; }
 .comic-mode .pack-item.in { background: #d8f2c8; border-color: var(--ink-c); }
 .comic-mode .side-info, .comic-mode .table-item { background: var(--paper-c); color: var(--ink-c); border: 2.5px solid var(--ink-c); box-shadow: 3px 3px 0 var(--ink-c); font-family: 'Comic Neue', var(--font); }
 .comic-mode .table-item.sel { background: #ffd23f; border-color: var(--ink-c); }
+/* Ritmo, bandeja, gafas y urinario del cap. 4: tinta y papel, sin degradados */
+.comic-mode .rhythm canvas { border: 3px solid var(--ink-c); border-radius: 8px; box-shadow: 4px 5px 0 var(--ink-c); }
+.comic-mode .rhythm-btns button { border: 3px solid var(--ink-c); border-radius: 8px; box-shadow: 3px 3px 0 var(--ink-c); }
+.comic-mode .rhythm-btns button:active { box-shadow: 1px 1px 0 var(--ink-c); }
+.comic-mode .tray-meter { background: var(--paper-c); border: 3px solid var(--ink-c); box-shadow: 3px 3px 0 var(--ink-c); height: 16px; }
+.comic-mode .gh-title, .comic-mode .pee-title { background: var(--paper-c); color: var(--ink-c); border: 3px solid var(--ink-c); border-radius: 6px; box-shadow: 3px 3px 0 var(--ink-c); font-family: 'Bangers', var(--display); font-weight: 400; letter-spacing: .05em; text-transform: uppercase; }
+.comic-mode .gh-game { background: #c9d1d4; }
+.comic-mode .gh-game::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 27.6%; background: #4f4a45; border-top: 3px solid var(--ink-c); z-index: -1; }
+.comic-mode .gh-inside { background: #dde3e5; }
+.comic-mode .gh-panel { background: #7a9aae; box-shadow: inset 0 0 0 3px var(--ink-c); }
+.comic-mode .gh-door { box-shadow: inset 0 0 0 3px var(--ink-c); }
 /* Onomatopeya: letras gordas de tebeo sobre un estallido, que saltan y se van */
 .pow {
   position: fixed; z-index: 8; pointer-events: none; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
