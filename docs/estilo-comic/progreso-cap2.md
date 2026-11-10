@@ -170,6 +170,28 @@ Partida completa jugada con el teclado, de la intro a «¡Capítulo superado!»,
 | Luciérnagas grandes; una pegada a la cámara en las estrellas | Más pequeñas; ocultas mientras se miran las estrellas |
 | Objetivo «al otro lado de la piscina» | «en el césped junto a la casa», que es donde están |
 
+## Séptima pasada (10-nov): revisión de fallos y capítulo menos «pim pam»
+| Problema | Arreglo |
+|---|---|
+| Ventanas del Ajuntament: rectángulo negro con un triángulo encima | Ventanas ojivales de verdad: marco de marès con su arco, cristal con el mismo arco, parteluz y alféizar; la galería alta con columnitas |
+| Pasos de cebra y discontinua con bordes de dientes de sierra | Pintura plana sobre el asfalto (`paintMat`, sin grosor y adelantada en profundidad); la tinta ya no les dibuja borde |
+| Gas saludando con el brazo roto | Ya no saluda: espera quieto, mirándola |
+| El gesto de «asentir» que hacían siempre | `noFidget` en Azul y Gas (vestidos y sin ropa) |
+| El coche arrancaba lentísimo | Sale ya en marcha (4 m/s) y acelera fuerte a su velocidad de crucero; frena para girar y para delante del vecino |
+| Los globos del coche salían centrados y sin rabito | Cada uno sale de su asiento (`speakerPoint`): el de Gas a la izquierda, el de Azul a la derecha, con el rabito apuntando a quien habla (`bark(…, side)`, `--tail-x`) |
+| No se podía ir rápido en el jardín y la barra no subía | Se anda a velocidad normal y se puede correr; correr y la grava hacen ruido. De puntillas con el joystick poco empujado o con Mayúsculas |
+| La carretera cambiaba de golpe a la calle de casa | Cruce en T: la carretera de Son Oleo pasa por delante (de sur a norte) y la calle de casa sale de ella; el coche frena y gira a la derecha. Bordillos y aceras con su esquina |
+| Recuerdo «la cola» tapado por la tertulia | La tertulia, en la otra mesa de la terraza, sobre la acera |
+| Al acabar Marco Polo empezaba otra partida | `mpDone` |
+| Gas tumbado flotaba medio metro | La postura de tumbado llega a los huesos fundiéndose; se vuelve a apoyar en la toalla durante su primer segundo y medio (`lieSettle`) |
+
+**Más largo y sin pistas**
+- Sin flecha, sin columna de luz y sin la flecha del HUD salvo si lleva 40 s sin avanzar (`lostT`). Objetivos cortos (🤫, 💙…), sin decir qué hacer; los avisos de texto, como bocadillos de Gas.
+- Nuevos pasos: despedirse de la tertulia del Imperi antes de irse (si no, «Uy… que no me he despedido de estos»); un cartel «Pins →» en el Born; las toallas están dobladas en la mesa de la terraza, bajo la ventana de los padres, y hay que ir a por ellas antes de la piscina; a medio camino del jardín, una luz arriba sin haber hecho nada: quieta hasta que se apague; Marco Polo de 7 rondas; al acabar, Gas sale el primero, va a su toalla y se tumba, y ella va cuando quiere.
+- Viaje: ~33 s con la conversación, por la carretera de Son Oleo con su cruce.
+
+Comprobado jugando: despedida, Pins, viaje y cruce, llegada, sigilo corriendo (sube la barra, salta la luz, se para), toallas, Marco Polo completo (y que no se repite), Gas saliendo y tumbándose, los dos en las toallas apoyados (2-3 cm), estrellas; consola sin errores.
+
 ## Falta (común a varios capítulos)
 - fps medidos en el móvil del dueño.
 - Azul con su VRM también en el cap. 2 (hoy solo en el 1): pendiente de que el dueño lo decida.

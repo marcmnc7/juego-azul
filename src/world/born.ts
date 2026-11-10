@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TownHD } from './hd/townHD';
 import { G, Merger, araucaria, makeCar, streetLamp } from '../entities/models';
-import { toon, glowTexture } from '../core/gfx';
+import { toon, glowTexture, paintMat } from '../core/gfx';
 import { Surf } from '../core/surfaces';
 import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
@@ -175,9 +175,12 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   walk(BORN.maxX - SIDEWALK, BORN.maxX, 4.4, BORN.maxZ - SIDEWALK);
   // Marcas viales: líneas de borde y pasos de cebra hacia Ses Voltes, Correus y el Bar Imperi
   const T = BORN_TOP;
+  // (pintura plana sobre el asfalto, sin grosor: con 1 cm de alto, la tinta les dibujaba bordes de dientes de sierra)
   const lines = new Merger();
-  for (const z of [T.maxZ + 0.35, T.minZ - 0.35]) lines.add(G.box, 0xf2f0ea, 0, 0.03, z, 0, 0, 0, T.maxX - T.minX + 0.7, 0.01, 0.1);
-  for (const x of [T.maxX + 0.35, T.minX - 0.35]) lines.add(G.box, 0xf2f0ea, x, 0.03, 0, 0, 0, 0, 0.1, 0.01, T.maxZ - T.minZ + 0.7);
+  const flatG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const PY = 0.021;
+  for (const z of [T.maxZ + 0.35, T.minZ - 0.35]) lines.add(flatG, 0xf2f0ea, 0, PY, z, 0, 0, 0, T.maxX - T.minX + 0.7, 1, 0.1);
+  for (const x of [T.maxX + 0.35, T.minX - 0.35]) lines.add(flatG, 0xf2f0ea, x, PY, 0, 0, 0, 0, 0.1, 1, T.maxZ - T.minZ + 0.7);
   // Pasos de cebra: cada uno de bordillo a bordillo (del de la explanada al de la acera de enfrente) y llevando a
   // algún sitio: a la puerta de Correus, a la del Imperi y, cuando sigue (Sant Joan), a Ses Voltes. (El de Ses Voltes
   // en una calle cerrada acababa en mitad del asfalto, y los otros se quedaban cortos)
@@ -185,15 +188,15 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     const len = Math.abs(a1 - a0), mid = (a0 + a1) / 2;
     for (let i = 0; i < 6; i++) {
       const c = at - 2.25 + i * 0.9;
-      if (alongX) lines.add(G.box, 0xf2f0ea, mid, 0.03, c, 0, 0, 0, len, 0.01, 0.5);
-      else lines.add(G.box, 0xf2f0ea, c, 0.03, mid, 0, 0, 0, 0.5, 0.01, len);
+      if (alongX) lines.add(flatG, 0xf2f0ea, mid, PY, c, 0, 0, 0, len, 1, 0.5);
+      else lines.add(flatG, 0xf2f0ea, c, PY, mid, 0, 0, 0, 0.5, 1, len);
     }
   };
   const kerb = 0.3; // el bordillo de la explanada sobresale 15 cm, más un palmo
   zebra(T.maxZ + kerb, BORN.maxZ - SIDEWALK - 0.12, 0, false); // hacia Correus
   zebra(T.minX - kerb, BORN.minX + SIDEWALK + 0.12, IMPERI.z, true); // hacia el Imperi
   if (opts.voltes) zebra(T.maxX + kerb, BORN.maxX + 3.2, 0, true); // hacia Ses Voltes
-  const lm = lines.mesh();
+  const lm = new THREE.Mesh(lines.build(), paintMat());
   lm.userData.noCast = true;
   g.add(lm);
   // La explanada: zócalo de piedra con bordillo y adoquín rojizo encima
@@ -247,15 +250,27 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   m.add(G.cyl, 0x2a2a2a, W + 0.32, 13.6, -6.5, 0, 0, Math.PI / 2, 0.16, 0.05, 0.16);
   m.add(G.box, 0x2a2a2a, W + 0.34, 13.85, -6.5, 0, 0, 0, 0.02, 0.55, 0.05);
   m.add(G.box, 0x2a2a2a, W + 0.34, 13.6, -6.32, 0, 0, 0, 0.02, 0.05, 0.4);
+  // Ventanas ojivales: marco de marès con su arco apuntado y, dentro, el cristal oscuro con el mismo arco (antes era
+  // un rectángulo casi negro con un triángulo de piedra encima, descolocado)
+  const ogive = new THREE.ConeGeometry(0.5, 1, 4).rotateY(Math.PI / 4);
   for (let z = BORN.minZ + 1.2; z <= -0.6; z += 2.4) {
     if (Math.abs(z + 6.5) < 2.5) continue;
     for (const y of [2.6, 6.4]) {
-      m.add(G.box, 0x3a2a20, W + 0.06, y, z, 0, 0, 0, 0.06, 1.8, 0.9);
-      m.add(new THREE.ConeGeometry(0.62, 0.7, 4), 0xb8955f, W + 0.08, y + 1.15, z, 0, Math.PI / 4, 0, 0.12, 1, 1);
+      const top = y + 0.9;
+      m.add(G.box, 0xc9a77a, W + 0.04, y - 0.05, z, 0, 0, 0, 0.08, 1.9, 1.12); // marco
+      m.add(ogive, 0xc9a77a, W + 0.04, top + 0.34, z, 0, 0, 0, 0.11, 0.78, 1.58); // arco del marco
+      m.add(G.box, 0x24303c, W + 0.09, y, z, 0, 0, 0, 0.04, 1.8, 0.86); // cristal
+      m.add(ogive, 0x24303c, W + 0.09, top + 0.27, z, 0, 0, 0, 0.06, 0.56, 1.21); // arco del cristal
+      m.add(G.box, 0xc9a77a, W + 0.12, y, z, 0, 0, 0, 0.04, 1.8, 0.06); // parteluz
+      m.add(G.box, 0xc9a77a, W + 0.14, y - 0.93, z, 0, 0, 0, 0.16, 0.08, 1.15); // alféizar
     }
     m.add(G.box, 0x2a2a2a, W + 0.4, 5.3, z, 0, 0, 0, 0.6, 0.08, 1.3);
   }
-  for (let z = BORN.minZ + 0.6; z <= 0; z += 1.1) m.add(G.box, 0x3a2a20, W + 0.06, 9.6, z, 0, 0, 0, 0.06, 1.3, 0.6); // galería alta
+  for (let z = BORN.minZ + 0.6; z <= 0; z += 1.1) {
+    // galería alta: arquillos con su cristal oscuro y su columnita
+    m.add(G.box, 0x24303c, W + 0.06, 9.6, z, 0, 0, 0, 0.05, 1.3, 0.6);
+    m.add(G.box, 0xc9a77a, W + 0.1, 9.6, z + 0.36, 0, 0, 0, 0.1, 1.4, 0.12);
+  }
   sign(g, 'AJUNTAMENT', W + 0.24, 7.2, -6.5, Math.PI / 2, 5); // (por delante de la torre, no dentro)
 
   // --- Oeste, al fondo a la izquierda: el Bar Imperi (fachada amarilla, puerta verde, rótulo cursivo) ---
@@ -347,6 +362,8 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   facade(S, -4.6, 18, -1, 2, false);
   facade(4.6, N, 18, -1, 2, false);
   sign(g, 'Plaça des Born', 17.9, 3, -7, -Math.PI / 2, 3.2);
+  // Hacia dónde queda la plaça dels Pins (donde recoge Gas a Azul): por la calle del sur, hacia el este
+  sign(g, 'Pins →', 17.9, 2.6, -11.6, -Math.PI / 2, 1.8);
   if (!opts.voltes) {
     // La calle de Ses Voltes, cerrada a los pocos metros por una casa
     block(30, 38, -6, 6, 10, WHITE);

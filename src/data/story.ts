@@ -260,6 +260,21 @@ export const CONCERT = {
 export const NIGHT = {
   intro: [{ who: 'Narrador', text: 'Ciutadella. 27 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
+  /** En la terraza del Imperi, antes de irse. */
+  bye: [
+    { who: 'Amiga', text: '¿Ya te vas? ¿Y con quién, si se puede saber? 👀' },
+    { who: 'Azul', text: 'Con nadie… 🙃' },
+    { who: 'Amigo', text: 'Ya, ya. Con nadie. Pásalo bien 😏' },
+  ] as Line[],
+  noBye: 'Uy… que no me he despedido de estos.',
+  /** Al llegar: por dónde se entra sin hacer ruido. */
+  sideWay: 'Por el lateral, que la puerta se oye desde arriba 🤫',
+  towelsAsk: '¿Y las toallas? Las dejé en la mesa de la terraza.',
+  towelsGot: 'Eso. Y ahora, a la piscina… despacito.',
+  sneakLight: '¡Shh! ¡Quieta! La luz de arriba…',
+  sneakLightOff: '…Vale. Se ha apagado. Sigue.',
+  mpRules: 'Yo cierro los ojos. Digo «Marco» y tú «Polo»… y si te oigo chapotear, voy a por ti 😏',
+  getOut: 'Me estoy quedando helado… ¿Nos tumbamos un rato?',
   /** En el coche, del Born a casa (bocadillos, sin parar el viaje). */
   drive: [
     { who: 'Gas', text: '¡Hola! ¿Qué tal?' },

@@ -1166,7 +1166,7 @@ export function comicWord(text: string, kind: string) {
 let barkEnd = 0;
 let barkRaf = 0;
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
-export function bark(who: string, text: string) {
+export function bark(who: string, text: string, side?: 'l' | 'r') {
   root.querySelectorAll('.bark').forEach((n) => n.remove());
   cancelAnimationFrame(barkRaf);
   const wa = text.startsWith('(WhatsApp) ');
@@ -1184,8 +1184,13 @@ export function bark(who: string, text: string) {
     const W = window.innerWidth;
     if (at && at.y > 90) {
       const w = t.offsetWidth, h = t.offsetHeight;
-      t.style.left = `${Math.min(Math.max(at.x - w / 2, 10), W - w - 10)}px`;
-      t.style.top = `${Math.max(at.y - h - 14, 72)}px`;
+      // De lado (dos que hablan uno junto al otro, como en el coche): el globo se abre hacia su lado y el rabito
+      // apunta a quien habla
+      const want = side === 'l' ? at.x - w + 30 : side === 'r' ? at.x - 30 : at.x - w / 2;
+      const left = Math.min(Math.max(want, 10), W - w - 10);
+      t.style.left = `${left}px`;
+      t.style.top = `${Math.max(at.y - h - 16, 72)}px`;
+      t.style.setProperty('--tail-x', `${Math.min(w - 16, Math.max(16, at.x - left))}px`);
       t.classList.add('anchored');
     } else {
       t.style.left = `${(W - t.offsetWidth) / 2}px`;

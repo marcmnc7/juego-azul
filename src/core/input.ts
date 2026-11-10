@@ -129,6 +129,11 @@ export class Input {
     return { x, y };
   }
 
+  /** ¿Está pulsada esta tecla? (p. ej. Mayúsculas para ir de puntillas con el teclado) */
+  held(code: string) {
+    return this.keys.has(code);
+  }
+
   queueAction() {
     this.actionQueued = true;
     this.usage.action++;

@@ -29,6 +29,15 @@ export function toon(allParams: THREE.MeshStandardMaterialParameters & { surf?: 
 }
 
 /**
+ * Material de la pintura del suelo (pasos de cebra, líneas): colores por vértice, a ras del asfalto y adelantado en
+ * profundidad. Sin grosor, la tinta no le dibuja bordes de dientes de sierra. Uno propio: el de vértices del
+ * decorado es compartido.
+ */
+export function paintMat(level = 2) {
+  return toon({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -level, polygonOffsetUnits: -level });
+}
+
+/**
  * Reparte la luz de ambiente de la escena una sola vez: sus hemisféricas propias se multiplican por
  * scene.userData.hemiScale (0,55 si no dice nada; Ferreries, 0,35). Es lo que antes hacía la luz de entorno del
  * cielo (HDRI) y es parte del aspecto de referencia del capítulo 1. La hemisférica del cómic no se toca: su

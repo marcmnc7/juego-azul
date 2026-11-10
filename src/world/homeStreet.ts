@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G, Merger, palmCrown } from '../entities/models';
-import { toon, glowTexture } from '../core/gfx';
+import { toon, glowTexture, paintMat } from '../core/gfx';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { Door } from './door';
@@ -183,7 +183,13 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
 
   // --- Suelo: carretera, aceras y pavimento delante de las casas ---
   m.add(G.box, 0x2c2c34, -20, -0.06, -23.5, 0, 0, 0, 130, 0.1, 7);
-  for (let x = -82; x < 44; x += 4) m.add(G.box, 0xe8e2d0, x, 0.0, -23.5, 0, 0, 0, 2, 0.02, 0.14); // línea discontinua
+  // Línea discontinua: pintura plana sobre el asfalto (con grosor, la tinta le dibujaba un borde de dientes de sierra)
+  const paint = new Merger();
+  const dash = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  for (let x = -82; x < 44; x += 4) paint.add(dash, 0xe8e2d0, x, -0.009, -23.5, 0, 0, 0, 2, 1, 0.14);
+  const paintMesh = new THREE.Mesh(paint.build(), paintMat());
+  paintMesh.userData.noCast = true;
+  sc.add(paintMesh);
   for (const z of [-20.08, -26.92]) m.add(G.box, 0xd8d2c4, -20, 0.06, z, 0, 0, 0, 130, 0.14, 0.16); // bordillos
   const tileTex = tileTexture();
   tileTex.repeat.set(130, 1);

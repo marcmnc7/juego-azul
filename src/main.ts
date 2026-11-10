@@ -174,6 +174,13 @@ const lastSpeaker = { pos: new THREE.Vector3(), at: 0 };
 setSpeakerResolver((who) => {
   const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
   if (!L) return null;
+  // El nivel puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
+  const hook = (level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null }).speakerPoint?.(who);
+  if (hook) {
+    _head.copy(hook).project(camera);
+    if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
+    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight };
+  }
   for (const f of SPEAKERS[who] ?? []) {
     const p = L[f];
     if (!p?.root || !p.head) continue;
