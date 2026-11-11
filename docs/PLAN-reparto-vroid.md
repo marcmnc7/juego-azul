@@ -1,6 +1,6 @@
 # Plan de reparto en VRoid: todos los personajes como Azul en el capítulo 1
 
-Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Studio y en el Finder, escribe en la terminal). Está escrito para que pueda trabajar sin más contexto. Fecha: 10-nov-2026.
+Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Studio y en el Finder, escribe en la terminal). Está escrito para que pueda trabajar sin más contexto. Fecha: 11-nov-2026. **Todo lo que necesitas está en el repo de GitHub `marcmnc7/juego-azul` (rama `main`) y en las carpetas de este Mac de la tabla «Rutas».**
 
 **Qué se quiere:** que todas las personas del juego (protagonistas, personajes con nombre y extras) se vean como **Azul en el capítulo 1**: un modelo de **VRoid Studio** (estilo anime, sombreado MToon), en lugar de los muñecos de MakeHuman que se ven hoy. Los extras también, aunque sean casi todos el mismo modelo base cambiando el género, el peinado y la ropa.
 
@@ -16,12 +16,54 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 
 ---
 
+## Rutas (todo en este Mac)
+
+`~` es la carpeta del usuario (`/Users/marc`).
+
+| Qué | Ruta |
+|---|---|
+| Repo del juego en GitHub | `https://github.com/marcmnc7/juego-azul` (rama `main`) |
+| **Tu copia del juego** (aquí trabajas) | `~/Documents/juego-azul` |
+| Este plan | `~/Documents/juego-azul/docs/PLAN-reparto-vroid.md` |
+| Fichas detalladas del cap. 1 | `~/Documents/juego-azul/docs/vroid-capitulo-1.md` |
+| Rayas de la camiseta del Barça (para importar en VRoid) | `~/Documents/juego-azul/docs/vroid/barca_rayas.png` |
+| Script para aligerar los VRM (Python 3, sin instalar nada) | `~/Documents/juego-azul/scripts/vrm_slim.py` |
+| **Proyectos de VRoid originales (no tocar)** | `~/Documents/Azul.vroid`, `~/Documents/GasFerreries.vroid`, `~/Documents/Nino.vroid`, `~/Documents/Vecina.vroid` |
+| Proyectos nuevos (cada «Guardar como») | `~/Documents/reparto/<nombre>.vroid` |
+| VRM recién exportados de VRoid (sin aligerar) | `~/Desktop/characters/reparto/<nombre>.vrm` |
+| VRM que ya exportó el dueño | `~/Desktop/characters/Azul-Ferre1(MadeMarc).vrm` (ya está en el juego), `~/Desktop/characters/Azul-Cap2(MadeMarc).vrm`, `~/Desktop/characters/Azul-Nadar(MadeMarc).vrm` |
+| **VRM aligerados, dentro del juego** (los que usa) | `~/Documents/juego-azul/src/assets/vrm/<nombre>.vrm` |
+| Capturas para el dueño | `~/Desktop/characters/reparto/capturas/<nombre>-frente.png`, `<nombre>-perfil.png`, `<nombre>-juego.png` |
+| Quién usa qué archivo y cuántas copias (no hace falta tocarlo) | `~/Documents/juego-azul/src/data/characters.ts` (`CAST_BY_CHAPTER`) |
+
+### Preparar tu copia (una vez)
+```
+git clone https://github.com/marcmnc7/juego-azul.git ~/Documents/juego-azul
+cd ~/Documents/juego-azul
+npm install
+mkdir -p ~/Documents/reparto ~/Desktop/characters/reparto/capturas
+```
+Si `~/Documents/juego-azul` ya existe: `cd ~/Documents/juego-azul && git checkout main && git pull`. Hace falta tener `git`, `node`/`npm` y `python3` (vienen con las herramientas de desarrollo del Mac; si falta alguno, avisa).
+
+### Entregar lo hecho (al acabar cada capítulo y con el OK del dueño)
+Los modelos llegan al juego del dueño por GitHub, en una rama aparte (nunca en `main`):
+```
+cd ~/Documents/juego-azul
+git checkout -B reparto-vroid
+git add src/assets/vrm/*.vrm
+git commit -m "Reparto VRoid: capítulo N"
+git push origin reparto-vroid
+```
+Solo los `.vrm` de `src/assets/vrm/`: ni proyectos `.vroid` ni capturas. Claude Code une esa rama con el juego. **Ojo: el repo es público**, así que lo que subas se puede ver; pregunta al dueño antes del primer push.
+
+---
+
 ## 0. Reglas (obligatorias)
 
 1. **Si un modelo no se parece al personaje, no se mete.** Ya pasó con Gas: su VRM salía con cara de chica. Antes de exportar, compara con la ficha; si dudas, para y pregunta al dueño.
 2. **No toques** los archivos internos de VRoid (`.vroid` por dentro, `data.bin`). Solo se usan desde VRoid Studio.
 3. **No borres ni sobrescribas** los proyectos originales (`~/Documents/Azul.vroid`, `GasFerreries.vroid`, `Nino.vroid`, `Vecina.vroid`): duplica siempre con «Guardar como».
-4. **Nada se publica.** Publicar (copiar `dist/` al repo `marcmnc7/pm-2611`) y subir el código, solo cuando el dueño lo diga.
+4. **Nada se publica.** No toques el repo `marcmnc7/pm-2611` (el juego publicado) ni la rama `main` de `juego-azul`. Lo único que subes es la rama `reparto-vroid`, con el OK del dueño (ver «Rutas»).
 5. **No descargues** modelos, texturas ni ropa de internet sin permiso del dueño (licencias).
 6. Habla con el dueño **en español**. Enséñale capturas de cada personaje (frente y perfil) antes de pasar al siguiente grupo.
 7. Los **animales** (burros, caballos, Joy, la vaca) **no** entran en este plan: se quedan como están.
@@ -38,11 +80,11 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 | Proyecto de una vecina (mujer) | `~/Documents/Vecina.vroid` |
 | Azul del cap. 1, exportada e integrada en el juego | `~/Desktop/characters/Azul-Ferre1(MadeMarc).vrm` → `src/assets/vrm/azul_ferreries.vrm` |
 | Azul del cap. 2 vestida y en la piscina (exportadas por el dueño, **sin integrar**) | `~/Desktop/characters/Azul-Cap2(MadeMarc).vrm`, `Azul-Nadar(MadeMarc).vrm` |
-| Fichas detalladas del cap. 1 (Gas, Carme, Tòfol, fabiolera, pistolas de agua) | `docs/vroid-capitulo-1.md` |
-| Plan técnico anterior (arquitectura, multitud, rendimiento) | `docs/PLAN-personajes.md` |
-| Rayas de la camiseta del Barça | `docs/vroid/barca_rayas.png` |
+| Fichas detalladas del cap. 1 (Gas, Carme, Tòfol, fabiolera, pistolas de agua) | `~/Documents/juego-azul/docs/vroid-capitulo-1.md` |
+| Plan técnico anterior (arquitectura, multitud, rendimiento) | `~/Documents/juego-azul/docs/PLAN-personajes.md` |
+| Rayas de la camiseta del Barça | `~/Documents/juego-azul/docs/vroid/barca_rayas.png` |
 
-Repo del juego: la carpeta `juego-azul` de esta sesión. Para probar: `npm run dev` y abrir `http://localhost:5173/?hq#test` (o el puerto que diga Vite).
+Repo del juego: `~/Documents/juego-azul` (ver «Rutas»). Para probar: `npm run dev` y abrir `http://localhost:5173/?hq#test` (o el puerto que diga Vite).
 
 ---
 
@@ -75,9 +117,9 @@ Repo del juego: la carpeta `juego-azul` de esta sesión. Para probar: `npm run d
 
 3. Guarda el `.vrm` en `~/Desktop/characters/reparto/` con el **nombre exacto de la ficha** (p. ej. `tofol.vrm`). Sin espacios ni acentos.
 
-### 2.3 Aligerar y dejar en el repo (terminal)
-Desde la carpeta `juego-azul`:
+### 2.3 Aligerar y dejar en el juego (terminal)
 ```
+cd ~/Documents/juego-azul
 python3 scripts/vrm_slim.py ~/Desktop/characters/reparto/tofol.vrm src/assets/vrm/tofol.vrm
 ```
 - El script quita expresiones de cara que no se usan y la miniatura (11 MB → ~6,5 MB). Si da error, **no** copies el archivo sin aligerar: avisa.
@@ -201,7 +243,7 @@ Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a p
 ---
 
 ## 6. Cómo se comprueba cada personaje (en el navegador)
-1. `npm run dev`, abrir `http://localhost:5173/?hq#test`.
+1. `cd ~/Documents/juego-azul && npm run dev` y abrir en el navegador la dirección que salga (normalmente `http://localhost:5173/`) con `?hq#test` al final: `http://localhost:5173/?hq#test`.
 2. En la consola: `__dbg.go(n)` (n = capítulo; orden del juego: 1 Jaleo, 2 Piscinita, 3 Ruta, 4 Fito, 5 Moto, 6 Sant Joan, 7 Cena, 8 Eclipse, 9 Un año después), `__dbg.skip()` pasa diálogos, `__dbg.level().debug()` lista las fases (`.run()` salta a una).
 3. Para cada personaje nuevo, en cada fase donde sale:
    - se ve el VRM (no el muñeco de antes) y se le reconoce;
@@ -209,7 +251,7 @@ Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a p
    - lo que pone el juego encima (casco, sombrero, delantal, móvil, guitarra) queda en su sitio;
    - la boca se mueve al hablar y parpadea;
    - la consola, sin errores.
-4. Capturas de frente y perfil para el dueño. **Si el dueño no lo reconoce, se queda el modelo de antes.**
+4. Capturas de frente y perfil (en VRoid) y una dentro del juego, en `~/Desktop/characters/reparto/capturas/`, para el dueño. **Si el dueño no lo reconoce, se queda el modelo de antes** (borra su archivo de `src/assets/vrm/`).
 
 ---
 
@@ -222,12 +264,12 @@ Fase F6 de `docs/PLAN-personajes.md`: plantillas con `scripts/crowd_lod.mjs` a p
 5. **Cap. 3** (22-nov): `camarero_laurel`.
 6. **Cap. 4** (23-nov): `gas_fito`, `camarero_fito`, `agente_aeropuerto_h`, `agente_aeropuerto_m`, `fito`, `bajista`, `saxofonista`, `bateria`.
 7. **Cap. 5** (24-nov): `azul_moto`, `gas_moto`, `extra_h3`, `extra_h4`.
-8. **Cap. 6** (25-nov): `azul_santjoan`, `gas_santjoan`, `taxista`, `caixer`, `extra_mayor_m`, `extra_mayor_h`.
+8. **Cap. 6** (25-nov): `azul_santjoan`, `gas_santjoan`, `taxista`, `caixer`.
 9. **Cap. 7** (26-nov): `padre_azul`, `madre_azul`, `vecino`.
-10. **Cap. 8** (27-nov): `padre_gas`, `madre_gas`, `eric`.
+10. **Cap. 8** (27-nov): `padre_gas`, `madre_gas`, `eric`, `extra_mayor_m`, `extra_mayor_h`.
 11. **Cap. 9** (28-nov): `azul_aniversario`, `azul_playa`, `gas_playa`.
 
-Después de cada capítulo: capturas al dueño y, solo con su permiso, commit. Publicar, solo cuando él lo diga.
+Después de cada capítulo: capturas al dueño y, solo con su permiso, entrega por la rama `reparto-vroid` (ver «Rutas»). Publicar el juego (el repo `pm-2611`) no es cosa tuya: lo hace el dueño con Claude Code.
 
 ---
 
