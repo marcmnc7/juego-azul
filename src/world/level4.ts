@@ -308,9 +308,8 @@ export class Level4 implements Level {
     this.gas.root.rotation.y = Math.PI;
     this.gas.root.visible = false; // va en el coche
     sc.add(this.gas.root);
-    // Versiones sin ropa para la piscina. Azul, con el cuerpo de mujer de MakeHuman en su versión sin ropa (con su piel,
-    // su pelo y sus ojos): su modelo de siempre lleva la ropa en la misma malla y, pintada de piel, se veía un mono
-    // blanco con el bulto de los pantalones
+    // Versiones sin ropa para la piscina (desde que se meten en el agua hasta el final del capítulo): sus VRM sin
+    // ropa, con la piel lisa
     this.looks = { azul: [this.player, makePerson(castLook({ ...nude(MARGAUX_LOOK), azul: false }, 'azul_piscina'))], gas: [this.gas, makePerson(castLook(nude(MARC_LOOK), 'gas_piscina'))] };
     for (const p of [this.looks.azul[1], this.looks.gas[1]]) {
       p.root.visible = false;

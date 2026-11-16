@@ -22,7 +22,7 @@ import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
 import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
-import { ensureCrowd, preloadCrowd } from './entities/crowdRig';
+import { ensureCrowd } from './entities/crowdRig';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
 import { castFor } from './data/characters';
@@ -306,14 +306,14 @@ function goMap() {
 // En orden real: Ferreries, la piscinita la noche siguiente, el road trip, Fito, la moto por la Costa Brava,
 // Sant Joan, la cena a escondidas, el eclipse y, un año después, otra vez Ferreries
 // Las texturas fotográficas se cargan ya, mientras se ve la portada
-// Personajes glTF y multitud horneada (para los capítulos con la calidad de la prueba)
+// Personajes glTF (para los capítulos con la calidad de la prueba); la multitud se hornea con cada capítulo
 let hdAssets = false;
 // Pantalla de carga: la portada no deja empezar hasta que todo está listo (así cada capítulo abre al momento)
 let loadedParts = 0;
-const LOAD_PARTS = 4;
+const LOAD_PARTS = 3;
 const part = <T,>(p: Promise<T>) => p.finally(() => loadedParts++);
 const rigLoading = part(preloadRig())
-  .then(() => Promise.all([part(preloadCrowd()), part(preloadDonkey()), part(preloadVehicles())]))
+  .then(() => Promise.all([part(preloadDonkey()), part(preloadVehicles())]))
   .then(() => (hdAssets = true));
 const allLoading = rigLoading;
 const LEVEL_CLASSES = [Level1, Level4, Level2, Level3, LevelMoto, LevelSantJoan, LevelCena, LevelEclipse, LevelAniversario];
@@ -389,7 +389,6 @@ async function buildLevel(n: number, card: ChapterLoading) {
     if (stale()) return;
     // La multitud de VRoid de este capítulo (si tiene)
     card.progress(0.14, 'Preparando a la gente');
-    await preloadCrowd();
     await ensureCrowd(n);
     if (stale()) return;
   }

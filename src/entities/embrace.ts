@@ -123,13 +123,12 @@ export function embrace(her: Person, him: Person, kind: EmbraceKind): Embrace {
   const base = new Map([her, him].map((p) => [p, p.rig!.model.position.z]));
   let push = 0;
   let trim = 0; // lo que aún falta para que las bocas se toquen, medido en la pose final del fotograma anterior
-  // Dónde están los labios respecto al hueso de la cabeza, medido en los modelos (la punta de la nariz menos
-  // 1,5 cm): Azul 0,113 m, MakeHuman (Gas) 0,139 m. Con la medida de antes (0,105 para los dos) los labios
-  // «tocaban» 4 cm dentro de la cara del otro y las caras se fundían
-  const lipsFwd = new Map([her, him].map((p) => [p, p.rig!.model.getObjectByName('MHHair') ? 0.139 : 0.113]));
+  // Dónde están los labios respecto al hueso de la cabeza, medido en los modelos de VRoid (la punta de la nariz
+  // menos 1,5 cm): 0,113 m. Con 0,105 los labios «tocaban» dentro de la cara del otro y las caras se fundían
+  const LIPS_FWD = 0.113;
   const lipsOf = (p: Person, out: THREE.Vector3) => {
     boneFrame(p, 'Head', _fr);
-    return bone(p, 'Head').getWorldPosition(out).addScaledVector(_d.copy(Z).applyQuaternion(_fr), lipsFwd.get(p)!).addScaledVector(_d.set(0, 1, 0).applyQuaternion(_fr), 0.045);
+    return bone(p, 'Head').getWorldPosition(out).addScaledVector(_d.copy(Z).applyQuaternion(_fr), LIPS_FWD).addScaledVector(_d.set(0, 1, 0).applyQuaternion(_fr), 0.045);
   };
   const tick = (dt: number) => {
     if (e.to !== undefined) {

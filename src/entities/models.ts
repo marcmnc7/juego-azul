@@ -4,7 +4,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { makeHelmet } from './helmet';
 import { toon } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
-import { RigCrowd, VroidCrowd, crowdReady, vroidTemplates, type Behave } from './crowdRig';
+import { VroidCrowd, vroidTemplates, type Behave } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
 import { makeCarHD, makeMotoHD, makeDogHD, vehiclesReady } from './vehiclesHD';
 import { spring } from '../core/walker';
@@ -384,11 +384,11 @@ export interface PersonLook {
   /** Hombre (modelo masculino en los capítulos con personajes glTF). La barba también lo indica. */
   male?: boolean;
   /** Pelo rizado con volumen arriba (Gas), sobre el pelo corto. */
-  /** Gas: su propio modelo (MakeHuman), con su pelo, bigote y perilla. */
+  /** Gas: su VRM (o, si no queda copia, su plantilla de VRoid). */
   gas?: boolean;
-  /** Azul: su propio modelo (el de antes, el de su cara y su cuerpo); las demás chicas, la chica de MakeHuman. */
+  /** Azul: su VRM (o, si no queda copia, su plantilla de VRoid); las demás chicas, una plantilla de chica. */
   azul?: boolean;
-  /** Niño o niña de unos 8 años (modelo de niño de MakeHuman). */
+  /** Niño o niña de unos 8 años (su VRM o la plantilla de niño o de niña). */
   kid?: boolean;
   curls?: boolean;
   /** Bigote fino y perilla (Gas). */
@@ -405,20 +405,17 @@ export type PersonMode = 'idle' | 'walk' | 'dance' | 'wave' | 'cheer' | 'talk';
  * cuerpo: sin esto la cadera se quedaba a la altura de estar de pie y parecían flotar sobre la silla.
  */
 export function seatedRootY(p: { root: THREE.Object3D; rig?: { hipsHeight: number; kind?: string } }, seatTop: number) {
-  // (ella, con los pantalones anchos, un poco más arriba: la tela se metía por debajo del asiento)
-  // (los de VRoid, como la Azul de antes: la cadera del modelo queda algo más alta que la de MakeHuman)
-  return p.rig ? seatTop + (p.rig.kind === 'woman' || String(p.rig.kind ?? '').startsWith('vrm:') ? 0.1 : 0.07) - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
+  // (en los modelos de VRoid la cadera queda algo por encima de donde apoya: un poco más arriba)
+  return p.rig ? seatTop + 0.1 - p.rig.hipsHeight * (p.root.scale.y || 1) : seatTop - 0.64;
 }
 
 /**
  * Pose de sentado en una silla (muslos hacia delante, rodillas dobladas, pies en el suelo). Se llama
- * después de animatePerson en cada fotograma. Él tiene el muslo más largo: con el muslo horizontal los
- * pies le quedaban colgando, así que se le inclina un poco hacia abajo (y la rodilla lo compensa).
+ * después de animatePerson en cada fotograma.
  */
 export function seatPose(p: Person) {
-  const tilt = p.rig?.kind === 'man' ? 0.25 : 0;
-  p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2 + tilt;
-  p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15 - tilt;
+  p.legL.rotation.x = p.legR.rotation.x = -Math.PI / 2;
+  p.kneeL.rotation.x = p.kneeR.rotation.x = Math.PI / 2 - 0.15;
   p.footL.rotation.x = p.footR.rotation.x = 0.15;
   p.body.rotation.z = 0;
   p.body.position.y = 0;
@@ -906,13 +903,11 @@ export interface CrowdLike {
   commit(): void;
 }
 
-/** Multitud: con personajes glTF horneados en los capítulos con la calidad de la prueba. */
+/** Multitud: con las plantillas de VRoid horneadas en los capítulos con la calidad de la prueba. */
 export function makeCrowd(look: PersonLook, count: number, dance = false, behave?: readonly Behave[]): CrowdLike {
-  if (crowdReady()) {
-    // Con las plantillas de VRoid si las hay para ese tipo de persona; si no, la multitud de MakeHuman
-    const keys = vroidTemplates(look);
-    return keys.length ? new VroidCrowd(look, count, dance, behave, keys) : new RigCrowd(look, count, dance, behave);
-  }
+  // Con las plantillas de VRoid horneadas para el capítulo; si no están (calidad baja), muñecos sencillos
+  const keys = vroidTemplates(look);
+  if (keys.length) return new VroidCrowd(look, count, dance, behave, keys);
   return new CrowdPeople(look, count);
 }
 

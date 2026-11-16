@@ -1,4 +1,4 @@
-// Convierte un VRM de VRoid en una plantilla ligera para la multitud (como woman_mh_lod.glb):
+// Convierte un VRM de VRoid en una plantilla ligera: para la multitud y para la gente sin VRM propio
 //
 //   node scripts/crowd_lod.mjs entrada.vrm salida.glb [triángulos=6000]
 //

@@ -71,10 +71,9 @@ export function fitoPrint() {
 export function shirtPrint(p: Person, tex: THREE.Texture, size = 0.25) {
   // En un personaje de VRoid el estampado va pintado en la textura de su camiseta (ver docs/PLAN-reparto-vroid.md)
   if (p.rig?.kind.startsWith('vrm:')) return;
-  const woman = p.rig?.kind === 'woman';
   const geo = new THREE.PlaneGeometry(size, size, 8, 1);
   const P = geo.attributes.position as THREE.BufferAttribute;
-  const R = woman ? 0.16 : 0.2; // el pecho es curvo: la lámina también
+  const R = 0.18; // el pecho es curvo: la lámina también
   for (let i = 0; i < P.count; i++) P.setZ(i, -(P.getX(i) * P.getX(i)) / (2 * R));
   geo.computeVertexNormals();
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, depthWrite: false }));
@@ -82,7 +81,7 @@ export function shirtPrint(p: Person, tex: THREE.Texture, size = 0.25) {
   m.frustumCulled = false;
   if (p.rig) {
     const a = boneAnchor(p, 'Spine2');
-    m.position.set(0, woman ? -0.02 : -0.03, woman ? 0.135 : 0.155);
+    m.position.set(0, -0.025, 0.145);
     a.add(m);
   } else {
     m.position.set(0, 1.0, 0.17);

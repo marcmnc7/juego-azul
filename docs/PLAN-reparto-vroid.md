@@ -28,10 +28,11 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 - **Multitudes en VRoid (16-nov-2026, fase F6 de `PLAN-personajes.md`):** Ferreries (caps. 1 y 9), el concierto (4) y Sant Joan (6) usan plantillas hechas de los extras con `node scripts/crowd_lod.mjs src/assets/vrm/<nombre>.vrm src/assets/crowd/vroid/<nombre>.glb` (zona de cada vértice por su material, atlas de 512 por textura, sin la piel ni el pantalón que tapa la ropa, ~5500 triángulos). Pantalón corto: `extra_m1`, `extra_m2`, `extra_h1`, `extra_h2`; largo: `amiga_imperi_1`, `amiga_imperi_2`, `amigo_imperi`, `extra_h4` (lista `TEMPLATES` de `crowdRig.ts`). Se hornean al cargar el capítulo (`ensureCrowd`, ~1 s cada una) y cada persona se tiñe por zonas conservando el sombreado de la textura. Si se cambia uno de esos extras, regenerar su plantilla.
 - `extra_m1`, `extra_h2`, `nino_2` y `nino_3` también llevaban el short deshilachado: ahora, short liso.
 
+- **Sin MakeHuman (16-nov-2026, fase F7):** quien no tiene VRM propio (o se queda sin copia libre) sale con una plantilla de VRoid de su tipo, teñida con sus colores (`templateFor` y `templateMaterial` en `rig.ts`): de la multitud para chicos y chicas, `azul_diario` y `gas_diario` para ellos dos (en el coche, por ejemplo) y `nino_3` / `nino_2` para niño y niña. Todas en la lista `TEMPLATES` de `rig.ts`, cargadas al arrancar. El baile (samba) vive en `src/assets/chars/dance_samba.glb` (solo esqueleto y animación). Fuera `man_mh`, `woman_mh`, `kid_mh`, `gas_mh`, sus versiones ligeras, `woman.glb`, sus texturas y su código (~25 MB menos).
+- **Piscina del cap. 2:** `azul_piscina` y `gas_piscina` van sin ropa, con la piel lisa (proyectos `azul_desnuda.vroid` y `gas_desnudo.vroid`: sin prendas y con la capa de ropa interior a opacidad 0). El juego los pone desde que se meten en el agua hasta el final del capítulo.
+
 **Pendiente (código, Claude Code):**
-- En el coche del cap. 2 (y en otros coches con gente dentro) Azul y Gas siguen siendo los muñecos de antes: `makeCar` no usa los VRM.
 - Medir la multitud en un iPhone de gama media (en el Mac va igual o mejor que la de MakeHuman; en el móvil no proyecta sombras).
-- Fase F7 de `PLAN-personajes.md`: quitar los modelos de MakeHuman cuando ya nada los use (todavía: coches con gente, jinetes de los burros…).
 
 ---
 

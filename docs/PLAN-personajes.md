@@ -139,7 +139,7 @@ Son pocos por escena (4–20) y se ven a media distancia. Recomendado: **plantil
 
 **Aceptación:** plaza de Ferreries, concierto y Born de Sant Joan con multitud VRoid; ≥ 30 fps en un iPhone de gama media (comprobar con el contador de `#test`); sin MakeHuman a la vista.
 
-### F7 · Limpieza y tamaño
+### F7 · Limpieza y tamaño — **hecho el 16-nov-2026**: fuera MakeHuman y la Azul de antes; la gente sin VRM propio usa las plantillas de VRoid (ver `docs/PLAN-reparto-vroid.md`, «Estado»)
 Cuando ningún capítulo use MakeHuman, quitar `man_mh*`, `woman_mh*`, `kid_mh`, `gas_mh`, `woman.glb` (≈ 25 MB) de `src/assets/chars/` y su código. Mantener `anims.glb` (capturas). Presupuesto de descarga total del juego: < 100 MB (hoy ~76 MB).
 
 ### F8 · Pruebas y publicación (cada capítulo)

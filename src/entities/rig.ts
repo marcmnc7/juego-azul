@@ -4,22 +4,27 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
 import { airOf } from '../core/air';
 import type { Person, PersonLook, PersonMode } from './models';
-import womanUrl from '../assets/chars/woman.glb';
-import womanMhUrl from '../assets/chars/woman_mh.glb';
-import kidMhUrl from '../assets/chars/kid_mh.glb';
-// Gas y el hombre genérico de los secundarios: MakeHuman (CC0), montados con src/demo/mhbuild.ts
-import gasUrl from '../assets/chars/gas_mh.glb';
-import manMhUrl from '../assets/chars/man_mh.glb';
+// El baile (samba) con su esqueleto y su T, sacado del modelo de Michelle que se usaba antes
+import danceUrl from '../assets/chars/dance_samba.glb';
 import animsUrl from '../assets/chars/anims.glb';
 // Universal Animation Library de Quaternius (CC0), con los huesos renombrados a Mixamo (scripts/anims_ual.mjs):
 // trote, sprint, salto, hablar, sentarse, conducir, nadar, otro baile, sí/no, beber…
 import animsUalUrl from '../assets/chars/anims_ual.glb';
 import animsUal2Url from '../assets/chars/anims_ual_2.glb';
 import { twoBone } from './embrace';
-import womanPartsUrl from '../assets/chars/woman_parts.png';
-// Fotos de tela (CC0, de MakeHuman) para la ropa de Azul: vaquero y punto de camiseta
-import denimUrl from '../assets/chars/denim_tile.jpg';
-import knitUrl from '../assets/chars/knit_tile.jpg';
+// Plantillas ligeras de VRoid (scripts/crowd_lod.mjs a partir de VRM del reparto): la gente sin VRM propio y la multitud
+import tplM1Url from '../assets/crowd/vroid/extra_m1.glb';
+import tplM2Url from '../assets/crowd/vroid/extra_m2.glb';
+import tplH1Url from '../assets/crowd/vroid/extra_h1.glb';
+import tplH2Url from '../assets/crowd/vroid/extra_h2.glb';
+import tplIm1Url from '../assets/crowd/vroid/amiga_imperi_1.glb';
+import tplIm2Url from '../assets/crowd/vroid/amiga_imperi_2.glb';
+import tplImhUrl from '../assets/crowd/vroid/amigo_imperi.glb';
+import tplH4Url from '../assets/crowd/vroid/extra_h4.glb';
+import tplAzulUrl from '../assets/crowd/vroid/azul_diario.glb';
+import tplGasUrl from '../assets/crowd/vroid/gas_diario.glb';
+import tplKidUrl from '../assets/crowd/vroid/nino_3.glb';
+import tplKidGirlUrl from '../assets/crowd/vroid/nino_2.glb';
 import type { VRM } from '@pixiv/three-vrm';
 import { loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
 
@@ -33,9 +38,28 @@ import { loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, ty
 // fabiol) o el modo no tiene captura (saludar, celebrar, hablar), esa parte del cuerpo copia la
 // articulación invisible, con una transición suave.
 
-/** woman: Azul (su modelo); mhwoman: las demás chicas; man: los demás hombres; kid: los niños (MakeHuman). */
-export type Kind = 'woman' | 'man' | 'gas' | 'mhwoman' | 'kid';
-const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.77, gas: 1.8, mhwoman: 1.64, kid: 1.3 };
+/**
+ * Plantillas de VRoid: quién sale de cada una. crowd: la multitud (y la gente sin VRM de su tipo); azul, gas: ellos
+ * cuando no queda copia de su VRM (en un coche, por ejemplo); kid: los niños sin VRM.
+ */
+export const TEMPLATES = [
+  { key: 'tpl:extra_m1', url: tplM1Url, role: 'crowd', female: true, shorts: true, height: 1.63 },
+  { key: 'tpl:extra_m2', url: tplM2Url, role: 'crowd', female: true, shorts: true, height: 1.63 },
+  { key: 'tpl:extra_h1', url: tplH1Url, role: 'crowd', female: false, shorts: true, height: 1.74 },
+  { key: 'tpl:extra_h2', url: tplH2Url, role: 'crowd', female: false, shorts: true, height: 1.74 },
+  { key: 'tpl:amiga_imperi_1', url: tplIm1Url, role: 'crowd', female: true, shorts: false, height: 1.63 },
+  { key: 'tpl:amiga_imperi_2', url: tplIm2Url, role: 'crowd', female: true, shorts: false, height: 1.63 },
+  { key: 'tpl:amigo_imperi', url: tplImhUrl, role: 'crowd', female: false, shorts: false, height: 1.74 },
+  { key: 'tpl:extra_h4', url: tplH4Url, role: 'crowd', female: false, shorts: false, height: 1.74 },
+  { key: 'tpl:azul_diario', url: tplAzulUrl, role: 'azul', female: true, shorts: false, height: 1.66 },
+  { key: 'tpl:gas_diario', url: tplGasUrl, role: 'gas', female: false, shorts: false, height: 1.8 },
+  { key: 'tpl:nino_3', url: tplKidUrl, role: 'kid', female: false, shorts: true, height: 1.3 },
+  { key: 'tpl:nino_2', url: tplKidGirlUrl, role: 'kid', female: true, shorts: true, height: 1.3 },
+] as const;
+export type TemplateKey = (typeof TEMPLATES)[number]['key'];
+/** Las plantillas cargadas, intactas (para hornear la multitud) y su color de piel y luminosidad por zona. */
+const tplSrc = new Map<string, { gltf: GLTF; info: TplInfo }>();
+interface TplInfo { skin: THREE.Color; lum: THREE.Vector3 }
 
 export interface KindData {
   gltf: GLTF;
@@ -58,8 +82,8 @@ export interface KindData {
 /** Clips extra (de otros esqueletos ya renombrados a Mixamo), con su pose en T. */
 interface ExtraSource { root: THREE.Object3D; rest: Pose; clips: THREE.AnimationClip[] }
 
-/** Los modelos de MakeHuman/Mixamo por tipo y, aparte, cada VRM de VRoid por su archivo ("vrm:<url>"). */
-type DataKey = Kind | `vrm:${string}`;
+/** Las plantillas de VRoid ("tpl:<nombre>") y cada VRM del reparto por su archivo ("vrm:<url>"). */
+type DataKey = `tpl:${string}` | `vrm:${string}`;
 let data: Partial<Record<DataKey, KindData>> = {};
 /**
  * VRM cargados por archivo: una o varias copias (una por persona viva que lo lleve; ver castFor en characters.ts) y
@@ -69,7 +93,6 @@ const vrmPool = new Map<string, LoadedVRM[]>();
 const vrmOwner = new Map<LoadedVRM, Person>();
 /** Lo que hace falta para preparar un VRM nuevo (las capturas y su pose), guardado al cargar los personajes. */
 let vrmPrep: { anims: GLTF; aBind: ReturnType<typeof saveLocal>; dance: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }; extras: ExtraSource[] } | null = null;
-let parts: Uint8ClampedArray | null = null;
 let loading: Promise<void> | null = null;
 let ready = false;
 
@@ -221,43 +244,7 @@ function strideSpeed(root: THREE.Object3D, clip: THREE.AnimationClip, scale: num
   return (2 * (max - min) * scale) / clip.duration;
 }
 
-async function loadImageData(url: string, w: number, h: number) {
-  const img = new Image();
-  // onload y no decode(): decode() puede no resolverse nunca con la página en segundo plano
-  await new Promise<void>((res, rej) => {
-    img.onload = () => res();
-    img.onerror = () => rej(new Error('imagen ' + url));
-    img.src = url;
-  });
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.drawImage(img, 0, 0, w, h);
-  return g.getImageData(0, 0, w, h).data;
-}
 
-/**
- * Pesos de piel sin negativos y normalizados. Los de la ropa de MakeHuman salen de un ajuste baricéntrico y
- * algunos eran negativos: al moverse, la puntera de los zapatos salía disparada en picos.
- */
-function cleanWeights(root: THREE.Object3D) {
-  root.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (!m.isSkinnedMesh) return;
-    const sw = m.geometry.attributes.skinWeight as THREE.BufferAttribute;
-    for (let i = 0; i < sw.count; i++) {
-      let s = 0;
-      const w = [0, 1, 2, 3].map((k) => {
-        const x = Math.max(0, sw.getComponent(i, k));
-        s += x;
-        return x;
-      });
-      if (s > 0) w.forEach((x, k) => sw.setComponent(i, k, x / s));
-    }
-    sw.needsUpdate = true;
-  });
-}
 
 /** Fase (0…1) del ciclo en que el pie izquierdo va más adelantado: para que andar, trotar y correr pisen a la vez. */
 function footPhase(root: THREE.Object3D, clip: THREE.AnimationClip) {
@@ -290,9 +277,8 @@ function lowestHips(clip: THREE.AnimationClip | undefined) {
   return best;
 }
 
-function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance?: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D }, height = HEIGHT[kind], extras: ExtraSource[] = []): KindData {
+function prepareKind(gltf: GLTF, anims: GLTF, animsBind: ReturnType<typeof saveLocal>, dance: { clip: THREE.AnimationClip; rest: Pose; root: THREE.Object3D } | undefined, height: number, extras: ExtraSource[] = []): KindData {
   const model = gltf.scene;
-  if (kind !== 'woman' && !model.userData.vrmOrig) cleanWeights(model);
   // Medir siempre en la misma pose: la T limpia
   const tpose = gltf.animations.find((c) => c.name === 'TPose');
   if (tpose) {
@@ -352,9 +338,9 @@ function prepareKind(kind: Kind, gltf: GLTF, anims: GLTF, animsBind: ReturnType<
 
 export function preloadRig() {
   loading ??= (async () => {
-    const [woman, anims, gas, manMh, womanMh, kidMh, ual1, ual2] = await Promise.all([
-      loadGLB(womanUrl), loadGLB(animsUrl), loadGLB(gasUrl), loadGLB(manMhUrl), loadGLB(womanMhUrl), loadGLB(kidMhUrl),
-      loadGLB(animsUalUrl).catch(() => null), loadGLB(animsUal2Url).catch(() => null),
+    const [dance, anims, ual1, ual2, ...tpls] = await Promise.all([
+      loadGLB(danceUrl), loadGLB(animsUrl), loadGLB(animsUalUrl).catch(() => null), loadGLB(animsUal2Url).catch(() => null),
+      ...TEMPLATES.map((t) => loadGLB(t.url).catch(() => null)),
     ]);
     const t0 = performance.now();
     // Clips de la librería: cada esqueleto en su T (sus huesos ya tienen los nombres de Mixamo)
@@ -366,30 +352,40 @@ export function preloadRig() {
       setPose(root, false);
       extras.push({ root, rest: worldPose(root), clips: g.animations.filter((c) => !SKIP.test(c.name)) });
     }
-    parts = await loadImageData(womanPartsUrl, 512, 512);
-    [denimPx, knitPx] = await Promise.all([loadImageData(denimUrl, FAB, FAB), loadImageData(knitUrl, FAB, FAB)]);
-    const samba = woman.animations.find((c) => c.name === 'SambaDance')!;
+    const samba = dance.animations.find((c) => c.name === 'SambaDance')!;
     // El baile de Michelle, respecto a su propia T
-    const tp = woman.animations.find((c) => c.name === 'TPose');
+    const tp = dance.animations.find((c) => c.name === 'TPose');
     if (tp) {
-      const m = new THREE.AnimationMixer(woman.scene);
+      const m = new THREE.AnimationMixer(dance.scene);
       m.clipAction(tp).play();
       m.update(0);
-      m.uncacheRoot(woman.scene);
+      m.uncacheRoot(dance.scene);
     }
     const aBind = saveLocal(anims.scene);
-    const wSave = saveLocal(woman.scene);
-    setPose(woman.scene, false);
-    const wRest = worldPose(woman.scene);
+    const wSave = saveLocal(dance.scene);
+    setPose(dance.scene, false);
+    const wRest = worldPose(dance.scene);
     restoreLocal(wSave);
     data = {};
-    data.woman = prepareKind('woman', woman, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
-    data.mhwoman = prepareKind('mhwoman', womanMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
-    data.kid = prepareKind('kid', kidMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
-    data.man = prepareKind('man', manMh, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
-    data.gas = prepareKind('gas', gas, anims, aBind, { clip: samba, rest: wRest, root: woman.scene }, undefined, extras);
+    const danceSrc = { clip: samba, rest: wRest, root: dance.scene };
+    // Las plantillas de VRoid: una copia intacta para la multitud y otra preparada para la gente suelta
+    TEMPLATES.forEach((t, i) => {
+      const g = tpls[i];
+      if (!g) return;
+      const body = g.scene.getObjectByName('Body') as THREE.SkinnedMesh | undefined;
+      const c = body?.userData.crowd as { skin: number[]; lum: Record<string, number> } | undefined;
+      if (!body || !c) return;
+      // (la zona de cada vértice, con el nombre que espera el shader)
+      if (body.geometry.attributes._zone) body.geometry.setAttribute('aZone', body.geometry.attributes._zone);
+      const info = {
+        skin: new THREE.Color().setRGB(c.skin[0], c.skin[1], c.skin[2], THREE.SRGBColorSpace),
+        lum: new THREE.Vector3(...[c.lum[2], c.lum[3], c.lum[4]].map((l) => Math.max(0.02, Math.pow(l, 2.2)))),
+      };
+      tplSrc.set(t.key, { gltf: { ...g, scene: SkeletonUtils.clone(g.scene) as THREE.Group }, info });
+      data[t.key] = prepareKind(g, anims, aBind, danceSrc, t.height, extras);
+    });
     // Personajes de VRoid: se cargan al empezar cada capítulo (ensureVRMs), solo los suyos
-    vrmPrep = { anims, aBind, dance: { clip: samba, rest: wRest, root: woman.scene }, extras };
+    vrmPrep = { anims, aBind, dance: danceSrc, extras };
     console.info(`[rig] personajes y animaciones preparados en ${Math.round(performance.now() - t0)} ms`);
     // (modo prueba: datos de animación a mano desde la consola, para medir y ajustar)
     if (location.hash === '#test') (globalThis as unknown as { __rigData: typeof data }).__rigData = data;
@@ -405,193 +401,6 @@ export const rigReady = () => ready;
 
 const lin = (hex: number) => new THREE.Color(hex);
 const texCache = new Map<string, THREE.Texture>();
-
-/**
- * La cara, pintada encima de la textura: el modelo la trae diminuta y a manchas. Cejas del color del pelo,
- * ojos con su iris, algo de color en las mejillas, una sombra suave en las cuencas y bajo la nariz, y labios.
- * En la textura la cara está tumbada: la frente hacia la izquierda (x menor), la barbilla hacia la derecha.
- */
-function paintFace(g: CanvasRenderingContext2D, look: PersonLook, M: number) {
-  const C = 88.4;
-  g.save();
-  g.scale(M, M);
-  const blob = (x: number, y: number, r: number, c: string, a: number) => {
-    const gr = g.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, `rgba(${c},${a})`);
-    gr.addColorStop(1, `rgba(${c},0)`);
-    g.fillStyle = gr;
-    g.fillRect(x - r, y - r, r * 2, r * 2);
-  };
-  const hairC = new THREE.Color(look.hair);
-  const brow = `rgb(${Math.round(hairC.clone().convertLinearToSRGB().r * 255 * 0.5)},${Math.round(hairC.clone().convertLinearToSRGB().g * 255 * 0.42)},${Math.round(hairC.clone().convertLinearToSRGB().b * 255 * 0.36)})`;
-  g.lineCap = 'round';
-  for (const s of [-1, 1]) {
-    blob(463, C + s * 25, 11, '228,118,104', 0.2); // mejilla
-    blob(441.5, C + s * 15.5, 9.5, '150,98,74', 0.12); // cuenca del ojo
-    // Ceja: más gruesa hacia la nariz y afinándose hacia fuera
-    g.strokeStyle = brow;
-    g.globalAlpha = 0.82;
-    g.lineWidth = 1.5;
-    g.beginPath();
-    g.moveTo(433.6, C + s * 6.5);
-    g.quadraticCurveTo(430.2, C + s * 12, 430.6, C + s * 17);
-    g.stroke();
-    g.lineWidth = 0.8;
-    g.beginPath();
-    g.moveTo(430.6, C + s * 16);
-    g.quadraticCurveTo(431.4, C + s * 22, 435.2, C + s * 26.5);
-    g.stroke();
-    g.globalAlpha = 1;
-  }
-  blob(450.8, C, 3.6, '160,100,80', 0.22); // bajo la nariz
-  blob(461.5, C, 3.4, '160,100,80', 0.1); // bajo el labio
-  // Labios: el de arriba con su arco, el de abajo más lleno, y la línea que los separa
-  g.fillStyle = '#b5636a';
-  g.beginPath();
-  g.moveTo(456.1, C - 6);
-  g.quadraticCurveTo(453.9, C - 2.3, 454.8, C);
-  g.quadraticCurveTo(453.9, C + 2.3, 456.1, C + 6);
-  g.quadraticCurveTo(456.9, C, 456.1, C - 6);
-  g.fill();
-  g.fillStyle = '#c67a7e';
-  g.beginPath();
-  g.moveTo(456.1, C - 6);
-  g.quadraticCurveTo(459.6, C, 456.1, C + 6);
-  g.quadraticCurveTo(456.9, C, 456.1, C - 6);
-  g.fill();
-  g.strokeStyle = 'rgba(112,38,48,.85)';
-  g.lineWidth = 0.45;
-  g.beginPath();
-  g.moveTo(456.1, C - 6);
-  g.quadraticCurveTo(456.9, C, 456.1, C + 6);
-  g.stroke();
-  // Los ojos: la esclerótica limpia, iris del color de sus ojos, pupila y un brillo
-  const ic = new THREE.Color(look.eyes ?? 0x5a3a22).convertLinearToSRGB();
-  const rgb = (k: number) => `rgb(${Math.round(ic.r * 255 * k)},${Math.round(ic.g * 255 * k)},${Math.round(ic.b * 255 * k)})`;
-  for (const [x, y] of [[501.5, 484.5], [499.25, 503.4]]) {
-    const R = 4.1;
-    const gr = g.createRadialGradient(x, y, 1.1, x, y, R);
-    gr.addColorStop(0, rgb(0.92));
-    gr.addColorStop(0.7, rgb(0.62));
-    gr.addColorStop(1, rgb(0.26));
-    g.fillStyle = gr;
-    g.beginPath();
-    g.arc(x, y, R, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#0c0a0a';
-    g.beginPath();
-    g.arc(x, y, 1.7, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = 'rgba(255,255,255,.9)';
-    g.beginPath();
-    g.arc(x - 1.1, y - 1.2, 0.62, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.restore();
-}
-
-/** Textura de Michelle recoloreada por partes (piel, pelo, camiseta, pantalón, zapatos). */
-/** Tejidos para la ropa de Azul (vaquero y punto), en píxeles; se repiten en espejo para que no se vean costuras. */
-let denimPx: Uint8ClampedArray | null = null, knitPx: Uint8ClampedArray | null = null;
-const FAB = 192;
-function mirror(v: number, n: number) {
-  const m = v % (2 * n);
-  return m < n ? m : 2 * n - 1 - m;
-}
-const jeansOn = (look: PersonLook) => !!look.jeans && !look.jumpsuit && !look.shorts && !look.nude;
-let denimAvg: number[] | null = null;
-/** Color medio de la foto de tela vaquera. */
-function denimMean() {
-  if (denimAvg) return denimAvg;
-  const s = [0, 0, 0];
-  const n = denimPx!.length / 4;
-  for (let i = 0; i < denimPx!.length; i += 4) for (let q = 0; q < 3; q++) s[q] += denimPx![i + q] / n;
-  return (denimAvg = s);
-}
-
-function womanTexture(src: THREE.Texture, look: PersonLook) {
-  // En el cómic la ropa va en color liso: los pliegues y el sombreado de la foto, casi fuera (la luz la pone
-  // el sombreado en tres tonos)
-  const cm = true;
-  const k = `w${look.skin}.${look.hair}.${look.shirt}.${look.pants}.${look.shoes ?? 0}.${look.eyes ?? 0}.${look.jumpsuit ? 'j' : look.shorts ? 's' : jeansOn(look) ? 'J' : ''}${look.nude ? 'n' : ''}${cm ? 'C' : ''}`;
-  const jeans = jeansOn(look);
-  const over = look.jumpsuit ? shortSuit().mask : look.shorts ? legsMask() : jeans ? waistMask() : null;
-  let t = texCache.get(k);
-  if (t) return t;
-  const img = src.image as HTMLImageElement | ImageBitmap;
-  // Al doble que la máscara de partes: la cara ocupa muy poco de la textura y en los primeros planos se ve
-  const S = 1024;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(img, 0, 0, S, S);
-  const id = g.getImageData(0, 0, S, S);
-  const px = id.data;
-  const sum = new Float64Array(7), cnt = new Float64Array(7);
-  // 1 piel, 2 pelo, 3 camiseta, 4 pantalón, 5 zapatos, 6 cara (piel con menos detalle); 0 se queda igual
-  const part = (x: number, y: number) => {
-    const m = (y >> 1) * 512 + (x >> 1);
-    return (over && over[m]) || Math.round((parts?.[m * 4] ?? 0) / 36);
-  };
-  for (let y = 0, i = 0; y < S; y++)
-    for (let x = 0; x < S; x++, i += 4) {
-      const p = part(x, y);
-      sum[p] += px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-      cnt[p]++;
-    }
-  // En sRGB, como los píxeles del lienzo
-  const target = [0, look.skin, look.hair, look.shirt, look.pants, look.shoes ?? 0x2a2420, look.skin].map((h) => ({ r: ((h >> 16) & 255) / 255, g: ((h >> 8) & 255) / 255, b: (h & 255) / 255 }));
-  for (let y = 0, i = 0; y < S; y++)
-    for (let x = 0; x < S; x++, i += 4) {
-      const p = part(x, y);
-      if (!p) continue;
-      const l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-      const mean = sum[p] / Math.max(1, cnt[p]);
-      const r = l / Math.max(8, mean);
-      // La cara, casi lisa y sin pasarse de su tono (por encima se saturaba y quedaba amarillo verdosa); los
-      // rasgos se pintan después. Sin ropa, la piel es lisa: los pliegues y costuras la delatarían
-      let f = p === 6 ? Math.min(1, Math.max(0.94, 0.985 + (r - 1) * 0.06)) : look.nude && p !== 2 ? 1 : p === 1 ? Math.min(1.08, Math.max(0.62, r)) : Math.min(1.7, Math.max(0.3, r));
-      if (cm && (p === 1 || p === 3 || p === 4)) f = 1 + (f - 1) * (p === 1 ? 0.45 : 0.3);
-      const col = target[p];
-      if (jeans && p === 3 && knitPx) {
-        // Top de punto: color liso con el relieve de una foto de tela (sin las costuras del top original)
-        const fl = Math.min(1.04, Math.max(0.86, 0.96 + (f - 1) * 0.35));
-        const j = (mirror(y * 3, FAB) * FAB + mirror(x * 3, FAB)) * 4;
-        const k = fl * (cm ? 1 : 0.9 + 0.2 * ((knitPx[j] * 0.3 + knitPx[j + 1] * 0.59 + knitPx[j + 2] * 0.11) / 96 - 0.5));
-        px[i] = Math.min(255, col.r * 255 * k);
-        px[i + 1] = Math.min(255, col.g * 255 * k);
-        px[i + 2] = Math.min(255, col.b * 255 * k);
-        continue;
-      }
-      if (jeans && p === 4 && denimPx) {
-        // Vaquero: foto de tela vaquera con los pliegues del pantalón (sin sus parches)
-        const sh = Math.min(1.15, Math.max(0.78, 1 + (f - 1) * 0.55));
-        const j = (mirror(Math.floor(y * 1.6), FAB) * FAB + mirror(Math.floor(x * 1.6), FAB)) * 4;
-        if (cm) {
-          // cómic: azul vaquero liso (el medio de la foto), con una pizca de su trama y las costuras
-          const dm = denimMean();
-          for (let q = 0; q < 3; q++) px[i + q] = Math.min(255, (dm[q] + (denimPx[j + q] - dm[q]) * 0.2) * sh);
-          continue;
-        }
-        px[i] = Math.min(255, denimPx[j] * sh);
-        px[i + 1] = Math.min(255, denimPx[j + 1] * sh);
-        px[i + 2] = Math.min(255, denimPx[j + 2] * sh);
-        continue;
-      }
-      px[i] = Math.min(255, col.r * 255 * f);
-      px[i + 1] = Math.min(255, col.g * 255 * f);
-      px[i + 2] = Math.min(255, col.b * 255 * f);
-    }
-  g.putImageData(id, 0, 0);
-  paintFace(g, look, S / 512);
-  t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.flipY = src.flipY;
-  t.anisotropy = 4;
-  texCache.set(k, t);
-  return t;
-}
 
 /** Textura en gris normalizado (media = blanco) para teñir la ropa con material.color. */
 export function grayTexture(src: THREE.Texture) {
@@ -622,148 +431,84 @@ export function grayTexture(src: THREE.Texture) {
   return t;
 }
 
-/** Color medio (lineal) del centro de una textura: para teñir la piel de la cara sin perder detalle. */
-const meanCache = new Map<string, THREE.Color>();
-function meanColor(src: THREE.Texture) {
-  let m = meanCache.get(src.uuid);
-  if (m) return m;
-  const img = src.image as HTMLImageElement | ImageBitmap;
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.drawImage(img, img.width * 0.3, img.height * 0.3, img.width * 0.4, img.height * 0.4, 0, 0, 32, 32);
-  const px = g.getImageData(0, 0, 32, 32).data;
-  let r = 0, gg = 0, b = 0;
-  for (let i = 0; i < px.length; i += 4) {
-    r += px[i];
-    gg += px[i + 1];
-    b += px[i + 2];
+// ---------- Plantillas de VRoid para la gente sin VRM propio ----------
+
+/** Sombreado de dibujo animado barato, como el MToon de los VRM: dos tonos. */
+const TOON = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([168, 168, 168, 255, 255, 255, 255, 255]), 2, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+})();
+
+/** Plantilla para alguien sin VRM: la suya si es Azul, Gas o un niño; si no, una de su tipo y su ropa. */
+function templateFor(look: PersonLook): TemplateKey | null {
+  const has = (k: TemplateKey) => !!data[k];
+  if (look.azul && has('tpl:azul_diario')) return 'tpl:azul_diario';
+  if (look.gas && has('tpl:gas_diario')) return 'tpl:gas_diario';
+  if (look.kid) {
+    const girl = look.hairStyle === 'long' || look.hairStyle === 'bun' || look.hairStyle === 'pony' || look.hairStyle === 'straight';
+    const k = girl ? 'tpl:nino_2' : 'tpl:nino_3';
+    if (has(k)) return k;
   }
-  const n = (px.length / 4) * 255;
-  m = new THREE.Color().setRGB(r / n, gg / n, b / n, THREE.SRGBColorSpace);
-  meanCache.set(src.uuid, m);
-  return m;
+  const female = !(look.male || look.beard || look.gas || look.hairStyle === 'short' || look.hairStyle === 'cap');
+  const crowd = TEMPLATES.filter((t) => t.role === 'crowd' && t.female === female && has(t.key));
+  // con falda, la de la falda; con pantalón corto o largo, las que van así
+  let pool: readonly (typeof TEMPLATES)[number][] = crowd.filter((t) => t.shorts === !!(look.shorts || look.nude));
+  if (look.skirt && !look.shorts) pool = crowd.filter((t) => t.key === 'tpl:amiga_imperi_1');
+  if (!pool.length) pool = crowd;
+  if (!pool.length) return (TEMPLATES.find((t) => has(t.key))?.key as TemplateKey | undefined) ?? null;
+  // (siempre la misma para el mismo personaje)
+  const h = ((look.hair * 7 + look.shirt * 3 + look.pants * 5 + look.skin) >>> 0) % pool.length;
+  return pool[h].key;
 }
 
-/** Tiñe el material de una pieza del modelo con los colores del personaje. false = ocultar la pieza. */
-export function colorRigMaterial(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look: PersonLook): boolean {
-  mat.metalness = 0;
-  if (name === 'Hair') {
-    mat.color = lin(look.hair);
-    mat.roughness = 0.9;
-    mat.normalMap = hairNormal();
-    mat.normalScale = new THREE.Vector2(0.6, 0.6);
-    return true;
-  }
-  if (kind === 'woman') {
-    if (mat.map) mat.map = womanTexture(mat.map, look);
-    // (mate: con brillo, el pelo oscuro de una sola pieza parecía de globos de látex negro)
-    mat.roughness = 0.9;
-    mat.envMapIntensity = 0.55;
-    // Un poco de luz propia en la piel y la ropa: a la sombra, las caras no se quedan grises
-    mat.emissive = new THREE.Color(0xffffff);
-    mat.emissiveMap = mat.map;
-    mat.emissiveIntensity = 0.09;
-    if (look.nude) mat.normalMap = null;
-    return true;
-  }
-  if (look.nude && /Outfit|Footwear/.test(name)) {
-    mat.map = null;
-    mat.normalMap = null;
-    mat.color = lin(look.skin);
-    mat.roughness = 0.62;
-    return true;
-  }
-  // La parte de arriba del modelo es una chaqueta de esmoquin (solapas y pajarita en la textura): se
-  // cambia por tela lisa de algodón, que con el corte por la cintura queda una camisa normal
-  if (/Outfit_Top/.test(name) && mat.map) {
-    mat.map = fabricTexture();
-    mat.normalMap = null;
-    mat.color = lin(look.shirt);
-    mat.roughness = 0.85;
-  }
-  else if (/Outfit_Bottom/.test(name) && mat.map) { mat.map = grayTexture(mat.map); mat.color = lin(look.pants); }
-  else if (/Footwear/.test(name) && mat.map) { mat.map = grayTexture(mat.map); mat.color = lin(look.shoes ?? 0x2a2420); }
-  else if (/Wolf3D_Body/.test(name)) mat.color = lin(look.skin);
-  else if (/Wolf3D_Head/.test(name) && mat.map) {
-    const mc = meanColor(mat.map);
-    const t = lin(look.skin);
-    mat.color.setRGB(Math.min(2, t.r / mc.r), Math.min(2, t.g / mc.g), Math.min(2, t.b / mc.b));
-    mat.emissive = mat.color.clone();
-    mat.emissiveMap = mat.map;
-    mat.emissiveIntensity = 0.09;
-  } else if (/Beard/.test(name)) {
-    mat.color = lin(look.hair);
-    if (!look.beard) return false;
-  }
-  mat.roughness = Math.max(mat.roughness, 0.6);
-  return true;
-}
-
-let fabric: THREE.Texture | null = null;
-/** Tela de algodón: un grano muy suave que se repite (no depende de cómo vengan las UV del modelo). */
-function fabricTexture() {
-  if (fabric) return fabric;
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const ctx = c.getContext('2d')!;
-  const img = ctx.createImageData(64, 64);
-  let seed = 11;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let y = 0; y < 64; y++)
-    for (let x = 0; x < 64; x++) {
-      // Trama de tejido (hilos en las dos direcciones) con un poco de ruido
-      const v = 235 + ((x + y) % 2) * 6 + Math.floor(rnd() * 12) - 6;
-      const i = (y * 64 + x) * 4;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.min(255, v);
-      img.data[i + 3] = 255;
-    }
-  ctx.putImageData(img, 0, 0);
-  fabric = new THREE.CanvasTexture(c);
-  fabric.wrapS = fabric.wrapT = THREE.RepeatWrapping;
-  fabric.repeat.set(10, 10);
-  fabric.colorSpace = THREE.SRGBColorSpace;
-  return fabric;
-}
-
-/** Datos ya preparados de un tipo de modelo (para la multitud). */
-export const rigKind = (k: Kind) => data[k]!;
+const tplMats = new Map<string, THREE.Material>();
 /**
- * Plantilla de la multitud hecha de un VRM (scripts/crowd_lod.mjs): misma preparación que un VRM del reparto (las
- * mismas capturas, a su esqueleto). Solo después de preloadRig.
+ * Material de una plantilla teñido con los colores del personaje: la piel, su textura × (su piel ÷ la de la
+ * plantilla); pelo, camiseta y pantalón, el color × la luminosidad de la textura ÷ su media (se ven los pliegues);
+ * zapatos y cara, tal cual.
  */
-export function prepareCrowdTemplate(gltf: GLTF, height: number): KindData | null {
-  if (!vrmPrep) return null;
-  const P = vrmPrep;
-  return prepareKind('woman', gltf, P.anims, P.aBind, P.dance, height, P.extras);
+function templateMaterial(key: string, base: THREE.MeshStandardMaterial, look: PersonLook) {
+  const src = tplSrc.get(key)!;
+  const bottoms = look.nude ? look.skin : look.pants;
+  const id = `${key}|${look.hair}|${look.shirt}|${bottoms}|${look.skin}`;
+  let mat = tplMats.get(id);
+  if (mat) return mat;
+  const skin = lin(look.skin);
+  const ratio = new THREE.Vector3(skin.r / Math.max(0.004, src.info.skin.r), skin.g / Math.max(0.004, src.info.skin.g), skin.b / Math.max(0.004, src.info.skin.b));
+  const col = (h: number) => { const c = lin(h); return new THREE.Vector3(c.r, c.g, c.b); };
+  const U = { uHair: { value: col(look.hair) }, uTop: { value: col(look.shirt) }, uBot: { value: col(bottoms) }, uSkin: { value: ratio }, uLum: { value: src.info.lum } };
+  const m = new THREE.MeshToonMaterial({ map: base.map, gradientMap: TOON, alphaTest: 0.5, side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aZone;\nvarying float vZone;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvZone = aZone;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uHair, uTop, uBot, uSkin, uLum;\nvarying float vZone;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float zn = floor(vZone + 0.5);
+        float lu = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        if (zn < 1.5) diffuseColor.rgb *= uSkin;
+        else if (zn < 2.5) diffuseColor.rgb = uHair * clamp(lu / uLum.x, 0.3, 1.7);
+        else if (zn < 3.5) diffuseColor.rgb = uTop * clamp(lu / uLum.y, 0.3, 1.7);
+        else if (zn < 4.5) diffuseColor.rgb = uBot * clamp(lu / uLum.z, 0.3, 1.7);`,
+      );
+  };
+  m.customProgramCacheKey = () => 'tplPerson';
+  mat = m;
+  tplMats.set(id, mat);
+  return mat;
 }
 
-// ---------- Pelo del hombre ----------
-
-let hairN: THREE.Texture | null = null;
-/** Relieve de mechones finos para que el pelo no parezca un casco liso. */
-function hairNormal() {
-  if (hairN) return hairN;
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const g = c.getContext('2d')!;
-  g.fillStyle = 'rgb(128,128,255)';
-  g.fillRect(0, 0, 256, 256);
-  let sd = 11;
-  const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 1800; i++) {
-    const x = rnd() * 256, y = rnd() * 256, l = 6 + rnd() * 18;
-    const v = rnd() < 0.5 ? 90 : 166;
-    g.strokeStyle = `rgba(${v},128,255,0.5)`;
-    g.lineWidth = 1 + rnd();
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + (rnd() - 0.5) * 3, y + l);
-    g.stroke();
-  }
-  hairN = new THREE.CanvasTexture(c);
-  hairN.wrapS = hairN.wrapT = THREE.RepeatWrapping;
-  return hairN;
+/** Datos de una plantilla para la multitud: su modelo intacto y lo preparado (null si no cargó). */
+export function crowdTemplate(key: string) {
+  const src = tplSrc.get(key), K = data[key as DataKey];
+  return src && K ? { gltf: src.gltf, info: src.info, K } : null;
 }
 
 // ---------- Personaje ----------
@@ -881,7 +626,7 @@ export async function ensureVRMs(need: [url: string, count: number, height: numb
         const v = await loadVRM(url);
         pool = [v];
         vrmPool.set(url, pool);
-        data[`vrm:${url}`] = prepareKind('woman', v.gltf, P.anims, P.aBind, P.dance, height, P.extras);
+        data[`vrm:${url}`] = prepareKind(v.gltf, P.anims, P.aBind, P.dance, height, P.extras);
       }
       while (pool.length < count) pool.push(await copyVRM(url, pool[0]));
     } catch (e) {
@@ -910,18 +655,17 @@ export function releaseVRMs(keep: Set<string>) {
 export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Object3D): Person {
   // Con su VRM de VRoid si lo tiene, está cargado y queda una copia libre (si no, su modelo de antes)
   const loaded = look.vrm ? takeVRM(look.vrm) : undefined;
-  const kind: DataKey = loaded ? `vrm:${look.vrm}` : look.gas ? 'gas' : look.kid ? 'kid' : look.male || look.beard ? 'man' : look.azul ? 'woman' : 'mhwoman';
+  // (si no, una plantilla de VRoid de su tipo, teñida con sus colores)
+  const kind: DataKey = loaded ? `vrm:${look.vrm}` : templateFor(look)!;
   const D = data[kind]!;
-  const mh = kind !== 'woman';
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   if (loaded) resetVRM(loaded);
-  const model = loaded ? loaded.vrm.scene : SkeletonUtils.clone(D.gltf.scene);
+  const model = loaded ? loaded.vrm.scene : SkeletonUtils.clone(tplSrc.get(kind)!.gltf.scene);
   model.scale.setScalar(D.scale);
   model.position.y = -D.minY * D.scale;
   root.add(model);
 
-  const extra: [THREE.SkinnedMesh, THREE.SkinnedMesh][] = [];
   model.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
     if (!m.isMesh || loaded) return;
@@ -929,36 +673,11 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     // Sin sombra propia: en los primeros planos, la del pelo y la nariz les manchaba la cara de gris
     m.receiveShadow = false;
     m.userData.noReceive = true;
+    // Su propio sombreado de dibujo animado, como los VRM: el paso de cómic no lo toca
+    m.userData.noComic = true;
     m.frustumCulled = false;
-    const mat = (m.material as THREE.MeshStandardMaterial).clone();
-    m.material = mat;
-    if (mh) {
-      // MakeHuman: cada pieza se enseña o no según la ropa, y se tiñe con los colores del personaje
-      m.visible = mhPart(kind as Kind, m.name, mat, look);
-      return;
-    }
-    if (colorRigMaterial(kind as Kind, m.name, mat, look) === false) m.visible = false;
-    if (kind === 'woman' && (look.jumpsuit || look.shorts) && (m as THREE.SkinnedMesh).isSkinnedMesh) {
-      const sm = m as THREE.SkinnedMesh;
-      const src = sm.geometry;
-      sm.geometry = jeansGeometry(shortSuit().geo.get(src.uuid) ?? src, true, sm.skeleton);
-      // y encima, el pantalón corto de verdad (del color del pantalón: negro con el mono)
-      const sg = shortSuit().shell.get(src.uuid);
-      if (sg && sg.attributes.position.count) {
-        const shorts = new THREE.SkinnedMesh(sg, new THREE.MeshStandardMaterial({ color: lin(look.pants), roughness: 0.85, side: THREE.DoubleSide }));
-        shorts.name = 'Shorts';
-        shorts.frustumCulled = false;
-        shorts.castShadow = true;
-        extra.push([sm, shorts]);
-      }
-    }
-    else if (kind === 'woman' && jeansOn(look) && (m as THREE.SkinnedMesh).isSkinnedMesh) m.geometry = jeansGeometry(m.geometry);
+    m.material = templateMaterial(kind, m.material as THREE.MeshStandardMaterial, look);
   });
-
-  for (const [m, shorts] of extra) {
-    m.parent!.add(shorts);
-    shorts.bind(m.skeleton, m.bindMatrix);
-  }
   const B = boneMap(model);
   // Articulaciones del muñeco (invisibles): las mueve animatePerson y el código de los niveles
   const body = new THREE.Group();
@@ -1053,623 +772,9 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     kneeL, kneeR, footL, footR, elbowL, elbowR,
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
-  if (kind === 'woman' && look.hairStyle === 'straight') straightHair(p, look);
   if (loaded) vrmOwner.set(loaded, p);
   people.add(p);
   return p;
-}
-
-/** Matriz de un vértice con el esqueleto en su pose actual, de la geometría al mundo. */
-function skinMatrix(m: THREE.SkinnedMesh, i: number) {
-  const g = m.geometry, si = g.attributes.skinIndex as THREE.BufferAttribute, sw = g.attributes.skinWeight as THREE.BufferAttribute;
-  const acc = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  const t = new THREE.Matrix4();
-  for (let k = 0; k < 4; k++) {
-    const wt = sw.getComponent(i, k);
-    if (!wt) continue;
-    const bi = si.getComponent(i, k);
-    t.multiplyMatrices(m.skeleton.bones[bi].matrixWorld, m.skeleton.boneInverses[bi]);
-    for (let e = 0; e < 16; e++) acc.elements[e] += t.elements[e] * wt;
-  }
-  return new THREE.Matrix4().multiplyMatrices(m.matrixWorld, m.bindMatrixInverse).multiply(acc).multiply(m.bindMatrix);
-}
-
-// ---------- Pantalón corto ----------
-
-let legs: Uint8Array | null = null;
-/** Solo las piernas del mono corto (sin taparle la barriga): pantalón corto de ella. */
-function legsMask() {
-  legs ??= shortSuit().mask.map((v) => (v === 6 ? 6 : 0));
-  return legs;
-}
-
-// ---------- Camiseta a rayas (la del Barça) ----------
-
-// ---------- Mono corto ----------
-
-let short: { mask: Uint8Array; geo: Map<string, THREE.BufferGeometry>; shell: Map<string, THREE.BufferGeometry> } | null = null;
-/**
- * Mono negro corto (Ferreries): tapa la barriga que deja ver el top de Michelle y deja las piernas
- * al aire desde medio muslo. Las perneras anchas del pantalón se ciñen a la forma de la pierna y su
- * textura pasa a ser piel; la barriga pasa a ser tela. Se calcula una vez para todas.
- */
-function shortSuit() {
-  if (short) return short;
-  const mask = new Uint8Array(512 * 512);
-  const geo = new Map<string, THREE.BufferGeometry>();
-  const shell = new Map<string, THREE.BufferGeometry>();
-  short = { mask, geo, shell };
-  const scene = data.woman?.gltf.scene;
-  if (!scene || !parts) return short;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 512;
-  const g = cv.getContext('2d', { willReadFrequently: true })!;
-  g.lineWidth = 2;
-  const hc = document.createElement('canvas');
-  hc.width = hc.height = 512;
-  const hg = hc.getContext('2d', { willReadFrequently: true })!;
-  hg.lineWidth = 1.5;
-  scene.updateWorldMatrix(true, true);
-  const meshes: THREE.SkinnedMesh[] = [];
-  scene.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (m.isSkinnedMesh && m.geometry.attributes.uv) meshes.push(m);
-  });
-  const box = new THREE.Box3();
-  const MS = meshes.map(() => [] as THREE.Matrix4[]);
-  const skinM = skinMatrix;
-  const W = meshes.map((m, mi) => {
-    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-    const w: THREE.Vector3[] = [];
-    for (let i = 0; i < pos.count; i++) {
-      const M = skinM(m, i);
-      MS[mi].push(M);
-      w.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(M));
-    }
-    w.forEach((v) => box.expandByPoint(v));
-    return w;
-  });
-  const H = box.max.y - box.min.y;
-  const cx = (box.max.x + box.min.x) / 2;
-  const hOf = (v: THREE.Vector3) => (v.y - box.min.y) / H;
-  const HEM = 0.455; // a medio muslo
-  // Grosor de la pierna (radio respecto a la altura) del muslo al tobillo
-  const legR = (h: number) => H * (h > 0.3 ? THREE.MathUtils.lerp(0.034, 0.05, (h - 0.3) / (HEM - 0.3)) : h > 0.17 ? THREE.MathUtils.lerp(0.03, 0.034, (h - 0.17) / 0.13) : THREE.MathUtils.lerp(0.02, 0.03, Math.max(0, h - 0.05) / 0.12));
-  meshes.forEach((m, mi) => {
-    const src = m.geometry;
-    const uv = src.attributes.uv as THREE.BufferAttribute;
-    const pos = src.attributes.position as THREE.BufferAttribute;
-    const w = W[mi];
-    const partOf = (i: number) => {
-      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
-      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
-      return Math.round(parts![(y * 512 + x) * 4] / 36);
-    };
-    const pt = Array.from({ length: pos.count }, (_, i) => partOf(i));
-    // Texturas: perneras por debajo del dobladillo → piel; barriga → tela del mono
-    const index = src.index ? Array.from(src.index.array) : [...Array(pos.count).keys()];
-    for (let t = 0; t < index.length; t += 3) {
-      const [a, b, c] = [index[t], index[t + 1], index[t + 2]];
-      const h = (hOf(w[a]) + hOf(w[b]) + hOf(w[c])) / 3;
-      const ax = Math.abs((w[a].x + w[b].x + w[c].x) / 3 - cx) / H;
-      let to = 0;
-      if (pt[a] === 4 && pt[b] === 4 && pt[c] === 4) {
-        // Altura de cada píxel del pantalón (función lineal en el triángulo = degradado lineal): el
-        // dobladillo sale recto y no en dientes de sierra como los triángulos
-        const P = [a, b, c].map((q) => [uv.getX(q) * 512, uv.getY(q) * 512, hOf(w[q])]);
-        const [x0, y0, h0] = P[0], [x1, y1, h1] = P[1], [x2, y2, h2] = P[2];
-        const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
-        let gx = 0, gy = 0;
-        if (Math.abs(det) > 1e-6) {
-          gx = ((h1 - h0) * (y2 - y0) - (h2 - h0) * (y1 - y0)) / det;
-          gy = ((h2 - h0) * (x1 - x0) - (h1 - h0) * (x2 - x0)) / det;
-        }
-        const g2 = gx * gx + gy * gy;
-        if (g2 > 1e-12) {
-          const s0 = -h0 / g2, s1 = (1 - h0) / g2;
-          const gr = hg.createLinearGradient(x0 + gx * s0, y0 + gy * s0, x0 + gx * s1, y0 + gy * s1);
-          gr.addColorStop(0, 'rgb(0,255,0)');
-          gr.addColorStop(1, 'rgb(255,255,0)');
-          hg.fillStyle = hg.strokeStyle = gr;
-        } else hg.fillStyle = hg.strokeStyle = `rgb(${Math.round(h0 * 255)},255,0)`;
-        hg.beginPath();
-        hg.moveTo(x0, y0);
-        hg.lineTo(x1, y1);
-        hg.lineTo(x2, y2);
-        hg.closePath();
-        hg.fill();
-        hg.stroke();
-        continue;
-      } else if (pt[a] === 1 && pt[b] === 1 && pt[c] === 1 && h > 0.5 && h < 0.69 && ax < 0.1) to = 3;
-      if (!to) continue;
-      g.fillStyle = g.strokeStyle = `rgb(${to * 36},0,0)`;
-      g.beginPath();
-      g.moveTo(uv.getX(a) * 512, uv.getY(a) * 512);
-      g.lineTo(uv.getX(b) * 512, uv.getY(b) * 512);
-      g.lineTo(uv.getX(c) * 512, uv.getY(c) * 512);
-      g.closePath();
-      g.fill();
-      g.stroke();
-    }
-    // (también el puño del pantalón, que en la máscara va con los zapatos: si no, la pierna se abría en el tobillo)
-    const isLeg = (i: number) => pt[i] === 4 || (pt[i] === 5 && hOf(w[i]) > 0.075);
-    // Perneras ceñidas: cada vértice del pantalón bajo el dobladillo se acerca al eje de su pierna
-    const BIN = 0.015;
-    const stat = new Map<string, { x: number; z: number; n: number; r: number }>();
-    const key = (v: THREE.Vector3) => `${v.x > cx ? 1 : 0}:${Math.floor(hOf(v) / BIN)}`;
-    for (let i = 0; i < pos.count; i++) {
-      if (!isLeg(i) || hOf(w[i]) >= HEM + 0.03) continue;
-      const k = key(w[i]);
-      const st = stat.get(k) ?? { x: 0, z: 0, n: 0, r: 0 };
-      st.x += w[i].x; st.z += w[i].z; st.n++;
-      stat.set(k, st);
-    }
-    for (const st of stat.values()) { st.x /= st.n; st.z /= st.n; }
-    for (let i = 0; i < pos.count; i++) {
-      if (!isLeg(i) || hOf(w[i]) >= HEM + 0.03) continue;
-      const st = stat.get(key(w[i]))!;
-      st.r = Math.max(st.r, Math.hypot(w[i].x - st.x, w[i].z - st.z));
-    }
-    const out = src.clone();
-    const op = out.attributes.position as THREE.BufferAttribute;
-    const v = new THREE.Vector3();
-    const W2 = w.map((q) => q.clone()); // posiciones en reposo después de ceñir las perneras
-    for (let i = 0; i < pos.count; i++) {
-      if (!isLeg(i)) continue;
-      const h = hOf(w[i]);
-      if (h >= HEM + 0.03) continue;
-      const st = stat.get(key(w[i]))!;
-      const k = Math.min(1, legR(Math.min(h, HEM)) / Math.max(1e-4, st.r));
-      const blend = THREE.MathUtils.smoothstep(HEM + 0.03 - h, 0, 0.03); // sin escalón en el dobladillo
-      const f = 1 + (k - 1) * blend;
-      W2[i].set(st.x + (w[i].x - st.x) * f, w[i].y, st.z + (w[i].z - st.z) * f);
-      v.copy(W2[i]).applyMatrix4(MS[mi][i].clone().invert());
-      op.setXYZ(i, v.x, v.y, v.z);
-    }
-    out.computeVertexNormals();
-    geo.set(src.uuid, out);
-    // Pantalón corto de verdad: una prenda aparte, con grosor, por encima de la piel de cintura a medio muslo,
-    // con el bajo recto y un poco acampanado (antes solo estaba pintado sobre la pierna)
-    {
-      const wg = new THREE.BufferGeometry();
-      wg.setAttribute('position', new THREE.Float32BufferAttribute(W2.flatMap((q) => [q.x, q.y, q.z]), 3));
-      wg.setIndex(index);
-      wg.computeVertexNormals();
-      const wn = wg.attributes.normal as THREE.BufferAttribute;
-      const si = src.attributes.skinIndex as THREE.BufferAttribute, sw = src.attributes.skinWeight as THREE.BufferAttribute;
-      const P: number[] = [], N: number[] = [], SI: number[] = [], SW: number[] = [], UV: number[] = [];
-      const n = new THREE.Vector3(), q = new THREE.Vector3();
-      const TOP = 0.615;
-      for (let t = 0; t < index.length; t += 3) {
-        const tri = [index[t], index[t + 1], index[t + 2]];
-        const hs = tri.map((i) => hOf(W2[i]));
-        const hc = (hs[0] + hs[1] + hs[2]) / 3;
-        if (hc < HEM || hc > TOP || !tri.every((i) => pt[i] === 4 || pt[i] === 3 || pt[i] === 0)) continue;
-        for (const i of tri) {
-          const h = Math.max(HEM, hOf(W2[i]));
-          n.fromBufferAttribute(wn, i);
-          // grosor: fino en la cintura, más suelto abajo; el bajo se abre un poco
-          const off = 0.007 + 0.012 * THREE.MathUtils.smoothstep(h, TOP, HEM + 0.04) + 0.012 * THREE.MathUtils.smoothstep(h, HEM + 0.035, HEM);
-          q.copy(W2[i]).addScaledVector(n, off);
-          q.y = box.min.y + h * H;
-          q.applyMatrix4(MS[mi][i].clone().invert());
-          P.push(q.x, q.y, q.z);
-          N.push(n.x, n.y, n.z);
-          UV.push(0.5, 0.5);
-          for (let k = 0; k < 4; k++) { SI.push(si.getComponent(i, k)); SW.push(sw.getComponent(i, k)); }
-        }
-      }
-      const sg = new THREE.BufferGeometry();
-      sg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-      sg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
-      sg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
-      sg.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
-      sg.computeVertexNormals();
-      shell.set(src.uuid, sg);
-    }
-  });
-  const px = g.getImageData(0, 0, 512, 512).data;
-  const hp = hg.getImageData(0, 0, 512, 512).data;
-  for (let i = 0; i < mask.length; i++) {
-    mask[i] = px[i * 4] > 70 ? 3 : 0; // bordes suavizados del lienzo
-    if (hp[i * 4 + 1] > 128 && hp[i * 4] / 255 < HEM) mask[i] = 6; // piel lisa, sin los pliegues del vaquero
-  }
-  return short;
-}
-
-let waist: Uint8Array | null = null;
-/**
- * Con vaqueros: la franja de la máscara de partes que el modelo original tenía como «camiseta» en la cintura del
- * pantalón pasa a ser pantalón (salía una tira dentada del color del top encima del vaquero). Se decide por la
- * altura de cada triángulo en la pose de reposo.
- */
-function waistMask() {
-  if (waist) return waist;
-  waist = new Uint8Array(512 * 512);
-  const scene = data.woman?.gltf.scene;
-  if (!scene || !parts) return waist;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 512;
-  const g = cv.getContext('2d', { willReadFrequently: true })!;
-  g.lineWidth = 2;
-  g.fillStyle = g.strokeStyle = '#ff0000';
-  scene.updateWorldMatrix(true, true);
-  const meshes: THREE.SkinnedMesh[] = [];
-  scene.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (m.isSkinnedMesh && m.geometry.attributes.uv) meshes.push(m);
-  });
-  const box = new THREE.Box3();
-  const W = meshes.map((m) => {
-    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-    const w: THREE.Vector3[] = [];
-    for (let i = 0; i < pos.count; i++) w.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(skinMatrix(m, i)));
-    w.forEach((v) => box.expandByPoint(v));
-    return w;
-  });
-  const H = box.max.y - box.min.y;
-  meshes.forEach((m, mi) => {
-    const uv = m.geometry.attributes.uv as THREE.BufferAttribute;
-    const w = W[mi];
-    const partOf = (i: number) => {
-      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
-      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
-      return Math.round(parts![(y * 512 + x) * 4] / 36);
-    };
-    const n = m.geometry.attributes.position.count;
-    const index = m.geometry.index ? Array.from(m.geometry.index.array) : [...Array(n).keys()];
-    for (let t = 0; t < index.length; t += 3) {
-      const tri = [index[t], index[t + 1], index[t + 2]];
-      // (la tira es «camiseta» o sin clasificar, que conserva el azul del conjunto original del modelo)
-      if (!tri.some((q) => partOf(q) === 3 || partOf(q) === 0)) continue;
-      const h = tri.reduce((s, q) => s + (w[q].y - box.min.y) / H, 0) / 3;
-      // la tira llega hasta 0.64 de la altura; el top empieza en 0.66 (entre medias no hay triángulos)
-      if (h > 0.645 || h < 0.42) continue;
-      g.beginPath();
-      g.moveTo(uv.getX(tri[0]) * 512, uv.getY(tri[0]) * 512);
-      g.lineTo(uv.getX(tri[1]) * 512, uv.getY(tri[1]) * 512);
-      g.lineTo(uv.getX(tri[2]) * 512, uv.getY(tri[2]) * 512);
-      g.closePath();
-      g.fill();
-      g.stroke();
-    }
-  });
-  const px = g.getImageData(0, 0, 512, 512).data;
-  for (let i = 0; i < waist.length; i++) {
-    const p = Math.round(parts[i * 4] / 36);
-    if (px[i * 4] > 70 && (p === 3 || p === 0)) waist[i] = 4;
-  }
-  return waist;
-}
-
-// ---------- MakeHuman (Gas y los hombres secundarios) ----------
-
-/** Color medio de la piel de la textura del hombre genérico (sRGB): el tono de cada uno se saca respecto a él. */
-const MH_SKIN = new THREE.Color(0xe9bc9e);
-const stripeCache = new Map<string, THREE.Texture>();
-/** La camiseta (blanca) con rayas verticales de dos colores: la del Barça. */
-function stripedMap(src: THREE.Texture, cols: [number, number]) {
-  const k = src.uuid + cols.join(',');
-  let t = stripeCache.get(k);
-  if (t) return t;
-  const img = src.image as HTMLImageElement | ImageBitmap;
-  const c = document.createElement('canvas');
-  c.width = img.width;
-  c.height = img.height;
-  const g = c.getContext('2d')!;
-  g.drawImage(img, 0, 0);
-  g.globalCompositeOperation = 'multiply';
-  const n = 26, w = c.width / n;
-  for (let i = 0; i < n; i++) {
-    g.fillStyle = '#' + new THREE.Color(cols[i % 2]).getHexString();
-    g.fillRect(i * w, 0, w + 1, c.height);
-  }
-  t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.flipY = src.flipY;
-  stripeCache.set(k, t);
-  return t;
-}
-/**
- * Qué piezas lleva cada uno y de qué color. El modelo trae el cuerpo en tres versiones (vestido, con pantalón
- * corto y sin ropa), la camiseta blanca, el pantalón largo y el corto: según la ropa se enseñan unas u otras.
- * Gas trae su pelo, su barba y sus vaqueros; al genérico se le tiñen la piel, el pelo y el pantalón.
- */
-/** Peinado de cada hombre secundario: sale de su aspecto, así el mismo personaje lleva siempre el mismo. */
-export function mhHairFor(look: PersonLook, kind: Kind = 'man') {
-  const k = (look.hair * 7 + look.shirt * 3 + look.skin) >>> 0;
-  const longish = look.hairStyle === 'long' || look.hairStyle === 'straight' || look.hairStyle === 'pony' || look.hairStyle === 'bun' || !!look.skirt;
-  if (kind === 'mhwoman') return look.hairStyle === 'long' || look.hairStyle === 'straight' ? 'MHHair' : k % 5 === 0 ? 'MHHair_afro01' : 'MHHair_bob02';
-  if (kind === 'kid') return longish ? 'MHHair_bob02' : k % 2 ? 'MHHair' : 'MHHair_short04';
-  const H = ['MHHair', 'MHHair_short01', 'MHHair_short03', 'MHHair_short04'];
-  return H[k % H.length];
-}
-
-function mhPart(kind: Kind, name: string, mat: THREE.MeshStandardMaterial, look: PersonLook) {
-  const nude = !!look.nude, shorts = (!!look.shorts || !!look.jumpsuit) && !nude;
-  const generic = kind !== 'gas';
-  switch (name) {
-    case 'Body':
-    case 'BodyShort':
-    case 'BodyFull':
-      if (generic) {
-        const s = lin(look.skin).convertLinearToSRGB();
-        mat.color.setRGB(Math.min(1.15, s.r / MH_SKIN.r), Math.min(1.15, s.g / MH_SKIN.g), Math.min(1.15, s.b / MH_SKIN.b), THREE.SRGBColorSpace);
-      }
-      return name === (nude ? 'BodyFull' : shorts ? 'BodyShort' : 'Body');
-    case 'Shirt':
-      if (look.stripes && mat.map) {
-        mat.map = stripedMap(mat.map, look.stripes);
-        mat.color.set(0xffffff);
-      } else mat.color = lin(look.shirt);
-      return !nude;
-    case 'Pants':
-    case 'PantsShort':
-      if (generic) mat.color = lin(look.pants);
-      return name === 'Pants' ? !nude && !shorts : shorts;
-    case 'Shoes':
-      return !nude;
-    case 'MHScalp':
-      // el casquete bajo el pelo, del color del pelo
-      mat.color = lin(look.hair).multiplyScalar(generic ? 1.0 : 0.85);
-      return true;
-    case 'MHHair':
-    case 'MHHair_short01':
-    case 'MHHair_short03':
-    case 'MHHair_short04':
-    case 'MHHair_bob02':
-    case 'MHHair_afro01':
-      if (generic) mat.color = lin(look.hair).multiplyScalar(1.15);
-      // (más tupido: con el recorte de antes se veía la piel de la cabeza a manchas naranjas)
-      mat.alphaTest = 0.2;
-      return !generic || name === mhHairFor(look, kind);
-    default:
-      return true;
-  }
-}
-
-// ---------- Vaqueros ----------
-
-const jeansCache = new Map<string, THREE.BufferGeometry>();
-/**
- * Vaqueros rectos para el pantalón ancho de Michelle: en la malla en reposo (las piernas ya van rectas), cada
- * pernera, rodaja a rodaja, pasa a ser casi un tubo que se estrecha poco a poco del muslo al bajo, sin el
- * bajo fruncido. Todo lo que queda bajo la entrepierna y no es piel cuenta como pernera (el mapa de partes
- * solo marca como pantalón la cadera; el puño del tobillo va marcado como zapato).
- */
-function jeansGeometry(src: THREE.BufferGeometry, bare = false, skel?: THREE.Skeleton) {
-  const ck = src.uuid + (bare ? 'b' : '');
-  const hit = jeansCache.get(ck);
-  if (hit) return hit;
-  const uv = src.attributes.uv as THREE.BufferAttribute | undefined;
-  if (!uv || !parts) return src;
-  const pos = src.attributes.position as THREE.BufferAttribute;
-  const pt = (i: number) => {
-    const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
-    const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
-    return Math.round(parts![(y * 512 + x) * 4] / 36);
-  };
-  let y0 = Infinity, y1 = -Infinity;
-  for (let i = 0; i < pos.count; i++) { y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)); }
-  // (con pantalón corto, hasta más arriba: si no, entre los muslos quedaba una telilla bajo el pantalón)
-  const H = y1 - y0, TOP = bare ? 0.52 : 0.48, LOW = 0.055, SL = 0.02;
-  const hb = (i: number) => (pos.getY(i) - y0) / H;
-  const leg = (i: number) => { const h = hb(i); return h < TOP && h > LOW && pt(i) !== 1 && pt(i) !== 6; };
-  // (izquierda y derecha respecto al centro de verdad de las piernas: el modelo no está centrado en x = 0 y las
-  // dos piernas caían en el mismo grupo y se juntaban)
-  let cxs = 0, cxn = 0;
-  for (let i = 0; i < pos.count; i++) if (leg(i)) { cxs += pos.getX(i); cxn++; }
-  const cx0 = cxn ? cxs / cxn : 0;
-  // y mejor aún, por el hueso que la mueve (pierna izquierda o derecha): las costuras de dentro del pantalón
-  // ancho quedan casi en el centro y, por posición, se iban a la otra pierna y estiraban triángulos entre las dos
-  const si = src.attributes.skinIndex as THREE.BufferAttribute | undefined, sw = src.attributes.skinWeight as THREE.BufferAttribute | undefined;
-  const sideOf = (i: number) => {
-    if (skel && si && sw) {
-      let l = 0, r = 0;
-      for (let k = 0; k < 4; k++) {
-        const n = skel.bones[si.getComponent(i, k)]?.name ?? '';
-        if (/Left(UpLeg|Leg|Foot|ToeBase)/.test(n)) l += sw.getComponent(i, k);
-        else if (/Right(UpLeg|Leg|Foot|ToeBase)/.test(n)) r += sw.getComponent(i, k);
-      }
-      if (l + r > 0.2) return l > r ? 'L' : 'R';
-    }
-    return pos.getX(i) > cx0 ? 'L' : 'R';
-  };
-  const sides = new Array<string>(pos.count);
-  for (let i = 0; i < pos.count; i++) sides[i] = sideOf(i);
-  const bk = (i: number) => `${sides[i]}:${Math.floor(hb(i) / SL)}`;
-  const bins = new Map<string, { x: number; z: number; n: number }>();
-  for (let i = 0; i < pos.count; i++) {
-    if (!leg(i)) continue;
-    const b = bins.get(bk(i)) ?? { x: 0, z: 0, n: 0 };
-    b.x += pos.getX(i); b.z += pos.getZ(i); b.n++;
-    bins.set(bk(i), b);
-  }
-  for (const b of bins.values()) { b.x /= b.n; b.z /= b.n; }
-  // con esqueleto, el eje de la pierna de verdad (cadera, rodilla, tobillo): el centro de la pernera ancha
-  // no lo es, y la pierna salía torcida y con bultos
-  if (skel) {
-    const at = (re: RegExp) => {
-      const j = skel.bones.findIndex((b) => re.test(b.name));
-      return j < 0 ? null : new THREE.Vector3().setFromMatrixPosition(skel.boneInverses[j].clone().invert());
-    };
-    for (const side of ['L', 'R'] as const) {
-      const n = side === 'L' ? 'Left' : 'Right';
-      const pts = [at(new RegExp(n + 'Foot$')), at(new RegExp(n + 'Leg$')), at(new RegExp(n + 'UpLeg$'))].filter(Boolean) as THREE.Vector3[];
-      if (pts.length < 3) continue;
-      pts.sort((a, b) => a.y - b.y);
-      for (const [k, b] of bins) {
-        if (!k.startsWith(side + ':')) continue;
-        const y = y0 + (Number(k.split(':')[1]) + 0.5) * SL * H;
-        const [p0, p1] = y < pts[1].y ? [pts[0], pts[1]] : [pts[1], pts[2]];
-        const u = THREE.MathUtils.clamp((y - p0.y) / (p1.y - p0.y), 0, 1);
-        b.x = THREE.MathUtils.lerp(p0.x, p1.x, u);
-        b.z = THREE.MathUtils.lerp(p0.z, p1.z, u) + 0.006;
-      }
-    }
-  }
-  const out = src.clone();
-  const op = out.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    if (!leg(i)) continue;
-    const h = hb(i), b = bins.get(bk(i))!;
-    const dx = pos.getX(i) - b.x, dz = pos.getZ(i) - b.z, d = Math.max(1e-6, Math.hypot(dx, dz));
-    // con pantalón corto, la pierna desnuda: muslo, rodilla, gemelo y tobillo de una pierna de verdad
-    const target = bare ? H * legBare(h) : H * THREE.MathUtils.lerp(0.033, 0.049, THREE.MathUtils.clamp((h - LOW) / (0.45 - LOW), 0, 1));
-    const blend = THREE.MathUtils.smoothstep(TOP - h, 0, 0.035); // sin escalón en la cadera
-    const nd = bare ? d + (target - d) * blend : d + (0.12 * d + 0.88 * target - d) * blend;
-    op.setXYZ(i, b.x + (dx / d) * nd, pos.getY(i), b.z + (dz / d) * nd);
-  }
-  out.computeVertexNormals();
-  jeansCache.set(ck, out);
-  return out;
-}
-
-/** Radio de la pierna desnuda (respecto a la altura) según la altura: tobillo, gemelo, rodilla y muslo. */
-function legBare(h: number) {
-  const K: [number, number][] = [[0.055, 0.018], [0.12, 0.022], [0.2, 0.029], [0.27, 0.025], [0.33, 0.03], [0.45, 0.041], [0.52, 0.047]];
-  for (let k = 1; k < K.length; k++) if (h <= K[k][0]) return THREE.MathUtils.lerp(K[k - 1][1], K[k][1], (h - K[k - 1][0]) / (K[k][0] - K[k - 1][0]));
-  return K[K.length - 1][1];
-}
-
-// ---------- Melena lisa ----------
-
-const noHairCache = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
-/** La misma malla sin los triángulos del pelo de Michelle (los dos moños). */
-function withoutHair(src: THREE.BufferGeometry) {
-  let g = noHairCache.get(src);
-  if (g) return g;
-  const uv = src.attributes.uv as THREE.BufferAttribute | undefined;
-  if (!uv || !parts) return src;
-  const isHair = (i: number) => {
-    const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
-    const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
-    return Math.round(parts![(y * 512 + x) * 4] / 36) === 2;
-  };
-  const index = src.index ? Array.from(src.index.array) : [...Array(src.attributes.position.count).keys()];
-  const out: number[] = [];
-  for (let t = 0; t < index.length; t += 3) if (!(isHair(index[t]) && isHair(index[t + 1]) && isHair(index[t + 2]))) out.push(index[t], index[t + 1], index[t + 2]);
-  g = src.clone();
-  g.setIndex(out);
-  noHairCache.set(src, g);
-  return g;
-}
-
-/** Puntos de una parte del modelo (por la textura de partes) en los ejes de un ancla de hueso. */
-function partPointsIn(p: Person, anchor: THREE.Object3D, bone: string, part: number) {
-  const out: THREE.Vector3[] = [];
-  const b = p.rig!.bones.get(bone)!;
-  anchor.updateMatrix();
-  const invA = anchor.matrix.clone().invert();
-  p.rig!.model.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (!m.isSkinnedMesh || !parts) return;
-    const bi = m.skeleton.bones.indexOf(b as THREE.Bone);
-    if (bi < 0) return;
-    const uv = m.geometry.attributes.uv as THREE.BufferAttribute | undefined;
-    if (!uv) return;
-    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
-    const toBone = m.skeleton.boneInverses[bi].clone().multiply(m.bindMatrix);
-    for (let i = 0; i < pos.count; i += 2) {
-      const x = Math.min(511, Math.max(0, Math.floor(uv.getX(i) * 512)));
-      const y = Math.min(511, Math.max(0, Math.floor(uv.getY(i) * 512)));
-      if (Math.round(parts[(y * 512 + x) * 4] / 36) !== part) continue;
-      out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toBone).applyMatrix4(invA));
-    }
-  });
-  return out;
-}
-
-/**
- * Melena lisa, rubia y a la altura de los hombros (Margaux): quita los moños del modelo y pone en
- * la cabeza una melena con raya al lado, que deja la cara al aire y cae por detrás y por los lados.
- */
-function straightHair(p: Person, look: PersonLook) {
-  p.rig!.model.traverse((o) => {
-    const m = o as THREE.SkinnedMesh;
-    if (m.isSkinnedMesh) m.geometry = withoutHair(m.geometry);
-  });
-  const anchor = boneAnchor(p, 'Head');
-  const face = partPointsIn(p, anchor, 'Head', 6);
-  if (face.length < 20) return;
-  const box = new THREE.Box3().setFromPoints(face);
-  const c = box.getCenter(new THREE.Vector3());
-  const sz = box.getSize(new THREE.Vector3());
-  if ((window as unknown as { __hairDbg?: unknown[] }).__hairDbg) (window as unknown as { __hairDbg: unknown[] }).__hairDbg.push({ n: face.length, min: box.min.toArray(), max: box.max.toArray() });
-  // Cráneo: tan ancho como la cara, algo más hondo, con el centro un poco detrás de ella
-  const rx = sz.x * 0.56, ry = sz.y * 0.5, rz = Math.max(sz.z, sz.x) * 0.56;
-  const cx = c.x, cy = c.y + sz.y * 0.08, cz = c.z - rz * 0.18;
-  const A = 48, S = 30;
-  const pos: number[] = [], idx: number[] = [], col: number[] = [], uvs: number[] = [];
-  const keep: boolean[] = [];
-  const hair = new THREE.Color(look.hair);
-  const root = hair.clone().multiplyScalar(0.72);
-  const tipLen = sz.y * 0.95; // por debajo de la oreja, hasta los hombros
-  for (let j = 0; j <= S; j++) {
-    const s = j / S;
-    for (let i = 0; i <= A; i++) {
-      const a = (i / A) * Math.PI * 2; // 0 = delante (+z)
-      const sa = Math.sin(a), ca = Math.cos(a);
-      let x: number, y: number, z: number;
-      // Raya al lado: el pelo cae algo más por la izquierda
-      const part = 1 + 0.06 * Math.sin(a + 0.6);
-      if (s < 0.5) {
-        const phi = (s / 0.5) * (Math.PI / 2); // de la coronilla al ecuador
-        x = cx + sa * Math.sin(phi) * rx * 1.1 * part;
-        y = cy + Math.cos(phi) * ry * 1.12;
-        z = cz + ca * Math.sin(phi) * rz * 1.1 * part;
-      } else {
-        const t = (s - 0.5) / 0.5; // cae recto, abriéndose un poco y metiéndose hacia dentro en las puntas
-        const flare = 1.1 + 0.16 * Math.sin(t * Math.PI * 0.8) - 0.05 * t * t;
-        x = cx + sa * rx * flare * part;
-        y = cy - t * tipLen - (Math.abs(ca) < 0.3 ? 0 : 0.02 * t) ;
-        z = cz + ca * rz * flare * part - 0.02 * t;
-      }
-      pos.push(x, y, z);
-      uvs.push((i / A) * 6, s * 3);
-      // Fuera la cara: por delante, por debajo de la línea de la frente
-      const front = ca; // 1 = justo delante
-      const hairline = cy + ry * (0.55 - 0.25 * Math.max(0, 1 - Math.abs(Math.atan2(Math.sin(a - 0.377), Math.cos(a - 0.377))) / 1.15)); // flequillo ladeado
-      // (la malla solo se quita con margen: el borde exacto lo recorta el sombreador, sin escalones)
-      keep.push(!(front > 0.56 && y < hairline - ry * 0.28));
-      const k = Math.min(1, s * 1.6);
-      const cc = root.clone().lerp(hair, k).multiplyScalar(0.92 + 0.16 * Math.sin(i * 2.7) * Math.sin(i * 1.3));
-      col.push(cc.r, cc.g, cc.b);
-    }
-  }
-  for (let j = 0; j < S; j++)
-    for (let i = 0; i < A; i++) {
-      const a = j * (A + 1) + i, b = a + A + 1;
-      if (keep[a] && keep[a + 1] && keep[b] && keep[b + 1]) idx.push(a, b, a + 1, b, b + 1, a + 1);
-    }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide, normalMap: hairNormal(), normalScale: new THREE.Vector2(0.8, 0.8) });
-  // El contorno de la cara, recortado píxel a píxel: flequillo ladeado con el borde limpio y algo de mecha
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uHair = { value: new THREE.Vector4(cx, cz, cy, ry) };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHairP = position;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairP;\nuniform vec4 uHair;').replace(
-      '#include <clipping_planes_fragment>',
-      `#include <clipping_planes_fragment>
-      {
-        vec2 hd = vHairP.xz - uHair.xy;
-        float ha = atan(hd.x, hd.y);
-        if (ha < 0.0) ha += 6.28318;
-        float hdA = abs(mod(ha - 0.377 + 3.14159, 6.28318) - 3.14159);
-        float hl = uHair.z + uHair.w * (0.55 - 0.25 * max(0.0, 1.0 - hdA / 1.15)) + uHair.w * (0.009 * sin(ha * 37.0) + 0.006 * sin(ha * 83.0));
-        if (cos(ha) > 0.42 && vHairP.y < hl) discard;
-      }`,
-    );
-  };
-  mat.customProgramCacheKey = () => 'hair-clip';
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.castShadow = true;
-  anchor.add(mesh);
 }
 
 /**
