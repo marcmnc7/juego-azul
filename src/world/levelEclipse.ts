@@ -16,7 +16,7 @@ import { POT_CORE, G, Merger, makePerson, makeCar, makeDog, animatePerson, seate
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
-import { princesaGame, lostMoto, type LoveLetterStage } from '../ui/minis';
+import { princesaGame, type LoveLetterStage } from '../ui/minis';
 import { cardCanvas } from '../ui/cards';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
 import { FAROLA_WALK, COAST_Z, LIGHTHOUSE_SEA, buildSaFarola } from './saFarola';
@@ -352,7 +352,7 @@ export class LevelEclipse implements Level {
     this.buildKayak();
     this.updateHud();
     const go = this.chain(() => this.startKayak());
-    later(() => dialogue(ECLIPSE.motoIntro, () => lostMoto(() => dialogue(ECLIPSE.afterMoto, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, go))))), 1800);
+    later(() => dialogue(ECLIPSE.dateIntro, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, go))), 1800);
     audio.startMusic('road');
   }
 

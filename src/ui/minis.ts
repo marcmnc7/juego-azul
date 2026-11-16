@@ -1,10 +1,9 @@
 import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
-import { CHATS, type ChatFrag } from '../data/chats';
+import { CHATS } from '../data/chats';
 import { MINIS } from '../data/story';
 import { phoneChat, toast, missionCard } from './ui';
 import { cardUrl } from './cards';
-import { parkingMission } from '../world/missions/parking';
 import { beachMission } from '../world/missions/beach';
 import { parkMission } from '../world/missions/park';
 
@@ -450,10 +449,6 @@ export interface MiniGame {
 
 
 
-/** Un fragmento partido en dos: lo de antes del juego y lo de después. */
-function split(f: ChatFrag, n: number): [ChatFrag, ChatFrag] {
-  return [{ ...f, msgs: f.msgs.slice(0, n) }, { ...f, msgs: f.msgs.slice(n) }];
-}
 
 
 /**
@@ -648,12 +643,6 @@ export function radar(onDone: () => void) {
   requestAnimationFrame(loop);
 }
 
-export function lostMoto(onDone: () => void) {
-  const [before, after] = split(CHATS.motoPerdida, 2);
-  // Misión en el aparcamiento de verdad (3D): entre filas de motos, con la linterna del móvil
-  phoneChat(before, () => parkingMission(() => phoneChat(after, onDone)));
-}
-
 /** 6 de octubre: Joy, campeona de agility. Toca para saltar las vallas. */
 
 /** 6 de octubre: «Este perro seria increiblemente bueno en agility». Primero trucos, luego el circuito. */
@@ -669,10 +658,9 @@ export function voley(onDone: () => void) {
   phoneChat(CHATS.voley, () => beachMission(onDone));
 }
 
-/** En orden real: el avión (9/7), la moto (2/8), el vóley (2/9) y el agility (6/10). */
+/** En orden real: el avión (9/7), el vóley (2/9) y el agility (6/10). */
 export const MINI_GAMES: MiniGame[] = [
   { id: 'radar', chapter: 7, icon: '✈️', title: MINIS.radar.title, run: radar },
-  { id: 'moto', chapter: 8, icon: '🏍️', title: MINIS.moto.title, run: lostMoto },
   { id: 'voley', chapter: 9, icon: '🏐', title: MINIS.voley.title, run: voley },
   { id: 'joy', chapter: 9, icon: '🐕', title: MINIS.tricks.title, run: joyTraining },
 ];

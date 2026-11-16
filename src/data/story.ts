@@ -603,7 +603,6 @@ export const MOTO = {
 // Los avisos ya no son letreros (en el tebeo no se ven): los dice alguien en su bocadillo. Los objetivos, mínimos.
 // «(inventado)»: textos nuevos que no salen de la historia, para cambiarlos por lo que pasó de verdad.
 export const ECLIPSE = {
-  motoIntro: [{ who: 'Narrador', text: '2 de agosto, en el parking del aeropuerto. Gas no tiene ni idea de dónde dejó la moto.' }] as Line[],
   kayakIntro: [
     { who: 'Narrador', text: 'El plan de Gas: ver el eclipse desde el mar, en kayak, de Sa Farola hacia Sa Caleta.' },
   ] as Line[],
@@ -617,7 +616,7 @@ export const ECLIPSE = {
   arriveAzul: [
     { who: 'Narrador', text: 'Vais juntos en su coche a casa de tus padres. Hoy los conoce.' },
   ] as Line[],
-  afterMoto: [{ who: 'Narrador', text: 'Diez días después, el 12 de agosto.' }] as Line[],
+  dateIntro: [{ who: 'Narrador', text: '12 de agosto, en Menorca.' }] as Line[],
   parentsHint: '👋',
   meetAzulParents: [
     { who: 'Gas', text: 'Hola, encantado. Soy Marc.' },
@@ -766,16 +765,6 @@ export const MINIS = {
     hint: 'Sigue el avión de Barcelona a Menorca con el dedo',
     good: (pct: number) => `Mirado el ${pct}% del vuelo ✈️ Love language`,
     ok: (pct: number) => `Mirado el ${pct}% del vuelo. Gas: «Pues no»`,
-  },
-  moto: {
-    title: '¿Dónde está la moto?',
-    hint: 'Busca la moto de Gas',
-    goal: 'Negra, con su casco rojo encima',
-    check: '👀 ¿Es esta?',
-    found: '¡Ahí está! 🏍️',
-    nope: 'Esa no es…',
-    hint1: 'Era negra. Y con mi casco encima, eso seguro',
-    hint2: '¡Ahora me acuerdo! Al fondo, cerca de una farola',
   },
   tricks: {
     title: 'Adiestrar a Joy',
