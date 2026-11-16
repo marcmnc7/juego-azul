@@ -2,13 +2,14 @@
 //
 //   node scripts/crowd_lod.mjs entrada.vrm salida.glb [triángulos=6000]
 //
-// - Una sola malla "Body" (cara + cuerpo + pelo) con una sola textura (atlas), sin blendshapes.
+// - Una sola malla "Body" (cara + cuerpo + pelo + ropa) con una sola textura (atlas: cada textura del VRM en
+//   una celda de 512 × 512), sin blendshapes.
 // - Huesos humanoides con los nombres de Mixamo ("mixamorigHips"…), para hornear las mismas animaciones.
 // - Malla simplificada con meshoptimizer (por defecto ~6000 triángulos).
 // - Cada vértice lleva su zona en el atributo _ZONE, para teñir a cada persona de la multitud:
-//   1 piel · 2 pelo · 3 camiseta · 4 pantalón · 5 zapatos (tal cual) · 6 detalles de la cara (tal cual).
-//   El pelo se reconoce por sus huesos (J_Sec_Hair…); la piel, por el color de la textura; camiseta y
-//   pantalón, por grupos de color (lo de arriba del pecho es camiseta; lo de las rodillas, pantalón).
+//   1 piel · 2 pelo · 3 camiseta · 4 pantalón · 5 zapatos (tal cual) · 6 cara y detalles (tal cual).
+//   La zona sale del material de cada pieza: el VRM tiene que estar exportado de VRoid sin fusionar materiales
+//   (como todo el reparto: …_SKIN, …_HAIR, Tops, Bottoms, Shoes…).
 // - En extras de la malla: color medio de la piel y luminosidad media de pelo, camiseta y pantalón.
 import fs from 'node:fs';
 import { NodeIO } from '@gltf-transform/core';
@@ -71,7 +72,7 @@ const sample = (img, u, v) => {
 await MeshoptSimplifier.ready;
 
 /** Una pieza (primitiva) simplificada, con sus vértices compactados. */
-function piece(prim, isFace, budget) {
+function piece(prim, isFace, budget, maxErr = isFace ? 0.004 : 0.02) {
   const P = prim.getAttribute('POSITION'), N = prim.getAttribute('NORMAL'), U = prim.getAttribute('TEXCOORD_0');
   const J = prim.getAttribute('JOINTS_0'), W = prim.getAttribute('WEIGHTS_0');
   const n = P.getCount();
@@ -87,7 +88,7 @@ function piece(prim, isFace, budget) {
   const idx = new Uint32Array(prim.getIndices().getArray());
   const target = Math.min(idx.length, Math.max(300, budget) * 3);
   // UV en la simplificación: que no se deformen las costuras de la textura
-  const [out] = MeshoptSimplifier.simplifyWithAttributes(idx, pos, 3, uv, 2, [isFace ? 2 : 1, isFace ? 2 : 1], null, target - (target % 3), isFace ? 0.004 : 0.02, []);
+  const [out] = MeshoptSimplifier.simplifyWithAttributes(idx, pos, 3, uv, 2, [isFace ? 2 : 1, isFace ? 2 : 1], null, target - (target % 3), maxErr, []);
   // compactar
   const map = new Int32Array(n).fill(-1);
   let m = 0;
@@ -103,100 +104,125 @@ function piece(prim, isFace, budget) {
   };
 }
 
-const prims = meshNodes.flatMap((n) => n.getMesh().listPrimitives().map((p) => ({ p, isFace: /Face/i.test(n.getMesh().getName()) })));
+// ---- Zona de cada pieza, por su material (VRoid exportado sin fusionar materiales) ----
+// 1 piel · 2 pelo · 3 camiseta (o vestido) · 4 pantalón (o falda) · 5 zapatos · 6 cara y detalles (tal cual)
+function zoneOf(name) {
+  if (/_SKIN/.test(name)) return 1;
+  if (/_HAIR/.test(name)) return 2;
+  if (/_(FACE|EYE)/.test(name)) return 6;
+  if (/(Tops|Onepiece|Dress|Coat|WholeBody)/i.test(name)) return 3;
+  if (/(Bottoms|Skirt)/i.test(name)) return 4;
+  if (/(Shoes|Socks)/i.test(name)) return 5;
+  return 6;
+}
+const prims = meshNodes.flatMap((n) => n.getMesh().listPrimitives().map((p) => {
+  const name = p.getMaterial()?.getName() ?? '';
+  const zone = zoneOf(name);
+  return { p, zone, isFace: zone === 6 || /Face/i.test(name) };
+}));
+if (!prims.some((x) => x.zone === 1) || !prims.some((x) => x.zone === 3)) throw new Error('no parece un VRM de VRoid con los materiales sin fusionar (faltan _SKIN o la ropa)');
 const totalTris = prims.reduce((s, { p }) => s + p.getIndices().getCount() / 3, 0);
 // presupuesto: la cara se queda con más detalle (ojos, cejas, boca)
-const pieces = prims.map(({ p, isFace }) => piece(p, isFace, Math.round(((p.getIndices().getCount() / 3) / totalTris) * TARGET_TRIS * (isFace ? 1.6 : 0.9))));
-
-// ---- Zonas ----
-const yOf = (pc, i) => pc.pos[i * 3 + 1];
-let yMin = Infinity, yMax = -Infinity;
-for (const pc of pieces) for (let i = 0; i < pc.count; i++) { yMin = Math.min(yMin, yOf(pc, i)); yMax = Math.max(yMax, yOf(pc, i)); }
-const Hgt = yMax - yMin;
-const rel = (y) => (y - yMin) / Hgt;
-const handJoints = new Set(joints.map((j, k) => (/Hand(Index|Middle|Ring|Pinky|Thumb)?\d?$/.test(j.getName()) && /mixamorig(Left|Right)Hand/.test(j.getName()) ? k : -1)).filter((k) => k >= 0));
-const texel = (pc, i) => sample(decoded(pc.tex), pc.uv[i * 2], pc.uv[i * 2 + 1]);
-const median = (cols) => [0, 1, 2].map((c) => cols.map((x) => x[c]).sort((a, b) => a - b)[cols.length >> 1] ?? 200);
-const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-/** Distancia de color perceptual (ΔE en CIELAB): distingue una camiseta crema de una piel clara. */
-function lab(c) {
-  const f = (x) => { x /= 255; return x > 0.04045 ? ((x + 0.055) / 1.055) ** 2.4 : x / 12.92; };
-  const [r, g, b] = [f(c[0]), f(c[1]), f(c[2])];
-  const X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, Y = 0.2126 * r + 0.7152 * g + 0.0722 * b, Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
-  const h = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  return [116 * h(Y) - 16, 500 * (h(X) - h(Y)), 200 * (h(Y) - h(Z))];
-}
-const dE = (a, b) => { const A = lab(a), B = lab(b); return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
-const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-const hairW = (pc, i) => { let w = 0; for (let k = 0; k < 4; k++) if (isHairJoint[pc.jo[i * 4 + k]]) w += pc.we[i * 4 + k]; return w; };
-const handW = (pc, i) => { let w = 0; for (let k = 0; k < 4; k++) if (handJoints.has(pc.jo[i * 4 + k])) w += pc.we[i * 4 + k]; return w; };
-
-// Alturas de cuello y cadera en la pose de enlace (de las matrices inversas del esqueleto)
-const ibm = skin.getInverseBindMatrices();
-function jointY(name) {
-  const k = joints.findIndex((j) => j.getName() === 'mixamorig' + name);
-  if (k < 0 || !ibm) return null;
-  const m = ibm.getElement(k, new Array(16).fill(0));
-  // inversa de una matriz rígida (por columnas): la posición del hueso es -Rᵀ·t; su y, -(columna 1 · t)
-  return -(m[4] * m[12] + m[5] * m[13] + m[6] * m[14]);
-}
-const neckRel = rel(jointY('Neck') ?? yMin + Hgt * 0.83);
-const hipsRel = rel(jointY('Hips') ?? yMin + Hgt * 0.5);
-// Piel: mediana de las manos (cuerpo) y de la parte central de la cara
-const bodySkin = median(pieces.filter((p) => !p.isFace).flatMap((pc) => [...Array(pc.count).keys()].filter((i) => handW(pc, i) > 0.9).map((i) => texel(pc, i))));
-const faceSkin = median(pieces.filter((p) => p.isFace).flatMap((pc) => [...Array(pc.count).keys()].map((i) => texel(pc, i)).filter((c) => c[3] > 200)));
-const zones = pieces.map((pc) => new Float32Array(pc.count));
-const clothes = [];
-pieces.forEach((pc, pi) => {
-  for (let i = 0; i < pc.count; i++) {
-    const c = texel(pc, i);
-    if (pc.isFace) { zones[pi][i] = dE(c, faceSkin) < 12 ? 1 : 6; continue; }
-    if (hairW(pc, i) > 0.5) { zones[pi][i] = 2; continue; }
-    if (dE(c, bodySkin) < 11) { zones[pi][i] = 1; continue; }
-    // por encima del cuello y sin ser piel: el pelo de la base (cuelga de la cabeza, no de huesos de pelo)
-    if (rel(yOf(pc, i)) > neckRel + 0.01) { zones[pi][i] = 2; continue; }
-    if (rel(yOf(pc, i)) < 0.06) { zones[pi][i] = 5; continue; }
-    clothes.push([pi, i, c, rel(yOf(pc, i))]);
+// (el pelo de VRoid trae muchísimos triángulos: menos para él y más para la ropa, que es lo que se tiñe)
+const WEIGHT = { 1: 0.9, 2: 0.45, 3: 1.6, 4: 1.6, 5: 1, 6: 1.6 };
+const pieces = prims.map(({ p, zone, isFace }) => ({ ...piece(p, isFace, Math.round(((p.getIndices().getCount() / 3) / totalTris) * TARGET_TRIS * WEIGHT[zone]), zone === 2 ? 0.08 : undefined), zone }));
+// ---- Fuera la piel que tapa la ropa ----
+// El cuerpo de VRoid sigue entero debajo de la ropa (con ropa interior negra); con la ropa simplificada, al moverse
+// asomaría. Un triángulo del cuerpo se quita si, desde su centro y hacia fuera, hay ropa a menos de 6 cm.
+{
+  const trisOf = (zs) => {
+    const out = [];
+    for (const pc of pieces) if (zs.includes(pc.zone))
+      for (let t = 0; t < pc.idx.length; t += 3) out.push([0, 1, 2].map((k) => [pc.pos[pc.idx[t + k] * 3], pc.pos[pc.idx[t + k] * 3 + 1], pc.pos[pc.idx[t + k] * 3 + 2]]));
+    return out;
+  };
+  const cloth = trisOf([3, 4, 5]), tops = trisOf([3]);
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  // rayo contra triángulo (Möller–Trumbore), por las dos caras: distancia o Infinity
+  const hit = (o, d, [a, b, c]) => {
+    const e1 = sub(b, a), e2 = sub(c, a), pv = cross(d, e2), det = dot(e1, pv);
+    if (Math.abs(det) < 1e-9) return Infinity;
+    const tv = sub(o, a), u = dot(tv, pv) / det;
+    if (u < 0 || u > 1) return Infinity;
+    const qv = cross(tv, e1), v = dot(d, qv) / det;
+    if (v < 0 || u + v > 1) return Infinity;
+    const t = dot(e2, qv) / det;
+    return t > 0 ? t : Infinity;
+  };
+  let removed = 0;
+  // (y la cintura del pantalón que queda debajo de la camiseta, más cerca: asomaba por el bajo)
+  for (const pc of pieces) {
+    const over = pc.zone === 1 && !pc.isFace ? cloth : pc.zone === 4 ? tops : null;
+    const near = pc.zone === 4 ? 0.035 : 0.06;
+    if (!over) continue;
+    const keep = [];
+    for (let t = 0; t < pc.idx.length; t += 3) {
+      const ids = [pc.idx[t], pc.idx[t + 1], pc.idx[t + 2]];
+      const o = [0, 1, 2].map((c) => ids.reduce((s, i) => s + pc.pos[i * 3 + c], 0) / 3);
+      const n = [0, 1, 2].map((c) => ids.reduce((s, i) => s + pc.nrm[i * 3 + c], 0));
+      const L = Math.hypot(...n) || 1;
+      const d = n.map((x) => x / L);
+      let covered = false;
+      for (const tri of over) if (hit(o, d, tri) < near) { covered = true; break; }
+      if (covered) removed++;
+      else keep.push(...ids);
+    }
+    pc.idx = Uint32Array.from(keep);
   }
-});
-// Camiseta y pantalón: dos grupos de color, sembrados con lo del pecho y lo de los muslos (con pantalón
-// corto las rodillas son piel)
-const chest = [hipsRel + (neckRel - hipsRel) * 0.45, hipsRel + (neckRel - hipsRel) * 0.85];
-const thigh = [hipsRel * 0.68, hipsRel * 0.9];
-let topC = median(clothes.filter((x) => x[3] > chest[0] && x[3] < chest[1]).map((x) => x[2]));
-let botC = median(clothes.filter((x) => x[3] > thigh[0] && x[3] < thigh[1]).map((x) => x[2]));
-for (let it = 0; it < 6; it++) {
-  const a = [], b = [];
-  for (const x of clothes) (dist(x[2], topC) <= dist(x[2], botC) ? a : b).push(x[2]);
-  if (a.length) topC = median(a);
-  if (b.length) botC = median(b);
+  // Triángulos de ropa que caen del todo en lo transparente de su textura (los flecos de un short deshilachado):
+  // en el juego se pintaban negros
+  let clear = 0;
+  for (const pc of pieces) {
+    if (pc.zone < 3 || pc.zone > 5) continue;
+    const img = decoded(pc.tex);
+    const keep = [];
+    for (let t = 0; t < pc.idx.length; t += 3) {
+      const ids = [pc.idx[t], pc.idx[t + 1], pc.idx[t + 2]];
+      const uvs = ids.map((i) => [pc.uv[i * 2], pc.uv[i * 2 + 1]]);
+      const cu = (uvs[0][0] + uvs[1][0] + uvs[2][0]) / 3, cv = (uvs[0][1] + uvs[1][1] + uvs[2][1]) / 3;
+      const alphas = [...uvs, [cu, cv]].map(([u, v]) => sample(img, u, v)[3]);
+      if (Math.max(...alphas) < 40) clear++;
+      else keep.push(...ids);
+    }
+    pc.idx = Uint32Array.from(keep);
+  }
+  console.log(`  piel (y pantalón) tapados por la ropa: ${removed} triángulos fuera`);
+  console.log(`  ropa transparente: ${clear} triángulos fuera`);
 }
-for (const [pi, i, c, h] of clothes) {
-  const top = dist(c, topC) <= dist(c, botC);
-  // (sin un pantalón de verdad debajo de la cintura, todo es camiseta, y al revés)
-  zones[pi][i] = top ? (h < thigh[0] * 0.6 ? 4 : 3) : h > chest[0] ? 3 : 4;
-}
-console.log(`  cuello ${neckRel.toFixed(2)} · cadera ${hipsRel.toFixed(2)}`);
+const zones = pieces.map((pc) => new Float32Array(pc.count).fill(pc.zone));
+const texel = (pc, i) => sample(decoded(pc.tex), pc.uv[i * 2], pc.uv[i * 2 + 1]);
+const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+const median = (cols) => [0, 1, 2].map((c) => cols.map((x) => x[c]).sort((a, b) => a - b)[cols.length >> 1] ?? 200);
+// Color de la piel: mediana de la textura del cuerpo (sin lo transparente)
+const bodySkin = median(pieces.filter((pc) => pc.zone === 1).flatMap((pc) => [...Array(pc.count).keys()].map((i) => texel(pc, i)).filter((c) => c[3] > 200)));
 const meanLum = (z) => {
   let s = 0, k = 0;
-  pieces.forEach((pc, pi) => { for (let i = 0; i < pc.count; i++) if (zones[pi][i] === z) { s += lum(texel(pc, i)); k++; } });
-  return k ? s / k / 255 : 1;
+  for (const pc of pieces) if (pc.zone === z) for (let i = 0; i < pc.count; i++) { const c = texel(pc, i); if (c[3] > 128) { s += lum(c); k++; } }
+  return k ? +(s / k / 255).toFixed(4) : 1;
 };
 const counts = [0, 0, 0, 0, 0, 0, 0];
-zones.forEach((z) => z.forEach((v) => counts[v]++));
+for (const pc of pieces) counts[pc.zone] += pc.count;
 
-// ---- Atlas: cuerpo a 1024 y cara a 512, uno al lado del otro (1536 × 1024) ----
-const AW = 1536, AH = 1024;
+// ---- Atlas: cada textura distinta en una celda de 512 × 512 (4 por fila) ----
+const CELL = 512, PAD = 4, COLS = 4;
+const texs = [...new Set(pieces.map((pc) => pc.tex))];
+const rows = Math.ceil(texs.length / COLS);
+const AW = CELL * Math.min(COLS, texs.length), AH = CELL * (rows <= 1 ? 1 : rows <= 2 ? 2 : 4);
+if (rows > 4) throw new Error(`demasiadas texturas (${texs.length})`);
 const atlas = new PNG({ width: AW, height: AH });
 function blit(img, ox, oy, size) {
-  // reducción por media de bloques (las texturas de VRoid son cuadradas)
-  const f = img.width / size;
+  // reducción por media de bloques (o ampliación por vecino si la textura es más pequeña)
+  const fx = img.width / size, fy = img.height / size;
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const acc = [0, 0, 0, 0];
       let k = 0;
-      for (let yy = Math.floor(y * f); yy < Math.floor((y + 1) * f); yy++)
-        for (let xx = Math.floor(x * f); xx < Math.floor((x + 1) * f); xx++) {
+      const y0 = Math.floor(y * fy), y1 = Math.max(y0 + 1, Math.floor((y + 1) * fy));
+      const x0 = Math.floor(x * fx), x1 = Math.max(x0 + 1, Math.floor((x + 1) * fx));
+      for (let yy = y0; yy < y1; yy++)
+        for (let xx = x0; xx < x1; xx++) {
           const o = (yy * img.width + xx) * 4;
           for (let c = 0; c < 4; c++) acc[c] += img.data[o + c];
           k++;
@@ -205,14 +231,19 @@ function blit(img, ox, oy, size) {
       for (let c = 0; c < 4; c++) atlas.data[d + c] = Math.round(acc[c] / Math.max(1, k));
     }
 }
-const bodyTex = pieces.find((p) => !p.isFace).tex, faceTex = pieces.find((p) => p.isFace)?.tex;
-blit(decoded(bodyTex), 0, 0, 1024);
-if (faceTex) blit(decoded(faceTex), 1024, 0, 512);
+const cellOf = new Map();
+texs.forEach((t, k) => {
+  const ox = (k % COLS) * CELL, oy = Math.floor(k / COLS) * CELL;
+  blit(decoded(t), ox, oy, CELL);
+  cellOf.set(t, [ox, oy]);
+});
 for (const pc of pieces) {
+  const [ox, oy] = cellOf.get(pc.tex);
   for (let i = 0; i < pc.count; i++) {
     const u = Math.min(1, Math.max(0, pc.uv[i * 2])), v = Math.min(1, Math.max(0, pc.uv[i * 2 + 1]));
-    if (pc.tex === bodyTex) { pc.uv[i * 2] = (u * 1024) / AW; pc.uv[i * 2 + 1] = v; }
-    else { pc.uv[i * 2] = (1024 + u * 512) / AW; pc.uv[i * 2 + 1] = (v * 512) / AH; }
+    // (un poco hacia dentro de la celda: que el filtrado no coja la vecina)
+    pc.uv[i * 2] = (ox + PAD + u * (CELL - 2 * PAD)) / AW;
+    pc.uv[i * 2 + 1] = (oy + PAD + v * (CELL - 2 * PAD)) / AH;
   }
 }
 
@@ -246,4 +277,4 @@ await doc.transform(prune({ keepLeaves: true }));
 fs.writeFileSync(dst, await io.writeBinary(doc));
 console.log(`${src} → ${dst}: ${IDX.length / 3} triángulos, ${V} vértices, ${(fs.statSync(dst).size / 1e6).toFixed(2)} MB`);
 console.log(`  zonas: piel ${counts[1]} · pelo ${counts[2]} · camiseta ${counts[3]} · pantalón ${counts[4]} · zapatos ${counts[5]} · cara ${counts[6]}`);
-console.log(`  piel ${bodySkin} · camiseta ${topC} · pantalón ${botC}`);
+console.log(`  piel ${bodySkin} · ${texs.length} texturas en un atlas de ${AW}×${AH}`);

@@ -22,7 +22,7 @@ import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
 import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
-import { preloadCrowd } from './entities/crowdRig';
+import { ensureCrowd, preloadCrowd } from './entities/crowdRig';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
 import { castFor } from './data/characters';
@@ -386,6 +386,11 @@ async function buildLevel(n: number, card: ChapterLoading) {
     const cast = castFor(n);
     releaseVRMs(new Set(cast.map((c) => c[0])));
     await ensureVRMs(cast);
+    if (stale()) return;
+    // La multitud de VRoid de este capítulo (si tiene)
+    card.progress(0.14, 'Preparando a la gente');
+    await preloadCrowd();
+    await ensureCrowd(n);
     if (stale()) return;
   }
   // La canción se descodifica mientras tanto: así suena desde el primer segundo

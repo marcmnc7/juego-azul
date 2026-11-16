@@ -37,7 +37,7 @@ import { loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, ty
 export type Kind = 'woman' | 'man' | 'gas' | 'mhwoman' | 'kid';
 const HEIGHT: Record<Kind, number> = { woman: 1.66, man: 1.77, gas: 1.8, mhwoman: 1.64, kid: 1.3 };
 
-interface KindData {
+export interface KindData {
   gltf: GLTF;
   clips: Record<string, THREE.AnimationClip>;
   /** Rotación en mundo de cada hueso con los brazos caídos (la pose de reposo del muñeco). */
@@ -728,6 +728,15 @@ function fabricTexture() {
 
 /** Datos ya preparados de un tipo de modelo (para la multitud). */
 export const rigKind = (k: Kind) => data[k]!;
+/**
+ * Plantilla de la multitud hecha de un VRM (scripts/crowd_lod.mjs): misma preparación que un VRM del reparto (las
+ * mismas capturas, a su esqueleto). Solo después de preloadRig.
+ */
+export function prepareCrowdTemplate(gltf: GLTF, height: number): KindData | null {
+  if (!vrmPrep) return null;
+  const P = vrmPrep;
+  return prepareKind('woman', gltf, P.anims, P.aBind, P.dance, height, P.extras);
+}
 
 // ---------- Pelo del hombre ----------
 

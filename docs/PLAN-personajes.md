@@ -47,7 +47,7 @@ Repo: `marcmnc7/juego-azul` (Three.js 0.180 + Vite + TypeScript). Hay 2 commits 
 - `scripts/crowd_lod.mjs entrada.vrm salida.glb [triángulos]` produce una malla única `Body` (~6000 triángulos, <1 MB) con atlas de textura, huesos `mixamorig*`, sin blendshapes, y un atributo **`_ZONE`** por vértice: 1 piel · 2 pelo · 3 camiseta · 4 pantalón · 5 zapatos · 6 detalles de cara. Detecta el pelo por sus huesos (`J_Sec_Hair*`) y por altura (sobre el cuello), la piel por color (ΔE en CIELAB) y camiseta/pantalón por dos grupos de color.
 - Plantillas ya generadas en `src/assets/crowd/`: `mujer_a` (de `vecina.vrm`: sudadera roja, falda de cuadros), `mujer_b` (de `vecina2.vrm`: camiseta crema, shorts vaqueros), `nino` (de `nino.vrm`: camiseta azul, shorts), `hombre_a` (de `gas.vrm`: camiseta verde, vaqueros). Los VRM de origen están en `~/Documents` del dueño.
 - **Pendiente conocido:** en los bordes entre prendas la zona se mezcla (el bajo de la camiseta sale como "pantalón"). Solución prevista: asignar la zona **por pieza conectada** de la malla (unión de vértices por índices) con voto de mayoría. `vecina30.vrm` y `gas30.vrm` no sirven (pierden ropa y pelo con la textura: usan UV de otra forma); descartados.
-- **No está conectado al juego** (`crowdRig.ts` sigue con MakeHuman). Ver fase F6.
+- **Conectado al juego el 16-nov-2026** (fase F6): las plantillas viejas de esta lista ya no se usan; las de ahora están en `src/assets/crowd/vroid/`.
 
 ---
 
@@ -127,7 +127,7 @@ Son pocos por escena (4–20) y se ven a media distancia. Recomendado: **plantil
 
 **Aceptación:** ningún extra MakeHuman en el capítulo; variedad visible (no clones del mismo color).
 
-### F6 · Multitudes horneadas (VAT)
+### F6 · Multitudes horneadas (VAT) — **hecho el 16-nov-2026**: ver `docs/PLAN-reparto-vroid.md`, «Estado»
 1. Arreglar las zonas de `crowd_lod.mjs` por pieza conectada (ver 1.4) y revisar con la vista de zonas (colorear `_ZONE`).
 2. En `rig.ts`, cargar las plantillas y pasarlas por `prepareKind` (retargeting a su esqueleto).
 3. En `crowdRig.ts`:

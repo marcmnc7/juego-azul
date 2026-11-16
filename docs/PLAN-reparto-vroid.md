@@ -25,9 +25,13 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 - **Copias:** en el 8, Sa Farola sale en varias escenas a la vez; `extra_mayor_m` y `extra_mayor_h` tienen 4 copias. Sin avisos `[rig]` en los capítulos 1-9.
 - **Se apartan de la ficha** (aprobado por el dueño o pendiente de su opinión): fabiolera con coleta baja sin moño; `amiga_imperi_2` con dos coletas; texto «FITO & FITIPALDIS» y caballo de Sant Joan dibujados a mano; `padre_gas` con la camisa más clara que `#6b8fb5`; `bajista` con sombra de barba.
 
+- **Multitudes en VRoid (16-nov-2026, fase F6 de `PLAN-personajes.md`):** Ferreries (caps. 1 y 9), el concierto (4) y Sant Joan (6) usan plantillas hechas de los extras con `node scripts/crowd_lod.mjs src/assets/vrm/<nombre>.vrm src/assets/crowd/vroid/<nombre>.glb` (zona de cada vértice por su material, atlas de 512 por textura, sin la piel ni el pantalón que tapa la ropa, ~5500 triángulos). Pantalón corto: `extra_m1`, `extra_m2`, `extra_h1`, `extra_h2`; largo: `amiga_imperi_1`, `amiga_imperi_2`, `amigo_imperi`, `extra_h4` (lista `TEMPLATES` de `crowdRig.ts`). Se hornean al cargar el capítulo (`ensureCrowd`, ~1 s cada una) y cada persona se tiñe por zonas conservando el sombreado de la textura. Si se cambia uno de esos extras, regenerar su plantilla.
+- `extra_m1`, `extra_h2`, `nino_2` y `nino_3` también llevaban el short deshilachado: ahora, short liso.
+
 **Pendiente (código, Claude Code):**
 - En el coche del cap. 2 (y en otros coches con gente dentro) Azul y Gas siguen siendo los muñecos de antes: `makeCar` no usa los VRM.
-- Multitudes (sección 5, «Multitudes»).
+- Medir la multitud en un iPhone de gama media (en el Mac va igual o mejor que la de MakeHuman; en el móvil no proyecta sombras).
+- Fase F7 de `PLAN-personajes.md`: quitar los modelos de MakeHuman cuando ya nada los use (todavía: coches con gente, jinetes de los burros…).
 
 ---
 

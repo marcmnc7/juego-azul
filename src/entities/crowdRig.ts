@@ -2,10 +2,19 @@ import * as THREE from 'three';
 import { MOBILE } from '../core/gfx';
 import { rotateWorld, twoBone } from './embrace';
 import { loadGLB } from '../core/assets';
-import { rigKind, vatTime, type Kind } from './rig';
+import { prepareCrowdTemplate, rigKind, vatTime, type Kind, type KindData } from './rig';
 import type { CrowdPose, PersonLook } from './models';
 import womanLodUrl from '../assets/chars/woman_mh_lod.glb';
 import manLodUrl from '../assets/chars/man_mh_lod.glb';
+// Plantillas de VRoid (scripts/crowd_lod.mjs a partir de los extras del reparto)
+import tplM1Url from '../assets/crowd/vroid/extra_m1.glb';
+import tplM2Url from '../assets/crowd/vroid/extra_m2.glb';
+import tplH1Url from '../assets/crowd/vroid/extra_h1.glb';
+import tplH2Url from '../assets/crowd/vroid/extra_h2.glb';
+import tplIm1Url from '../assets/crowd/vroid/amiga_imperi_1.glb';
+import tplIm2Url from '../assets/crowd/vroid/amiga_imperi_2.glb';
+import tplImhUrl from '../assets/crowd/vroid/amigo_imperi.glb';
+import tplH4Url from '../assets/crowd/vroid/extra_h4.glb';
 
 // Multitud con los mismos personajes glTF y la misma captura de movimiento, pero horneada en
 // texturas (VAT, "vertex animation textures"): al cargar se calcula la posición de cada vértice en
@@ -31,9 +40,12 @@ interface VatPart {
 interface VatKind {
   parts: VatPart[];
   clips: Record<Clip, { start: number; frames: number }>;
+  /** Plantilla de VRoid: color de su piel y luminosidad media de pelo, camiseta y pantalón (para teñir). */
+  tpl?: { skin: number; lum: [number, number, number] };
+  walkSpeed: number;
 }
 
-const kinds: Partial<Record<Kind, VatKind>> = {};
+const kinds: Record<string, VatKind> = {};
 let baking: Promise<void> | null = null;
 
 
@@ -142,6 +154,17 @@ function addProps(meshes: THREE.SkinnedMesh[]) {
 function bakeKind(kind: Kind, lod: THREE.Object3D) {
   // El hombre y la chica de MakeHuman en versión ligera, con su mismo esqueleto y sus animaciones
   const K = rigKind(kind === 'woman' ? 'mhwoman' : kind);
+  // Materiales con textura del modelo grande, por nombre de malla
+  const full = new Map<string, THREE.MeshStandardMaterial>();
+  K.gltf.scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) full.set(m.name, m.material as THREE.MeshStandardMaterial);
+  });
+  bake(kind, lod, K, full);
+}
+
+/** Hornea un modelo ligero con su esqueleto preparado; full: materiales del modelo grande (o los suyos, si no). */
+function bake(key: string, lod: THREE.Object3D, K: KindData, full: Map<string, THREE.MeshStandardMaterial> | null) {
   const model = lod;
   model.scale.setScalar(K.scale);
   model.position.y = -K.minY * K.scale;
@@ -149,12 +172,6 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
   model.traverse((o) => {
     const m = o as THREE.SkinnedMesh;
     if (m.isSkinnedMesh && !/Teeth/.test(m.name)) meshes.push(m);
-  });
-  // Materiales con textura del modelo grande, por nombre de malla
-  const full = new Map<string, THREE.MeshStandardMaterial>();
-  K.gltf.scene.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (m.isMesh) full.set(m.name, m.material as THREE.MeshStandardMaterial);
   });
 
   const mixer = new THREE.AnimationMixer(model);
@@ -266,13 +283,19 @@ function bakeKind(kind: Kind, lod: THREE.Object3D) {
     if (d.m.geometry.attributes.uv) g.setAttribute('uv', d.m.geometry.attributes.uv);
     g.setAttribute('aRest', new THREE.BufferAttribute(rests[datas.indexOf(d)], 2));
     // zona de cada vértice del cuerpo único (piel, pelo, camiseta…), en el rojo del color de vértice
+    // (las plantillas de VRoid la traen aparte, en _ZONE)
+    const zone = d.m.geometry.attributes._zone as THREE.BufferAttribute | undefined;
     const col = d.m.geometry.attributes.color as THREE.BufferAttribute | undefined;
-    if (col) g.setAttribute('aZone', new THREE.BufferAttribute(new Float32Array(col.count).map((_, i) => Math.round(col.getX(i) * 8)), 1));
-    const base = full.get(d.m.name) ?? (full.values().next().value as THREE.MeshStandardMaterial);
+    if (zone) g.setAttribute('aZone', new THREE.BufferAttribute(new Float32Array(zone.count).map((_, i) => zone.getX(i)), 1));
+    else if (col) g.setAttribute('aZone', new THREE.BufferAttribute(new Float32Array(col.count).map((_, i) => Math.round(col.getX(i) * 8)), 1));
+    const base = full ? full.get(d.m.name) ?? (full.values().next().value as THREE.MeshStandardMaterial) : (d.m.material as THREE.MeshStandardMaterial);
     parts.push({ name: d.m.name, geo: g, pos: tex(d.pos, d.rows), nrm: tex(d.nrm, d.rows), V: d.V, base });
   });
   mixer.uncacheRoot(model);
-  kinds[kind] = { parts, clips };
+  // Plantilla de VRoid: lo que crowd_lod.mjs midió de su textura
+  const info = meshes.find((m) => m.userData.crowd)?.userData.crowd as { skin: number[]; lum: Record<string, number> } | undefined;
+  const tpl = info ? { skin: new THREE.Color().setRGB(info.skin[0], info.skin[1], info.skin[2], THREE.SRGBColorSpace).getHex(), lum: [info.lum[2], info.lum[3], info.lum[4]] as [number, number, number] } : undefined;
+  kinds[key] = { parts, clips, tpl, walkSpeed: K.walkSpeed || 1.5 };
 }
 
 /** Hornea la multitud (después de preloadRig). Tarda un poco, una sola vez. */
@@ -287,6 +310,62 @@ export function preloadCrowd() {
   return baking;
 }
 export const crowdReady = () => !!kinds.woman && !!kinds.man;
+
+/** Plantillas de VRoid de la multitud: de qué extra salen, si son de mujer y si van de pantalón corto. */
+const TEMPLATES = [
+  { key: 'tpl:extra_m1', url: tplM1Url, female: true, shorts: true },
+  { key: 'tpl:extra_m2', url: tplM2Url, female: true, shorts: true },
+  { key: 'tpl:extra_h1', url: tplH1Url, female: false, shorts: true },
+  { key: 'tpl:extra_h2', url: tplH2Url, female: false, shorts: true },
+  { key: 'tpl:amiga_imperi_1', url: tplIm1Url, female: true, shorts: false },
+  { key: 'tpl:amiga_imperi_2', url: tplIm2Url, female: true, shorts: false },
+  { key: 'tpl:amigo_imperi', url: tplImhUrl, female: false, shorts: false },
+  { key: 'tpl:extra_h4', url: tplH4Url, female: false, shorts: false },
+];
+/** Capítulos con multitud y qué plantillas usan (con pantalón corto o largo, como va la gente de ese capítulo). */
+const CROWD_CHAPTERS: Record<number, boolean> = { 1: true, 4: false, 6: true, 9: true };
+
+/**
+ * Hornea las plantillas de VRoid que usa la multitud del capítulo n (después de preloadRig) y suelta las demás: cada
+ * una ocupa sus texturas de animación en la GPU. Una a una, dejando respirar a la pantalla de carga.
+ */
+export async function ensureCrowd(n: number) {
+  const shorts = CROWD_CHAPTERS[n];
+  const want = new Set(shorts === undefined ? [] : TEMPLATES.filter((t) => t.shorts === shorts).map((t) => t.key));
+  for (const t of TEMPLATES) {
+    const k = kinds[t.key];
+    if (k && !want.has(t.key)) {
+      for (const p of k.parts) {
+        p.pos.dispose();
+        p.nrm.dispose();
+      }
+      delete kinds[t.key];
+    }
+  }
+  for (const t of TEMPLATES) {
+    if (!want.has(t.key) || kinds[t.key]) continue;
+    try {
+      const g = await loadGLB(t.url);
+      const K = prepareCrowdTemplate(g, t.female ? 1.63 : 1.74);
+      if (!K) continue;
+      const t0 = performance.now();
+      bake(t.key, g.scene, K, null);
+      console.info(`[rig] plantilla ${t.key.slice(4)} horneada en ${Math.round(performance.now() - t0)} ms`);
+    } catch (e) {
+      // (esa plantilla no sale; si no queda ninguna de ese tipo, sigue la multitud de MakeHuman)
+      console.warn('[rig] no se pudo preparar la plantilla', t.key, e);
+    }
+    await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
+/** Las plantillas de VRoid para un look (mujer u hombre, con pantalón corto o largo); vacío si no hay ninguna. */
+export function vroidTemplates(look: PersonLook) {
+  const female = !(look.male || look.beard || look.hairStyle === 'short' || look.hairStyle === 'cap');
+  const ok = (t: (typeof TEMPLATES)[number]) => !!kinds[t.key] && t.female === female;
+  const same = TEMPLATES.filter((t) => ok(t) && t.shorts === !!look.shorts);
+  return (same.length ? same : TEMPLATES.filter(ok)).map((t) => t.key);
+}
 
 const VAT_COMMON = /* glsl */ `
 uniform highp sampler2D vatPos;
@@ -414,7 +493,7 @@ export class RigCrowd {
     this.hv = new Uint8Array(count);
     this.prop = new Uint8Array(count);
     // paso de los que pasean, para que los pies no patinen
-    const ws = rigKind(kind === 'woman' ? 'mhwoman' : kind).walkSpeed || 1.5;
+    const ws = K.walkSpeed;
     for (let i = 0; i < count; i++) {
       const own = Math.random() < 0.33;
       // pelo, camiseta y pantalón son color liso (respecto a blanco); la piel, la textura teñida
@@ -520,3 +599,157 @@ const _v = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 const _Y = new THREE.Vector3(0, 1, 0);
 const _Z = new THREE.Vector3(0, 0, 1);
+
+// ---------- Multitud de VRoid ----------
+// Las mismas animaciones horneadas, con plantillas hechas de los extras del reparto (scripts/crowd_lod.mjs). Cada
+// persona va con una de las plantillas de su tipo (una InstancedMesh por plantilla: una llamada de dibujo cada una) y
+// con sus colores: la textura conserva su sombreado (arrugas, mechones) y se tiñe por zonas.
+
+/** Sombreado de dibujo animado barato, parecido al MToon de los VRM: dos tonos, sin degradado. */
+const TOON = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([168, 168, 168, 255, 255, 255, 255, 255]), 2, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+})();
+
+/**
+ * Teñido de una plantilla de VRoid: la piel, su textura × (piel de la persona ÷ piel de la plantilla); pelo, camiseta
+ * y pantalón, el color de la persona × la luminosidad de la textura ÷ la media de esa zona (así se ven los pliegues);
+ * zapatos y cara, tal cual.
+ */
+function vroidTint(mat: THREE.Material, lum: [number, number, number]) {
+  const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  // (la media se midió en sRGB; el shader trabaja en lineal)
+  const L = new THREE.Vector3(...lum.map((l) => Math.max(0.02, Math.pow(l, 2.2))));
+  mat.onBeforeCompile = (sh, r) => {
+    prev.call(mat, sh, r);
+    sh.uniforms.uLum = { value: L };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aZone;\nattribute vec3 iHair, iTop, iBot, iSkin;\nvarying float vZone;\nvarying vec3 vHair, vTop, vBot, vSkin;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvZone = aZone; vHair = iHair; vTop = iTop; vBot = iBot; vSkin = iSkin;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uLum;\nvarying float vZone;\nvarying vec3 vHair, vTop, vBot, vSkin;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float zn = floor(vZone + 0.5);
+        float lu = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        if (zn < 1.5) diffuseColor.rgb *= vSkin;
+        else if (zn < 2.5) diffuseColor.rgb = vHair * clamp(lu / uLum.x, 0.3, 1.7);
+        else if (zn < 3.5) diffuseColor.rgb = vTop * clamp(lu / uLum.y, 0.3, 1.7);
+        else if (zn < 4.5) diffuseColor.rgb = vBot * clamp(lu / uLum.z, 0.3, 1.7);`,
+      );
+  };
+  mat.customProgramCacheKey = () => prevKey() + '|vroid';
+}
+
+interface VroidSub {
+  meshes: THREE.InstancedMesh[];
+  size: Float32Array;
+  prop: Uint8Array;
+  commits: number;
+}
+
+/** Multitud con las plantillas de VRoid: misma forma de usar que RigCrowd (las personas se reparten entre ellas). */
+export class VroidCrowd {
+  readonly group = new THREE.Group();
+  private subs: (VroidSub | null)[] = [];
+  constructor(look: PersonLook, count: number, dance: boolean, behave: readonly Behave[] | undefined, keys: string[]) {
+    const T = keys.length;
+    const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+    keys.forEach((key, t) => {
+      const n = count > t ? Math.ceil((count - t) / T) : 0;
+      if (!n) return void this.subs.push(null);
+      const K = kinds[key];
+      const tpl = K.tpl!;
+      const who = (j: number) => t + j * T;
+      const hair = new Float32Array(n * 3), top = new Float32Array(n * 3), bot = new Float32Array(n * 3), skin = new Float32Array(n * 3);
+      const size = new Float32Array(n * 2), prop = new Uint8Array(n), a = new Float32Array(n * 4);
+      for (let j = 0; j < n; j++) {
+        // Colores de cada uno: un tercio va como lo pensó el capítulo, el resto, a su aire
+        const own = Math.random() < 0.33;
+        ratio(own ? look.hair : pick(HAIRS), 0xffffff, hair, j * 3);
+        ratio(own ? look.shirt : pick(TOPS), 0xffffff, top, j * 3);
+        ratio(own ? look.pants : pick(BOTTOMS), 0xffffff, bot, j * 3);
+        ratio(own ? look.skin : pick(SKINS), tpl.skin, skin, j * 3);
+        const b = behave?.[who(j)];
+        prop[j] = b === 'drink' ? 1 : b === 'phone' ? 2 : 0;
+        size[j * 2] = 0.94 + Math.random() * 0.12;
+        size[j * 2 + 1] = 0.95 + Math.random() * 0.1;
+        const r = Math.random();
+        const c: Clip = dance ? 'dance' : b === 'walk' ? 'walk' : b === 'drink' ? 'drink' : b === 'phone' ? 'phone' : b === 'talk' ? (r < 0.6 ? 'agree' : 'headShake') : r < 0.35 ? 'idle' : r < 0.8 ? 'agree' : 'headShake';
+        a.set([K.clips[c].start, K.clips[c].frames, Math.random() * 20, c === 'walk' ? WALK_SPEED / K.walkSpeed : 0.85 + Math.random() * 0.3], j * 4);
+      }
+      const anim = new THREE.InstancedBufferAttribute(a, 4);
+      const attrs = {
+        iHair: new THREE.InstancedBufferAttribute(hair, 3),
+        iTop: new THREE.InstancedBufferAttribute(top, 3),
+        iBot: new THREE.InstancedBufferAttribute(bot, 3),
+        iSkin: new THREE.InstancedBufferAttribute(skin, 3),
+      };
+      const meshes: THREE.InstancedMesh[] = [];
+      for (const part of K.parts) {
+        const pv = part.name === 'Cup' ? 1 : part.name === 'Phone' ? 2 : 0;
+        if (pv && !prop.some((p) => p === pv)) continue;
+        const g = new THREE.BufferGeometry();
+        g.setIndex(part.geo.index);
+        for (const k in part.geo.attributes) g.setAttribute(k, part.geo.attributes[k]);
+        g.setAttribute('iAnim', anim);
+        g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.9, 0), 1.2);
+        let mat: THREE.Material;
+        if (pv) mat = new THREE.MeshStandardMaterial({ color: pv === 1 ? 0xf3ead2 : 0x1c1c24, roughness: 0.5 });
+        else {
+          // (por las dos caras, como la ropa de VRoid: por el bajo de la camiseta se ve el revés)
+          mat = new THREE.MeshToonMaterial({ map: part.base.map, gradientMap: TOON, alphaTest: 0.5, side: THREE.DoubleSide });
+          for (const [k, at] of Object.entries(attrs)) g.setAttribute(k, at);
+        }
+        vatify(mat, part);
+        if (!pv) vroidTint(mat, tpl.lum);
+        mat.userData.noComic = true;
+        const im = new THREE.InstancedMesh(g, mat, n);
+        im.userData.person = true;
+        im.userData.noComic = true;
+        const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+        vatify(depth, part);
+        im.customDepthMaterial = depth;
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.frustumCulled = true;
+        if (MOBILE || pv) im.userData.noCast = true;
+        if (pv) im.userData.propVariant = pv;
+        meshes.push(im);
+        this.group.add(im);
+      }
+      this.subs.push({ meshes, size, prop, commits: 0 });
+    });
+  }
+  /** Coloca a la persona i en (x, z) mirando según q, con el balanceo de su postura. */
+  set(i: number, x: number, z: number, q: THREE.Quaternion, p: CrowdPose, y = 0) {
+    const T = this.subs.length;
+    const s = this.subs[i % T];
+    if (!s) return;
+    const j = Math.floor(i / T);
+    _q.copy(q).multiply(_q2.setFromAxisAngle(_Y, p.twist * 0.5)).multiply(_q2.setFromAxisAngle(_Z, p.sway * 0.5));
+    _v.set(p.shift * 0.5, 0, 0).applyQuaternion(q);
+    _s.set(s.size[j * 2 + 1], s.size[j * 2], s.size[j * 2 + 1]);
+    _m.compose(_v.set(x + _v.x, y, z + _v.z), _q, _s);
+    for (const im of s.meshes) {
+      const pv = im.userData.propVariant;
+      im.setMatrixAt(j, pv === undefined || pv === s.prop[j] ? _m : ZERO);
+    }
+  }
+  commit() {
+    for (const s of this.subs) {
+      if (!s || !s.meshes.length) continue;
+      for (const im of s.meshes) im.instanceMatrix.needsUpdate = true;
+      const c = s.commits++;
+      if (c < 5 || c % 30 === 0) {
+        const m0 = s.meshes[0];
+        m0.computeBoundingSphere();
+        for (const im of s.meshes) im.boundingSphere = m0.boundingSphere;
+      }
+    }
+  }
+}
