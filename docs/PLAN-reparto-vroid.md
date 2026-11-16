@@ -16,6 +16,21 @@ Documento para la IA que maneja el ordenador del dueño (hace clics en VRoid Stu
 
 ---
 
+## Estado (16-nov-2026): reparto terminado
+
+**Hechos los 46 VRM de la sección 8** (13 protagonistas, 22 con nombre y 11 extras) y las 6 bases, todos en `src/assets/vrm/` y probados en su capítulo (capturas en `~/Desktop/characters/reparto/capturas/`). Proyectos de VRoid en `~/Documents/reparto/<nombre>.vroid`.
+
+- **Sombra de la ropa teñida:** VRoid deja la sombra por defecto (lila o rosa claro) aunque se tiña la prenda con el color base, y en el juego el lado en sombra salía de otro color. Se corrige en el `.vrm` ya aligerado con `python3 scripts/vrm_shade.py src/assets/vrm/<nombre>.vrm` (sombra = color base × sombra por defecto, solo en prendas teñidas). Pasarlo **una sola vez** por archivo, después de `vrm_slim.py`, cada vez que se reexporte un personaje con ropa teñida.
+- **Evitar el short vaquero deshilachado** de VRoid: en el juego pinta bloques negros bajo los flecos. `azul_playa` y `nino_1` llevan shorts lisos.
+- **Copias:** en el 8, Sa Farola sale en varias escenas a la vez; `extra_mayor_m` y `extra_mayor_h` tienen 4 copias. Sin avisos `[rig]` en los capítulos 1-9.
+- **Se apartan de la ficha** (aprobado por el dueño o pendiente de su opinión): fabiolera con coleta baja sin moño; `amiga_imperi_2` con dos coletas; texto «FITO & FITIPALDIS» y caballo de Sant Joan dibujados a mano; `padre_gas` con la camisa más clara que `#6b8fb5`; `bajista` con sombra de barba.
+
+**Pendiente (código, Claude Code):**
+- En el coche del cap. 2 (y en otros coches con gente dentro) Azul y Gas siguen siendo los muñecos de antes: `makeCar` no usa los VRM.
+- Multitudes (sección 5, «Multitudes»).
+
+---
+
 ## Rutas (todo en este Mac)
 
 `~` es la carpeta del usuario (`/Users/marc`).
@@ -273,7 +288,7 @@ Después de cada capítulo: capturas al dueño y, solo con su permiso, entrega p
 
 ---
 
-## 8. Lista de archivos (para ir tachando)
+## 8. Lista de archivos (para ir tachando) — ✅ todos hechos (16-nov-2026)
 
 **Protagonistas (13):** azul_diario · azul_piscina · azul_moto · azul_santjoan · azul_aniversario · azul_playa · gas_ferreries · gas_diario · gas_piscina · gas_fito · gas_moto · gas_santjoan · gas_playa
 

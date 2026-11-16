@@ -70,7 +70,8 @@ const CAST_BY_CHAPTER: Record<number, [name: string, count: number][]> = {
   // (un caixer por caballo: 4 por la calle, 2 por Ses Voltes y 3 en Es Bè)
   6: [['azul_santjoan', 4], ['gas_santjoan', 4], ['taxista', 3], ['caixer', 9]],
   7: [['azul_diario', 1], ['gas_diario', 2], ['padre_azul', 2], ['madre_azul', 2], ['vecino', 1]],
-  8: [['azul_diario', 3], ['gas_diario', 3], ['padre_azul', 1], ['madre_azul', 1], ['padre_gas', 1], ['madre_gas', 1], ['eric', 1], ['extra_mayor_m', 1], ['extra_mayor_h', 1]],
+  // (en el 8, Sa Farola sale en varias escenas que siguen vivas, el kayak y la casa de Azul entre ellas: cada una se queda sus dos paseantes)
+  8: [['azul_diario', 3], ['gas_diario', 3], ['padre_azul', 1], ['madre_azul', 1], ['padre_gas', 1], ['madre_gas', 1], ['eric', 1], ['extra_mayor_m', 4], ['extra_mayor_h', 4]],
   9: [['azul_aniversario', 1], ['gas_diario', 2], ['azul_diario', 1], ['azul_playa', 1], ['gas_playa', 1], ['tofol', 1], ['carme', 1], ['fabiolera', 1], ['extra_m1', 1], ['extra_m2', 1], ['extra_h1', 1], ['extra_h2', 1]],
 };
 
