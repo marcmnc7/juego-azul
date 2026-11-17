@@ -3,14 +3,16 @@ import { audio } from '../core/audio';
 import { cinema } from '../core/cinema';
 import { Sky, Sun, settleAmbient, applyShadows, makeSea, vibrate } from '../core/gfx';
 import { steerTo, type SteerState } from '../core/steer';
-import type { Walker } from '../core/walker';
+import { Walker, type Circle } from '../core/walker';
+import type { Input } from '../core/input';
+import { Lost } from '../core/lost';
 import { MARC_LOOK, MARGAUX_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { SIDE } from '../data/story';
 import { twoBone } from '../entities/embrace';
 import type { Particles } from '../entities/fx';
 import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } from '../entities/models';
 import { rigPost } from '../entities/rig';
-import { bark, comicWord, dialogue, later, timingGauge } from '../ui/ui';
+import { bark, comicWord, dialogue, later, timingGauge, type Hud } from '../ui/ui';
 import type { Box2 } from './ferreries';
 import { canvasTex } from './deco';
 import { comicBulbTexture } from '../core/comicTiles';
@@ -799,8 +801,23 @@ export class StoneSkip {
   /** El primer fotograma pone la cámara en su sitio (venía de la carretera: cruzaba el mapa y salían líneas de velocidad). */
   private first = true;
 
+  /**
+   * Antes de tirar, buscar piedras planas por la losa (paso nuevo, [inventado]): andando, con el botón al lado de
+   * cada una; las redondas no valen. hunt: los mandos del nivel (sin ellos, se tira directamente).
+   */
+  private hunt: { input: Input; hud: Hud } | null;
+  private hunting = false;
+  private walker: Walker | null = null;
+  private rockCircles: Circle[] = [];
+  private pebbles: { m: THREE.Mesh; flat: boolean; got: boolean }[] = [];
+  private found = 0;
+  private huntT = 0;
+  private lost = new Lost();
+  private groundAt: (x: number, z: number) => number = () => 0.55;
+
   /** looks: la ropa del día (en el cap. 5, el conjunto de moto). */
-  constructor(private onDone: () => void, looks: { azul?: PersonLook; gas?: PersonLook } = {}) {
+  constructor(private onDone: () => void, looks: { azul?: PersonLook; gas?: PersonLook } = {}, hunt: { input: Input; hud: Hud } | null = null) {
+    this.hunt = hunt;
     const sc = this.scene;
     // La misma tarde que en la carretera (antes, hora dorada en la carretera y mediodía aquí): sol alto a la espalda
     // y el reparto de la luz de ambiente del cap. 1
@@ -824,6 +841,7 @@ export class StoneSkip {
       const s = 0.5 + (i % 5) * 0.34;
       if (z > -1.1) continue;
       m.add(i % 2 ? G.rock : G.crag, SLATE[i % 4], x, 0.02 + (i % 3) * 0.18, z, i * 0.3, i, 0, s * 1.5, s * 0.7, s);
+      this.rockCircles.push({ x, z, r: s * 0.62 + 0.15 });
     }
     // Los dos brazos de la cala y el cabo del fondo
     for (let i = 0; i < 34; i++) {
@@ -852,6 +870,7 @@ export class StoneSkip {
       // (acotado: si el rayo diera en el canto de una roca suelta, que no los suba encima)
       return THREE.MathUtils.clamp(down.intersectObject(rocks, false)[0]?.point.y ?? 0.55, 0.4, 0.8);
     };
+    this.groundAt = groundAt;
     this.azul.root.position.set(-0.5, groundAt(-0.5, -1.9), -1.9);
     this.gas.root.position.set(0.55, groundAt(0.55, -1.9), -1.9);
     sc.add(this.azul.root, this.gas.root);
@@ -865,7 +884,119 @@ export class StoneSkip {
     this.chip.hidden = true;
     uiRoot().append(this.chip);
     cinema.stop();
-    later(() => dialogue(SIDE.stones.start, () => this.gasThrow()), 700);
+    if (this.hunt) this.buildPebbles();
+    later(() => dialogue(SIDE.stones.start, () => (this.hunt ? this.startHunt() : this.gasThrow())), 700);
+  }
+
+  /** Tres piedras planas y dos redondas, por los huecos de la losa entre las rocas. */
+  private buildPebbles() {
+    const spots: [number, number, boolean][] = [];
+    const free = (x: number, z: number) => this.rockCircles.every((c) => Math.hypot(x - c.x, z - c.z) > c.r + 0.35) && spots.every(([a, b]) => Math.hypot(x - a, z - b) > 2.2);
+    // Puntos candidatos de la losa (determinista: siempre los mismos), unas planas lejos de donde empieza ella
+    const cand: [number, number][] = [];
+    for (let i = 0; i < 160; i++) {
+      const a = i * 2.17 + 0.6, r = 1.6 + (i % 13) * 0.42;
+      const x = Math.cos(a) * r * 1.1, z = -4.6 + Math.sin(a) * r * 0.62;
+      if (z > -1.4 || z < -9 || Math.abs(x) > 6.2) continue;
+      cand.push([x, z]);
+    }
+    for (const [x, z] of cand) {
+      if (spots.length >= 5) break;
+      if (!free(x, z)) continue;
+      // (las planas, mejor no pegadas a donde empieza: que haya que buscarlas)
+      const flat = spots.filter((p) => p[2]).length < 3 ? Math.hypot(x + 0.5, z + 1.9) > 2.4 : false;
+      if (!flat && spots.filter((p) => !p[2]).length >= 2) continue;
+      spots.push([x, z, flat]);
+    }
+    for (const [x, z, flat] of spots) {
+      const g = flat ? new THREE.CylinderGeometry(0.13, 0.15, 0.045, 14) : new THREE.SphereGeometry(0.12, 12, 9).scale(1, 0.82, 0.92);
+      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: flat ? 0xb3ab9c : 0x8f887c, roughness: 0.8 }));
+      m.position.set(x, this.groundAt(x, z) + (flat ? 0.03 : 0.08), z);
+      m.rotation.set(flat ? 0.08 : 0, x * 3, flat ? -0.05 : 0);
+      m.castShadow = true;
+      this.scene.add(m);
+      this.pebbles.push({ m, flat, got: false });
+    }
+  }
+
+  /** Ella se da la vuelta y busca por la losa; él espera en la orilla. */
+  private startHunt() {
+    this.hunting = true;
+    this.found = 0;
+    this.huntT = 0;
+    this.lost.reset();
+    this.walker = new Walker(this.azul.root.position);
+    this.walker.yaw = this.walker.facing = Math.PI;
+    this.walker.canJump = false;
+    this.walker.speed = 3;
+    this.chip.hidden = false;
+    this.chip.textContent = `🪨 0/3`;
+    this.hunt!.input.reset();
+  }
+
+  private pick(p: { m: THREE.Mesh; flat: boolean; got: boolean }) {
+    p.got = true;
+    p.m.visible = false;
+    this.huntT = 0;
+    if (!p.flat) {
+      audio.boo();
+      bark('Gas', SIDE.stones.round);
+      return;
+    }
+    this.found++;
+    audio.pickup();
+    vibrate(20);
+    this.chip.textContent = `🪨 ${this.found}/3`;
+    bark('Margaux', SIDE.stones.flat[Math.min(this.found - 1, 2)]);
+    if (this.found < 3) return;
+    // Las tres: de vuelta a la orilla, a tirar
+    this.hunting = false;
+    this.hunt!.hud.setAction(null);
+    this.hunt!.hud.setArrow(null);
+    later(() => {
+      this.walker = null;
+      this.azul.root.position.set(-0.5, this.groundAt(-0.5, -1.9), -1.9);
+      this.azul.root.rotation.y = 0;
+      this.first = true;
+      this.gasThrow();
+    }, 1300);
+  }
+
+  private updateHunt(dt: number, camera: THREE.Camera) {
+    const w = this.walker!;
+    const { input, hud } = this.hunt!;
+    const pp = this.azul.root.position;
+    w.turn(input.consumeCam());
+    const mag = this.hunting ? w.move(dt, input.axes(), [], { minX: -6.6, maxX: 6.6, minZ: -9.6, maxZ: -1.3 }, this.rockCircles) : 0;
+    pp.y = this.groundAt(pp.x, pp.z);
+    this.azul.root.rotation.y = w.facing;
+    animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
+    // La piedra que tienes a los pies, con su botón
+    let near: (typeof this.pebbles)[number] | null = null;
+    let bd = 0.95;
+    for (const p of this.pebbles) {
+      if (p.got) continue;
+      const d = Math.hypot(pp.x - p.m.position.x, pp.z - p.m.position.z);
+      if (d < bd) {
+        bd = d;
+        near = p;
+      }
+    }
+    if (this.hunting) {
+      hud.setAction(near ? '🪨' : null, !!near);
+      if (near && input.consumeAction()) this.pick(near);
+      // Si tarda, Gas le da una pista; a los 40 s sin encontrar nada, la flecha a la piedra plana más cercana
+      if ((this.huntT += dt) > 24) {
+        this.huntT = 0;
+        bark('Gas', SIDE.stones.hint);
+      }
+      const goal = this.pebbles.filter((p) => p.flat && !p.got).sort((a, b) => pp.distanceTo(a.m.position) - pp.distanceTo(b.m.position))[0];
+      if (this.lost.tick(`stones${this.found}`, dt, false) && goal && pp.distanceTo(goal.m.position) > 1.6) {
+        const ang = Math.atan2(goal.m.position.x - pp.x, goal.m.position.z - pp.z);
+        hud.setArrow(-Math.atan2(Math.sin(ang - w.yaw), Math.cos(ang - w.yaw)));
+      } else hud.setArrow(null);
+    }
+    w.camera(camera, dt, [], 4.2, 2.4);
   }
 
   private path(x0: number, skips: number) {
@@ -974,6 +1105,13 @@ export class StoneSkip {
 
   update(dt: number, camera: THREE.Camera) {
     this.t += dt;
+    if (this.walker && this.hunt) {
+      this.updateHunt(dt, camera);
+      animatePerson(this.gas, dt, 'idle');
+      this.sun.follow(new THREE.Vector3(0, 0, 8));
+      this.sky.update(camera, dt);
+      return;
+    }
     const f = this.flight;
     if (f) {
       const h = f.hops[f.i];

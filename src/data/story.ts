@@ -875,7 +875,12 @@ export const SIDE = {
     start: [
       { who: 'Gas', text: 'Ya que no se puede llegar al faro: a ver quién hace más ranas.' },
       { who: 'Margaux', text: 'Empieza tú, que quiero ver cómo pierdes.' },
+      { who: 'Gas', text: 'Vale. Tú, mientras, búscate tres piedras planas. Las redondas no botan.' },
     ] as Line[],
+    // Antes de tirar, las piedras (paso nuevo, inventado: Marc, cámbialo si quieres)
+    flat: ['Esta. Plana como una galleta.', 'Otra.', 'Y la tercera. Ya puedes ir preparándote.'],
+    round: 'Esa es una bola. Plana, plana.',
+    hint: 'Las buenas son planas y finas. Mira entre las rocas.',
     gasDone: [{ who: 'Gas', text: 'Cinco. Te toca.' }] as Line[],
     angle: 'Agáchate: la piedra tiene que salir rasante',
     power: 'Y ahora, fuerte pero sin pasarse',

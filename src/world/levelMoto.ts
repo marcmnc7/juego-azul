@@ -1148,7 +1148,7 @@ export class LevelMoto implements Level {
       this.clearTransient();
       this.phase = 'cala';
       this.updateHud();
-      this.stones = new StoneSkip(() => this.endCala(), { azul: AZUL_MOTO, gas: GAS_MOTO });
+      this.stones = new StoneSkip(() => this.endCala(), { azul: AZUL_MOTO, gas: GAS_MOTO }, { input: this.input, hud: this.hud });
     });
   }
 
