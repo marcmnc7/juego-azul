@@ -318,6 +318,20 @@ export class Level2 implements Level {
     gg.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(gg.attributes.position.count).fill(Surf.Grass), 1));
     this.ground = new THREE.Mesh(gg, toon({ color: REGION_STYLE.madrid.ground }));
     sc.add(this.ground);
+    // Las afueras de Madrid: aceras y bordillos hasta los bloques de pisos (antes, edificios plantados en la arena)
+    {
+      const city = new Merger(false);
+      for (const sx of [-1, 1]) {
+        city.add(G.box, 0xb8b2a6, sx * 37, 0.012, 170, 0, 0, 0, 65, 0.02, 470); // la acera ancha y la explanada
+        city.add(G.box, 0xd2cdc2, sx * 4.75, 0.06, 170, 0, 0, 0, 0.35, 0.12, 470); // bordillo
+        for (let z = -60; z < 400; z += 26) city.add(G.box, 0x8a8478, sx * 9.5, 0.03, z, 0, 0, 0, 0.9, 0.04, 0.9); // alcorques
+      }
+      const cm = city.mesh();
+      cm.position.y = 0;
+      cm.userData.noCast = true;
+      cm.receiveShadow = true;
+      sc.add(cm);
+    }
 
     // La carretera: asfalto dibujado (también en coordenadas del mundo) y la pintura plana encima, como en el cap. 2.
     // Las líneas de borde son continuas (siguen al coche); las discontinuas de los carriles van fijas en el suelo y
@@ -366,7 +380,8 @@ export class Level2 implements Level {
     this.logSign.position.set(-6.8, 0, LEG1 + 40 + LEG2 - 150);
     sc.add(this.logSign);
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
-    sv.position.set(-6, 0, LEG1 - 20);
+    // (antes, donde se para el coche: el plano de llegada era el cartel a pantalla completa y no se veía el pueblo)
+    sv.position.set(-6, 0, LEG1 - 110);
     sc.add(sv);
     const gs = this.buildGasStation();
     gs.position.set(0, 0, GAS_Z);
@@ -524,13 +539,18 @@ export class Level2 implements Level {
       .add(G.rock, 0xf2f4f6, 0, 17, 0, 0, 0.6, 0, 22, 9, 16)
       .add(G.rock, 0x7c7f86, 30, -4, 6, 0, 1.2, 0, 40, 30, 30)
       .build();
-    const bull = new Merger()
-      .add(G.box, 0x111111, 0, 7, 0, 0, 0, 0, 0.2, 5, 11)
-      .add(G.box, 0x111111, 0, 9.8, 5.2, 0, 0, 0, 0.2, 2.6, 2.6)
-      .add(G.box, 0x111111, 0, 3, 3.5, 0, 0, 0, 0.2, 3.5, 1.2)
-      .add(G.box, 0x111111, 0, 3, -3.8, 0, 0, 0, 0.2, 3.5, 1.2)
-      .add(G.box, 0x111111, 0, 11.5, 5.5, 0, 0, 0.6, 0.2, 2.5, 0.4)
-      .add(G.box, 0x111111, 0, 11.5, 5.5, 0, 0, 0, 0.2, 0.4, 2.8)
+    // El toro de Osborne: la silueta negra de chapa, de perfil a la carretera (antes, cajas: parecía un cartel)
+    const bullShape = new THREE.Shape(
+      ([[-6.6, 9.3], [-2, 9.6], [3.4, 10.1], [4.8, 11.2], [6.1, 11.1], [7.8, 9.2], [7.6, 8.5], [6.5, 8.3], [5.9, 6.6], [5.3, 4.6], [5.0, 0], [3.7, 0], [3.5, 3.9], [2.4, 5.0], [0.5, 4.8], [-3.4, 5.1], [-3.8, 0], [-5.2, 0], [-5.7, 3.6], [-6.7, 6.4], [-6.9, 8.5]] as [number, number][]).map(([x, y]) => new THREE.Vector2(x, y)),
+    );
+    const horn = (x0: number, dir: number) => new THREE.Shape([new THREE.Vector2(x0, 10.6), new THREE.Vector2(x0 + 0.5, 10.9), new THREE.Vector2(x0 + dir * 1.2, 12.9), new THREE.Vector2(x0 + dir * 1.25, 12.6)]);
+    const tail = new THREE.Shape([new THREE.Vector2(-6.7, 9.0), new THREE.Vector2(-6.95, 8.9), new THREE.Vector2(-7.4, 4.1), new THREE.Vector2(-7.1, 4.0)]);
+    const ext = (sh: THREE.Shape) => new THREE.ExtrudeGeometry(sh, { depth: 0.25, bevelEnabled: false }).rotateY(-Math.PI / 2);
+    const bull = new Merger(false)
+      .add(ext(bullShape), 0x111111)
+      .add(ext(horn(5.1, -1)), 0x111111)
+      .add(ext(horn(5.8, 1)), 0x111111)
+      .add(ext(tail), 0x111111)
       .build();
 
     this.scatters = [
@@ -541,16 +561,17 @@ export class Level2 implements Level {
       new Scatter(hay, 20, 9, ['meseta'], [8, 50], true, [0.8, 1.2]),
       new Scatter(mill, 6, 45, ['meseta'], [25, 60], true, [1, 1.2]),
       new Scatter(bull, 1, 260, ['meseta'], [22, 24], false, [1, 1], false),
-      new Scatter(hill, 10, 30, ['cantabria'], [40, 90], false, [0.7, 1.4]),
+      // (en Cantabria el mar empieza a 20 m por la izquierda (x > 20): nada encima del agua)
+      new Scatter(hill, 10, 30, ['cantabria'], [-40, -90], false, [0.7, 1.4]),
       new Scatter(peak, 6, 70, ['cantabria'], [-150, -210], false, [0.9, 1.5], false),
-      new Scatter(oakGeo, 22, 9, ['cantabria'], [10, 35], true, [0.8, 1.3]),
+      new Scatter(oakGeo, 22, 9, ['cantabria'], [10, 18], true, [0.8, 1.3]),
       new Scatter(cowGeometry('frisona'), 8, 20, ['cantabria'], [-12, -32], false, [1, 1]),
       new Scatter(cowGeometry('tudanca'), 5, 32, ['cantabria'], [-13, -34], false, [1, 1]),
       new Scatter(vineGeo, 24, 10, ['rioja'], [12, 32], true, [1, 1], false),
-      new Scatter(vergeGeo, 40, 5, ['madrid', 'meseta', 'cantabria', 'rioja'], [9, 14], true, [0.7, 1.3]),
+      new Scatter(vergeGeo, 40, 5, ['meseta', 'cantabria', 'rioja'], [9, 14], true, [0.7, 1.3]),
       // Hierba en la cuneta y el campo: seca hasta la meseta, verde en Cantabria
-      new Scatter(tuftClump([0xb7a05c, 0xa8924f, 0xc4ae6a]), 70, 2.6, ['madrid', 'meseta'], [5.4, 24], true, [0.8, 1.5]),
-      new Scatter(tuftClump([0x64923f, 0x568a3a, 0x77a04a]), 90, 2.2, ['cantabria'], [5.4, 26], true, [0.8, 1.6]),
+      new Scatter(tuftClump([0xb7a05c, 0xa8924f, 0xc4ae6a]), 70, 2.6, ['meseta'], [5.4, 24], true, [0.8, 1.5]),
+      new Scatter(tuftClump([0x64923f, 0x568a3a, 0x77a04a]), 90, 2.2, ['cantabria'], [5.4, 18], true, [0.8, 1.6]),
       new Scatter(tuftClump([0x8d8f4a, 0x7c7f42]), 40, 3.4, ['rioja'], [5.4, 11], true, [0.7, 1.2]),
     ];
     // Las montañas lejanas no llevan niebla (si no, desaparecen): ya son de un gris azulado de lejanía
@@ -992,7 +1013,7 @@ export class Level2 implements Level {
     this.turboT -= dt;
     const turbo = drive && this.turboT > 0 && this.hitT <= 0;
     // (volviendo al último punto bueno: frena en seco, antes de llegar a la vaca)
-    const target = this.phase === 'fuel' ? Math.max(0, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    const target = this.phase === 'fuel' ? Math.max(0, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : this.phase === 'marcial' ? Math.max(0, Math.min(11, (MARCIAL_Z - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
     this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : this.phase === 'cow' ? 6 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
@@ -1013,7 +1034,8 @@ export class Level2 implements Level {
     // Cambio de carril con volante y masa: el coche se desplaza con un muelle, no de golpe
     const prevVX = this.carVX;
     // (con la carretera mojada, el coche tarda en obedecer)
-    [this.carX, this.carVX] = spring(this.carX, this.carVX, this.phase === 'fuel' ? -6.4 : LANES[this.lane], this.phase === 'fuel' ? 3 : 9 - 4.5 * this.wet, dt);
+    const parking = this.phase === 'fuel' ? -6.4 : this.phase === 'marcial' ? -6.8 : null;
+    [this.carX, this.carVX] = spring(this.carX, this.carVX, parking ?? LANES[this.lane], parking !== null ? 3 : 9 - 4.5 * this.wet, dt);
     const latAccel = dt > 0 ? (this.carVX - prevVX) / dt : 0;
 
     const car = this.car;
@@ -1624,7 +1646,8 @@ export class Level2 implements Level {
   /** Restaurante de carretera con su cartel. */
   private buildEatery(name: string, isM: boolean) {
     const g = new THREE.Group();
-    const wall = isM ? 0xf2e6c8 : [0xe8d9c0, 0xd9cfc0, 0xf0e2c8][name.length % 3];
+    // (Marcial, como en la foto: revoque ocre arriba, bajo de ladrillo con arcos, toldo rojo con el nombre y balcón de hierro)
+    const wall = isM ? 0xe0a35c : [0xe8d9c0, 0xd9cfc0, 0xf0e2c8][name.length % 3];
     const m = new Merger();
     const hd = new TownHD();
     const H = 6.4;
@@ -1643,12 +1666,23 @@ export class Level2 implements Level {
       for (const d of [-1.9, -0.63, 0.63, 1.9]) m.add(G.box, 0x2a2a2e, 11.91, 1.6, z + d, 0, 0, 0, 0.05, 2, 0.07);
       m.add(G.box, 0x2a2a2e, 11.91, 2.62, z, 0, 0, 0, 0.05, 0.07, 3.9);
     }
+    if (isM) {
+      m.add(G.box, 0xa04a32, 11.99, 1.7, 0, 0, 0, 0, 0.03, 3.4, 12); // bajo de ladrillo visto
+      for (const z of [-3.6, 3.6]) m.add(G.cyl, 0x2a2a2e, 11.985, 2.62, z, 0, 0, Math.PI / 2, 3.9, 0.02, 3.9); // los arcos
+      for (const z of [-5.85, -1.55, 1.55, 5.85]) m.add(G.box, 0x8e3f2a, 11.88, 1.7, z, 0, 0, 0, 0.12, 3.4, 0.5); // pilastras
+      m.add(G.box, 0x8e3f2a, 11.88, 3.45, 0, 0, 0, 0, 0.16, 0.14, 12.1); // cornisa de ladrillo
+      // Balcón de hierro en el primer piso, sobre la puerta
+      m.add(G.box, 0x6b6b6b, 11.3, 4.05, 0, 0, 0, 0, 1.4, 0.08, 2.8);
+      m.add(G.box, 0x1a1a1a, 10.62, 4.55, 0, 0, 0, 0, 0.05, 0.05, 2.8);
+      for (let k = 0; k <= 10; k++) m.add(G.box, 0x1a1a1a, 10.62, 4.3, -1.4 + k * 0.28, 0, 0, 0, 0.03, 0.5, 0.03);
+      m.add(G.box, 0x2a2a2e, 11.95, 4.7, 0, 0, 0, 0, 0.04, 1.8, 1.1); // la ventana del balcón
+    }
     m.add(G.box, 0x6b4428, 11.94, 1.3, 0, 0, 0, 0, 0.06, 2.6, 1.3);
     m.add(G.box, 0x9fc4e0, 11.9, 1.75, 0, 0, 0, 0, 0.02, 1.2, 0.8);
     m.add(G.sphere, 0xc8ccd0, 11.88, 1.15, 0.42, 0, 0, 0, 0.06, 0.06, 0.06);
     // Toldo a rayas, con su faldón
     const c1 = isM ? 0xc0392b : 0x2f6b46;
-    for (let k = 0; k < 14; k++) m.add(G.box, k % 2 ? 0xf4f1e8 : c1, 11.1, 3.05, -5.53 + k * 0.85, 0, 0, 0.32, 1.9, 0.05, 0.85);
+    for (let k = 0; k < 14; k++) m.add(G.box, k % 2 && !isM ? 0xf4f1e8 : c1, 11.1, 3.05, -5.53 + k * 0.85, 0, 0, 0.32, 1.9, 0.05, 0.85);
     m.add(G.box, c1, 10.2, 2.63, 0, 0, 0, 0, 0.04, 0.3, 11.9);
     // Terraza: mesas y sillas, y el aparcamiento con sus plazas
     m.add(G.box, 0xbdb4a4, 10.3, 0.05, 0, 0, 0, 0, 3.4, 0.1, 12);
@@ -1667,8 +1701,29 @@ export class Level2 implements Level {
     body.add(m.mesh());
     hd?.finish(body);
     g.add(body);
+    if (isM) {
+      // El nombre en el faldón del toldo (aparte del cuerpo reflejado, para que no salga al revés)
+      const val = new THREE.Mesh(
+        new THREE.PlaneGeometry(11.6, 0.3),
+        new THREE.MeshBasicMaterial({
+          map: canvasTex((ctx, w, h) => {
+            ctx.fillStyle = '#c0392b';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#f6efe2';
+            ctx.font = `700 ${h * 0.7}px Georgia, serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (const x of [0.2, 0.5, 0.8]) ctx.fillText(x === 0.5 ? 'MARCIAL' : 'CAFETERÍA', w * x, h * 0.56);
+          }, 1024, 28),
+        }),
+      );
+      val.rotation.y = Math.PI / 2;
+      val.position.set(-10.17, 2.63, 0);
+      g.add(val);
+    }
     const sign = makeSign(isM ? ['CAFETERÍA', 'MARCIAL'] : name.split(' ').length > 2 ? [name.split(' ')[0], name.split(' ').slice(1).join(' ')] : [name], isM ? '#b8322a' : '#5a4632');
-    sign.position.set(-6.2, 0, -6);
+    // (al otro lado del aparcamiento: donde estaba, el coche aparcado quedaba debajo y la cámara se metía dentro)
+    sign.position.set(-5.2, 0, 8.2);
     g.add(sign);
     return g;
   }
@@ -1919,6 +1974,13 @@ export class Level2 implements Level {
       // Se para antes del puente y la cámara sube: el Ebro, el casco viejo y las torres de La Redonda
       this.camTarget.set(this.carX - 5, 3.4, this.carZ - 9);
       this.camLook.set(this.carX + 3, 9, this.carZ + 100);
+    } else if (this.phase === 'marcial') {
+      // Aparcados delante de Marcial: de lado, el coche, la terraza y la fachada de ladrillo
+      this.camTarget.set(1.8, 3.2, MARCIAL_Z - 11);
+      this.camLook.lerp(new THREE.Vector3(-9.5, 2.0, MARCIAL_Z + 0.5), 1 - Math.exp(-dt * 3));
+      this.camera.position.lerp(this.camTarget, 1 - Math.exp(-dt * 2.5));
+      this.camera.lookAt(this.camLook);
+      return;
     } else if (this.phase === 'fuel') {
       // En la gasolinera: desde el otro lado de la carretera, el coche bajo la marquesina y la tienda detrás
       this.camTarget.set(3.2, 3.0, GAS_Z + 11);

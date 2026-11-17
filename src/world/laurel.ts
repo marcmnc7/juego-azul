@@ -110,7 +110,10 @@ export class Laurel {
           for (let b = 0; b < nb; b++) {
             if ((b * 3 + i + Math.round(y * 9)) % 11 === 0) continue;
             const hb = 0.2 + ((b * 7 + i) % 3) * 0.03;
-            m.add(G.cyl, [0x2f5a3a, 0x6b2a2a, 0x3a2a18, 0x8a6a2a, 0x233a4a][(b + i) % 5], fx(0.1), y + 0.02 + hb / 2, winZ - len / 2 + 0.14 + b * 0.095, 0, 0, 0, 0.05, hb, 0.05);
+            const bc = [0x2f5a3a, 0x6b2a2a, 0x3a2a18, 0x8a6a2a, 0x233a4a][(b + i) % 5], bz = winZ - len / 2 + 0.14 + b * 0.095;
+            m.add(G.cyl, bc, fx(0.1), y + 0.02 + hb * 0.36, bz, 0, 0, 0, 0.055, hb * 0.72, 0.055);
+            // (con su cuello: sin él, en fila parecían lomos de libros)
+            m.add(G.box, bc, fx(0.1), y + 0.02 + hb * 0.86, bz, 0, 0, 0, 0.02, hb * 0.28, 0.02);
           }
         }
         for (let h2 = 0; h2 < 5; h2++) m.add(G.capsule, 0x7a3a22, fx(0.1), 2.3, winZ - len / 2 + 0.4 + h2 * 0.62, 0, 0, 0, 0.09, 0.12, 0.09);
@@ -148,6 +151,10 @@ export class Laurel {
     }
     sc.add(m.mesh());
     hd?.finish(sc);
+    // (calle larga y estrecha: el combado a mano alzada abombaba las fachadas hacia dentro, como un ojo de pez)
+    sc.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.userData.comicBent = true;
+    });
 
     // Rótulos de bandera, colgados de su barra sobre cada puerta
     for (const it of signs) {

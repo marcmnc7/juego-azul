@@ -511,6 +511,12 @@ if (TEST)
     __dbg: {
       level: () => level, start: (n: number) => startLevel(n), letter: () => startLetter(), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
+      /** Dibuja ya el fotograma actual y lo devuelve (para revisar con la página oculta, sin esperar al bucle). */
+      snap: () => {
+        const sc = stage.current ? stage.current.scene : level?.threeScene;
+        if (sc) draw(sc);
+        return canvas.toDataURL('image/png');
+      },
       skip: dbgSkip,
       /** Abre el capítulo n y pasa la introducción. */
       go: async (n: number) => {

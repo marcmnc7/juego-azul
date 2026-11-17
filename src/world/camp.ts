@@ -85,8 +85,15 @@ export class Camp {
 
     const m = new Merger();
     // Tierra, el claro de grava y matorral bajo alrededor, menos donde está la mesa
-    m.add(G.box, 0x7d6649, 0, -0.05, 0, 0, 0, 0, 160, 0.1, 160);
-    m.add(G.cyl, 0x8a7a68, 0, -0.03, 0, 0, 0, 0, 7, 0.06, 7);
+    // (el suelo, de hierba y el claro de tierra: con el color de antes el tebeo lo dibujaba como un enlosado de ladrillo)
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 160).rotateX(-Math.PI / 2), toon({ color: 0x4f6234, surf: Surf.Grass }));
+    ground.receiveShadow = true;
+    sc.add(ground);
+    const clearing = new THREE.Mesh(new THREE.CircleGeometry(9, 32).rotateX(-Math.PI / 2), toon({ color: 0x8a7656, surf: Surf.Sand }));
+    clearing.position.set(0, 0.01, -5);
+    clearing.scale.set(1.5, 1, 1.2);
+    clearing.receiveShadow = true;
+    sc.add(clearing);
     // El matorral, instanciado y de pocos polígonos (es mucho: con esferas normales la escena iba a tirones)
     const vines: THREE.Matrix4[] = [];
     const tint: THREE.Color[] = [];
@@ -160,7 +167,7 @@ export class Camp {
     // (sin luz de punto: como en el cap. 2, una lámpara solo se ve encendida; su luz pintaba dianas en la mesa)
     this.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffb060, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 }));
     this.glow.position.copy(lampGlass.position);
-    this.glow.scale.setScalar(0.9);
+    this.glow.scale.setScalar(0.3);
     sc.add(this.glow);
 
     for (let i = 0; i < 6; i++) {
@@ -434,7 +441,7 @@ export class Camp {
     }
     // La llama del farolillo tiembla un poco
     const fl = 1 + Math.sin(this.t * 13) * 0.04 + Math.sin(this.t * 7.3) * 0.05;
-    this.glow.scale.setScalar(0.9 * fl);
+    this.glow.scale.setScalar(0.3 * fl); // (de noche el tebeo lo pinta como halo con su aro: pequeño, solo el farolillo)
     this.sky.update(camera, dt);
   }
 }
