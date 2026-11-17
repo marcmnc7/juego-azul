@@ -1,3 +1,4 @@
+import { askHelp } from '../core/lost';
 import { GIFTS, Gift } from '../data/gifts';
 import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
 import { audio } from '../core/audio';
@@ -632,7 +633,7 @@ export function howToPlay() {
       ['👈', 'Andar', 'Pon el pulgar en la mitad izquierda y deslízalo. No hace falta llegar al borde para correr.'],
       ['👉', 'Mirar', 'Arrastra en la mitad derecha para girar la cámara.'],
       ['🔴', 'Acción', 'Cuando hay algo que hacer, aparece un botón abajo a la derecha.'],
-      ['✨', 'Por dónde', 'Sigue la columna de luz y la flecha del objetivo, arriba.'],
+      ['✦', 'Qué hacer', 'Mira alrededor y escucha a la gente. Si te atascas, toca la estrella de arriba: te da una pista y, si hace falta, una flecha.'],
       ['🔎', 'Recuerdos', 'En cada capítulo hay fotos escondidas: acércate a lo que brilla.'],
       ['☰', 'Pausa', 'El botón de arriba a la derecha para el juego.'],
     ];
@@ -1540,9 +1541,17 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     clearTimeout(objTimer);
     objTimer = window.setTimeout(() => obj.classList.remove('open'), ms);
   };
+  // Ayuda que llega poco a poco, para que primero mire y escuche: con cada objetivo nuevo solo destella la estrella;
+  // a los 15 s (sin contar conversaciones) se lee el texto y, a los 40 s sin avanzar, la flecha. Tocando la estrella, todo al momento.
+  // (La flecha la decide cada capítulo con `Lost`: sale tras 40 s sin avanzar o al pedir pista.)
+  const TEXT_AFTER = 15000;
+  let textShown = false;
+  let textTimer = 0;
   obj.onpointerdown = (e) => {
     e.stopPropagation();
-    expand(4000);
+    askHelp();
+    textShown = true;
+    expand(4500);
   };
   const counters = el('div', 'counters' + (mission ? ' m-hud' : ''));
   const menuBtn = el('button', 'icon-btn menu-btn', '<i></i><i></i>');
@@ -1635,10 +1644,25 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       lastObj = t;
       objText.textContent = t;
       obj.classList.toggle('empty', !t);
-      if (t) expand(5500);
+      textShown = false;
+      obj.classList.remove('open', 'fresh');
+      clearTimeout(textTimer);
+      if (!t) return;
+      // En los minijuegos la instrucción hace falta ya; en el paseo, primero descubrir
+      if (mission) return expand(5500);
+      void obj.offsetWidth;
+      obj.classList.add('fresh');
+      const reveal = () => {
+        if (textShown) return;
+        // Mientras alguien habla no cuenta: se espera a que acabe la conversación
+        if (document.querySelector('#ui .dialogue')) return void (textTimer = window.setTimeout(reveal, 3000));
+        textShown = true;
+        expand(5500);
+      };
+      textTimer = window.setTimeout(reveal, TEXT_AFTER);
     },
     setArrow: (a) => {
-      // Sin dirección, el icono del objetivo; con dirección, la flecha que apunta
+      // Sin dirección, la estrella; con dirección (perdida o tras pedir pista), la flecha que apunta
       const glyph = a === null ? '✦' : '⬆';
       if (arrow.textContent !== glyph) arrow.textContent = glyph;
       arrow.style.transform = a === null ? '' : `rotate(${a}rad)`;
