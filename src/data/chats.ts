@@ -853,7 +853,7 @@ export const CHATS = {
   ]
  },
  "cesped": {
-  "date": "27 de agosto de 2025",
+  "date": "26 de agosto de 2025",
   "contact": "Marc",
   "msgs": [
    {
@@ -974,7 +974,7 @@ export const CHATS = {
   ]
  },
  "meGustas": {
-  "date": "27 de agosto de 2025",
+  "date": "26 de agosto de 2025",
   "contact": "Marc",
   "msgs": [
    {

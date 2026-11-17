@@ -13,7 +13,7 @@ export interface LevelInfo {
 
 export const LEVELS: LevelInfo[] = [
   { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏' },
-  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 27 de agosto de 2025', emoji: '🌙' },
+  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 26 de agosto de 2025', emoji: '🌙' },
   { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗' },
   { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸' },
   { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️' },
@@ -32,13 +32,13 @@ export const FERRERIES = {
   ] as Line[],
   tofolQuest: [
     // La primera persona con la que habla en todo el juego: presenta el regalo (inventado: Marc, cámbialo si quieres)
-    { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol. Som sa primera persona amb qui parles, eh? Idò t’he de dir una cosa.' },
+    { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol. Abans de res, t’he de dir una cosa.' },
     { who: 'Tòfol', text: 'Te lo digo en castellano, que esto es importante: esto no es un juego cualquiera. Es un regalo. Para ti.' },
-    { who: 'Tòfol', text: 'Cada capítulo es un trocito de vuestra historia. Se irán abriendo poco a poco, en días señalados, hasta Navidad.' },
-    { who: 'Tòfol', text: 'Nadie te va a decir exactamente qué hacer: mira, escucha a la gente y ve descubriéndolo. Si te pierdes, toca la estrella de arriba.' },
+    { who: 'Tòfol', text: 'Cada capítulo es un trocito de vuestra historia. Se irán abriendo poco a poco.' },
+    { who: 'Tòfol', text: 'Nadie te va a decir exactamente qué hacer: mira, escucha a la gente y ve descubriéndolo.' },
     { who: 'Tòfol', text: 'Y al final de cada capítulo te espera un regalo de verdad.' },
     { who: 'Margaux', text: '¿En serio?' },
-    { who: 'Tòfol', text: 'Molt en serio. Espero que t’agradi: ell hi ha posat molt d’amor.' },
+    { who: 'Tòfol', text: 'Molt en serio. Espero que t’agradi: ell hi ha posat molt d’amor i molt de temps.' },
     { who: 'Tòfol', text: 'Bé, au! I avui aquí mano jo. Benvinguda a Ferreries: darrer dia de Sant Bartomeu.' },
     { who: 'Tòfol', text: 'Tot s’any som un poble tranquil. Avui no: pistoles d’aigua, purpurina, i ases pel mig de sa plaça amb tot es poble ballant-los devora. Aquí ningú torna sec a ca seva.' },
     { who: 'Tòfol', text: 'I alerta, que es jaleo té sa seva màgia. Un ve a passar sa tarda, i no sap mai què se’n durà.' },
@@ -392,7 +392,7 @@ export const CONCERT = {
 
 // Capítulo 2: los chats de esa noche van tal cual en src/data/chats.ts (imperi, pins, cesped, meGustas).
 export const NIGHT = {
-  intro: [{ who: 'Narrador', text: 'Ciutadella. 27 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
+  intro: [{ who: 'Narrador', text: 'Ciutadella. 26 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
   /** En la terraza del Imperi, antes de irse. */
   bye: [
@@ -416,9 +416,6 @@ export const NIGHT = {
     { who: 'Gas', text: 'Bien. Oye… vas muy guapa.' },
     { who: 'Azul', text: 'Jajaja, gracias. Qué random todo, ¿no?' },
     { who: 'Gas', text: 'Un poco. A mí me gusta lo random.' },
-    { who: 'Azul', text: '¿Y adónde vamos?' },
-    { who: 'Gas', text: 'A casa de mis padres. Hay piscina.' },
-    { who: 'Azul', text: '¿A estas horas? 😳' },
     { who: 'Gas', text: 'Te voy a pedir una cosa: en casa, silencio. Mis padres duermen.' },
     { who: 'Azul', text: 'Silencio full. Prometido 🤫' },
   ] as Line[],
@@ -431,6 +428,12 @@ export const NIGHT = {
     { who: 'Margaux', text: 'Qué pena no poder verlos bien esta noche.' },
     { who: 'Marc', text: 'Esa oscuridad tenebre ha tenido su parte buena también.' },
     { who: 'Margaux', text: 'Tuvo su porqué.' },
+    // (inventado salvo la idea de Gas: Marc, retócalo si quieres)
+    { who: 'Marc', text: 'Mira eso. Aquí no hay ni una luz y se ven todas.' },
+    { who: 'Margaux', text: 'Es increíble. En Madrid no se ve ni una.' },
+    { who: 'Marc', text: '¿Sabes? Uno de mis objetivos en la vida es vivir en un sitio donde pueda aparcar en la puerta de casa…' },
+    { who: 'Marc', text: '…y donde me baste con levantar la cabeza para ver unas estrellas como estas.' },
+    { who: 'Margaux', text: 'Suena a muy buen plan.' },
   ] as Line[],
   lie: [{ who: 'Narrador', text: 'Toca las estrellas, empezando por la que parpadea.' }] as Line[],
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',

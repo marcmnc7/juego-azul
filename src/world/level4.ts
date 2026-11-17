@@ -2022,6 +2022,16 @@ export class Level4 implements Level {
         if (v.y < min) min = v.y;
       }
     });
+    // (con esqueleto: la espalda sobre la tela. El punto más bajo de la malla era el pelo, que cae hacia la toalla, y
+    // el cuerpo quedaba flotando unos centímetros; se apoyan la cadera y el pecho, a su grosor, en la toalla)
+    const r = p.rig;
+    const hips = r?.bones.get('Hips'), chest = r?.bones.get('Spine2') ?? r?.bones.get('Spine1');
+    if (hips && chest) {
+      const hy = hips.getWorldPosition(v).y - 0.1;
+      const cy = chest.getWorldPosition(v).y - 0.11;
+      p.root.position.y += TOWEL_TOP - Math.min(hy, cy);
+      return;
+    }
     if (min < Infinity) p.root.position.y += TOWEL_TOP - min;
   }
 
@@ -2129,7 +2139,8 @@ export class Level4 implements Level {
     vibrate([40, 60, 120]);
     for (let i = 0; i < 4; i++) later(() => this.launchShootingStar(), i * 700);
     later(() => {
-      phoneChat([CHATS.cesped, CHATS.meGustas], () => {
+      // (termina con «Tb el césped con vista estrellas» y los besos)
+      phoneChat(CHATS.cesped, () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';

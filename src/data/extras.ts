@@ -4,7 +4,6 @@ import { CHATS, type ChatMsg } from './chats';
 import { STICKERS } from './memories';
 import cocacola from '../assets/recuerdos/cocacola.jpg';
 import diadema from '../assets/recuerdos/diadema.jpg';
-import joyFoto from '../assets/recuerdos/joy.jpg';
 
 /** Una pista de lo que viene. Se ve al acabar el capítulo anterior y en el mapa. */
 export const TEASERS: Record<number, string> = {
@@ -39,7 +38,7 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
   },
   2: {
     // (Gas no está en el bar: viene en coche; lo suyo son mensajes, no un bocadillo flotando por el Born)
-    atBar: [b('Gas', '(WhatsApp) Bale tabiso ara.'), b('Gas', '(WhatsApp) Arranco!')],
+    atBar: [b('Gas', '(WhatsApp) Arranco!')],
     toPool: [b('Gas', 'Silencio full, eh.'), b('Gas', 'Ni respires, eh.'), b('Gas', 'Molaría mazo que no se enteraran.')],
     swim: [b('Gas', 'Muy pequeñita ella, pero sí, funciona.'), b('Gas', 'Y se le puede llamar piscina. Como tal.')],
     toTowels: [b('Gas', 'Mira qué cielo.'), b('Margaux', 'Soy una mujer con muchas sorpresas.')],
@@ -184,7 +183,6 @@ export const KEEPSAKES: Keepsake[] = [
   { id: 'c1-diadema', chapter: 1, phases: M1, x: -8, z: 22, src: diadema, caption: 'Y la diadema.' },
   // Bar Imperi y casa de Gas
   { id: 'c2-cola', chapter: 2, phases: ['atBar'], x: -616, z: 1, chat: CHATS.imperi.msgs.slice(82, 84), caption: 'Sigo aún con la cola' },
-  { id: 'c2-joy', chapter: 2, phases: ['arrive', 'toPool', 'toTowels'], x: -5.5, z: -7, src: joyFoto, caption: '«Siii es un perrito negro, bueno, no tan chiquito»' },
   { id: 'c2-cesped', chapter: 2, phases: ['toTowels'], x: 3.4, z: 13, chat: CHATS.cesped.msgs.slice(19, 22), caption: 'Tb el césped' },
   // La carretera (un carril concreto) y el camping
   { id: 'c3-pacto', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, chat: CHATS.pacto.msgs.slice(5, 7), caption: 'El pacto' },

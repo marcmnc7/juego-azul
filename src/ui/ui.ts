@@ -1,4 +1,3 @@
-import { askHelp } from '../core/lost';
 import { GIFTS, Gift } from '../data/gifts';
 import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
 import { audio } from '../core/audio';
@@ -360,12 +359,36 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     ni.alt = '';
     card.append(ni, el('div', 'wn-lock', days <= 0 ? '✦' : '🔒'));
     const txt = el('div', 'wn-txt');
-    txt.append(
-      el('div', 'wn-kicker', `Capítulo ${nextTeaser}`),
-      el('h1', 'wn-title', days <= 0 ? 'Ya puedes jugarlo' : days === 1 ? 'Se abre mañana' : `Se abre el ${longDate(d)}`),
-      el('p', 'wn-quote', TEASERS[nextTeaser] ? (TEASERS[nextTeaser].startsWith('«') ? TEASERS[nextTeaser] : `«${TEASERS[nextTeaser]}»`) : nlv.name),
-    );
-    if (days > 1) txt.append(el('div', 'wn-count', `<b>${days}</b> días`));
+    const quote = TEASERS[nextTeaser] ? (TEASERS[nextTeaser].startsWith('«') ? TEASERS[nextTeaser] : `«${TEASERS[nextTeaser]}»`) : nlv.name;
+    txt.append(el('div', 'wn-kicker', `Capítulo ${nextTeaser}`));
+    if (days <= 0) txt.append(el('h1', 'wn-title', 'Ya puedes jugarlo'));
+    else {
+      // Solo lo que falta, al minuto (sin decir qué día es)
+      txt.append(el('div', 'wn-ct-label', 'Se abre dentro de'));
+      const ct = el('div', 'wn-ct');
+      const cell = (k: string) => {
+        const c = el('div', 'wn-ct-cell');
+        const v = el('b', '', '0');
+        c.append(v, el('span', '', k));
+        ct.append(c);
+        return v;
+      };
+      const [dd, hh, mm] = [cell('días'), cell('horas'), cell('min')];
+      let first = true;
+      const tick = () => {
+        // (la primera vez la pantalla aún no está montada: solo se para cuando ya se ha cerrado)
+        if (!first && !o.isConnected) return clearInterval(iv);
+        first = false;
+        const l = left(d);
+        dd.textContent = String(l.d);
+        hh.textContent = String(l.h).padStart(2, '0');
+        mm.textContent = String(l.m).padStart(2, '0');
+      };
+      const iv = window.setInterval(tick, 10000);
+      tick();
+      txt.append(ct);
+    }
+    txt.append(el('p', 'wn-quote', quote));
     b.append(card, txt);
     beats.push({ el: b, label: () => 'Volver al menú' });
   }
@@ -736,7 +759,7 @@ export function howToPlay() {
       ['👈', 'Andar', 'Pon el pulgar en la mitad izquierda y deslízalo. No hace falta llegar al borde para correr.'],
       ['👉', 'Mirar', 'Arrastra en la mitad derecha para girar la cámara.'],
       ['🔴', 'Acción', 'Cuando hay algo que hacer, aparece un botón abajo a la derecha.'],
-      ['✦', 'Qué hacer', 'Mira alrededor y escucha a la gente. Si te atascas, toca la estrella de arriba: te da una pista y, si hace falta, una flecha.'],
+      ['✦', 'Qué hacer', 'Mira alrededor y escucha a la gente: lo irás descubriendo.'],
       ['🔎', 'Recuerdos', 'En cada capítulo hay fotos escondidas: acércate a lo que brilla.'],
       ['☰', 'Pausa', 'El botón de arriba a la derecha para el juego.'],
     ];
@@ -1689,16 +1712,15 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     objTimer = window.setTimeout(() => obj.classList.remove('open'), ms);
   };
   // Ayuda que llega poco a poco, para que primero mire y escuche: con cada objetivo nuevo solo destella la estrella;
-  // a los 15 s (sin contar conversaciones) se lee el texto y, a los 40 s sin avanzar, la flecha. Tocando la estrella, todo al momento.
+  // a los 15 s (sin contar conversaciones) se lee el texto y, a los 40 s sin avanzar, la flecha. (No hay ayuda a demanda.)
   // (La flecha la decide cada capítulo con `Lost`: sale tras 40 s sin avanzar o al pedir pista.)
   const TEXT_AFTER = 15000;
   let textShown = false;
   let textTimer = 0;
+  // (sin ayuda a demanda: tocarla solo vuelve a enseñar el objetivo si ya se puede leer)
   obj.onpointerdown = (e) => {
     e.stopPropagation();
-    askHelp();
-    textShown = true;
-    expand(4500);
+    if (textShown) expand(4500);
   };
   const counters = el('div', 'counters' + (mission ? ' m-hud' : ''));
   const menuBtn = el('button', 'icon-btn menu-btn', '<i></i><i></i>');

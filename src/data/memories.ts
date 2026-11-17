@@ -35,10 +35,6 @@ export interface Memory {
 export const MEMORIES: Memory[] = [
   { level: 1, src: ferreriesSelfie, caption: 'Ferreries, 25 de agosto. Purpurina y pomada.' },
   { level: 1, src: ferreriesPoster, video: ferreriesVideo, caption: 'El jaleo, en directo.' },
-  { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Font. Más o menos.', sticker: true },
-  { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
-  { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },
-  { level: 2, chat: CHATS.joyPiscina.msgs, caption: 'Joy, 3 de abril de 2026. De una.' },
   { level: 3, src: ruta, caption: 'El planning. «A coruña es muy ambicioso.»' },
   { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
   { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },

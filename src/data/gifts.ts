@@ -19,6 +19,14 @@ export const GIFTS: Gift[] = [
     howToRedeem: 'Tú eliges el día y la hora. Enséñale este vale a Gas.',
   },
   {
+    id: 'carbonara',
+    level: 2,
+    icon: '🍝',
+    title: 'Una carbonara made in Marc',
+    description: 'Guanciale, huevo, pecorino y nada de nata. Hecha por mí, para ti.',
+    howToRedeem: 'El día que tú elijas. Enséñale este vale a Gas.',
+  },
+  {
     id: 'cena',
     level: 3,
     icon: '🍽️',

@@ -193,12 +193,16 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   // Pasos de cebra: cada uno de bordillo a bordillo (del de la explanada al de la acera de enfrente) y llevando a
   // algún sitio: a la puerta de Correus, a la del Imperi y, cuando sigue (Sant Joan), a Ses Voltes. (El de Ses Voltes
   // en una calle cerrada acababa en mitad del asfalto, y los otros se quedaban cortos)
+  // (las franjas van en el sentido de los coches, de 4 m de largo, una al lado de otra de bordillo a bordillo: antes
+  // estaban giradas, seis rayas largas en el sentido en que se cruza)
   const zebra = (a0: number, a1: number, at: number, alongX: boolean) => {
-    const len = Math.abs(a1 - a0), mid = (a0 + a1) / 2;
-    for (let i = 0; i < 6; i++) {
-      const c = at - 2.25 + i * 0.9;
-      if (alongX) lines.add(flatG, 0xf2f0ea, mid, PY, c, 0, 0, 0, len, 1, 0.5);
-      else lines.add(flatG, 0xf2f0ea, c, PY, mid, 0, 0, 0, 0.5, 1, len);
+    const lo = Math.min(a0, a1), len = Math.abs(a1 - a0);
+    const n = Math.max(1, Math.floor((len + 0.5) / 1.0));
+    const start = lo + (len - (n * 1.0 - 0.5)) / 2 + 0.25;
+    for (let i = 0; i < n; i++) {
+      const c = start + i * 1.0;
+      if (alongX) lines.add(flatG, 0xf2f0ea, c, PY, at, 0, 0, 0, 0.5, 1, 4);
+      else lines.add(flatG, 0xf2f0ea, at, PY, c, 0, 0, 0, 4, 1, 0.5);
     }
   };
   const kerb = 0.3; // el bordillo de la explanada sobresale 15 cm, más un palmo
