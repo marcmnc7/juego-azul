@@ -231,18 +231,20 @@ export const SANTJOAN = {
 
 export const ROAD = {
   intro: [
-    { who: 'Narrador', text: '24 de octubre de 2025. Él ha preparado un fin de semana por el norte. Tú le escribes con una duda.' },
+    { who: 'Narrador', text: '24 de octubre de 2025. Él ha preparado un fin de semana por el norte, y te lo manda.' },
   ] as Line[],
   introTrain: [
     { who: 'Narrador', text: '30 de octubre. Él viene a Madrid en tren, y va justísimo.' },
   ] as Line[],
   introGo: [
-    { who: 'Narrador', text: 'Da lluvia. Así que coche: el tuyo. Y conduces tú.' },
+    { who: 'Narrador', text: 'Da lluvia. Así que coche: el tuyo. Pero conduce él.' },
     { who: 'Narrador', text: 'Por el camino, un juego: parar a comer en el primer restaurante que empiece por M.' },
   ] as Line[],
   /** Una vaca en mitad de la carretera: se para, se la saluda y se le pregunta el camino. */
   cowBtn: '🐄 Saludar a la vaca',
-  cowMissed: '¡Frena, frena, que es una vaca! 🛑',
+  cowMissed: '¡Que había que parar a saludar a la vaca! Volvemos.',
+  /** Al volver al último punto bueno (inventado). */
+  rewind: 'Venga, otra vez desde aquí.',
   cows: [
     [
       { who: 'Margaux', text: 'Hola, vaca. ¿Hacia dónde vamos?' },
@@ -261,7 +263,7 @@ export const ROAD = {
     ],
   ] as Line[][],
   notM: (n: string) => `«${n}»… no empieza por M 😅`,
-  missedM: '¡Eh, que ese empieza por M! Frena 🛑',
+  missedM: '¡Eh, que ese empezaba por M! Media vuelta…',
   marcial: [
     { who: 'Narrador', text: 'Cafetería Marcial. La primera con M. Juego ganado.' },
     { who: 'Narrador', text: '📷 Recuerdo desbloqueado: Cafetería Marcial.' },
@@ -274,21 +276,30 @@ export const ROAD = {
   /** La noche del camping, entre Marcial y San Vicente. */
   camp: [
     { who: 'Narrador', text: 'Esa noche, a una cabaña de leña. Iba a ser cenita de camping: cartas y el camping gas.' },
-    { who: 'Narrador', text: 'A él se le olvidó precisamente el gas.' },
+    { who: 'Narrador', text: 'Ni gas, ni gasolinera, ni estufa. Esa noche no se cocinó.' },
   ] as Line[],
-  // El hornillo no enciende y ella busca el cartucho (paso nuevo, inventado: Marc, cámbialo si quieres)
-  campNoLight: [
-    { who: 'Marc', text: 'No enciende. ¿Has visto el cartucho de gas?' },
-    { who: 'Margaux', text: '¿Yo? Lo traías tú.' },
-    { who: 'Marc', text: 'Estará en la mochila… o en el coche. Mira, porfa.' },
+  // Sin gas: Gas ya sabía que no lo llevaba, contaba con comprarlo en la gasolinera de al lado. No tenían, y la estufa
+  // de pellets de la cabaña tampoco sirvió para cocinar (lo que pasó; las frases, inventadas: Marc, cámbialas si quieres)
+  campStove: [
+    { who: 'Marc', text: 'Hornillo, listo. Cartas, listas.' },
+    { who: 'Margaux', text: '¿Y el gas?' },
+    { who: 'Marc', text: 'El cartucho lo compramos en la gasolinera de aquí al lado. Seguro que tienen.' },
+    { who: 'Margaux', text: '¿No lo has traído?' },
+    { who: 'Marc', text: 'Confía.' },
   ] as Line[],
-  /** Lo que dice ella en cada sitio (según cuántos quedan: el último, ya mosqueada). */
-  campSearch: { mochila: '🎒 En la mochila no está.', lena: '🪵 Entre la leña, tampoco.', coche: '🚗 En el maletero… nada.' },
-  campHint: '¿Y en la mochila, la leña o el maletero?',
-  campConfess: [
-    { who: 'Margaux', text: 'No está en ningún sitio.' },
-    { who: 'Marc', text: '…Vale. Creo que me lo he dejado en casa.' },
+  gasStation: [
+    { who: 'Marc', text: 'Buenas. ¿Tenéis cartuchos de camping gas?' },
+    { who: 'Gasolinero', text: '¿De camping gas? Uy, no. De esos no tenemos.' },
+    { who: 'Margaux', text: '«Confía», decía.' },
+    { who: 'Marc', text: 'Plan B: en la cabaña hay una estufa de pellets. Cocinamos ahí.' },
   ] as Line[],
+  pelletTry: [{ who: 'Narrador', text: 'La olla, encima de la estufa de pellets. ¿Qué podría salir mal?' }] as Line[],
+  pelletFail: [
+    { who: 'Narrador', text: 'Humo. Mucho humo. Y la olla, fría.' },
+    { who: 'Margaux', text: 'Gas… creo que así no.' },
+    { who: 'Marc', text: 'Vale. Esta noche no se cocina.' },
+  ] as Line[],
+  campHint: { gasolinera: 'La gasolinera está ahí al lado, junto a la carretera.', estufa: 'La estufa de pellets, la del rincón de la cabaña.' },
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
   terrace: [
     { who: 'Narrador', text: 'La terraza de El Ancla.' },

@@ -1,13 +1,14 @@
 // Fotos y stickers sacados de nuestro chat. Cada capítulo desbloquea sus recuerdos en el álbum.
-import { CHATS, type ChatMsg } from './chats';
-import ruta from '../assets/recuerdos/ruta.jpg';
-import trenes from '../assets/recuerdos/trenes.jpg';
+import type { ChatMsg } from './chats';
 import vueloLpa from '../assets/recuerdos/vuelo-lpa.jpg';
 import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 import carnaval from '../assets/recuerdos/carnaval.jpg';
 import caballos from '../assets/recuerdos/caballos.jpg';
 import santJoan from '../assets/recuerdos/sant-joan.jpg';
 import santJoanSelfie from '../assets/recuerdos/sant-joan-selfie.jpg';
+import marcialFoto from '../assets/recuerdos/marcial.jpg';
+import torreznos from '../assets/recuerdos/torreznos.jpg';
+import cabana from '../assets/recuerdos/cabana.jpg';
 import ferreriesSelfie from '../assets/recuerdos/ferreries-selfie.jpg';
 import ferreriesVideo from '../assets/recuerdos/ferreries-video.mp4';
 import ferreriesPoster from '../assets/recuerdos/ferreries-video.jpg';
@@ -35,12 +36,9 @@ export interface Memory {
 export const MEMORIES: Memory[] = [
   { level: 1, src: ferreriesSelfie, caption: 'Ferreries, 25 de agosto. Purpurina y pomada.' },
   { level: 1, src: ferreriesPoster, video: ferreriesVideo, caption: 'El jaleo, en directo.' },
-  { level: 3, src: ruta, caption: 'El planning. «A coruña es muy ambicioso.»' },
-  { level: 3, src: trenes, caption: 'Barcelona ⇄ Atocha. Lo demás, en tu coche.' },
-  { level: 3, pending: true, caption: 'Cafetería Marcial. La primera con M.' },
-  { level: 3, chat: CHATS.vuelta.msgs, caption: '3 de noviembre, de vuelta a Barcelona' },
-  { level: 3, chat: CHATS.zamburinasCumple.msgs, caption: '28 de noviembre de 2025' },
-  { level: 3, chat: CHATS.sanVicente.msgs, caption: '«Ya sabes dónde se quedó mi corazón»' },
+  { level: 3, src: marcialFoto, caption: 'Cafetería Marcial. La primera con M.' },
+  { level: 3, src: torreznos, caption: 'Y sus torreznos.' },
+  { level: 3, src: cabana, caption: 'La cabaña. Sin gas, pero con cama.' },
   { level: 4, src: vueloLpa, caption: '«VOY TARDEEEE?!» «tu vas pronto»' },
   { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
   { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },

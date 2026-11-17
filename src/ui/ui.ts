@@ -1513,10 +1513,16 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   root.append(o);
   type Item = { kind: 'date'; text: string } | { kind: 'msg'; me: boolean; t: string; text: string; first: boolean };
   const items: Item[] = [];
+  // (varios trozos del mismo día: la fecha una sola vez; entre trozos, la hora si hay un salto, como en el chat real)
+  let prevDate = '';
+  let last = -1;
   for (const f of frags) {
-    items.push({ kind: 'date', text: f.date });
+    if (f.date !== prevDate) {
+      items.push({ kind: 'date', text: f.date });
+      last = -1;
+    }
+    prevDate = f.date;
     let prev: boolean | null = null;
-    let last = -1;
     for (const m of f.msgs) {
       // Un salto de horas entre dos mensajes se marca: en un chat real no se escribe todo de seguido
       const [h, mi] = m.t.split(':').map(Number);

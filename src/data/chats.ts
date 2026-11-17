@@ -4,6 +4,274 @@ export interface ChatMsg { me: boolean; t: string; text: string }
 export interface ChatFrag { date: string; contact: string; msgs: ChatMsg[] }
 
 export const CHATS = {
+ "planning24": {
+  "date": "24 de octubre de 2025",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "15:44",
+    "text": "Buenas tardesss!! Paso borrador de planning hahaha. Si ayer era coña ya vas tarde… hahahaha<br><br>1. Jueves noche llego a Madrid. Pasamos noche en tu casa. Obligatorio helado.<br>2. Viernes por la mañana teletrabajo en tu casa hasta las 14 (tu haz lo que quieras hahaha)<br>3. Recogemos moto a las 15<br>4. Ruta:<br>   4.1 Llegar oporto Viernes Noche. Dormir Oporto.<br>   4.2 Ver oporto por la mañana. Salir de oporto mediodia. Llegar a A Coruña Sabado Noche.<br>   4.3 Salir de fiesta en A Coruña, dormir.<br>   4.4 Ver A Coruña por la mañana. Salir de A Coruña mediodia. Llegar Madrid noche. Dormir en tu casa.<br>4.5 Me cojo primer tren hacia Barcelona."
+   },
+   {
+    "me": false,
+    "t": "15:45",
+    "text": "PD: A coruña es muy ambicioso, talvez nos tenemos que quedar en Vigo por timings que no nos da hahahaha"
+   },
+   {
+    "me": true,
+    "t": "20:17",
+    "text": "Buenaaaaaaassssssssss"
+   },
+   {
+    "me": true,
+    "t": "20:17",
+    "text": "Me encanta el planning me parece epico! Pero una cosa, puede que llueva.. y si fueramos en coche seria tan mal? Yo tengo uno 🤓"
+   },
+   {
+    "me": true,
+    "t": "20:18",
+    "text": "Si vamos en coche igual no tan!"
+   },
+   {
+    "me": true,
+    "t": "20:18",
+    "text": "Que opinas"
+   },
+   {
+    "me": true,
+    "t": "20:43",
+    "text": "Y sino San Sebastian-Bilbao-Santander ?"
+   },
+   {
+    "me": false,
+    "t": "21:31",
+    "text": "Hagamos un pacto"
+   },
+   {
+    "me": false,
+    "t": "21:45",
+    "text": "Si no da lluvia moto, si da lluvia coshe"
+   },
+   {
+    "me": false,
+    "t": "21:48",
+    "text": "Que tengo un mono especial de moto y como me apetece asi ir mas pegaitos con el aire en la cara y por caminitos no solo autopista"
+   },
+   {
+    "me": false,
+    "t": "21:48",
+    "text": "Decision el Lunes"
+   },
+   {
+    "me": false,
+    "t": "21:48",
+    "text": "Pero 100% que vamos con uno de los dos transportes"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Compro vuelos y tal mañana"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Que creo que vendre dsd Menorca"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Planasssso joder que ganas y que random me parece increíble hahahhah"
+   },
+   {
+    "me": true,
+    "t": "21:59",
+    "text": "Ya ves…"
+   },
+   {
+    "me": true,
+    "t": "21:59",
+    "text": "Yaaaa pero hasta porto es una autopista linea recta ahahah"
+   },
+   {
+    "me": true,
+    "t": "21:59",
+    "text": "Y porque tantas ganas de ir a Oporto?"
+   },
+   {
+    "me": true,
+    "t": "21:59",
+    "text": "Dale perfe"
+   },
+   {
+    "me": true,
+    "t": "21:59",
+    "text": "Haahahha de locos, estoy flipando"
+   },
+   {
+    "me": false,
+    "t": "22:08",
+    "text": "Eso es trampa despues te paso pantallazo yo"
+   },
+   {
+    "me": false,
+    "t": "22:09",
+    "text": "Noooo!! Tengo caminitos!!"
+   },
+   {
+    "me": false,
+    "t": "22:09",
+    "text": "Porque mola cruzar fronteras y lo tengo pendiente peeero cualquier ciudad me va 100%… “el plan” es lo que mola"
+   },
+   {
+    "me": false,
+    "t": "22:10",
+    "text": "Hahahahahhah cuando te vea ahi me lo creere"
+   },
+   {
+    "me": false,
+    "t": "22:10",
+    "text": "Hasta entonses nada"
+   },
+   {
+    "me": true,
+    "t": "22:16",
+    "text": "Ahahahaha eso entiendo esta guayyy! Te dejo elegir oporto pero entonces en coche, y prometo pasar por caminitos tb ! 😌"
+   },
+   {
+    "me": true,
+    "t": "22:16",
+    "text": "O bueno tu pasas, si quieres conducir"
+   },
+   {
+    "me": true,
+    "t": "22:16",
+    "text": "Mientras tanto te espero en Madrid"
+   },
+   {
+    "me": false,
+    "t": "22:37",
+    "text": "Como negocias eh increible"
+   },
+   {
+    "me": false,
+    "t": "22:37",
+    "text": "Acepto PERO con otro trato"
+   },
+   {
+    "me": false,
+    "t": "22:37",
+    "text": "Algun dia vienes de ruta en moto"
+   },
+   {
+    "me": false,
+    "t": "22:37",
+    "text": "Acepto tambien"
+   },
+   {
+    "me": true,
+    "t": "22:49",
+    "text": "🤝🏻 hecho"
+   }
+  ]
+ },
+ "tuLoPierdo": {
+  "date": "30 de octubre de 2025",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "18:26",
+    "text": "Tu lo pierdo"
+   },
+   {
+    "me": false,
+    "t": "18:26",
+    "text": "Omgggg jdr"
+   },
+   {
+    "me": true,
+    "t": "18:32",
+    "text": "ES COÑA"
+   },
+   {
+    "me": true,
+    "t": "18:32",
+    "text": "no bromeas"
+   },
+   {
+    "me": true,
+    "t": "18:32",
+    "text": "😒😒😒😒"
+   },
+   {
+    "me": false,
+    "t": "18:33",
+    "text": "MUY JUSTO aun nose"
+   },
+   {
+    "me": false,
+    "t": "18:33",
+    "text": "Toy semaforo y lo tengo en 7’"
+   },
+   {
+    "me": true,
+    "t": "18:33",
+    "text": "A ver si el destino esta de nuestra parte"
+   },
+   {
+    "me": false,
+    "t": "18:39",
+    "text": "Bua"
+   },
+   {
+    "me": false,
+    "t": "18:39",
+    "text": "Estoy"
+   },
+   {
+    "me": true,
+    "t": "18:40",
+    "text": "Ahahaha"
+   },
+   {
+    "me": true,
+    "t": "18:40",
+    "text": "Reeeeeyyyyy"
+   },
+   {
+    "me": false,
+    "t": "18:41",
+    "text": "No me lo creo, que justo estoy CHORREANDO"
+   },
+   {
+    "me": true,
+    "t": "18:42",
+    "text": "HAHAAHHA"
+   },
+   {
+    "me": true,
+    "t": "18:42",
+    "text": "Pero logradooo"
+   }
+  ]
+ },
+ "findes": {
+  "date": "3 de noviembre de 2025",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": true,
+    "t": "6:01",
+    "text": "Ojalá todos los findes improvisados salieran así!! Gracias por hacer esta apuesta conmigo, lo pasé increíble y lo recordaré con mucho cariño 🫰🏼 <br>Que te vaya bien la vuelta a bcn (solo por unos dias) 😚"
+   },
+   {
+    "me": false,
+    "t": "8:49",
+    "text": "Ya casi llegando! <i>En veldá</i> ha sido súper! He estado muy comodo. Despues te paso dirección y algunas fotos tuyas que tengo, que no me acordé ayer. Sigue descansando! Bon dia! 😚"
+   }
+  ]
+ },
  "ferreriesTarde": {
   "date": "25 de agosto de 2025",
   "contact": "Marc",

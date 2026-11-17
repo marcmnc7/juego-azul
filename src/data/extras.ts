@@ -44,16 +44,8 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
     toTowels: [b('Gas', 'Mira qué cielo.'), b('Margaux', 'Soy una mujer con muchas sorpresas.')],
   },
   3: {
-    drive1: [
-      b('Marc', 'Si no da lluvia, moto. Si da lluvia, coshe.'),
-      b('Marc', 'Y lo del helado, eso sí que no te lo podré perdonar.'),
-      b('Margaux', 'Te invito a una cerve.'),
-      b('Marc', 'A una langosta.'),
-      b('Margaux', 'Muy bien. Humilde. Me gusta.'),
-      b('Marc', 'Caminitos, no solo autopista.'),
-    ],
+    // (conduciendo, nada de charla de fondo: solo las reacciones a lo que pasa en la carretera)
     camp: [b('Marc', 'Lo llevo todo. Cartas, hornillo…'), b('Margaux', '¿Seguro que todo?')],
-    drive2: [b('Gas', 'No habrá mejor zamburiña en el mundo.'), b('Margaux', 'Déjalo.'), b('Gas', 'Solo digo.')],
   },
   4: {
     airport: [

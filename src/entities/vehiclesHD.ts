@@ -95,7 +95,7 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
   const chrome = phys({ color: 0xc9ced4, metalness: 1, roughness: 0.22 });
   const rubber = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
   const lamp = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, emissive: 0xfff3d6, emissiveIntensity: 0.6, roughness: 0.1 });
-  const tail = new THREE.MeshStandardMaterial({ color: 0x8a0d10, emissive: 0xff1a1a, emissiveIntensity: 0.45, roughness: 0.25 });
+  const tail = new THREE.MeshStandardMaterial({ color: 0xa8141a, emissive: 0xff2020, emissiveIntensity: 0.95, roughness: 0.25 });
   const box = new THREE.BoxGeometry(1, 1, 1);
 
   // Carrocería hasta la línea de cintura: portón trasero casi vertical, capó corto y en pendiente
@@ -124,8 +124,13 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
   add(box, chrome, 0, 0.7, 2.19, 0.3, 0.05, 0.02);
   for (const sx of [-0.62, 0.62]) {
     add(box, lamp, sx, 0.74, 2.12, 0.42, 0.1, 0.06);
-    add(box, tail, sx, 0.86, -2.17, 0.4, 0.09, 0.05);
+    // Pilotos traseros grandes, que asoman del portón y doblan la esquina (antes, una raya metida en la chapa)
+    add(box, tail, sx, 0.86, -2.2, 0.46, 0.17, 0.07);
+    add(box, tail, sx * 1.45, 0.86, -2.02, 0.07, 0.17, 0.34);
+    add(box, plastic, sx, 0.86, -2.235, 0.48, 0.02, 0.01);
   }
+  // Tercera luz de freno, arriba del portón
+  add(box, tail, 0, 1.385, -1.83, 0.5, 0.04, 0.05);
   // Retrovisores y matrícula
   for (const sx of [-0.98, 0.98]) add(box, lacquer, sx, 1.08, 0.85, 0.16, 0.1, 0.1);
   add(box, new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.5 }), 0, 0.5, 2.22, 0.52, 0.11, 0.01);

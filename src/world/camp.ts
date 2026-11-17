@@ -3,7 +3,7 @@ import { Surf } from '../core/surfaces';
 import { audio } from '../core/audio';
 import { Sky, Sun, glowTexture, toon } from '../core/gfx';
 import { Lost } from '../core/lost';
-import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO, castLook } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
@@ -13,14 +13,15 @@ import type { Input } from '../core/input';
 import { Trail } from '../core/follow';
 import { beacon } from '../core/beacon';
 import { Door } from './door';
+import { canvasTex } from './deco';
 import type { Box2 } from './ferreries';
 
 // Capítulo 3, entre Cafetería Marcial y San Vicente: iba a ser cenita de camping (estrellas, cartas y
 // el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: en un claro
 // entre matorral y pinos, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
 
-export type CampSpot = 'mochila' | 'lena' | 'coche';
-const SPOT_LABEL: Record<CampSpot, string> = { mochila: '🎒 Mirar', lena: '🪵 Mirar', coche: '🚗 Maletero' };
+export type CampSpot = 'gasolinera' | 'estufa';
+const SPOT_LABEL: Record<CampSpot, string> = { gasolinera: '⛽ Preguntar', estufa: '🔥 Probar la estufa' };
 
 export class Camp {
   scene = new THREE.Scene();
@@ -28,6 +29,8 @@ export class Camp {
   private fx: Particles;
   readonly azul: Person;
   readonly gas: Person;
+  /** El de la gasolinera, en su ventanilla. */
+  private clerk: Person;
   private glow: THREE.Sprite;
   private t = 0;
   private lost = new Lost();
@@ -47,17 +50,25 @@ export class Camp {
   /** Centro de la mesa. */
   readonly table = new THREE.Vector3(0, 0.75, 0);
   /**
-   * Buscando el cartucho de gas (paso nuevo, [inventado]): la mochila, la leña y el maletero. No está en ninguno.
-   * onSearched: cada sitio mirado (y cuántos quedan). searchDone: mirados los tres.
+   * Sin gas (Gas contaba con comprarlo en la gasolinera de al lado): a pie a la gasolinera, que no tiene, y de vuelta
+   * a probar la estufa de pellets de la cabaña, que solo echa humo. searching: hay un sitio al que ir (active);
+   * onSearched: se ha llegado y se ha pulsado. El nivel decide qué viene después.
    */
   searching = false;
-  searchDone = false;
-  onSearched: ((key: CampSpot, left: number) => void) | null = null;
-  private spots: { key: CampSpot; at: THREE.Vector3; reach: number; done: boolean }[] = [
-    { key: 'mochila', at: new THREE.Vector3(-2.7, 0, 2.2), reach: 1.15, done: false },
-    { key: 'lena', at: new THREE.Vector3(2.2, 0, -4.15), reach: 1.15, done: false },
-    { key: 'coche', at: new THREE.Vector3(-10.9, 0, -7.45), reach: 1.7, done: false },
-  ];
+  active: CampSpot | null = null;
+  onSearched: ((key: CampSpot) => void) | null = null;
+  private spots: Record<CampSpot, { at: THREE.Vector3; reach: number }> = {
+    gasolinera: { at: new THREE.Vector3(9.4, 0, -8.1), reach: 1.8 },
+    estufa: { at: new THREE.Vector3(2.35, 0, 1.75), reach: 1.25 },
+  };
+  /** La estufa de pellets (para encuadrarla) y su humo. */
+  readonly pellet = new THREE.Vector3(2.75, 0.9, 2.45);
+  private puffs: { s: THREE.Sprite; t: number }[] = [];
+  private pot = new THREE.Group();
+  /** De pie junto a la estufa (sin andar ni sentarse). */
+  private standing = false;
+  private puffTex: THREE.Texture | null = null;
+  private smokeT = 0;
 
   constructor() {
     const sc = this.scene;
@@ -125,14 +136,29 @@ export class Camp {
     m.add(G.cyl, 0xb8bcc2, this.stove.x, 0.89, this.stove.z, 0, 0, 0, 0.17, 0.12, 0.17);
     // Base del farolillo
     m.add(G.cyl, 0x333333, -0.32, 0.76, 0.16, 0, 0, 0, 0.08, 0.04, 0.08);
-    // La mochila de Gas, en el rincón del fondo (abierta, con un jersey asomando)
+    // La estufa de pellets, en el rincón: cuerpo negro con su ventanita hacia la sala, tolva arriba y el tubo
     {
-      const [bx, bz] = [-2.75, 2.45];
-      m.add(G.rbox, 0x55613a, bx, 0.25, bz, -0.12, 0.4, 0, 0.36, 0.48, 0.22);
-      m.add(G.rbox, 0x48532f, bx, 0.47, bz - 0.04, -0.5, 0.4, 0, 0.34, 0.06, 0.2); // solapa caída
-      m.add(G.rbox, 0x48532f, bx - 0.05, 0.18, bz - 0.12, -0.12, 0.4, 0, 0.24, 0.2, 0.06); // bolsillo
-      m.add(G.rbox, 0xb0302c, bx + 0.02, 0.5, bz + 0.03, 0.3, 0.4, 0, 0.22, 0.06, 0.12); // jersey
-      for (const sx of [-0.1, 0.1]) m.add(G.box, 0x2a2a22, bx + sx * Math.cos(0.4), 0.3, bz + 0.12 - sx * Math.sin(0.4), -0.12, 0.4, 0, 0.04, 0.42, 0.02); // tirantes
+      const [px, pz] = [this.pellet.x, this.pellet.z];
+      m.add(G.rbox, 0x26282c, px, 0.5, pz, 0, 0, 0, 0.55, 1.0, 0.5);
+      m.add(G.box, 0x5a2a10, px - 0.02, 0.5, pz - 0.255, 0, 0, 0, 0.3, 0.3, 0.02); // ventanita
+      m.add(G.box, 0x9a9ca0, px - 0.02, 0.5, pz - 0.262, 0, 0, 0, 0.34, 0.03, 0.01);
+      m.add(G.box, 0x1a1b1e, px, 1.02, pz, 0, 0, 0, 0.5, 0.05, 0.46);
+      m.add(G.cyl, 0x2f3136, px + 0.1, 1.9, pz + 0.1, 0, 0, 0, 0.13, 1.75, 0.13);
+      m.add(G.box, 0x6b4a2e, px - 0.62, 0.14, pz + 0.05, 0, 0.3, 0, 0.4, 0.28, 0.3); // saco de pellets
+      this.colliders.push({ minX: px - 0.32, maxX: px + 0.32, minZ: pz - 0.3, maxZ: pz + 0.3 });
+    }
+    // La gasolinera de al lado del camping: marquesina, un surtidor y la caseta con su ventanilla
+    {
+      const [gx, gz] = [9.6, -10.6];
+      m.add(G.box, 0xf2f0ea, gx, 1.3, gz, 0, 0, 0, 3.2, 2.6, 2.4);
+      m.add(G.box, 0x1d6b3a, gx, 2.7, gz, 0, 0, 0, 3.5, 0.3, 2.7);
+      m.add(G.box, 0x2a3440, gx - 0.6, 1.35, gz + 1.22, 0, 0, 0, 1.4, 0.9, 0.06); // ventanilla
+      m.add(G.box, 0x7a6a58, gx - 0.6, 0.88, gz + 1.3, 0, 0, 0, 1.5, 0.06, 0.25); // repisa
+      for (const [dx, dz] of [[-2.6, 2.2], [-0.4, 3.0]]) m.add(G.cyl, 0xd8d8d0, gx + dx, 1.6, gz + dz, 0, 0, 0, 0.14, 3.2, 0.14);
+      m.add(G.box, 0x1d6b3a, gx - 1.5, 3.25, gz + 2.6, 0, 0, 0, 3.6, 0.3, 2.2); // marquesina
+      m.add(G.rbox, 0xd7263d, gx - 1.7, 0.75, gz + 3.0, 0, 0, 0, 0.55, 1.5, 0.4); // surtidor
+      m.add(G.box, 0x1a1a1a, gx - 1.7, 1.15, gz + 3.21, 0, 0, 0, 0.36, 0.25, 0.02);
+      this.colliders.push({ minX: gx - 1.8, maxX: gx + 1.8, minZ: gz - 1.4, maxZ: gz + 1.3 }, { minX: gx - 2.05, maxX: gx - 1.35, minZ: gz + 2.7, maxZ: gz + 3.3 });
     }
     sc.add(m.mesh());
 
@@ -160,6 +186,42 @@ export class Camp {
       this.sparks.push(sp);
       sc.add(sp);
     }
+
+    // El rótulo de la marquesina
+    {
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.4, 0.28),
+        new THREE.MeshBasicMaterial({
+          map: canvasTex((ctx, w, h) => {
+            ctx.fillStyle = '#1d6b3a';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#f4f1e4';
+            ctx.font = `800 ${h * 0.62}px Georgia, serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('GASOLINERA · 24 H', w / 2, h * 0.54);
+          }, 512, 42),
+        }),
+      );
+      sign.position.set(9.6 - 1.5, 3.25, -10.6 + 3.71);
+      sc.add(sign);
+    }
+    // La olla, que solo aparece encima de la estufa cuando se intenta cocinar ahí
+    {
+      const pm = new Merger(false);
+      pm.add(G.cyl, 0xb8bcc2, 0, 0.11, 0, 0, 0, 0, 0.3, 0.2, 0.3);
+      pm.add(G.box, 0x2a2a2a, 0.2, 0.17, 0, 0, 0, 0, 0.12, 0.03, 0.04);
+      pm.add(G.box, 0x2a2a2a, -0.2, 0.17, 0, 0, 0, 0, 0.12, 0.03, 0.04);
+      this.pot.add(pm.mesh());
+      this.pot.position.set(this.pellet.x - 0.05, 1.045, this.pellet.z - 0.05);
+      this.pot.visible = false;
+      sc.add(this.pot);
+    }
+    this.clerk = makePerson(castLook({ skin: 0xe2b08c, shirt: 0x1d6b3a, pants: 0x2a2a2a, hair: 0x3a2a1c, hairStyle: 'short', male: true, beard: true }, 'camarero_laurel'));
+    // (en la puerta de la caseta, junto a la ventanilla)
+    this.clerk.root.position.set(9.6 + 0.75, 0, -10.6 + 1.65);
+    this.clerk.root.rotation.y = -0.5;
+    sc.add(this.clerk.root);
 
     // Azul y Gas, sentados uno frente al otro
     this.azul = makePerson(AZUL_DIARIO);
@@ -235,26 +297,72 @@ export class Camp {
     this.walker.yaw = this.walker.facing = 0.2;
     this.gasTrail = new Trail();
     this.inside = false;
-    this.searching = this.searchDone = false;
+    this.searching = false;
+    this.active = null;
     camera.position.set(-2, 3, -12.5);
   }
 
-  /** El hornillo no enciende: ella se levanta a buscar el cartucho; él se queda en la mesa. */
-  startSearch() {
+  /** Hay que ir a un sitio (la gasolinera, luego la estufa): andando, y Gas detrás. */
+  startSearch(key: CampSpot) {
     this.searching = true;
-    this.searchDone = false;
-    for (const s of this.spots) s.done = false;
-    this.azul.root.position.set(-1.3, 0, -0.75);
-    this.azul.root.rotation.set(0, Math.PI, 0);
-    this.walker = new Walker(this.azul.root.position);
-    this.walker.yaw = this.walker.facing = Math.PI;
+    this.active = key;
+    if (!this.walker) {
+      this.azul.root.position.set(-1.3, 0, -0.75);
+      this.azul.root.rotation.set(0, Math.PI, 0);
+      this.gas.root.position.set(0.9, 0, -0.4);
+      this.gas.root.rotation.set(0, Math.PI, 0);
+      this.walker = new Walker(this.azul.root.position);
+      this.walker.yaw = this.walker.facing = Math.PI;
+      this.gasTrail = new Trail();
+    }
     this.lost.reset();
+  }
+
+  /** Humo de la estufa: bocanadas grises que suben y se deshacen. */
+  smoke(secs = 5) {
+    this.smokeT = secs;
+    this.pot.visible = true;
+  }
+
+  /** Nubecilla de tebeo para el humo: bolas que se juntan, blancas con su raya de tinta (se tiñen de gris). */
+  private puffTexture() {
+    if (!this.puffTex)
+      this.puffTex = canvasTex((ctx, w, h) => {
+        ctx.clearRect(0, 0, w, h);
+        const blobs: [number, number, number][] = [[0.5, 0.56, 0.26], [0.32, 0.6, 0.18], [0.68, 0.6, 0.18], [0.42, 0.38, 0.2], [0.6, 0.4, 0.17]];
+        ctx.fillStyle = '#2b2233';
+        for (const [x, y, r] of blobs) {
+          ctx.beginPath();
+          ctx.arc(x * w, y * h, r * w + 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#ffffff';
+        for (const [x, y, r] of blobs) {
+          ctx.beginPath();
+          ctx.arc(x * w, y * h, r * w, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }, 128, 128);
+    return this.puffTex;
+  }
+
+  /** Para el plano de la estufa: ella y él, a un lado, mirándola. */
+  standAtPellet() {
+    this.walker = null;
+    this.searching = false;
+    this.standing = true;
+    this.azul.root.position.set(1.85, 0, 2.45);
+    this.azul.root.rotation.set(0, Math.atan2(this.pellet.x - 1.85, this.pellet.z - 2.45), 0);
+    this.gas.root.position.set(2.75, 0, 1.5);
+    this.gas.root.rotation.set(0, Math.atan2(this.pellet.x - 2.75, this.pellet.z - 1.5), 0);
   }
 
   /** Dentro: cada uno a su silla. */
   sitDown() {
     this.walker = null;
     this.searching = false;
+    this.active = null;
+    this.standing = false;
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.44), 0);
       p.root.rotation.y = -sx * Math.PI / 2;
@@ -291,36 +399,25 @@ export class Camp {
       this.azul.root.rotation.y = w.facing;
       animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
       this.who.length = 0;
-      if (this.searching || this.searchDone) {
-        // Él, sentado a la mesa con el hornillo; ella, mirando por todas partes
-        this.sit(this.gas);
-        this.gas.armR.rotation.x = -0.9;
-        this.who.push(pp);
-      } else {
-        const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
-        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
-        this.who.push(pp, this.gas.root.position);
-      }
+      const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
+      animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      this.who.push(pp, this.gas.root.position);
       this.door.update(dt, this.who, camera.position);
-      // Buscando: el sitio que tienes al lado, con su botón
-      const left = this.spots.filter((s) => !s.done);
-      const near = this.searching ? left.find((s) => Math.hypot(pp.x - s.at.x, pp.z - s.at.z) < s.reach) : undefined;
-      if (this.searching) hud.setAction(near ? SPOT_LABEL[near.key] : null, !!near);
+      // A dónde hay que ir: al llegar, su botón
+      const sp = this.searching && this.active ? this.spots[this.active] : null;
+      const near = !!sp && Math.hypot(pp.x - sp.at.x, pp.z - sp.at.z) < sp.reach;
+      if (this.searching) hud.setAction(near ? SPOT_LABEL[this.active!] : null, near);
       if (near && input && input.consumeAction()) {
-        near.done = true;
+        const key = this.active!;
+        this.searching = false;
         audio.pop();
-        const n = left.length - 1;
-        if (!n) {
-          this.searching = false;
-          this.searchDone = true;
-          hud.setAction(null);
-        }
-        this.onSearched?.(near.key, n);
+        hud.setAction(null);
+        this.onSearched?.(key);
       }
       // Pistas, solo si se ha perdido (40 s sin avanzar): la flecha y la columna sobre la puerta o el sitio que falta
-      const goal = this.searching ? left.slice().sort((a, b) => pp.distanceTo(a.at) - pp.distanceTo(b.at))[0]?.at ?? null : pp.z < -3.6 ? this.v.set(0, 0, -3) : null;
-      if (this.lost.tick(this.searching ? `search${left.length}` : 'cabin', dt, !input) && goal) {
-        const ang = Math.atan2(goal.x - pp.x, (this.searching ? goal.z : -2) - pp.z);
+      const goal = sp ? sp.at : !this.searching && pp.z < -3.6 && !this.inside ? this.v.set(0, 0, -3) : null;
+      if (this.lost.tick(this.searching ? `go-${this.active}` : 'cabin', dt, !input) && goal) {
+        const ang = Math.atan2(goal.x - pp.x, (sp ? goal.z : -2) - pp.z);
         const rel = Math.atan2(Math.sin(ang - w.yaw), Math.cos(ang - w.yaw));
         hud.setArrow(pp.distanceTo(goal) < 1.6 ? null : -rel);
         beacon.at(pp.distanceTo(goal) < 1.6 ? null : goal);
@@ -332,6 +429,10 @@ export class Camp {
       if (pp.z > -2 && Math.abs(pp.x) < 3 && !this.inside) this.inside = true;
       const indoor = pp.z > -3.4 && Math.abs(pp.x) < 3.4;
       w.camera(camera, dt, this.colliders, indoor ? 2.6 : 5.5, indoor ? 1.9 : 2.8);
+    } else if (this.standing) {
+      animatePerson(this.azul, dt, 'idle');
+      animatePerson(this.gas, dt, 'idle');
+      this.door.update(dt, this.who.slice(0, 0), camera.position);
     } else {
       this.sit(this.azul);
       this.sit(this.gas);
@@ -339,6 +440,31 @@ export class Camp {
       // Él con la mano en el hornillo; ella con las cartas
       this.gas.armR.rotation.x = -0.9 + Math.sin(this.t * 1.7) * 0.04;
       this.azul.armL.rotation.x = -0.7;
+    }
+    animatePerson(this.clerk, dt, 'idle');
+    // El humo de la estufa de pellets
+    if (this.smokeT > 0) {
+      this.smokeT -= dt;
+      if (Math.random() < dt * 9) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.puffTexture(), color: 0x9a9a9a, transparent: true, depthWrite: false, opacity: 0.95 }));
+        sp.position.set(this.pellet.x + (Math.random() - 0.5) * 0.25, 1.15, this.pellet.z - 0.05 + (Math.random() - 0.5) * 0.25);
+        sp.scale.setScalar(0.3);
+        this.scene.add(sp);
+        this.puffs.push({ s: sp, t: 0 });
+      }
+    }
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      const p = this.puffs[i];
+      p.t += dt;
+      p.s.position.y += dt * 0.45;
+      p.s.position.x -= dt * 0.12;
+      p.s.scale.setScalar(0.3 + p.t * 0.55);
+      p.s.material.opacity = Math.max(0, 0.95 - p.t * 0.33);
+      if (p.t > 2.8) {
+        this.scene.remove(p.s);
+        p.s.material.dispose();
+        this.puffs.splice(i, 1);
+      }
     }
     if (this.sparkT > 0) {
       this.sparkT -= dt;

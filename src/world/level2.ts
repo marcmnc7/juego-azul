@@ -189,6 +189,9 @@ export class Level2 implements Level {
   private camp: Camp | null = null;
   private campDone = false;
   private campHintT = 0;
+  /** El último punto bueno del viaje (la salida, la última vaca saludada, el camping): si se pasa de largo, se vuelve ahí. */
+  private checkpoint = 0;
+  private rewinding = false;
   /** Logroño, de fiesta. */
   private laurel: Laurel | null = null;
   private cowIdx = 0;
@@ -200,8 +203,8 @@ export class Level2 implements Level {
   private hud: Hud;
   private fx: Particles;
   private phase: Phase = 'intro';
-  // Su Ford Focus gris: conduce ella («el tuyo. Y conduces tú») y Marc va de copiloto
-  private car = makeCar(0x8d9298, { joy: false, driver: AZUL_DIARIO, passenger: GAS_DIARIO });
+  // Su Ford Focus gris: el coche es de ella, pero conduce él (y ella va de copiloto)
+  private car = makeCar(0x8d9298, { joy: false, driver: GAS_DIARIO, passenger: AZUL_DIARIO });
   private carZ = 0;
   private carX = 0;
   private carVX = 0;
@@ -391,9 +394,9 @@ export class Level2 implements Level {
     later(() => {
       if (this.phase !== 'intro') return;
       dialogue(ROAD.intro, () =>
-        phoneChat(CHATS.pacto, () =>
+        phoneChat(CHATS.planning24, () =>
           dialogue(ROAD.introTrain, () =>
-            phoneChat([CHATS.muyJusto, CHATS.helado, CHATS.aparcao], () =>
+            phoneChat([CHATS.tuLoPierdo, CHATS.helado, CHATS.aparcao], () =>
               dialogue(ROAD.introGo, () => {
                 // (si en el modo prueba ya se ha saltado a otra fase, no volver a la salida de Madrid)
                 if (this.phase !== 'intro') return;
@@ -879,12 +882,12 @@ export class Level2 implements Level {
     this.wet += (want - this.wet) * Math.min(1, dt * 1.5);
     if (drive && this.stormSaid === 0 && want > 0.3) {
       this.stormSaid = 1;
-      bark('Margaux', ROAD.storm, 'l');
+      bark('Margaux', ROAD.storm, 'r');
       audio.warn();
       vibrate(40);
     } else if (drive && this.stormSaid === 1 && z > STORM_Z1 - 10) {
       this.stormSaid = 2;
-      bark(this.him(), ROAD.stormOff, 'r');
+      bark(this.him(), ROAD.stormOff, 'l');
     }
     if (this.wet > 0.004 || this.rain?.visible) {
       if (!this.rain) {
@@ -934,11 +937,10 @@ export class Level2 implements Level {
       const before = this.camp.inside;
       this.camp.update(dt, this.camera, this.busy ? null : this.input, this.hud);
       if (this.camp.inside && !before) this.campInside();
-      if (this.camp.searchDone && !this.busy) this.campConfess();
-      // Buscando el cartucho: si tarda, él le dice dónde mirar
-      if (this.camp.searching && !this.busy && (this.campHintT += dt) > 26) {
+      // Si tarda, él le dice a dónde ir
+      if (this.camp.searching && this.camp.active && !this.busy && (this.campHintT += dt) > 26) {
         this.campHintT = 0;
-        bark('Marc', ROAD.campHint);
+        bark('Marc', ROAD.campHint[this.camp.active]);
       }
       return;
     }
@@ -969,8 +971,9 @@ export class Level2 implements Level {
     // Velocidad
     this.turboT -= dt;
     const turbo = drive && this.turboT > 0 && this.hitT <= 0;
-    const target = drive ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
-    this.speed += (target - this.speed) * Math.min(1, dt * (drive ? (turbo ? 2.5 : 1.2) : 2.5));
+    // (volviendo al último punto bueno: frena en seco, antes de llegar a la vaca)
+    const target = drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
     // Sensación de velocidad: el plano se abre con el turbo
@@ -1089,7 +1092,7 @@ export class Level2 implements Level {
         } else if (th.kind === 'smoke') {
           this.photos = Math.max(0, this.photos - 1);
           audio.boo();
-          bark(this.him(), ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)], 'r');
+          bark(this.him(), ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)], 'l');
           this.fx.burst(at, '💨', 5, 1.5);
         } else if (this.hitT <= 0) {
           this.hitT = 1.2;
@@ -1103,7 +1106,7 @@ export class Level2 implements Level {
           vibrate(120);
           this.fx.burst(at, '💥', 4, 1.6);
           comicWord(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)], 'hit');
-          if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'r'), 500);
+          if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'l'), 500);
         }
         this.updateHud();
       } else if (drive && th.kind === 'obstacle' && !th.passed && th.z < this.carZ - 2.5) {
@@ -1181,12 +1184,13 @@ export class Level2 implements Level {
     if (!['drive1', 'drive2', 'cow', 'marcial', 'arriveSV'].includes(this.phase) && !(this.phase === 'logrono' && !this.laurel)) return null;
     const her = who === 'Margaux' || who === 'Azul';
     if (!her && !['Gas', 'Marc'].includes(who)) return null;
-    return this.car.body.localToWorld(new THREE.Vector3(her ? 0.4 : -0.4, 1.6, -0.25));
+    // (conduce él, a la izquierda: ella va de copiloto, a la derecha)
+    return this.car.body.localToWorld(new THREE.Vector3(her ? -0.4 : 0.4, 1.6, -0.25));
   }
 
   speakerSide(who: string): 'l' | 'r' | undefined {
     if (who === 'Camarero') return undefined;
-    return who === 'Margaux' || who === 'Azul' ? 'l' : 'r';
+    return who === 'Margaux' || who === 'Azul' ? 'r' : 'l';
   }
 
   private tapGrill(e: PointerEvent) {
@@ -1281,10 +1285,10 @@ export class Level2 implements Level {
       this.scene.add(this.roadCow.root);
     }
     if (d < COW_BRAKE) {
-      bark(this.him(), ROAD.cowMissed, 'r');
-      this.photos = Math.max(0, this.photos - 1);
-      audio.boo();
-      this.stopForCow();
+      if (!this.rewinding) {
+        audio.boo();
+        this.rewind(ROAD.cowMissed);
+      }
     } else if (d < COW_NEAR) {
       this.hud.setAction(ROAD.cowBtn, false);
       if (acted) this.stopForCow();
@@ -1297,7 +1301,32 @@ export class Level2 implements Level {
     this.cowLeaving = false;
   }
 
+  /** Se ha pasado de largo un sitio donde había que parar: Gas lo dice y se vuelve al último punto bueno. */
+  private rewind(line: string) {
+    this.rewinding = true;
+    this.busy = true;
+    this.hud.setAction(null);
+    bark(this.him(), line, 'l');
+    later(() =>
+      fadeFlash(() => {
+        const cp = Math.max(this.checkpoint, this.phase === 'drive2' ? this.legStart : 0);
+        // (los restaurantes de después vuelven a contar)
+        for (const e of EATERIES) if (e.z > cp) this.eateryTried.delete(e.name);
+        this.dropCow();
+        this.reset(cp);
+        this.speed = 0;
+        this.lane = 1;
+        this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+        this.busy = false;
+        this.rewinding = false;
+        this.updateHud();
+        bark(this.him(), ROAD.rewind, 'l');
+      }, 500),
+    1300);
+  }
+
   private stopForCow() {
+    this.checkpoint = COW_Z[this.cowIdx] ?? this.carZ;
     this.cowFrom = this.phase;
     this.phase = 'cow';
     this.lane = 1;
@@ -1354,7 +1383,7 @@ export class Level2 implements Level {
     1200);
   }
 
-  /** Ya dentro de la cabaña: se sientan a la mesa y el hornillo no enciende. Ella se levanta a buscar el cartucho. */
+  /** Ya dentro de la cabaña: se sientan a la mesa, el hornillo sin cartucho, y a la gasolinera de al lado a por gas. */
   private campInside() {
     const c = this.camp!;
     this.busy = true;
@@ -1366,21 +1395,18 @@ export class Level2 implements Level {
       c.sitDown();
       this.hud.setObjective('');
       cinema.play([
-        // El hornillo: clic, clic, clic… y nada
-        { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove, at: () => c.tryStove() },
+        // El hornillo en la mesa, con su olla… y sin cartucho
+        { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove },
       ]);
       later(() =>
-        dialogue(ROAD.campNoLight, () =>
+        dialogue(ROAD.campStove, () =>
           fadeFlash(() => {
             cinema.stop();
-            c.startSearch();
-            c.onSearched = (key) => {
-              this.campHintT = 0;
-              bark('Margaux', ROAD.campSearch[key]);
-            };
+            c.onSearched = (key) => (key === 'gasolinera' ? this.campStation() : this.campPellet());
+            c.startSearch('gasolinera');
             this.campHintT = 0;
             this.input.reset();
-            this.hud.setObjective('🔦');
+            this.hud.setObjective('⛽');
             this.busy = false;
           }, 400),
         ),
@@ -1388,8 +1414,22 @@ export class Level2 implements Level {
     }, 500);
   }
 
-  /** Mirado todo: vuelve a la mesa y él lo confiesa. De ahí el nombre. A la mañana siguiente, carretera otra vez. */
-  private campConfess() {
+  /** En la gasolinera: no tienen. Plan B, la estufa de pellets de la cabaña. */
+  private campStation() {
+    this.busy = true;
+    this.input.reset();
+    this.hud.setArrow(null);
+    beacon.at(null);
+    dialogue(ROAD.gasStation, () => {
+      this.camp!.startSearch('estufa');
+      this.campHintT = 0;
+      this.hud.setObjective('🔥');
+      this.busy = false;
+    });
+  }
+
+  /** La estufa de pellets: humo, mucho humo, y no se cocina. De ahí el nombre. A la mañana siguiente, carretera. */
+  private campPellet() {
     const c = this.camp!;
     const [, noGas] = ROAD.camp;
     this.busy = true;
@@ -1397,40 +1437,50 @@ export class Level2 implements Level {
     this.hud.setAction(null);
     this.hud.setArrow(null);
     beacon.at(null);
-    later(() =>
-      fadeFlash(() => {
-        c.sitDown();
-        this.hud.setObjective('');
-        const mid = () => c.table.clone().setY(1.05);
-        // Los dos, frente a frente
-        cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
-        later(() =>
-          dialogue([...ROAD.campConfess, noGas], () => {
-            audio.fanfare();
-            // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
-            cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-            later(
-              () =>
-                dialogue(ROAD.campAfter, () =>
-                  fadeFlash(() => {
-                    cinema.stop();
-                    audio.stopMusic();
-                    audio.startMusic('road');
-                    this.route.style.display = '';
-                    this.busy = false;
-                    this.speed = 0;
-                    this.phase = 'drive1';
-                    this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
-                    this.nextSpawn = this.carZ + 60;
-                    this.updateHud();
-                  }, 500),
-                ),
-              3800,
-            );
-          }),
-        900);
-      }, 500),
-    1400);
+    this.hud.setObjective('');
+    c.standAtPellet();
+    const look = c.pellet.clone().setY(1.15);
+    cinema.play([{ dur: Infinity, move: 5, pos: new THREE.Vector3(0.0, 1.75, -0.6), pos2: new THREE.Vector3(0.4, 1.7, -0.2), look, fov: 50, focus: look }]);
+    dialogue(ROAD.pelletTry, () => {
+      c.smoke(6);
+      audio.warn();
+      later(() =>
+        dialogue(ROAD.pelletFail, () =>
+          fadeFlash(() => {
+            c.sitDown();
+            const mid = () => c.table.clone().setY(1.05);
+            // Los dos, frente a frente, sin cena
+            cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
+            later(() =>
+              dialogue([noGas], () => {
+                audio.fanfare();
+                // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
+                cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+                later(
+                  () =>
+                    dialogue(ROAD.campAfter, () =>
+                      fadeFlash(() => {
+                        cinema.stop();
+                        audio.stopMusic();
+                        audio.startMusic('road');
+                        this.route.style.display = '';
+                        this.busy = false;
+                        this.speed = 0;
+                        this.phase = 'drive1';
+                        this.checkpoint = this.carZ;
+                        this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+                        this.nextSpawn = this.carZ + 60;
+                        this.updateHud();
+                      }, 500),
+                    ),
+                  3800,
+                );
+              }),
+            900);
+          }, 500),
+        ),
+      2600);
+    });
   }
 
   /** Logroño, de fiesta. Y al acabar, la vuelta en tren y el nombre: los chats de esos días. */
@@ -1470,7 +1520,7 @@ export class Level2 implements Level {
                     cinema.stop();
                     audio.stopMusic();
                     // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
-                    phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => dialogue(ROAD.named, () => this.finish()));
+                    phoneChat(CHATS.findes, () => dialogue(ROAD.named, () => this.finish()));
                   }),
                 4200);
               }),
@@ -1601,20 +1651,18 @@ export class Level2 implements Level {
         if (near.m) this.stopMarcial();
         else {
           audio.boo();
-          bark(this.him(), ROAD.notM(near.name), 'r');
+          bark(this.him(), ROAD.notM(near.name), 'l');
           this.hud.setAction(null);
         }
       }
     } else this.hud.setAction(null);
-    // Si se pasa de largo, Gas frena igualmente: es la primera con M
-    if (!this.marcialDone && this.carZ > MARCIAL_Z + 6) {
-      bark(this.him(), ROAD.missedM, 'r');
-      this.stopMarcial();
-    }
+    // Si se pasa de largo: no vale, vuelta al último punto bueno
+    if (!this.marcialDone && !this.rewinding && this.carZ > MARCIAL_Z + 6) this.rewind(ROAD.missedM);
   }
 
   private stopMarcial() {
     this.marcialDone = true;
+    this.checkpoint = MARCIAL_Z + 8;
     this.phase = 'marcial';
     this.hud.setAction(null);
     this.showLaneButtons(false);

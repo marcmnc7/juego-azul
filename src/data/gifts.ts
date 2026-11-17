@@ -27,12 +27,12 @@ export const GIFTS: Gift[] = [
     howToRedeem: 'El día que tú elijas. Enséñale este vale a Gas.',
   },
   {
-    id: 'cena',
+    id: 'mascarillas',
     level: 3,
-    icon: '🍽️',
-    title: 'Una cena en un buen restaurante',
-    description: 'Una cena de las buenas, con mantel y todo. Si hay zamburiñas en la carta, mejor.',
-    howToRedeem: 'Enséñale este vale a Gas. El restaurante, sorpresa.',
+    icon: '🧖‍♀️',
+    title: 'Un pack de mascarillas para la cara',
+    description: 'Para repetir el plan: mascarilla, sofá y nada más que hacer.',
+    howToRedeem: 'Enséñale este vale a Gas y elegid la noche.',
   },
   {
     id: 'carnaval',
