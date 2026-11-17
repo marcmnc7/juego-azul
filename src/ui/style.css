@@ -1581,3 +1581,50 @@ html, body { background: #000; }
 }
 .dn-body .result-stats span { font: 800 10px/1.2 var(--font); letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 248, 236, .55); }
 .dn-body .result-stats b { font: 600 22px/1 var(--serif); color: var(--cream); }
+
+/* =====================================================================================================
+   HUD final (noviembre de 2026): una sola barra arriba (objetivo, contadores y pausa), textos más compactos,
+   el tutorial junto al pulgar y los rótulos de misión más breves.
+   ===================================================================================================== */
+.hud-top { align-items: flex-start; }
+.hud-top .counters { position: static; top: auto; right: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px; }
+.hud-top .counters .chip { font-size: 12px; padding: 3px 9px; }
+#ui.mission .hud-top:not(.m-hud) .counters { display: none !important; }
+.objective.open { max-width: min(62vw, 380px); }
+
+/* Tutorial: cada paso señala su sitio y el texto va al lado, sin tapar el objetivo */
+.tuto.step0 .tuto-ring { left: 26vw; top: 74dvh; }
+.tuto.step0 .tuto-hand { left: calc(26vw - 12px); top: calc(74dvh - 4px); animation: tutoDrag 1.9s ease-in-out infinite; }
+.tuto.step0 .tuto-bubble { left: max(16px, env(safe-area-inset-left)); bottom: calc(26dvh + 72px); }
+.tuto.step1 .tuto-ring { left: 72vw; top: 52dvh; }
+.tuto.step1 .tuto-hand { left: calc(72vw - 12px); top: calc(52dvh - 4px); animation: tutoSwipe 2.1s ease-in-out infinite; }
+.tuto.step1 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); bottom: calc(48dvh + 72px); }
+.tuto.step2 .tuto-hand { animation: tutoTap 1s ease-in-out infinite; }
+.tuto.step2 .tuto-bubble { right: max(16px, env(safe-area-inset-right)); bottom: calc(max(22px, env(safe-area-inset-bottom) + 8px) + 124px); }
+
+/* Narrador y bocadillos: el mismo tebeo, más pequeño */
+.comic-mode .dialogue { width: min(540px, calc(100vw - 28px)); }
+.comic-mode .dialogue .text { font-size: 14px; line-height: 1.28; }
+.comic-mode .dialogue.who-narr:not(.speech) { width: min(440px, calc(100vw - 36px)); padding: 9px 16px 11px; }
+.comic-mode .dialogue.speech { max-width: min(270px, calc(100vw - 40px)); padding: 12px 18px 14px; }
+.comic-mode .dialogue.speech .text { font-size: 13.5px; }
+.comic-mode .bark { max-width: min(240px, 64vw); font-size: 12.5px; }
+
+/* Rótulo de misión: arriba, pequeño y breve */
+.mission-card { top: 15%; animation-duration: 2.5s; }
+.mission-card .m-title { font-size: clamp(21px, 6vw, 30px); }
+.mission-card .m-goal { font-size: 13.5px; }
+
+/* Rótulo de carga de cada capítulo, con su portada (como el menú) */
+.chapter-card { background: var(--night) !important; color: var(--cream); overflow: hidden; justify-content: flex-end !important; padding-bottom: calc(env(safe-area-inset-bottom) + 64px) !important; }
+.chapter-card .cc-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: hmKen 14s ease-in-out infinite alternate; }
+.chapter-card .cc-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12, 22, 38, .25) 0%, rgba(12, 22, 38, .1) 35%, rgba(12, 22, 38, .85) 72%, var(--night) 100%); }
+.chapter-card > :not(.cc-cover):not(.cc-shade) { position: relative; }
+.chapter-card .num { display: inline-block; padding: 7px 13px; border-radius: 999px; font: 800 11px/1 var(--font) !important; letter-spacing: .14em; text-transform: uppercase; color: var(--warm) !important; background: rgba(12, 22, 38, .55) !important; box-shadow: inset 0 0 0 1px rgba(255, 207, 122, .35) !important; border: 0 !important; }
+.chapter-card h1 { font: 600 clamp(36px, 11vw, 56px)/1 var(--serif) !important; color: var(--cream) !important; -webkit-text-stroke: 0 !important; text-shadow: 0 2px 20px rgba(0, 0, 0, .4) !important; margin: 10px 0 6px !important; }
+.chapter-card .place { font: italic 500 17px/1.3 var(--serif) !important; color: rgba(255, 248, 236, .82) !important; text-shadow: none !important; }
+.chapter-card .emoji { display: none; }
+.chapter-card .cc-load { margin-top: 22px; }
+.chapter-card .cc-bar { background: rgba(255, 255, 255, .15) !important; border: 0 !important; height: 5px !important; }
+.chapter-card .cc-fill { background: var(--warm) !important; }
+.chapter-card .cc-label { color: rgba(255, 248, 236, .6) !important; text-shadow: none !important; }

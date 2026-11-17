@@ -943,7 +943,11 @@ export function chapterCard(n: number): ChapterLoading {
   const label = el('div', 'cc-label', 'Preparando…');
   const load = el('div', 'cc-load');
   load.append(bar, label);
-  c.append(el('div', 'num', `Capítulo ${n}`), el('div', 'emoji', lv.emoji), el('h1', '', lv.name), el('div', 'place', lv.place), load);
+  // Su portada de fondo (la del menú), el número, el nombre y dónde y cuándo pasó
+  const img = el('img', 'cc-cover') as HTMLImageElement;
+  img.src = COVERS[n - 1];
+  img.alt = '';
+  c.append(img, el('div', 'cc-shade'), el('div', 'num', `Capítulo ${n}`), el('h1', '', lv.name), el('div', 'place', lv.place), load);
   root.append(c);
   const t0 = performance.now();
   let closed = false;
@@ -1610,7 +1614,8 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     openIt();
   };
   if (!mission) pauseOpener = openIt;
-  top.append(obj, el('div', 'spacer'));
+  // (los contadores, en la misma barra que el objetivo: una sola fila arriba)
+  top.append(obj, counters, el('div', 'spacer'));
   if (!mission) top.append(menuBtn);
 
   const act = el('button', 'action-btn hidden' + (mission ? ' m-hud' : ''));
@@ -1622,7 +1627,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
   // (la ayuda de los controles ya la dan los primeros pasos y «Cómo se juega»)
   void hintText;
   const hint = el('div', 'hint-move');
-  root.append(top, counters, act);
+  root.append(top, act);
   return {
     root: top,
     setObjective: (t) => {
@@ -1673,7 +1678,7 @@ export function missionCard(title: string, goal = '', done = false) {
     audio.fanfare();
     vibrate([30, 40, 60]);
   } else audio.chime(1);
-  setTimeout(() => c.remove(), 3300);
+  setTimeout(() => c.remove(), 2600);
 }
 
 /**
