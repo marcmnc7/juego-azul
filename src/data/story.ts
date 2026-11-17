@@ -401,6 +401,18 @@ export const CENA = {
     { who: 'Margaux', text: '¿Qué dices? Guanciale. Y ni se te ocurra la nata.' },
     { who: 'Gas', text: 'Vale, vale. El 10 es la carbonara.' },
   ] as Line[],
+  // Antes de cocinar, los ingredientes por el patio (paso nuevo, inventado: Marc, cámbialo si quieres)
+  pantryAsk: [
+    { who: 'Gas', text: '¿Y dónde guardáis las cosas? Yo aquí no encuentro nada.' },
+    { who: 'Margaux', text: 'Mi madre lo deja todo por ahí. Busca conmigo.' },
+  ] as Line[],
+  /** Lo que dice ella al coger cada cosa. */
+  pantry: { cesta: '🥚 Huevos y espaguetis.', queso: '🧀 El pecorino.', nevera: '🥓 Guanciale. El de verdad.' },
+  pantryBacon: 'Bacon no. Esto es una carbonara.',
+  pantryNata: 'Nata… ni de broma.',
+  /** Gas, si tardas: una pista por cada cosa que falta. */
+  pantryHints: { cesta: '¿Los huevos no estarán en la cesta de la cocina?', queso: 'El queso lo he visto en la mesa del jardín, ¿no?', nevera: 'La carne estará en la nevera de playa, la de detrás de la mesa.' },
+  pantryDone: 'Ya está todo. Al fuego.',
   /** Lo que dice Gas mientras cocinas (los dice él, en su bocadillo). */
   steps: {
     guanciale: 'Toca cuando el guanciale esté dorado 🥓',

@@ -27,6 +27,7 @@ import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
 import { beacon } from '../core/beacon';
 import { Door } from './door';
+import { Pantry, type PantryKey, type CoolerPick } from './pantry';
 
 // Capítulo 7 · La cena a escondidas (13 de julio de 2026), en casa de los padres de Azul, junto a Sa Farola.
 // Es el espejo de la piscinita: aquella noche se coló Azul en casa de los padres de Gas; ahora se cuela él.
@@ -247,6 +248,10 @@ export class LevelCena implements Level {
   private tidied = 0;
   private scares = 0;
   private grade = 0;
+  /** Los ingredientes por el patio, antes de cocinar (gathering: ya lo ha pedido Gas). */
+  private pantry!: Pantry;
+  private gathering = false;
+  private pantryT = 0;
   private tries = 0;
   private nata = 0;
   private minutes = T(21, 5);
@@ -289,6 +294,7 @@ export class LevelCena implements Level {
     this.place = place;
     this.doors = [place.gate, place.door];
     this.pan = place.pan;
+    this.pantry = new Pantry(sc, STOVE, TABLE);
     for (let i = 0; i < 11; i++) {
       const a = i * 2.4, r = 0.05 + (i % 3) * 0.055;
       const d = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.045), this.foodMat);
@@ -488,7 +494,7 @@ export class LevelCena implements Level {
       wait: '👀',
       gasComing: '🏍️',
       toGate: '🏍️',
-      toKitchen: '🍝',
+      toKitchen: this.gathering && this.pantry.count < 3 ? '🧺' : '🍝',
       cook: 'Carbonara de verdad',
       toTable: '🍝',
       dinner: '🕙',
@@ -501,7 +507,7 @@ export class LevelCena implements Level {
     };
     this.hud.setObjective(objective[this.phase]);
     const left = this.phase === 'alarm' && !this.busy ? `<span class="chip">⏱️ ${Math.ceil(this.alarmT)}</span>` : '';
-    this.hud.setCounters(`<span class="chip">${clock}</span>${left}${this.scares ? `<span class="chip">😱 ${this.scares}</span>` : ''}${this.grade ? `<span class="chip">🍝 ${this.grade}/10</span>` : ''}`);
+    this.hud.setCounters(`<span class="chip">${clock}</span>${left}${this.scares ? `<span class="chip">😱 ${this.scares}</span>` : ''}${this.grade ? `<span class="chip">🍝 ${this.grade}/10</span>` : ''}${this.phase === 'toKitchen' && this.gathering ? `<span class="chip">🧺 ${this.pantry.count}/3</span>` : ''}`);
   }
 
   // ---------------- Fases ----------------
@@ -631,7 +637,55 @@ export class LevelCena implements Level {
     this.setClock(T(21, 10));
   }
 
+  /** Coge la cesta o el queso. */
+  private takeIngredient(key: PantryKey) {
+    this.pantry.take(key);
+    audio.pickup();
+    vibrate(20);
+    bark('Margaux', CENA.pantry[key]);
+    this.pantryT = 0;
+    this.gotAll();
+  }
+
+  private gotAll() {
+    this.updateHud();
+    if (this.pantry.count < 3) return;
+    audio.perfect();
+    later(() => this.phase === 'toKitchen' && bark('Gas', CENA.pantryDone), 1400);
+  }
+
+  /** La nevera de playa: se abre y se elige (el guanciale; el bacon y la nata, no). */
+  private openCooler() {
+    this.busy = true;
+    this.walker.stop();
+    const yaw = this.pantry.coolerStand(this.player.root.position);
+    this.player.root.rotation.y = yaw;
+    this.walker.facing = yaw;
+    this.hud.setAction(null);
+    audio.pop();
+    this.pantry.openCooler((p: CoolerPick) => {
+      if (p === 'guanciale') {
+        this.pantry.closeCooler();
+        this.pantry.take('nevera');
+        audio.pickup();
+        vibrate(20);
+        bark('Margaux', CENA.pantry.nevera);
+        this.pantryT = 0;
+        later(() => {
+          this.busy = false;
+          this.gotAll();
+        }, 600);
+      } else {
+        audio.boo();
+        vibrate([30, 30]);
+        this.pantry.shake(p);
+        bark('Margaux', p === 'bacon' ? CENA.pantryBacon : CENA.pantryNata);
+      }
+    });
+  }
+
   private startCook() {
+    if (this.pantry.count < 3) this.pantry.reset(true);
     this.phase = 'cook';
     this.busy = true;
     this.hud.setAction(null);
@@ -1160,7 +1214,7 @@ export class LevelCena implements Level {
       case 'toGate':
         return GATE_IN;
       case 'toKitchen':
-        return STOVE;
+        return this.gathering && this.pantry.count < 3 ? this.pantry.nearest(this.player.root.position) : STOVE;
       case 'toTable':
         return this.garlandOn ? TABLE : SWITCH_AT;
       case 'alarm': {
@@ -1181,6 +1235,7 @@ export class LevelCena implements Level {
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    this.pantry.update(dt, this.camera);
     this.updateSky(dt);
     this.updateParents(dt);
     this.updateMoto(dt);
@@ -1257,6 +1312,24 @@ export class LevelCena implements Level {
         bark('Gas', CENA.atGateWait);
       }
     }
+    if (free && this.phase === 'toKitchen' && !this.gathering && pp.distanceTo(STOVE) < 1.8) {
+      this.gathering = true;
+      this.busy = true;
+      this.walker.stop();
+      this.pantryT = 0;
+      dialogue(CENA.pantryAsk, () => {
+        this.busy = false;
+        this.updateHud();
+      });
+    }
+    if (free && this.phase === 'toKitchen' && this.gathering && this.pantry.count < 3) {
+      this.pantryT += dt;
+      if (this.pantryT > 24) {
+        this.pantryT = 0;
+        const s = this.pantry.spots.filter((x) => !x.done).sort((a, b) => pp.distanceTo(a.at) - pp.distanceTo(b.at))[0];
+        if (s) bark('Gas', CENA.pantryHints[s.key]);
+      }
+    }
     if (free && this.phase === 'toTable' && !this.garlandOn) {
       this.gateT += dt;
       // Si va a la mesa con todo a oscuras (o tarda), Gas lo dice
@@ -1284,7 +1357,11 @@ export class LevelCena implements Level {
     if (this.phase === 'wait') {
       label = '📱 «Ven»';
       action = () => this.sayCome();
-    } else if (free && this.phase === 'toKitchen' && pp.distanceTo(STOVE) < 1.6) {
+    } else if (free && this.phase === 'toKitchen' && this.gathering && this.pantry.count < 3 && this.pantry.near(pp)) {
+      const s = this.pantry.near(pp)!;
+      label = s.key === 'cesta' ? '🧺 Coger' : s.key === 'queso' ? '🧀 Coger' : '🧊 Abrir';
+      action = () => (s.key === 'nevera' ? this.openCooler() : this.takeIngredient(s.key));
+    } else if (free && this.phase === 'toKitchen' && this.pantry.count === 3 && pp.distanceTo(STOVE) < 1.6) {
       label = '🍳 Cocinar';
       action = () => this.startCook();
     } else if (free && this.phase === 'toTable' && !this.garlandOn && pp.distanceTo(SWITCH_AT) < 1.1) {
@@ -1311,7 +1388,7 @@ export class LevelCena implements Level {
     if (this.phase === 'wait' && this.busy) this.hud.setAction(null);
 
     // Pistas, solo si se ha perdido: la flecha, la columna de luz y el marcador salen a los 40 s sin avanzar
-    const key = `${this.phase}|${this.garlandOn}|${this.tidied}|${this.helmetAt}|${this.gasAtGate}`;
+    const key = `${this.phase}|${this.garlandOn}|${this.tidied}|${this.helmetAt}|${this.gasAtGate}|${this.gathering}|${this.pantry.count}`;
     const tgt = this.lost.tick(key, dt, this.busy || !walking) ? this.target() : null;
     this.marker.visible = !!tgt && free;
     if (tgt && free) {
@@ -1328,7 +1405,13 @@ export class LevelCena implements Level {
 
     // Cámara
     // Dentro del patio, por debajo del toldo y de la buganvilla: a más altura la cámara se metía entre las flores
-    if (walking) this.walker.camera(this.camera, dt, this.colliders, 6, pp.z < 10.4 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
+    if (this.pantry.coolerOpen) {
+      // Abriendo la nevera: de cerca, desde delante, los tres paquetes con su nombre
+      this.pantry.coolerCam(this.v1, this.v2);
+      this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
+      this.camLook.lerp(this.v2, Math.min(1, dt * 3.5));
+      this.camera.lookAt(this.camLook);
+    } else if (walking) this.walker.camera(this.camera, dt, this.colliders, 6, pp.z < 10.4 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
     else {
       const m = this.moto.root.position;
       const [pos, look] =
@@ -1431,6 +1514,9 @@ export class LevelCena implements Level {
     // Las cosas
     this.setHelmet(!after('toGate') ? (phase === 'toGate' ? 'gas' : 'rider') : 'ground');
     this.pan.visible = true;
+    this.pantry.reset(after('toKitchen'));
+    this.gathering = after('toKitchen');
+    this.pantryT = 0;
     this.steam.forEach((s) => (s.visible = false));
     this.dinnerPlates.visible = false;
     this.decor.show(this.photo);
@@ -1514,6 +1600,7 @@ export class LevelCena implements Level {
   }
 
   dispose() {
+    this.pantry.dispose();
     this.cancelGauge?.();
     this.tableGame?.dispose();
     rigPost.delete(this.post);

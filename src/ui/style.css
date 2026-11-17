@@ -1703,3 +1703,5 @@ html, body { background: #000; }
 #ui:has(.pk) .hud-top, #ui:has(.pk) .action-btn, #ui:has(.pk) .stick-base, #ui:has(.pk) .mission-card { display: none !important; }
 .pk ~ .bark, #ui:has(.pk) .bark { z-index: 31; }
 .ll-log:empty { display: none; }
+/* Cap. 7, la nevera de playa: el paquete equivocado se sacude */
+.side-spot.pincho-tag.nope span { display: inline-block; animation: nope .45s ease; background: #fde0e0; }
