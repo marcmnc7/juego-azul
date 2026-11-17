@@ -230,6 +230,19 @@ export const ROAD = {
     { who: 'Narrador', text: 'Esa noche, a una cabaña de leña. Iba a ser cenita de camping: cartas y el camping gas.' },
     { who: 'Narrador', text: 'A él se le olvidó precisamente el gas.' },
   ] as Line[],
+  // El hornillo no enciende y ella busca el cartucho (paso nuevo, inventado: Marc, cámbialo si quieres)
+  campNoLight: [
+    { who: 'Marc', text: 'No enciende. ¿Has visto el cartucho de gas?' },
+    { who: 'Margaux', text: '¿Yo? Lo traías tú.' },
+    { who: 'Marc', text: 'Estará en la mochila… o en el coche. Mira, porfa.' },
+  ] as Line[],
+  /** Lo que dice ella en cada sitio (según cuántos quedan: el último, ya mosqueada). */
+  campSearch: { mochila: '🎒 En la mochila no está.', lena: '🪵 Entre la leña, tampoco.', coche: '🚗 En el maletero… nada.' },
+  campHint: '¿Y en la mochila, la leña o el maletero?',
+  campConfess: [
+    { who: 'Margaux', text: 'No está en ningún sitio.' },
+    { who: 'Marc', text: '…Vale. Creo que me lo he dejado en casa.' },
+  ] as Line[],
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
   terrace: [
     { who: 'Narrador', text: 'La terraza de El Ancla.' },

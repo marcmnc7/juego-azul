@@ -188,6 +188,7 @@ export class Level2 implements Level {
   /** La última noche: el camping sin gas (escena de cine). */
   private camp: Camp | null = null;
   private campDone = false;
+  private campHintT = 0;
   /** Logroño, de fiesta. */
   private laurel: Laurel | null = null;
   private cowIdx = 0;
@@ -933,6 +934,12 @@ export class Level2 implements Level {
       const before = this.camp.inside;
       this.camp.update(dt, this.camera, this.busy ? null : this.input, this.hud);
       if (this.camp.inside && !before) this.campInside();
+      if (this.camp.searchDone && !this.busy) this.campConfess();
+      // Buscando el cartucho: si tarda, él le dice dónde mirar
+      if (this.camp.searching && !this.busy && (this.campHintT += dt) > 26) {
+        this.campHintT = 0;
+        bark('Marc', ROAD.campHint);
+      }
       return;
     }
     if ((this.phase === 'logrono' || this.phase === 'done') && this.laurel) {
@@ -1347,10 +1354,9 @@ export class Level2 implements Level {
     1200);
   }
 
-  /** Ya dentro de la cabaña: se sientan a la mesa y el hornillo no enciende. */
+  /** Ya dentro de la cabaña: se sientan a la mesa y el hornillo no enciende. Ella se levanta a buscar el cartucho. */
   private campInside() {
     const c = this.camp!;
-    const [, noGas] = ROAD.camp;
     this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
@@ -1359,40 +1365,72 @@ export class Level2 implements Level {
     fadeFlash(() => {
       c.sitDown();
       this.hud.setObjective('');
-      const mid = () => c.table.clone().setY(1.05);
       cinema.play([
         // El hornillo: clic, clic, clic… y nada
         { dur: Infinity, move: 4, pos: new THREE.Vector3(0.14, 1.22, -1.05), pos2: new THREE.Vector3(0.13, 1.02, -0.55), look: c.stove, fov: 40, focus: c.stove, at: () => c.tryStove() },
-        // Los dos, frente a frente
-        { dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid },
       ]);
       later(() =>
-        dialogue([noGas], () => {
-          cinema.next();
-          audio.fanfare();
-          // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
-          cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-          later(
-            () =>
-              dialogue(ROAD.campAfter, () =>
-                fadeFlash(() => {
-                  cinema.stop();
-                  audio.stopMusic();
-                  audio.startMusic('road');
-                  this.route.style.display = '';
-                  this.busy = false;
-                  this.speed = 0;
-                  this.phase = 'drive1';
-                  this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
-                  this.nextSpawn = this.carZ + 60;
-                  this.updateHud();
-                }, 500),
-              ),
-            3800,
-          );
-        }),
-      900);
+        dialogue(ROAD.campNoLight, () =>
+          fadeFlash(() => {
+            cinema.stop();
+            c.startSearch();
+            c.onSearched = (key) => {
+              this.campHintT = 0;
+              bark('Margaux', ROAD.campSearch[key]);
+            };
+            this.campHintT = 0;
+            this.input.reset();
+            this.hud.setObjective('🔦');
+            this.busy = false;
+          }, 400),
+        ),
+      1900);
     }, 500);
+  }
+
+  /** Mirado todo: vuelve a la mesa y él lo confiesa. De ahí el nombre. A la mañana siguiente, carretera otra vez. */
+  private campConfess() {
+    const c = this.camp!;
+    const [, noGas] = ROAD.camp;
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    later(() =>
+      fadeFlash(() => {
+        c.sitDown();
+        this.hud.setObjective('');
+        const mid = () => c.table.clone().setY(1.05);
+        // Los dos, frente a frente
+        cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
+        later(() =>
+          dialogue([...ROAD.campConfess, noGas], () => {
+            audio.fanfare();
+            // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
+            cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+            later(
+              () =>
+                dialogue(ROAD.campAfter, () =>
+                  fadeFlash(() => {
+                    cinema.stop();
+                    audio.stopMusic();
+                    audio.startMusic('road');
+                    this.route.style.display = '';
+                    this.busy = false;
+                    this.speed = 0;
+                    this.phase = 'drive1';
+                    this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+                    this.nextSpawn = this.carZ + 60;
+                    this.updateHud();
+                  }, 500),
+                ),
+              3800,
+            );
+          }),
+        900);
+      }, 500),
+    1400);
   }
 
   /** Logroño, de fiesta. Y al acabar, la vuelta en tren y el nombre: los chats de esos días. */

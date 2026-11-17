@@ -19,6 +19,9 @@ import type { Box2 } from './ferreries';
 // el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: en un claro
 // entre matorral y pinos, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
 
+export type CampSpot = 'mochila' | 'lena' | 'coche';
+const SPOT_LABEL: Record<CampSpot, string> = { mochila: '🎒 Mirar', lena: '🪵 Mirar', coche: '🚗 Maletero' };
+
 export class Camp {
   scene = new THREE.Scene();
   private sky: Sky;
@@ -28,6 +31,7 @@ export class Camp {
   private glow: THREE.Sprite;
   private t = 0;
   private lost = new Lost();
+  private v = new THREE.Vector3();
   private colliders: Box2[] = [];
   private door!: Door;
   private walker: Walker | null = null;
@@ -42,6 +46,18 @@ export class Camp {
   readonly stove = new THREE.Vector3(0.12, 0.8, 0.02);
   /** Centro de la mesa. */
   readonly table = new THREE.Vector3(0, 0.75, 0);
+  /**
+   * Buscando el cartucho de gas (paso nuevo, [inventado]): la mochila, la leña y el maletero. No está en ninguno.
+   * onSearched: cada sitio mirado (y cuántos quedan). searchDone: mirados los tres.
+   */
+  searching = false;
+  searchDone = false;
+  onSearched: ((key: CampSpot, left: number) => void) | null = null;
+  private spots: { key: CampSpot; at: THREE.Vector3; reach: number; done: boolean }[] = [
+    { key: 'mochila', at: new THREE.Vector3(-2.7, 0, 2.2), reach: 1.15, done: false },
+    { key: 'lena', at: new THREE.Vector3(2.2, 0, -4.15), reach: 1.15, done: false },
+    { key: 'coche', at: new THREE.Vector3(-10.9, 0, -7.45), reach: 1.7, done: false },
+  ];
 
   constructor() {
     const sc = this.scene;
@@ -109,6 +125,15 @@ export class Camp {
     m.add(G.cyl, 0xb8bcc2, this.stove.x, 0.89, this.stove.z, 0, 0, 0, 0.17, 0.12, 0.17);
     // Base del farolillo
     m.add(G.cyl, 0x333333, -0.32, 0.76, 0.16, 0, 0, 0, 0.08, 0.04, 0.08);
+    // La mochila de Gas, en el rincón del fondo (abierta, con un jersey asomando)
+    {
+      const [bx, bz] = [-2.75, 2.45];
+      m.add(G.rbox, 0x55613a, bx, 0.25, bz, -0.12, 0.4, 0, 0.36, 0.48, 0.22);
+      m.add(G.rbox, 0x48532f, bx, 0.47, bz - 0.04, -0.5, 0.4, 0, 0.34, 0.06, 0.2); // solapa caída
+      m.add(G.rbox, 0x48532f, bx - 0.05, 0.18, bz - 0.12, -0.12, 0.4, 0, 0.24, 0.2, 0.06); // bolsillo
+      m.add(G.rbox, 0xb0302c, bx + 0.02, 0.5, bz + 0.03, 0.3, 0.4, 0, 0.22, 0.06, 0.12); // jersey
+      for (const sx of [-0.1, 0.1]) m.add(G.box, 0x2a2a22, bx + sx * Math.cos(0.4), 0.3, bz + 0.12 - sx * Math.sin(0.4), -0.12, 0.4, 0, 0.04, 0.42, 0.02); // tirantes
+    }
     sc.add(m.mesh());
 
     // El coche de Azul (el Ford Focus gris), aparcado al lado
@@ -210,12 +235,26 @@ export class Camp {
     this.walker.yaw = this.walker.facing = 0.2;
     this.gasTrail = new Trail();
     this.inside = false;
+    this.searching = this.searchDone = false;
     camera.position.set(-2, 3, -12.5);
+  }
+
+  /** El hornillo no enciende: ella se levanta a buscar el cartucho; él se queda en la mesa. */
+  startSearch() {
+    this.searching = true;
+    this.searchDone = false;
+    for (const s of this.spots) s.done = false;
+    this.azul.root.position.set(-1.3, 0, -0.75);
+    this.azul.root.rotation.set(0, Math.PI, 0);
+    this.walker = new Walker(this.azul.root.position);
+    this.walker.yaw = this.walker.facing = Math.PI;
+    this.lost.reset();
   }
 
   /** Dentro: cada uno a su silla. */
   sitDown() {
     this.walker = null;
+    this.searching = false;
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.44), 0);
       p.root.rotation.y = -sx * Math.PI / 2;
@@ -251,24 +290,48 @@ export class Camp {
       const mag = w.move(dt, input ? input.axes() : { x: 0, y: 0 }, this.colliders, { minX: -12, maxX: 12, minZ: -13, maxZ: 2 });
       this.azul.root.rotation.y = w.facing;
       animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
-      const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
-      animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
       this.who.length = 0;
-      this.who.push(pp, this.gas.root.position);
+      if (this.searching || this.searchDone) {
+        // Él, sentado a la mesa con el hornillo; ella, mirando por todas partes
+        this.sit(this.gas);
+        this.gas.armR.rotation.x = -0.9;
+        this.who.push(pp);
+      } else {
+        const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+        this.who.push(pp, this.gas.root.position);
+      }
       this.door.update(dt, this.who, camera.position);
-      // Pistas, solo si se ha perdido (40 s sin entrar): la flecha y la columna sobre la puerta
-      if (this.lost.tick('cabin', dt, !input) && pp.z < -3.6) {
-        const ang = Math.atan2(-pp.x, -2 - pp.z);
+      // Buscando: el sitio que tienes al lado, con su botón
+      const left = this.spots.filter((s) => !s.done);
+      const near = this.searching ? left.find((s) => Math.hypot(pp.x - s.at.x, pp.z - s.at.z) < s.reach) : undefined;
+      if (this.searching) hud.setAction(near ? SPOT_LABEL[near.key] : null, !!near);
+      if (near && input && input.consumeAction()) {
+        near.done = true;
+        audio.pop();
+        const n = left.length - 1;
+        if (!n) {
+          this.searching = false;
+          this.searchDone = true;
+          hud.setAction(null);
+        }
+        this.onSearched?.(near.key, n);
+      }
+      // Pistas, solo si se ha perdido (40 s sin avanzar): la flecha y la columna sobre la puerta o el sitio que falta
+      const goal = this.searching ? left.slice().sort((a, b) => pp.distanceTo(a.at) - pp.distanceTo(b.at))[0]?.at ?? null : pp.z < -3.6 ? this.v.set(0, 0, -3) : null;
+      if (this.lost.tick(this.searching ? `search${left.length}` : 'cabin', dt, !input) && goal) {
+        const ang = Math.atan2(goal.x - pp.x, (this.searching ? goal.z : -2) - pp.z);
         const rel = Math.atan2(Math.sin(ang - w.yaw), Math.cos(ang - w.yaw));
-        hud.setArrow(-rel);
-        beacon.at(new THREE.Vector3(0, 0, -3));
+        hud.setArrow(pp.distanceTo(goal) < 1.6 ? null : -rel);
+        beacon.at(pp.distanceTo(goal) < 1.6 ? null : goal);
       } else {
         hud.setArrow(null);
         beacon.at(null);
       }
       // Pasada la puerta, ya estás dentro
       if (pp.z > -2 && Math.abs(pp.x) < 3 && !this.inside) this.inside = true;
-      w.camera(camera, dt, this.colliders, pp.z > -3.4 ? 2.6 : 5.5, pp.z > -3.4 ? 1.9 : 2.8);
+      const indoor = pp.z > -3.4 && Math.abs(pp.x) < 3.4;
+      w.camera(camera, dt, this.colliders, indoor ? 2.6 : 5.5, indoor ? 1.9 : 2.8);
     } else {
       this.sit(this.azul);
       this.sit(this.gas);
