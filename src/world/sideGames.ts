@@ -832,7 +832,8 @@ export class StoneSkip {
       const x = side * (11 + Math.sin(i * 1.4) * 2.4 + i * 0.55);
       const s = 3.4 + (i % 4) * 1.8;
       m.add(i % 3 ? G.rock2 : G.rock, SLATE[i % 4], x, s * 0.2, z, 0, i, 0, s * 1.5, s * (0.9 + (i % 3) * 0.3), s * 1.4);
-      if (i % 3 === 0) m.add(G.bush, 0x5d6b3a, x - side * 1.5, s * 0.72, z, 0, i, 0, 1.6, 0.65, 1.6);
+      // (la mata, hundida en lo alto de la roca: más arriba o hacia el borde quedaba flotando)
+      if (i % 3 === 0) m.add(G.bush, 0x5d6b3a, x, s * 0.52, z, 0, i, 0, 1.6, 0.65, 1.6);
     }
     for (let i = 0; i < 18; i++) m.add(G.rock2, SLATE[i % 4], -80 + i * 11, 3 + (i % 3) * 3, 210 + Math.sin(i) * 16, 0, i, 0, 22, 12 + (i % 4) * 5, 22);
     for (let i = 0; i < 16; i++) {

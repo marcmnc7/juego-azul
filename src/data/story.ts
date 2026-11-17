@@ -582,14 +582,14 @@ export const MOTO = {
   stats: (fluid: number, photos: number, waves: number, motos: number, wrong: number) =>
     [['Curvas fluidas', `${fluid}%`], ['Saludos moteros', `${waves}/${motos}${wrong ? ` · ${wrong} a coches 🚗` : ''}`], ['Fotos', `${photos}/4`]] as [string, string][],
   pack: [
-    { icon: '🏍️', label: 'Conjunto de moto (tejanos, chupa, guantes)', ok: true },
-    { icon: '👕', label: '2 camisetas finas de manga larga', ok: true },
+    { icon: '🏍️', label: 'Conjunto de moto', ok: true },
+    { icon: '👕', label: '2 camisetas finas', ok: true },
     { icon: '👟', label: 'Zapatillas Nike', ok: true },
     { icon: '🧦', label: '3 calcetines largos', ok: true },
-    { icon: '🍦', label: 'Conjunto de paseo (cenar y helado)', ok: true },
-    { icon: '👙', label: 'Biquinis y un vestidito', ok: true },
+    { icon: '🍦', label: 'Ropa de paseo', ok: true },
+    { icon: '👙', label: 'Biquinis y vestidito', ok: true },
     { icon: '🌙', label: 'Pijama', ok: true },
-    { icon: '💍', label: 'Accesorios (joyitas, gafas de sol, reloj)', ok: true },
+    { icon: '💍', label: 'Joyitas, gafas, reloj', ok: true },
     { icon: '👠', label: 'Tacones', ok: false },
     { icon: '💇‍♀️', label: 'Plancha del pelo', ok: false },
     { icon: '🧳', label: 'Maleta de ruedas', ok: false },
@@ -738,8 +738,8 @@ export const ANIVERSARIO_GAS = {
 export const MINIS = {
   pack: {
     title: 'La mochila',
-    hint: 'Toca solo lo de la lista de Gas. Lo demás no cabe.',
-    nope: 'Gas: «Ma menos»',
+    hint: 'Solo lo de la lista de Gas: en la moto no cabe nada más.',
+    nope: 'Ma menos. Eso no estaba en la lista.',
   },
   princesa: {
     title: 'Love Letter',

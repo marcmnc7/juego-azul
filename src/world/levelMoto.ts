@@ -17,7 +17,7 @@ import { twoBone } from '../entities/embrace';
 import { makeHelmet } from '../entities/helmet';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord, timingGauge } from '../ui/ui';
+import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord, viewfinder } from '../ui/ui';
 import { packBag } from '../ui/minis';
 import { disposeScene, type Level, type LevelDone } from './level';
 
@@ -1036,16 +1036,17 @@ export class LevelMoto implements Level {
     this.faroOpen = true;
     this.hud.setAction(null);
     this.photoT = 99;
-    this.cancelGauge = timingGauge(
+    // El visor del móvil sobre la escena: que el faro salga dentro del encuadre (el pulso, cada vez más tranquilo)
+    const v = new THREE.Vector3();
+    this.cancelGauge = viewfinder(
       {
         title: MOTO.faroPhoto.title,
-        duration: 1.3 + this.faroTries * 0.2,
-        button: '📷 ¡Foto!',
-        zones: [
-          { to: 0.34, label: MOTO.faroPhoto.zones[0], color: '#c76a4a' },
-          { to: 0.66, label: MOTO.faroPhoto.zones[1], color: '#5fcf80', good: true },
-          { to: 1, label: MOTO.faroPhoto.zones[2], color: '#c76a4a' },
-        ],
+        sway: Math.max(0.55, 1 - this.faroTries * 0.2),
+        target: () => {
+          v.copy(this.lighthouse).project(this.camera);
+          if (v.z > 1) return null;
+          return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
+        },
       },
       (q) => {
         this.cancelGauge = null;
@@ -1252,7 +1253,7 @@ export class LevelMoto implements Level {
     if (pressed && act) (act as () => void)();
 
     // Pistas, solo si se ha perdido: parados ante la valla, si en 40 s no hace la foto, Gas se lo recuerda
-    const busy = !!document.querySelector('.dialogue, .phone-overlay, .gauge, .pack-screen');
+    const busy = !!document.querySelector('.dialogue, .phone-overlay, .gauge, .vf, .pack-screen');
     const key = `${this.phase}|${this.faroReady}|${this.faroOpen}|${this.photos}`;
     if (this.lost.tick(key, dt, busy) && this.phase === 'creus' && this.faroReady && !this.faroOpen && !this.lostNag) {
       this.lostNag = true;

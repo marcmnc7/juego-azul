@@ -1219,6 +1219,63 @@ export interface GaugeZone {
   good?: boolean;
 }
 
+/**
+ * Hacer una foto de verdad: el visor del móvil encima de la escena (sin paneles), el encuadre se mueve con el pulso
+ * y hay que disparar cuando lo que se quiere sale dentro. `target` da dónde está en pantalla (px) en cada momento.
+ * Devuelve la calidad (1 = centrado, ~0.6 = dentro pero en el borde, 0 = fuera) y una función para cancelarlo.
+ */
+export function viewfinder(o: { title: string; target: () => { x: number; y: number } | null; sway?: number }, onResult: (quality: number) => void) {
+  const w = el('div', 'vf');
+  const frame = el('div', 'vf-frame');
+  frame.append(el('i', 'c tl'), el('i', 'c tr'), el('i', 'c bl'), el('i', 'c br'), el('i', 'vf-cross'));
+  const title = el('div', 'vf-title', o.title);
+  const shot = el('button', 'vf-shot') as HTMLButtonElement;
+  shot.setAttribute('aria-label', 'Hacer la foto');
+  w.append(frame, title, shot);
+  root.append(w);
+  const sway = o.sway ?? 1;
+  const t0 = performance.now();
+  let raf = 0;
+  let fx = 0, fy = 0;
+  const loop = () => {
+    const t = (performance.now() - t0) / 1000;
+    // el pulso: dos ondas lentas que no se repiten igual
+    fx = (Math.sin(t * 1.35) * 0.6 + Math.sin(t * 2.9 + 1) * 0.4) * 0.2 * sway;
+    fy = (Math.sin(t * 1.7 + 2) * 0.6 + Math.sin(t * 3.4) * 0.4) * 0.16 * sway;
+    // (el encuadre ronda lo que hay que fotografiar: a ratos le pasa por encima, a ratos se va)
+    const p = o.target();
+    const W = window.innerWidth, H = window.innerHeight;
+    const bx = p ? Math.min(W * 0.8, Math.max(W * 0.2, p.x)) : W / 2, by = p ? Math.min(H * 0.75, Math.max(H * 0.25, p.y)) : H / 2;
+    frame.style.left = `${bx + fx * W}px`;
+    frame.style.top = `${by + fy * H}px`;
+    raf = requestAnimationFrame(loop);
+  };
+  loop();
+  const end = () => {
+    cancelAnimationFrame(raf);
+    w.remove();
+  };
+  shot.onpointerdown = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const r = frame.getBoundingClientRect();
+    const p = o.target();
+    let q = 0;
+    if (p) {
+      const dx = Math.abs(p.x - (r.left + r.width / 2)) / (r.width / 2);
+      const dy = Math.abs(p.y - (r.top + r.height / 2)) / (r.height / 2);
+      const d = Math.max(dx, dy);
+      if (d < 0.8) q = d < 0.35 ? 1 : 1 - ((d - 0.35) / 0.45) * 0.4;
+    }
+    w.classList.add('snap');
+    setTimeout(() => {
+      end();
+      onResult(q);
+    }, 260);
+  };
+  return end;
+}
+
 export interface GaugeOptions {
   title: string;
   zones: GaugeZone[];

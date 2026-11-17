@@ -2,7 +2,7 @@ import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { CHATS } from '../data/chats';
 import { MINIS } from '../data/story';
-import { phoneChat, toast, missionCard } from './ui';
+import { phoneChat, toast, missionCard, bark } from './ui';
 import { cardUrl } from './cards';
 import { beachMission } from '../world/missions/beach';
 import { parkMission } from '../world/missions/park';
@@ -29,34 +29,55 @@ export interface PackItem {
   ok: boolean;
 }
 
-/** Meter en la mochila lo de la lista de Gas y nada más. Devuelve los intentos de colar algo de más. */
-/** La mochila del viaje en moto, como misión: el panel encima de la escena (se ve la moto detrás). */
+/**
+ * Meter en la mochila lo de la lista de Gas (la acaba de leer en el chat) y nada más. Una viñeta: la ropa extendida
+ * sobre la cama y la mochila abierta al lado; lo bueno vuela a la mochila, lo que sobra, Gas lo devuelve.
+ * Devuelve los intentos de colar algo de más.
+ */
 export function packBag(items: PackItem[], onDone: (extras: number) => void) {
-  const o = el('div', 'pack-screen panel-overlay');
-  missionCard(MINIS.pack.title, MINIS.pack.hint);
+  const o = el('div', 'pack-screen pk');
   const need = items.filter((i) => i.ok).length;
   let got = 0;
   let extras = 0;
-  const count = el('div', 'eyebrow', `🎒 0/${need}`);
-  o.append(el('h1', '', MINIS.pack.title), el('p', '', MINIS.pack.hint), count);
-  const grid = el('div', 'pack-grid');
+  const head = el('div', 'pk-title', MINIS.pack.title);
+  const hint = el('div', 'pk-hint', MINIS.pack.hint);
+  const bed = el('div', 'pk-bed');
+  bed.append(el('i', 'pk-pillow'));
+  const grid = el('div', 'pk-grid');
+  const bag = el('div', 'pk-bag');
+  const count = el('div', 'pk-count', `0/${need}`);
+  bag.append(el('i', 'pk-strap l'), el('i', 'pk-strap r'), el('i', 'pk-flap'), el('i', 'pk-pocket'), count);
   const order = [...items].sort(() => Math.random() - 0.5);
-  for (const it of order) {
-    const b = el('button', 'pack-item', `<span class="pi-icon">${it.icon}</span><span class="pi-label">${it.label}</span>`);
-    b.onclick = () => {
+  order.forEach((it, k) => {
+    const b = el('button', 'pk-item', `<span class="pi-icon">${it.icon}</span><span class="pi-label">${it.label}</span>`);
+    b.style.setProperty('--r', `${((k * 37) % 11) - 5}deg`);
+    b.onpointerdown = (e) => {
+      e.preventDefault();
       if (b.classList.contains('in')) return;
       if (it.ok) {
+        // vuela a la mochila
+        const a = b.getBoundingClientRect(), z = bag.getBoundingClientRect();
+        b.style.setProperty('--dx', `${z.left + z.width / 2 - (a.left + a.width / 2)}px`);
+        b.style.setProperty('--dy', `${z.top + z.height * 0.4 - (a.top + a.height / 2)}px`);
         b.classList.add('in');
         got++;
         audio.pickup();
         vibrate(15);
-        count.textContent = `🎒 ${got}/${need}`;
+        setTimeout(() => {
+          count.textContent = `${got}/${need}`;
+          bag.classList.remove('gulp');
+          void bag.offsetWidth;
+          bag.classList.add('gulp');
+        }, 380);
         if (got === need) {
-          missionCard(MINIS.pack.title, '', true);
+          setTimeout(() => {
+            audio.perfect();
+            o.classList.add('done');
+          }, 450);
           setTimeout(() => {
             o.remove();
             onDone(extras);
-          }, 700);
+          }, 1400);
         }
       } else {
         extras++;
@@ -65,12 +86,13 @@ export function packBag(items: PackItem[], onDone: (extras: number) => void) {
         b.classList.remove('nope');
         void b.offsetWidth;
         b.classList.add('nope');
-        toast(MINIS.pack.nope);
+        bark('Gas', MINIS.pack.nope);
       }
     };
     grid.append(b);
-  }
-  o.append(grid);
+  });
+  bed.append(grid);
+  o.append(head, hint, bed, bag);
   root.append(o);
 }
 
