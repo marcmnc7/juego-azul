@@ -45,6 +45,8 @@ class BeachMission implements Mission {
   private to = new THREE.Vector3();
   private endT = -1;
   private cool = 0;
+  private extras: Person[] = [];
+  private camAt = new THREE.Vector3();
 
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
@@ -81,7 +83,37 @@ class BeachMission implements Mission {
     m.add(G.cone, 0xe0533a, -7.15, 2.45, -7, 0, 0, 0, 3.0, 0.6, 3.0);
     m.add(G.box, 0x3a8fd8, -5.5, 0.01, -8, 0, 0.3, 0, 0.9, 0.01, 1.8);
     m.add(G.box, 0xf2c94c, -8.6, 0.01, -8.2, 0, -0.2, 0, 0.9, 0.01, 1.8);
+    // Detrás de Gas, la playa de septiembre con gente: sombrillas de rayas, toallas, neveras y un chiringuito
+    const PARASOLS: [number, number, number, number][] = [
+      [10.5, -7.5, 0xe0533a, 0xf6f1e4], [12.5, 6.5, 0x2f7fc4, 0xf6f1e4], [16, -3, 0xf2c94c, 0xe0533a], [19, 9, 0x3fa27a, 0xf6f1e4],
+      [21, -9, 0xe0533a, 0xf2c94c], [25, 3, 0x2f7fc4, 0xf2c94c], [9.5, 11, 0xf2c94c, 0xf6f1e4], [28, -5, 0x3fa27a, 0xe0533a],
+    ];
+    const PARASOL = new THREE.ConeGeometry(0.5, 1, 18);
+    PARASOLS.forEach(([x, z, a, b], i) => {
+      m.add(G.cyl, 0xf2f2ee, x, 1.2, z, 0.1 * (i % 2 ? 1 : -1), 0, 0, 0.06, 2.6, 0.06);
+      m.add(PARASOL, a, x, 2.45, z, 0, i, 0, 2.8, 0.55, 2.8);
+      m.add(G.cyl, b, x, 2.16, z, 0, 0, 0, 2.86, 0.08, 2.86); // el faldón, del otro color
+      m.add(G.box, [0x3a8fd8, 0xf2c94c, 0xe0533a, 0xf6f1e4][i % 4], x + 1.1, 0.01, z + 0.6, 0, 0.2 * i, 0, 0.9, 0.01, 1.8);
+      if (i % 3 === 0) m.add(G.rbox, 0x2f7fc4, x - 0.9, 0.2, z + 0.9, 0, i, 0, 0.5, 0.36, 0.34); // nevera
+    });
+    // El chiringuito: caseta de madera con tejadillo de cañizo y su barra
+    m.add(G.box, 0xb88a5a, 30, 1.4, 13, 0, -0.3, 0, 5, 2.8, 3);
+    m.add(G.box, 0xd9c08a, 30, 2.95, 13, 0, -0.3, 0, 5.8, 0.25, 3.8);
+    m.add(G.box, 0x7a5236, 29.2, 1.1, 14.3, 0, -0.3, 0, 4.2, 0.12, 0.6);
     sc.add(m.mesh());
+    const LOOKS = [
+      { skin: 0xe8b894, shirt: 0x2f7fc4, pants: 0x2a2a2a, hair: 0x2b1d14, hairStyle: 'short', male: true, shorts: true },
+      { skin: 0xf0c8a6, shirt: 0xe0533a, pants: 0xe0533a, hair: 0x6b3f22, hairStyle: 'straight', shorts: true },
+      { skin: 0xd9a27c, shirt: 0xf6f1e4, pants: 0x3a6a5a, hair: 0x1f1610, hairStyle: 'short', male: true, shorts: true },
+      { skin: 0xf3d2b6, shirt: 0xf2c94c, pants: 0x3b4a6b, hair: 0x9a6a3a, hairStyle: 'straight', shorts: true },
+    ] as const;
+    this.extras = [[11.8, -6.6], [13.6, 7.4], [17.3, -2.2], [20.2, 9.9], [22.3, -8.2], [10.6, 11.9]].map(([x, z], i) => {
+      const p = makePerson(LOOKS[i % LOOKS.length]);
+      p.root.position.set(x, 0, z);
+      p.root.rotation.y = -Math.PI / 2 + (i - 2.5) * 0.4;
+      sc.add(p.root);
+      return p;
+    });
     const netTex = canvasTex((c, w, h) => {
       c.clearRect(0, 0, w, h);
       c.strokeStyle = 'rgba(30,30,34,.85)';
@@ -125,8 +157,9 @@ class BeachMission implements Mission {
     this.hud = hud(() => ctx.input.queueAction(), () => {}, 'Toca el botón cuando la pelota llegue a ti', true);
     this.hud.setObjective('🏐');
     this.updateHud();
-    ctx.camera.position.set(-3.2, 2.7, -8.2);
-    ctx.camera.lookAt(0, 1.3, 0.5);
+    // A su espalda y un poco de lado: ella delante, la red, Gas y la playa con gente detrás; el mar a la izquierda
+    ctx.camera.position.set(-7.3, 2.15, -1.9);
+    ctx.camera.lookAt(1.8, 1.35, 0.6);
     missionCard(T.title, T.hint);
     this.launch(GAS, ME);
   }
@@ -158,6 +191,7 @@ class BeachMission implements Mission {
 
   update(dt: number) {
     this.t += dt;
+    this.extras.forEach((p, i) => animatePerson(p, dt, i % 2 ? 'talk' : 'idle', 0, this.t * 3 + i));
     const { input, camera } = this.ctx;
     const T = MINIS.voley;
     const pressed = input.consumeAction();
@@ -235,8 +269,10 @@ class BeachMission implements Mission {
     this.ball.rotation.x += dt * 6;
     // Cámara de lado, siguiendo un poco la pelota
     // Tres cuartos desde la banda (de canto, la red no se veía), siguiendo un poco la pelota
-    camera.position.lerp(new THREE.Vector3(this.ball.position.x * 0.25 - 3.2, 2.7, -8.2), Math.min(1, dt * 1.5));
-    camera.lookAt(this.ball.position.x * 0.3, 1.35, 0.5);
+    // (a su espalda; sigue un poco la pelota para que se vea venir y irse)
+    this.camAt.set(-7.3 + this.ball.position.x * 0.12, 2.15, -1.9);
+    camera.position.lerp(this.camAt, Math.min(1, dt * 1.5));
+    camera.lookAt(1.8 + this.ball.position.x * 0.2, 1.35, 0.6);
     this.sky.update(camera, dt);
     this.sun.follow(new THREE.Vector3());
   }

@@ -52,6 +52,7 @@ class ParkMission implements Mission {
   private obs: Obstacle[] = [];
   private jumpT = -1;
   private hits = 0;
+  private walkers: { p: Person; mode: string; dog: Dog | null; x0: number; z: number; dir: number }[] = [];
   private endT = -1;
 
   constructor(private ctx: MissionCtx, private onDone: () => void) {
@@ -104,6 +105,26 @@ class ParkMission implements Mission {
     }
     m.add(G.box, 0x8a6a44, -2.5, 0.45, 3.2, 0, 0, 0, 1.8, 0.08, 0.45);
     for (const x of [-3.2, -1.8]) m.add(G.box, 0x3a3a3e, x, 0.22, 3.2, 0, 0, 0, 0.08, 0.45, 0.4);
+    // Más parque al fondo: otra hilera de árboles, parterres con flores, farolas y bancos con gente
+    for (let i = 0; i < 14; i++) {
+      const x = -14 + i * 7 + Math.cos(i * 1.7) * 2;
+      for (const z of [-17 - (i % 3), 16 + (i % 2) * 2]) {
+        m.add(G.cyl, 0x5a4a38, x, 1.6, z, 0, 0, 0, 0.34, 3.2, 0.34);
+        m.add(G.bush, i % 2 ? 0x3f6a32 : 0x557f3c, x, 4, z, 0, i, 0, 4.2, 3.2, 4.2);
+      }
+    }
+    for (const [x, z] of [[-6, -5], [8, 6], [20, -6], [34, 6]] as const) {
+      m.add(G.cyl, 0x8a6a44, x, 0.12, z, 0, 0, 0, 3.2, 0.24, 3.2);
+      for (let k = 0; k < 9; k++) m.add(G.sphere, [0xe0533a, 0xf2c94c, 0xf6f1e4, 0xc85aa0][k % 4], x + Math.cos(k * 0.7) * (0.4 + (k % 3) * 0.4), 0.34, z + Math.sin(k * 0.7) * (0.4 + (k % 3) * 0.4), 0, 0, 0, 0.32, 0.26, 0.32);
+    }
+    for (const x of [-9, 6, 22, 38]) {
+      m.add(G.cyl, 0x2a2e33, x, 1.7, -10.4, 0, 0, 0, 0.1, 3.4, 0.1);
+      m.add(G.sphere, 0xf6efd8, x, 3.5, -10.4, 0, 0, 0, 0.36, 0.42, 0.36);
+    }
+    for (const x of [12, 28]) {
+      m.add(G.box, 0x8a6a44, x, 0.45, -10.6, 0, 0, 0, 1.8, 0.08, 0.45);
+      m.add(G.box, 0x8a6a44, x, 0.75, -10.85, 0, 0, 0, 1.8, 0.4, 0.06);
+    }
     for (let i = 0; i < 30; i++) m.add(G.box, 0xe8e2d0, -10 + i * 3, 0.5, -12, 0, 0, 0, 0.08, 1.0, 0.08);
     m.add(G.box, 0xe8e2d0, 35, 0.9, -12, 0, 0, 0, 90, 0.06, 0.06);
     sc.add(m.mesh());
@@ -118,6 +139,26 @@ class ParkMission implements Mission {
     this.joy.root.position.set(0.6, 0, -0.1);
     this.joy.root.rotation.y = 0;
     sc.add(this.me.root, this.gas.root, this.joy.root);
+    // Gente del parque: dos sentados en los bancos y dos paseando a su perro por el fondo
+    const LOOKS = [
+      { skin: 0xe8b894, shirt: 0x8a3a3a, pants: 0x2a2a2a, hair: 0x2b1d14, hairStyle: 'short', male: true },
+      { skin: 0xf0c8a6, shirt: 0x3a6a8a, pants: 0x3b4a6b, hair: 0x6b3f22, hairStyle: 'straight' },
+      { skin: 0xd9a27c, shirt: 0xd8cfc0, pants: 0x3a5a3a, hair: 0x1f1610, hairStyle: 'short', male: true },
+      { skin: 0xf3d2b6, shirt: 0xe0a040, pants: 0x222222, hair: 0x9a6a3a, hairStyle: 'straight' },
+    ] as const;
+    this.walkers = [[11.4, -9.7, 'talk'], [12.6, -9.7, 'talk'], [-4, -7.5, 'walk'], [18, 7.5, 'walk']].map(([x, z, mode], i) => {
+      const p = makePerson(LOOKS[i]);
+      p.root.position.set(x as number, 0, z as number);
+      p.root.rotation.y = mode === 'talk' ? (i === 0 ? Math.PI / 2 : -Math.PI / 2) : i === 2 ? Math.PI / 2 : -Math.PI / 2;
+      sc.add(p.root);
+      let dog: Dog | null = null;
+      if (mode === 'walk') {
+        dog = makeDog();
+        dog.root.scale.setScalar(0.8);
+        sc.add(dog.root);
+      }
+      return { p, mode: mode as string, dog, x0: x as number, z: z as number, dir: i === 2 ? 1 : -1 };
+    });
 
     // Los gestos de los trucos (abajo) y el bocadillo de Gas
     const T = MINIS.tricks;
@@ -281,6 +322,24 @@ class ParkMission implements Mission {
 
   update(dt: number) {
     this.t += dt;
+    // La gente del fondo: los de los paseos van y vienen con su perro delante; los otros, de charla
+    for (const w of this.walkers) {
+      if (w.mode !== 'walk') {
+        animatePerson(w.p, dt, 'talk', 0, this.t * 3 + w.x0);
+        continue;
+      }
+      const r = w.p.root;
+      r.position.x += w.dir * 1.1 * dt;
+      if (Math.abs(r.position.x - w.x0) > 7) {
+        w.dir = -w.dir;
+        r.rotation.y = w.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      }
+      animatePerson(w.p, dt, 'walk', 1.1);
+      if (w.dog) {
+        w.dog.root.position.set(r.position.x + w.dir * 1.3, 0, w.z + 0.5);
+        w.dog.root.rotation.y = r.rotation.y;
+      }
+    }
     const { input, camera } = this.ctx;
     const pressed = input.consumeAction();
     if (this.phase === 'tricks') {
