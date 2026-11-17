@@ -228,92 +228,179 @@ function sheet(build: (body: HTMLElement, close: () => void) => void, cls = '') 
   return close;
 }
 
-type Shot = { src?: string; chat?: Memory['chat']; caption: string; sticker?: boolean; level: number };
+type Shot = { src?: string; chat?: Memory['chat']; caption: string; sticker?: boolean; video?: string; level: number };
 /**
- * Final de un capítulo: su portada arriba con confeti, las estrellas, el regalo (una caja que hay que abrir), las fotos
- * que pasan al álbum y cuándo se abre el siguiente. Un único botón abajo para seguir.
+ * Final de un capítulo, por momentos y a pantalla completa (pensado para el móvil en horizontal), con un solo botón:
+ * 1) superado: la portada cae como una polaroid, el título y las estrellas que se estampan una a una;
+ * 2) el regalo: un sobre lacrado que se abre y saca el vale de papel con su talón troquelado;
+ * 3) lo nuevo del álbum, en abanico (fotos, vídeo y chats); 4) el siguiente capítulo, borroso, con su fecha.
  */
 export function chapterComplete(n: number, result: LevelResult | undefined, gift: Gift | null, nextTeaser: number | null, onClose: () => void) {
   clearScreens();
-  const o = el('div', 'screen dn-screen');
-  const hero = el('header', 'dn-hero');
-  const img = el('img', 'dn-cover') as HTMLImageElement;
-  img.src = COVERS[n - 1];
-  img.alt = '';
-  hero.append(img, el('div', 'dn-shade'));
-  const ht = el('div', 'dn-hero-txt');
-  ht.append(el('div', 'hm-chip', `Capítulo ${n}`), el('h1', 'dn-title', LEVELS[n - 1].name), el('p', 'dn-sub', '¡Capítulo superado!'));
-  hero.append(ht);
-  const body = el('main', 'dn-body');
-  if (result) body.append(resultBlock(result));
-  const btn = el('button', 'hm-btn', 'Seguir');
+  const lv = LEVELS[n - 1];
+  const o = el('div', 'screen wn-screen');
+  const bg = el('img', 'wn-bg') as HTMLImageElement;
+  bg.src = COVERS[n - 1];
+  bg.alt = '';
+  const sparks = el('div', 'wn-sparks');
+  for (let i = 0; i < 26; i++) {
+    const sp = el('i');
+    sp.style.left = `${(i * 37) % 100}%`;
+    sp.style.setProperty('--d', `${6 + (i % 5) * 1.7}s`);
+    sp.style.setProperty('--delay', `${-(i * 0.73) % 8}s`);
+    sp.style.setProperty('--sz', `${2 + (i % 3)}px`);
+    sparks.append(sp);
+  }
+  const stage = el('div', 'wn-stage');
+  const foot = el('div', 'wn-foot');
+  const dots = el('div', 'wn-dots');
+  const btn = el('button', 'hm-btn wn-btn', 'Seguir');
+  foot.append(dots, btn);
+  o.append(bg, el('div', 'wn-shade'), sparks, stage, foot);
+
+  type Beat = { el: HTMLElement; enter?: () => void; label: () => string; next?: () => boolean };
+  const beats: Beat[] = [];
+
+  // 1 · Superado
+  {
+    const b = el('section', 'wn-beat wn-done');
+    const pol = el('figure', 'wn-polaroid');
+    const pi = el('img') as HTMLImageElement;
+    pi.src = COVERS[n - 1];
+    pi.alt = '';
+    pol.append(pi, el('figcaption', '', lv.place));
+    const txt = el('div', 'wn-txt');
+    txt.append(el('div', 'wn-kicker', `Capítulo ${n} · superado`), el('h1', 'wn-title', lv.name));
+    if (result) {
+      const stars = el('div', 'wn-stars');
+      for (let i = 0; i < 3; i++) {
+        const st = el('span', i < result.stars ? 'on' : '');
+        st.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.3l-5.8 3.1 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>';
+        st.style.animationDelay = `${0.9 + i * 0.28}s`;
+        stars.append(st);
+      }
+      const stats = el('div', 'wn-stats');
+      result.stats.forEach(([k, v], i) => {
+        const c = el('div', 'wn-stat', `<b>${v}</b><span>${k}</span>`);
+        c.style.animationDelay = `${1.8 + i * 0.12}s`;
+        stats.append(c);
+      });
+      txt.append(stars, stats);
+      setTimeout(() => {
+        for (let i = 0; i < result.stars; i++) setTimeout(() => audio.pickup(), i * 280);
+      }, 900);
+    }
+    b.append(pol, txt);
+    beats.push({ el: b, label: () => (gift ? 'Ver tu regalo' : 'Seguir') });
+  }
+
+  // 2 · El regalo
   let giftOpen = !gift;
   if (gift) {
-    const card = el('section', 'dn-card dn-gift');
-    const kick = el('div', 'dn-kicker', 'Tienes un regalo');
-    const box = el('button', 'giftbox');
-    box.append(el('div', 'lid'), el('div', 'base'), el('div', 'ribbon'));
-    const hint = el('p', 'gift-hint', 'Toca la caja para abrirla');
-    card.append(kick, box, hint);
-    box.onclick = () => {
+    const b = el('section', 'wn-beat wn-gift');
+    const kick = el('div', 'wn-kicker', 'Tu regalo de este capítulo');
+    const env = el('button', 'wn-env');
+    env.append(el('div', 'wn-env-back'), el('div', 'wn-env-front'), el('div', 'wn-env-flap'), el('div', 'wn-env-seal', '♥'));
+    const hint = el('p', 'wn-hint', 'Toca el sobre para abrirlo');
+    const ticket = el('div', 'wn-ticket');
+    const stub = el('div', 'wn-stub');
+    stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(n).padStart(2, '0')}`));
+    const main = el('div', 'wn-tmain');
+    main.append(el('div', 'wn-tlabel', 'Vale regalo'), el('h2', 'wn-ttitle', gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    ticket.append(stub, main);
+    const saved = el('p', 'wn-hint wn-saved', 'Lo tienes guardado en este capítulo, en el menú');
+    b.append(kick, env, hint, ticket, saved);
+    const open = () => {
       if (giftOpen) return;
       giftOpen = true;
-      box.classList.add('open');
-      hint.remove();
+      b.classList.add('open');
       audio.pop();
-      audio.cheer(0.35);
       vibrate([30, 40, 60]);
-      cssConfetti(o);
       setTimeout(() => {
-        box.remove();
-        kick.textContent = '¡Regalo desbloqueado!';
-        const v = voucher(gift);
-        v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano · también lo tienes en este capítulo, en el menú'));
-        card.append(v);
-        btn.textContent = 'Seguir';
-      }, 650);
+        audio.cheer(0.35);
+        cssConfetti(o, 80);
+      }, 450);
+      refresh();
     };
-    btn.textContent = 'Abrir el regalo';
-    body.append(card);
+    env.onclick = open;
+    beats.push({ el: b, label: () => (giftOpen ? 'Seguir' : 'Abrir el sobre'), next: () => (giftOpen ? true : (open(), false)) });
   }
+
+  // 3 · Lo nuevo del álbum
   const photos: Shot[] = memoriesFor(n);
   if (photos.length) {
-    const card = el('section', 'dn-card');
-    card.append(el('div', 'dn-kicker', `${photos.length === 1 ? 'Una foto nueva' : `${photos.length} fotos nuevas`} en el álbum`));
-    const strip = el('div', 'ap-strip');
-    photos.forEach((m, i) => {
-      const t = el('button', 'ap-photo');
-      t.append(thumb(m), el('span', 'ap-photo-cap', m.caption));
-      t.style.animationDelay = `${0.2 + i * 0.15}s`;
+    const b = el('section', 'wn-beat wn-album');
+    b.append(el('div', 'wn-kicker', `Nuevo en tu álbum · ${photos.length === 1 ? '1 recuerdo' : `${photos.length} recuerdos`}`));
+    const fan = el('div', 'wn-fan');
+    const shown = photos.slice(0, 5);
+    shown.forEach((m, i) => {
+      const t = el('button', 'wn-photo' + (m.chat ? ' chat' : '') + (m.sticker ? ' sticker' : ''));
+      const mid = (shown.length - 1) / 2;
+      t.style.setProperty('--r', `${(i - mid) * 7}deg`);
+      t.style.setProperty("--x", `${(i - mid) * 82}%`);
+      t.style.setProperty('--y', `${Math.abs(i - mid) * 6}%`);
+      t.style.animationDelay = `${0.15 + i * 0.12}s`;
+      t.append(thumb(m));
       t.onclick = () => lightbox(photos, i);
-      strip.append(t);
+      fan.append(t);
     });
-    card.append(strip);
-    body.append(card);
+    b.append(fan, el('p', 'wn-hint', 'Toca para verlos'));
+    beats.push({ el: b, label: () => (nextTeaser ? 'Seguir' : 'Volver al menú') });
   }
+
+  // 4 · El siguiente
   if (nextTeaser) {
-    const lv = LEVELS[nextTeaser - 1];
+    const nlv = LEVELS[nextTeaser - 1];
     const d = openDay(nextTeaser - 1);
     const days = daysUntil(d);
-    const card = el('section', 'dn-card dn-next');
-    const th = el('img', 'dn-next-img') as HTMLImageElement;
-    th.src = COVERS[nextTeaser - 1];
-    th.alt = '';
-    const txt = el('div', 'dn-next-txt');
-    txt.append(el('div', 'dn-kicker', `Capítulo ${nextTeaser} · ${days <= 0 ? 'ya se puede jugar' : days === 1 ? 'mañana' : `el ${longDate(d)}`}`), el('div', 'dn-next-hint', TEASERS[nextTeaser] ? `«${TEASERS[nextTeaser]}»` : lv.name));
-    card.append(th, txt);
-    body.append(card);
+    const b = el('section', 'wn-beat wn-next');
+    const card = el('div', 'wn-ncard');
+    const ni = el('img') as HTMLImageElement;
+    ni.src = COVERS[nextTeaser - 1];
+    ni.alt = '';
+    card.append(ni, el('div', 'wn-lock', days <= 0 ? '✦' : '🔒'));
+    const txt = el('div', 'wn-txt');
+    txt.append(
+      el('div', 'wn-kicker', `Capítulo ${nextTeaser}`),
+      el('h1', 'wn-title', days <= 0 ? 'Ya puedes jugarlo' : days === 1 ? 'Se abre mañana' : `Se abre el ${longDate(d)}`),
+      el('p', 'wn-quote', TEASERS[nextTeaser] ? (TEASERS[nextTeaser].startsWith('«') ? TEASERS[nextTeaser] : `«${TEASERS[nextTeaser]}»`) : nlv.name),
+    );
+    if (days > 1) txt.append(el('div', 'wn-count', `<b>${days}</b> días`));
+    b.append(card, txt);
+    beats.push({ el: b, label: () => 'Volver al menú' });
   }
-  const foot = el('div', 'dn-foot');
-  foot.append(btn);
-  btn.onclick = () => {
-    if (!giftOpen) return (o.querySelector('.giftbox') as HTMLButtonElement | null)?.click();
-    onClose();
+
+  let cur = 0;
+  beats.forEach((bt, i) => {
+    stage.append(bt.el);
+    dots.append(el('i', i === 0 ? 'on' : ''));
+  });
+  const refresh = () => {
+    btn.textContent = beats[cur].label();
+    [...dots.children].forEach((d, i) => d.classList.toggle('on', i === cur));
   };
-  o.append(hero, body, foot);
+  const show = (i: number) => {
+    beats.forEach((bt, k) => {
+      bt.el.classList.toggle('in', k === i);
+      bt.el.classList.toggle('past', k < i);
+    });
+    cur = i;
+    beats[i].enter?.();
+    refresh();
+  };
+  btn.onclick = () => {
+    const bt = beats[cur];
+    if (bt.next && !bt.next()) return;
+    if (cur < beats.length - 1) {
+      audio.whoosh();
+      show(cur + 1);
+    } else onClose();
+  };
+  dots.hidden = beats.length < 2;
   root.append(o);
+  setTimeout(() => show(0), 30);
   audio.fanfare();
-  cssConfetti(o, 40);
+  setTimeout(() => cssConfetti(o, 50), 700);
 }
 
 /** Visor de fotos a pantalla completa: deslizar o flechas para pasar, tocar fuera para cerrar. */
@@ -334,6 +421,15 @@ function lightbox(items: Shot[], start: number) {
       const c = el('div', 'mini-chat big');
       for (const msg of m.chat) c.append(el('div', 'bubble' + (msg.me ? ' me' : ''), `<span class="bt">${msg.text}</span><span class="bm">${msg.t}</span>`));
       stageEl.append(c);
+    } else if (m.video) {
+      const v = el('video') as HTMLVideoElement;
+      v.src = m.video;
+      v.poster = m.src ?? '';
+      v.controls = true;
+      v.playsInline = true;
+      v.autoplay = true;
+      v.className = 'ap-video';
+      stageEl.append(v);
     } else if (m.src) {
       const img = el('img') as HTMLImageElement;
       img.src = m.src;
@@ -348,12 +444,14 @@ function lightbox(items: Shot[], start: number) {
     next.hidden = i === items.length - 1;
   };
   const go = (d: number) => {
+    stageEl.querySelector('video')?.pause();
     i = Math.max(0, Math.min(items.length - 1, i + d));
     show();
   };
   prev.onclick = (e) => (e.stopPropagation(), go(-1));
   next.onclick = (e) => (e.stopPropagation(), go(1));
   const close = () => {
+    stageEl.querySelector('video')?.pause();
     o.classList.add('out');
     setTimeout(() => o.remove(), 200);
   };
@@ -587,6 +685,11 @@ function thumb(m: Shot) {
   img.loading = 'lazy';
   img.decoding = 'async';
   img.draggable = false;
+  if (m.video) {
+    const w = el('div', 'vid-thumb');
+    w.append(img, el('span', 'wn-play', '▶'));
+    return w;
+  }
   return img;
 }
 
@@ -904,22 +1007,6 @@ function cssConfetti(parent: HTMLElement, n = 70) {
     c.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
     parent.append(c);
   }
-}
-
-/** Las estrellas del capítulo, que entran una a una, y sus números. */
-function resultBlock(result: LevelResult) {
-  const res = el('div', 'result');
-  const stars = el('div', 'stars');
-  for (let i = 0; i < 3; i++) {
-    const st = el('span', i < result.stars ? 'on' : '', '★');
-    st.style.animationDelay = `${0.3 + i * 0.25}s`;
-    stars.append(st);
-  }
-  const st = el('div', 'result-stats');
-  for (const [k, v] of result.stats) st.append(el('div', '', `<span>${k}</span><b>${v}</b>`));
-  res.append(stars, st);
-  setTimeout(() => result.stars > 0 && audio.pickup(), 300);
-  return res;
 }
 
 /** Rótulo de capítulo a pantalla completa que se desvanece (tapa también la carga de la escena). */

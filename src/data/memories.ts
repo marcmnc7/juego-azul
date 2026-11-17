@@ -8,6 +8,9 @@ import carnaval from '../assets/recuerdos/carnaval.jpg';
 import caballos from '../assets/recuerdos/caballos.jpg';
 import santJoan from '../assets/recuerdos/sant-joan.jpg';
 import santJoanSelfie from '../assets/recuerdos/sant-joan-selfie.jpg';
+import ferreriesSelfie from '../assets/recuerdos/ferreries-selfie.jpg';
+import ferreriesVideo from '../assets/recuerdos/ferreries-video.mp4';
+import ferreriesPoster from '../assets/recuerdos/ferreries-video.jpg';
 import stOso from '../assets/recuerdos/st-oso.webp';
 import stJuzgamos from '../assets/recuerdos/st-juzgamos.webp';
 import stCarita from '../assets/recuerdos/st-carita.webp';
@@ -25,9 +28,13 @@ export interface Memory {
   pending?: boolean;
   /** Los stickers se pintan sin marco de polaroid. */
   sticker?: boolean;
+  /** Un vídeo (src es su fotograma de portada). */
+  video?: string;
 }
 
 export const MEMORIES: Memory[] = [
+  { level: 1, src: ferreriesSelfie, caption: 'Ferreries, 25 de agosto. Purpurina y pomada.' },
+  { level: 1, src: ferreriesPoster, video: ferreriesVideo, caption: 'El jaleo, en directo.' },
   { level: 1, src: stOso, caption: 'Así bailaba aquel de Sa Font. Más o menos.', sticker: true },
   { level: 2, chat: CHATS.cesped.msgs.slice(-4, -1), caption: '27 de agosto, 1:17' },
   { level: 2, chat: CHATS.meGustas.msgs.slice(4, 8), caption: '27 de agosto, 1:30' },

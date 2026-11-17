@@ -27,3 +27,7 @@ declare module '*.png' {
 interface ImportMeta {
   glob<T = unknown>(pattern: string, opts: { eager: true; query?: string; import?: string }): Record<string, T>;
 }
+declare module '*.mp4' {
+  const src: string;
+  export default src;
+}

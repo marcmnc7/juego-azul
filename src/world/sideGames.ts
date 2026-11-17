@@ -120,7 +120,7 @@ function toyGun(c: number) {
 }
 
 export class WaterFight {
-  private kids: { p: Person; st: SteerState; goal: THREE.Vector3; goalT: number; wet: number; fireT: number; warn: number; out: boolean; flinch: number; alert: THREE.Sprite }[] = [];
+  private kids: { p: Person; st: SteerState; goal: THREE.Vector3; goalT: number; wet: number; fireT: number; warn: number; out: boolean; flinch: number; dodge: number; alert: THREE.Sprite }[] = [];
   private drops: Droplets;
   private cool = 0;
   private armT = 0;
@@ -153,7 +153,7 @@ export class WaterFight {
       alert.renderOrder = 5;
       alert.visible = false;
       sc.add(alert);
-      this.kids.push({ p, st: {}, goal: p.root.position.clone(), goalT: 0, wet: 0, fireT: 1.6 + i * 0.7, warn: 0, out: false, flinch: 0, alert });
+      this.kids.push({ p, st: {}, goal: p.root.position.clone(), goalT: 0, wet: 0, fireT: 1.6 + i * 0.7, warn: 0, out: false, flinch: 0, dodge: 0, alert });
     });
   }
 
@@ -174,7 +174,7 @@ export class WaterFight {
 
   shoot() {
     if (this.cool > 0 || this.finished) return;
-    this.cool = 0.32;
+    this.cool = 0.45;
     this.armT = 0.5;
     const pp = this.player.root.position;
     // Apunta sola al que tiene delante, si lo hay
@@ -185,7 +185,8 @@ export class WaterFight {
       const q = k.p.root.position;
       const d = Math.hypot(q.x - pp.x, q.z - pp.z);
       const ang = Math.abs(wrap(Math.atan2(q.x - pp.x, q.z - pp.z) - this.walker.facing));
-      if (d > 7.5 || ang > 0.75) continue;
+      // (más difícil: hay que encararlos de verdad, la puntería automática solo ayuda un poco y de cerca)
+      if (d > 6.2 || ang > 0.42) continue;
       if (d + ang * 2 < score) {
         score = d + ang * 2;
         target = k;
@@ -195,17 +196,27 @@ export class WaterFight {
     const f = this.v1.set(Math.sin(this.walker.facing), 0, Math.cos(this.walker.facing));
     const from = this.v2.copy(pp).addScaledVector(f, 0.45).setY(1.22).clone();
     const to = target ? target.p.root.position.clone().setY(0.85) : pp.clone().addScaledVector(f, 7).setY(0.3);
-    const time = Math.max(0.16, from.distanceTo(to) / 15);
+    const time = Math.max(0.2, from.distanceTo(to) / 10.5);
     this.drops.jet(from, to, time, 20);
     audio.knock(0.25, 1400, 0.06);
     if (target) {
       const k = target;
       const moved = k.p.root.position.clone();
+      // Los críos espabilados: a veces ven venir el chorro y se apartan de un salto (más si ya van mojados o estás lejos)
+      const far = Math.hypot(moved.x - pp.x, moved.z - pp.z) > 3.2;
+      if (k.warn <= 0 && Math.random() < (k.wet ? 0.5 : 0.3) + (far ? 0.15 : 0)) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const a = Math.atan2(moved.x - pp.x, moved.z - pp.z) + side * Math.PI / 2;
+        const z = this.zone;
+        k.goal.set(THREE.MathUtils.clamp(moved.x + Math.sin(a) * 2.6, z.minX, z.maxX), 0, THREE.MathUtils.clamp(moved.z + Math.cos(a) * 2.6, z.minZ, z.maxZ));
+        k.goalT = 0.9;
+        k.dodge = 0.6;
+      }
       this.pending.push({
         t: time,
         run: () => {
           // Si se ha apartado mucho, falla
-          if (k.out || k.p.root.position.distanceTo(moved) > 1.15) return;
+          if (k.out || k.p.root.position.distanceTo(moved) > 0.75) return;
           k.wet++;
           k.flinch = 0.5;
           this.fx.burst(k.p.root.position.clone().setY(1), 'spray', 10, 1.6, 0.8);
@@ -289,6 +300,8 @@ export class WaterFight {
             run: () => {
               if (Math.hypot(pp.x - land.x, pp.z - land.z) > 1) return;
               this.soaked++;
+              // Con el agua en la cara, un segundo sin poder disparar
+              this.cool = Math.max(this.cool, 1.0);
               this.walker.shake(0.22);
               this.fx.burst(pp.clone().setY(1.5), 'spray', 10, 1.6, 0.8);
               audio.hit();
@@ -296,14 +309,17 @@ export class WaterFight {
               comicWord(SIDE.water.soaked, 'splash');
             },
           });
-          k.fireT = 2.4 + Math.random() * 2.4;
+          k.fireT = 1.7 + Math.random() * 2;
         }
         continue;
       }
       k.fireT -= dt;
       if (k.fireT <= 0 && d < 8) k.warn = 0.65;
-      steerTo(r, k.st, k.goal.x, k.goal.z, 3.1, dt, this.people as never, 6, 0.26, undefined, this.colliders as Box2[]);
-      animatePerson(k.p, dt, 'walk', 0.9);
+      // Huyendo de ti (y más los ya mojados, o al esquivar) corren más
+      k.dodge -= dt;
+      const run = k.dodge > 0 ? 5.2 : d < 4.5 ? (k.wet ? 4.3 : 3.8) : 3.1;
+      steerTo(r, k.st, k.goal.x, k.goal.z, run, dt, this.people as never, k.dodge > 0 ? 12 : 6, 0.26, undefined, this.colliders as Box2[]);
+      animatePerson(k.p, dt, 'walk', run > 3.5 ? 1 : 0.9);
     }
   }
 

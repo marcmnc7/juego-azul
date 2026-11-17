@@ -11,12 +11,12 @@ export interface Gift {
 
 export const GIFTS: Gift[] = [
   {
-    id: 'fiesta',
+    id: 'masaje',
     level: 1,
-    icon: '🪩',
-    title: 'Una noche de fiesta juntos',
-    description: 'Como en Ferreries: música, baile y sin mirar el reloj. Tú eliges dónde; yo prometo bailar (mal).',
-    howToRedeem: 'Enséñale este vale a Gas y elegid la noche.',
+    icon: '💆‍♀️',
+    title: 'Un masaje de 15 minutos',
+    description: 'Con aceite y con música. Quince minutos enteros para ti, sin prisas.',
+    howToRedeem: 'Tú eliges el día y la hora. Enséñale este vale a Gas.',
   },
   {
     id: 'cena',

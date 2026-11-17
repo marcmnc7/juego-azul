@@ -7,7 +7,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Confetti, Fireworks, Glitter, toon, vibrate } from '../core/gfx';
-import { FERRERIES, FERRERIES_MEET } from '../data/story';
+import { FERRERIES, FERRERIES_MEET, FERRERIES_CHATTER, FERRERIES_BYE } from '../data/story';
 import { buildFerreries, animateCrowd, FerreriesWorld, type TownDressing } from './ferreries';
 import { boneAnchor, rigPost, carryHand } from '../entities/rig';
 import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type PersonLook } from '../entities/models';
@@ -15,7 +15,7 @@ import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM, castLook } from '../data/characters';
 import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
-import { embrace, hugFor, type Embrace } from '../entities/embrace';
+import { embrace, hugFor, twoBone, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { cinema, headOf, rel } from '../core/cinema';
@@ -82,6 +82,9 @@ export const FERRERIES_VARIANT: JaleoVariant = {
 };
 
 // toFont: capítulo 9, después del jaleo, a bailar juntos a Sa Font (donde se conocieron) antes del beso
+/** Lo que dura la caricia al burro (s). */
+const PET = 1.6;
+
 type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'toFont' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
@@ -208,13 +211,18 @@ export class Level1 implements Level {
   private pomadaCount = 0;
   private luckCount = 0;
   /** Caricia al burro en curso: se gira hacia él y le da unas palmaditas en el cuello; él cabecea contento. */
-  private pet: { s: DonkeyState; t: number } | null = null;
+  /** La caricia: a qué burro, cuánto le queda y de qué lado está ella (1: a su izquierda; -1: a su derecha). */
+  private pet: { s: DonkeyState; t: number; side: number } | null = null;
+  private petPost: (() => void) | null = null;
   /** Sentada en una silla de terraza (se levanta al moverse). */
   private sit: { x: number; z: number; ry: number; fx: number; fz: number } | null = null;
   /** Gente con la que ya ha hablado (para no repetir siempre lo mismo). */
   private chats = 0;
   private perfects = 0;
   private hits = 0;
+  /** La gente con la que ya has hablado: su nombre, si sabe lo que toca y qué te ha contado. */
+  private folk = new Map<object, { name: string; hint: boolean; talk: number; times: number }>();
+  private folkNext = 0;
   private playTime = 0;
   private invuln = 0;
   private t = 0;
@@ -747,8 +755,15 @@ export class Level1 implements Level {
   private chatWith(w: { b: { x: number; z: number; ry: number; walk?: unknown }; female: boolean }) {
     const pp = this.player.root.position;
     if (!w.b.walk) w.b.ry = Math.atan2(pp.x - w.b.x, pp.z - w.b.z);
-    const names = w.female ? ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia'] : ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel'];
-    const name = names[Math.floor(Math.random() * names.length)];
+    // Cada persona tiene su nombre y su papel (fijos): una de cada tres sabe lo que toca y te lo dice; las demás
+    // hablan de la fiesta (sueltas o con una mini conversación) y, si les vuelves a hablar, se despiden
+    let who = this.folk.get(w.b);
+    if (!who) {
+      const names = w.female ? ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia'] : ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel'];
+      who = { name: names[Math.floor(Math.random() * names.length)], hint: this.folk.size % 3 === 1, talk: this.folkNext++ % FERRERIES_CHATTER.length, times: 0 };
+      this.folk.set(w.b, who);
+    }
+    const name = who.name;
     const g = this.V.guide;
     const hint: Record<string, string[]> = {
       talkTofol: [`¿Buscas a ${g}? Siempre está detrás de la barra del Bar Es Pla, en la plaza.`, `${g} andaba preguntando por ti. Está en el Es Pla, el de la plaza de la iglesia.`],
@@ -760,24 +775,49 @@ export class Level1 implements Level {
         : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
       toFont: ['¿A Sa Font? Al fondo de la plaza, al lado de la iglesia.'],
     };
-    const chatter = [
-      '¡Qué calor! Pero el jaleo no me lo pierdo por nada.',
-      'Mi abuelo dice que antes los caballos saltaban más alto. Lo dice cada año.',
-      '¿Has probado la pomada? Gin de Menorca con limonada. Peligrosa.',
-      'Esta noche hay fuegos artificiales en la plaza. No te los pierdas.',
-      'Llevo desde las nueve aquí. Me duelen los pies, pero vale la pena.',
-      '¿De dónde eres? Se te nota que no eres de Ferreries… ¡Bienvenida!',
-      'Este año hay más gente que nunca. Medio Menorca está aquí.',
-      'Me han mojado tres veces ya. Los críos con las pistolas son lo peor.',
-      'Sant Bartomeu es lo mejor del verano. Luego ya empieza septiembre.',
-      '¡Ep! ¿Bailamos luego en el Cas Ferrer? Ponen buena música.',
-    ];
     const pool = hint[this.stage];
-    const useHint = pool && (this.chats % 2 === 0 || Math.random() < 0.5);
-    const text = useHint ? pool[Math.floor(Math.random() * pool.length)] : chatter[(this.chats * 7 + Math.floor(Math.random() * 3)) % chatter.length];
+    let lines: Line[];
+    if (who.hint && pool) lines = [{ who: name, text: pool[who.times % pool.length] }];
+    else if (who.times > 0) lines = [{ who: name, text: FERRERIES_BYE[(who.talk + who.times) % FERRERIES_BYE.length] }];
+    else lines = FERRERIES_CHATTER[who.talk].map((l) => ({ who: l.who === '*' ? name : l.who, text: l.text }));
+    who.times++;
     this.chats++;
     this.busy = true;
-    dialogue([{ who: name, text }], () => (this.busy = false));
+    dialogue(lines, () => (this.busy = false));
+  }
+
+  /**
+   * Las manos en el burro, cada fotograma después de la animación: la del lado de la cabeza le acaricia el cuello
+   * de arriba abajo; la otra, apoyada en la cruz.
+   */
+  private startPetIK() {
+    if (this.petPost) rigPost.delete(this.petPost);
+    const r = this.player.rig;
+    if (!r) return;
+    const t = new THREE.Vector3(), pole = new THREE.Vector3(), sh = new THREE.Vector3();
+    this.petPost = () => {
+      const P = this.pet;
+      if (!P) return;
+      const e = PET - P.t;
+      const w = THREE.MathUtils.smoothstep(e, 0.05, 0.35) * THREE.MathUtils.smoothstep(P.t, 0, 0.3);
+      const stroke = 0.5 - 0.5 * Math.cos(e * 5.5); // de 0 a 1 y vuelta: cuello abajo y arriba
+      // Mirando al burro de lado: si está a su izquierda (side 1), la mano izquierda queda hacia la cabeza
+      const headHand = P.side > 0 ? 'Left' : 'Right';
+      const backHand = P.side > 0 ? 'Right' : 'Left';
+      const piv = P.s.d.pivot;
+      piv.updateWorldMatrix(true, false);
+      for (const [hand, local] of [
+        [headHand, new THREE.Vector3(P.side * 0.15, 1.42 - stroke * 0.14, 1.5 - stroke * 0.22)],
+        [backHand, new THREE.Vector3(P.side * 0.19, 1.16, 1.05)],
+      ] as const) {
+        // (las coordenadas del pivote: su eje está en las patas de atrás, 0,75 m detrás del centro)
+        piv.localToWorld(t.copy(local));
+        const shoulder = r.bones.get(hand + 'Arm')!.getWorldPosition(sh);
+        pole.set(shoulder.x, shoulder.y - 0.7, shoulder.z);
+        twoBone(r.bones.get(hand + 'Arm')!, r.bones.get(hand + 'ForeArm')!, r.bones.get(hand + 'Hand')!, t, pole, w);
+      }
+    };
+    rigPost.add(this.petPost);
   }
 
   private touchDonkey(s: DonkeyState) {
@@ -786,7 +826,10 @@ export class Level1 implements Level {
     s.touched = true;
     s.ring.visible = false;
     this.luckCount++;
-    this.pet = { s, t: 1.1 };
+    // De qué lado del burro está ella (en el espacio del burro, que mira a +z)
+    const loc = s.d.root.worldToLocal(this.v1.copy(this.player.root.position));
+    this.pet = { s, t: PET, side: loc.x >= 0 ? 1 : -1 };
+    this.startPetIK();
     // (corazón dibujado, no el emoji 💕 del sistema)
     later(() => this.fx.burst(this.v1.copy(s.d.root.position).setY(2.1), '❤️', 4, 1.6, 0.9), 350);
     const at = this.v1.copy(s.d.root.position).setY(2.4);
@@ -972,18 +1015,30 @@ export class Level1 implements Level {
       if (this.player.rig) carryHand(this.player, 'R');
       else this.player.armR.rotation.x = -0.7 + this.player.armR.rotation.x * 0.3;
     }
-    // Caricia: de cara al burro, el brazo derecho adelantado dándole palmaditas (y él, cabeceando)
+    // Caricia: se arrima al cuello del burro, de lado, y le acaricia (las manos las pone el IK, ver startPetIK)
     if (this.pet) {
       const P = this.pet;
       P.t -= dt;
-      const dp = this.v2.subVectors(P.s.d.root.position, this.player.root.position);
-      this.player.root.rotation.y = Math.atan2(dp.x, dp.z);
-      const w = Math.min(1, P.t / 0.25, (1.1 - P.t) / 0.2);
-      this.player.armR.rotation.x = THREE.MathUtils.lerp(this.player.armR.rotation.x, -1.3 + Math.sin(P.t * 17) * 0.16, w);
-      this.player.elbowR.rotation.x = THREE.MathUtils.lerp(this.player.elbowR.rotation.x, -0.45 + Math.sin(P.t * 17) * 0.2, w);
+      const d = P.s.d;
+      const w = Math.min(1, (PET - P.t) / 0.3, P.t / 0.3);
+      // Su sitio: al lado del cuello, a medio metro, mirándolo
+      const spot = d.root.localToWorld(this.v2.set(P.side * 0.5, 0, 0.55));
+      const pp = this.player.root.position;
+      pp.x += (spot.x - pp.x) * Math.min(1, dt * 8) * w;
+      pp.z += (spot.z - pp.z) * Math.min(1, dt * 8) * w;
+      const neck = d.root.localToWorld(this.v2.set(0, 0, 0.55));
+      const yaw = Math.atan2(neck.x - pp.x, neck.z - pp.z);
+      this.player.root.rotation.y = yaw;
+      this.walker.facing = yaw;
+      if (!this.player.rig) {
+        this.player.armR.rotation.x = THREE.MathUtils.lerp(this.player.armR.rotation.x, -1.2 + Math.sin(P.t * 6) * 0.12, w);
+        this.player.elbowR.rotation.x = THREE.MathUtils.lerp(this.player.elbowR.rotation.x, -0.4, w);
+      }
       if (P.t <= 0) {
-        P.s.d.head.rotation.z = 0;
+        d.head.rotation.z = 0;
         this.pet = null;
+        if (this.petPost) rigPost.delete(this.petPost);
+        this.petPost = null;
       }
     }
     if (held > 1) {
@@ -1085,9 +1140,10 @@ export class Level1 implements Level {
     const rearingNear = this.updateDonkeys(dt);
     if (this.pet) {
       // (después de mover a los burros: si no, su paso le borraba el cabeceo)
-      const w = Math.min(1, this.pet.t / 0.25, (1.1 - this.pet.t) / 0.2);
-      this.pet.s.d.head.rotation.x += Math.sin(this.pet.t * 9) * 0.22 * w;
-      this.pet.s.d.head.rotation.z = Math.sin(this.pet.t * 6) * 0.12 * w;
+      // Él, a gusto: baja la cabeza y la inclina hacia ella, despacio
+      const w = Math.min(1, (PET - this.pet.t) / 0.4, this.pet.t / 0.3);
+      this.pet.s.d.head.rotation.x += (0.25 + Math.sin(this.pet.t * 3) * 0.06) * w;
+      this.pet.s.d.head.rotation.z = this.pet.side * 0.18 * w;
     }
 
     // Pomadas
@@ -1694,6 +1750,8 @@ export class Level1 implements Level {
       this.marcSteer = {};
       this.carmeSteer = {};
       this.pet = null;
+      if (this.petPost) rigPost.delete(this.petPost);
+      this.petPost = null;
       this.sit = null;
       this.player.body.position.y = 0;
       this.stampede = false;
@@ -1835,6 +1893,7 @@ export class Level1 implements Level {
   }
 
   dispose() {
+    if (this.petPost) rigPost.delete(this.petPost);
     this.hud.remove();
     audio.stopMusic();
     audio.ambience(0);

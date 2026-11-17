@@ -601,7 +601,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   if (senyeraPlanes.length) group.add(mergedPlanes(senyeraPlanes, senyeraMat));
 
   // Pancartas de las fiestas cruzando la calle y a la entrada del Pla de l'Església
-  const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "Jaleo d'Ases · 23, 24 i 25 d'agost")) });
+  const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "23, 24 i 25 d'agost")) });
   const banners: Parameters<typeof mergedPlanes>[0] = [];
   const cables: [number, number, number, number, number, number][] = [];
   for (const bx of [-34, 22]) {

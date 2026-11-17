@@ -31,7 +31,15 @@ export const FERRERIES = {
     { who: 'Narrador', text: 'Pistolas de agua, purpurina y confeti por todas partes. Has subido con tus amigas. Todavía no le conoces.' },
   ] as Line[],
   tofolQuest: [
-    { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol, i avui mano jo. Benvinguda a Ferreries: darrer dia de Sant Bartomeu.' },
+    // La primera persona con la que habla en todo el juego: presenta el regalo (inventado: Marc, cámbialo si quieres)
+    { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol. Som sa primera persona amb qui parles, eh? Idò t’he de dir una cosa.' },
+    { who: 'Tòfol', text: 'Te lo digo en castellano, que esto es importante: esto no es un juego cualquiera. Es un regalo. Para ti.' },
+    { who: 'Tòfol', text: 'Cada capítulo es un trocito de vuestra historia. Se irán abriendo poco a poco, en días señalados, hasta Navidad.' },
+    { who: 'Tòfol', text: 'Nadie te va a decir exactamente qué hacer: mira, escucha a la gente y ve descubriéndolo. Si te pierdes, toca la estrella de arriba.' },
+    { who: 'Tòfol', text: 'Y al final de cada capítulo te espera un regalo de verdad.' },
+    { who: 'Margaux', text: '¿En serio?' },
+    { who: 'Tòfol', text: 'Molt en serio. Espero que t’agradi: ell hi ha posat molt d’amor.' },
+    { who: 'Tòfol', text: 'Bé, au! I avui aquí mano jo. Benvinguda a Ferreries: darrer dia de Sant Bartomeu.' },
     { who: 'Tòfol', text: 'Tot s’any som un poble tranquil. Avui no: pistoles d’aigua, purpurina, i ases pel mig de sa plaça amb tot es poble ballant-los devora. Aquí ningú torna sec a ca seva.' },
     { who: 'Tòfol', text: 'I alerta, que es jaleo té sa seva màgia. Un ve a passar sa tarda, i no sap mai què se’n durà.' },
     { who: 'Margaux', text: '¿Y qué se hace aquí?' },
@@ -85,6 +93,44 @@ export const FERRERIES = {
         : [{ who: 'Margaux', text: 'Toma… la que ha llegado.' }, { who: 'Tòfol', text: 'Una?! Bé, sa intenció és lo que compta.' }],
   },
 };
+
+/**
+ * La gente de la fiesta que no sabe lo que toca: charla normal de jaleo (inventada). El pueblo habla en menorquín;
+ * algún forastero, en castellano. who '*': la persona con la que hablas (su nombre lo pone el nivel).
+ */
+export const FERRERIES_CHATTER: Line[][] = [
+  [
+    { who: '*', text: 'Ja t’han tirat confeti? Idò ara sí que ets de sa festa.' },
+    { who: 'Margaux', text: '¡Tengo purpurina hasta en las orejas!' },
+    { who: '*', text: 'Això no se’n va fins a Nadal.' },
+  ],
+  [{ who: '*', text: 'Uf, quina calor! Me’n vaig a cercar una pomada ben fresca.' }],
+  [
+    { who: '*', text: 'Aquest vespre hi ha concert a sa plaça. Hi vendràs?' },
+    { who: 'Margaux', text: '¡Si me quedan fuerzas!' },
+    { who: '*', text: 'Idò ens hi veim!' },
+  ],
+  [{ who: '*', text: 'Sa meva padrina fa quaranta anys que no es perd es jaleo. És allà, a primera fila.' }],
+  [{ who: '*', text: 'Venimos de Barcelona solo para esto. ¡Una locura, eh!' }],
+  [
+    { who: '*', text: 'T’agrada sa festa?' },
+    { who: 'Margaux', text: '¡Me encanta! Es todo tan… vivo.' },
+    { who: '*', text: 'Idò espera’t a sa nit, que encara és més bo.' },
+  ],
+  [{ who: '*', text: 'Compte amb es got, que aquí tothom balla i qualcú te’l tomba.' }],
+  [{ who: '*', text: 'He perdut ses meves amigues fa una hora. Si veus tres al·lotes amb diademes de flors, digue’ls que som aquí!' }],
+  [
+    { who: '*', text: 'Perdona, ¿nos haces una foto?' },
+    { who: 'Margaux', text: '¡Claro! Decid «pomada»…' },
+    { who: '*', text: '¡Pomadaaa! Gracias, guapa.' },
+  ],
+  [{ who: '*', text: 'Me’n vaig a ca meva a mudar-me. Estic xop de cap a peus!' }],
+  [{ who: '*', text: 'Mi hijo se ha gastado toda el agua de la pistola en mí. Toda.' }],
+  [{ who: '*', text: 'Mon pare diu que abans es jaleo era més salvatge. Ho diu cada any.' }],
+  [{ who: '*', text: 'Una pomada, dues pomades… i després ja no les compt.' }],
+];
+/** Si le vuelves a hablar a alguien que ya te ha contado lo suyo. */
+export const FERRERIES_BYE = ['Bona festa!', 'Ens veim per aquí!', 'Vés, vés, que es jaleo no espera.', '¡Pásalo bien!', 'Adéu, guapa!'];
 
 /** Lo que solo pasa en Ferreries: la mirada a cámara lenta, el baile, el beso y el número (a las 19:46 ya os escribíais por WhatsApp). */
 export const FERRERIES_MEET = {
@@ -831,9 +877,9 @@ export const SIDE = {
   water: {
     intro: [
       { who: 'Narrador', text: 'Pistolas de agua por todas partes. Unos críos te cortan el paso.' },
-      { who: 'Un crío', text: 'D\'aquí no passes si no ens mulles!' },
+      { who: 'Un crío', text: 'D\'aquí no passes si no mus banyes!' },
       // (inventado: antes lo contaba el narrador; ahora la regla la dice el crío)
-      { who: 'Un crío', text: 'Té, una pistola. Som cinc: dues mullades a cada un!' },
+      { who: 'Un crío', text: 'Té, una pistola. Som cinc: mus has de banyar dues vegades a cadascú!' },
     ] as Line[],
     hint: '💦',
     btn: '💦 Disparar',

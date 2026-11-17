@@ -1,5 +1,40 @@
 import * as THREE from 'three';
 import { comicTile } from '../../core/comicTiles';
+import { canvasTex } from '../deco';
+
+/** Etiqueta de gin de Menorca para las botellas de las barras: «GIN XORIGUER», blanca con letras azules y su molino. */
+function ginLabel() {
+  return canvasTex((ctx, w, h) => {
+    ctx.fillStyle = '#f7f3e8';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#1f3f7a';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, w - 16, h - 16);
+    // El molino, en pequeño
+    ctx.fillStyle = '#1f3f7a';
+    const cx = w / 2, cy = h * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy + 30);
+    ctx.lineTo(cx - 9, cy - 4);
+    ctx.lineTo(cx + 9, cy - 4);
+    ctx.lineTo(cx + 14, cy + 30);
+    ctx.fill();
+    ctx.lineWidth = 5;
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + (k * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 6);
+      ctx.lineTo(cx + Math.cos(a) * 30, cy - 6 + Math.sin(a) * 30);
+      ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${h * 0.2}px Georgia, serif`;
+    ctx.fillText('GIN', cx, h * 0.62);
+    ctx.font = `800 ${h * 0.105}px Georgia, serif`;
+    ctx.fillText('XORIGUER', cx, h * 0.8);
+  }, 160, 200);
+}
 
 // Materiales del pueblo de tebeo (Ferreries, el Born, Ciutadella): cada uno con su dibujo hecho a mano de
 // comicTiles.ts (losas, sillares de marès, encalado, teja árabe, madera, puertas y ventanas), que se repite por los
@@ -47,7 +82,7 @@ function createHdMaterials() {
     cup: std({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }),
     lemonade: std({ color: 0xf2e27a, roughness: 0.2, transparent: true, opacity: 0.85 }),
     gin: std({ color: 0xa8d4b8, roughness: 0.1, transparent: true, opacity: 0.8 }),
-    label: std({ color: 0xf4efe2, roughness: 0.7 }),
+    label: std({ color: 0xffffff, roughness: 0.7, map: ginLabel(), side: THREE.DoubleSide }),
     lantern: std({ color: 0xfff1c9, emissive: 0xffcf7a, emissiveIntensity: 0.6, roughness: 0.3 }),
   };
 }

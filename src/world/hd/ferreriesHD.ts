@@ -155,6 +155,8 @@ export class FerreriesHD {
       b.cyl(g, [bx, 1.14 + 0.11, -0.25], 0.04, 0.04, 0.22, { seg: 14, parent: P });
       b.cyl(g, [bx, 1.14 + 0.25, -0.25], 0.014, 0.04, 0.06, { seg: 10, parent: P });
       b.cyl(g, [bx, 1.14 + 0.32, -0.25], 0.014, 0.014, 0.09, { seg: 8, parent: P });
+      // Su etiqueta de gin de Menorca, de cara a la gente
+      b.add(new THREE.CylinderGeometry(0.0425, 0.0425, 0.12, 14, 1, true, -1.1, 2.2), M.label, new THREE.Matrix4().makeTranslation(bx, 1.14 + 0.1, -0.25).premultiply(P));
     }
     for (let i = 0; i < 6; i++) {
       const gx = -1.2 + i * 0.36;
@@ -167,7 +169,7 @@ export class FerreriesHD {
     b.cyl(M.gin, [1.6, 1.14 + 0.45, 0.15], 0.03, 0.03, 0.07, { seg: 10, parent: P });
     const handle = new THREE.TorusGeometry(0.07, 0.014, 6, 12, Math.PI);
     b.add(handle, M.gin, new THREE.Matrix4().makeRotationZ(-Math.PI / 2).setPosition(1.7, 1.14 + 0.26, 0.15).premultiply(P));
-    b.box(M.label, [1.6, 1.14 + 0.18, 0.255], [0.11, 0.12, 0.004], { parent: P });
+    b.add(new THREE.PlaneGeometry(0.15, 0.18), M.label, new THREE.Matrix4().makeTranslation(1.6, 1.14 + 0.18, 0.15 + 0.112).premultiply(P));
     // Barril
     b.cyl(M.wood, [2.6, 0.5, 0], 0.36, 0.4, 1, { seg: 16, tile: 0.8, parent: P });
   }
