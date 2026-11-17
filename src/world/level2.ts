@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD } from '../data/story';
-import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, woodChair, CarRig } from '../entities/models';
+import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, woodChair, CarRig, makePerson, animatePerson, type Person } from '../entities/models';
 import { ROOF_GEO } from './ferreries';
 import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
@@ -33,7 +33,7 @@ import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 // Por el camino, además de fotos, gasolina y tabaco, alguna vaca en mitad de la carretera: hay que parar,
 // saludarla y preguntarle hacia dónde vamos.
 
-type Phase = 'intro' | 'drive1' | 'marcial' | 'camp' | 'cow' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
+type Phase = 'intro' | 'drive1' | 'marcial' | 'fuel' | 'camp' | 'cow' | 'arriveSV' | 'grill' | 'zambDone' | 'drive2' | 'logrono' | 'terrace' | 'done';
 type Region = 'madrid' | 'meseta' | 'cantabria' | 'rioja';
 
 const LANES = [-2.6, 0, 2.6];
@@ -59,9 +59,11 @@ const EATERIES: { name: string; z: number; m?: boolean }[] = [
 ];
 const MARCIAL_Z = 770;
 /** Donde paráis a hacer noche: entre Marcial y San Vicente. */
-const CAMP_Z = 985;
+/** La gasolinera de la carretera, antes de la cabaña: a por el cartucho del hornillo (no tenían). */
+const GAS_Z = 1255;
+const CAMP_Z = 1320;
 /** Las vacas de la carretera. */
-const COW_Z = [1110, 1345, LEG1 + 40 + 340];
+const COW_Z = [1110, 1420, LEG1 + 40 + 340];
 const COW_NEAR = 60;
 /** La tromba de Cantabria: dónde empieza y dónde acaba (entre dos vacas). */
 const STORM_Z0 = 1165, STORM_Z1 = 1295;
@@ -93,13 +95,15 @@ function makeSign(lines: string[], bg = '#1f5fbf') {
     });
   }, 512, 256);
   const g = new THREE.Group();
+  // (sin combar a mano alzada: la chapa de detrás, al doblarse, atravesaba el panel y tapaba medio letrero)
+  g.userData.comicBent = true;
   const board = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), new THREE.MeshBasicMaterial({ map: tex }));
-  board.position.set(0, 4, -0.03);
+  board.position.set(0, 4, -0.06);
   board.rotation.y = Math.PI;
   g.add(board);
   // Los postes, detrás del panel (asomaban por delante, cruzando el texto), y su trasera de chapa
   g.add(
-    new Merger()
+    new Merger(false)
       .add(G.box, 0x9aa3ad, 0, 4, 0.03, 0, 0, 0, 5.02, 2.52, 0.05)
       .add(G.cyl, 0x888888, -2, 2.6, 0.13, 0, 0, 0, 0.15, 5.2, 0.15)
       .add(G.cyl, 0x888888, 2, 2.6, 0.13, 0, 0, 0, 0.15, 5.2, 0.15)
@@ -191,6 +195,12 @@ export class Level2 implements Level {
   private campHintT = 0;
   /** El último punto bueno del viaje (la salida, la última vaca saludada, el camping): si se pasa de largo, se vuelve ahí. */
   private checkpoint = 0;
+  /** La charla del gas (bocadillos mientras se conduce), la parada en la gasolinera y Gas a pie hasta la tienda. */
+  private gasTalkIdx = 0;
+  private gasDone = false;
+  private fuelT = -1;
+  private fuelGas: Person | null = null;
+  private fuelPath: THREE.Vector3[] = [];
   private rewinding = false;
   /** Logroño, de fiesta. */
   private laurel: Laurel | null = null;
@@ -225,7 +235,7 @@ export class Level2 implements Level {
   private townZ = Infinity;
   private scatterAt = (z: number): Region | null => {
     // Ni en la ciudad, ni en la terraza de San Vicente, ni delante de los restaurantes: salían matas y vacas encima
-    if (z > this.townZ || (z > LEG1 - 8 && z < LEG1 + 52) || EATERIES.some((e) => Math.abs(z - e.z) < 11)) return null;
+    if (z > this.townZ || (z > LEG1 - 8 && z < LEG1 + 52) || EATERIES.some((e) => Math.abs(z - e.z) < 11) || Math.abs(z - GAS_Z) < 14) return null;
     return this.regionAt(z);
   };
   private things: Thing[] = [];
@@ -351,11 +361,16 @@ export class Level2 implements Level {
 
     this.logSign = makeSign(['LOGROÑO', 'Calle Laurel ↗'], '#7a1f3d');
     // (antes de donde se para el coche: justo allí tapaba media pantalla en el plano de llegada)
-    this.logSign.position.set(-7, 0, LEG1 + 40 + LEG2 - 45);
+    // (más grande, más pegada al arcén y antes del parque: de lejos se leía mal y llegando quedaba de canto)
+    this.logSign.scale.setScalar(1.35);
+    this.logSign.position.set(-6.8, 0, LEG1 + 40 + LEG2 - 150);
     sc.add(this.logSign);
     const sv = makeSign(['San Vicente', 'de la Barquera'], '#1f5fbf');
     sv.position.set(-6, 0, LEG1 - 20);
     sc.add(sv);
+    const gs = this.buildGasStation();
+    gs.position.set(0, 0, GAS_Z);
+    sc.add(gs);
     for (const e of EATERIES) {
       const r = this.buildEatery(e.name, !!e.m);
       r.position.set(0, 0, e.z);
@@ -824,6 +839,11 @@ export class Level2 implements Level {
     const reg = this.regionAt(z);
     const end = this.phase === 'drive1' ? LEG1 - 60 : this.legStart + LEG2 - 60;
     if (z > end) return;
+    // (por donde se habla del gas y en la gasolinera, carretera tranquila: la charla no molesta a la conducción)
+    if (this.marcialDone && !this.gasDone && z > GAS_Z - 70 && z < GAS_Z + 30) {
+      this.nextSpawn += 30;
+      return;
+    }
     if (!this.marcialDone && Math.abs(z - MARCIAL_Z) < 25) {
       this.nextSpawn += 30;
       return;
@@ -972,8 +992,8 @@ export class Level2 implements Level {
     this.turboT -= dt;
     const turbo = drive && this.turboT > 0 && this.hitT <= 0;
     // (volviendo al último punto bueno: frena en seco, antes de llegar a la vaca)
-    const target = drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
-    this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
+    const target = this.phase === 'fuel' ? Math.max(0, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : this.phase === 'cow' ? 6 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
     // Sensación de velocidad: el plano se abre con el turbo
@@ -984,11 +1004,16 @@ export class Level2 implements Level {
     }
     if (turbo && Math.random() < dt * 20) this.fx.burst(this.car.root.position.clone().setY(0.3).setZ(this.carZ - 2), 'dust', 1, 0.8, 0.2);
     this.carZ += this.speed * dt;
+    // (frenando para la vaca: se queda a un palmo, sin atravesarla)
+    if (this.phase === 'cow' && this.roadCow && !this.cowLeaving && this.carZ > this.roadCow.root.position.z - 3.2) {
+      this.carZ = this.roadCow.root.position.z - 3.2;
+      this.speed = 0;
+    }
     if (drive) this.dist = this.carZ - this.legStart;
     // Cambio de carril con volante y masa: el coche se desplaza con un muelle, no de golpe
     const prevVX = this.carVX;
     // (con la carretera mojada, el coche tarda en obedecer)
-    [this.carX, this.carVX] = spring(this.carX, this.carVX, LANES[this.lane], 9 - 4.5 * this.wet, dt);
+    [this.carX, this.carVX] = spring(this.carX, this.carVX, this.phase === 'fuel' ? -6.4 : LANES[this.lane], this.phase === 'fuel' ? 3 : 9 - 4.5 * this.wet, dt);
     const latAccel = dt > 0 ? (this.carVX - prevVX) / dt : 0;
 
     const car = this.car;
@@ -1003,6 +1028,21 @@ export class Level2 implements Level {
     this.ground.position.z = this.carZ;
     this.road.position.z = this.edges.position.z = this.carZ + 100;
     this.dashes.position.z = Math.floor((this.carZ - 30) / 12) * 12;
+    // Llegando a Logroño, el asfalto y la pintura acaban donde empieza la rampa del Puente de Piedra (antes seguían
+    // planos por debajo del puente y las rayas asomaban flotando junto al pretil)
+    const dg = this.dashes.geometry;
+    if (Number.isFinite(this.townZ)) {
+      const end = this.townZ + 18;
+      const start = this.carZ - 100, stop = Math.min(this.carZ + 300, end);
+      const len = Math.max(0.01, stop - start);
+      this.road.scale.z = this.edges.scale.z = len / 400;
+      this.road.position.z = this.edges.position.z = start + len / 2;
+      const n = Math.max(0, Math.min(22, Math.floor((end - this.dashes.position.z - 3.6) / 12) + 1));
+      dg.setDrawRange(0, (dg.attributes.position.count / 44) * 2 * n);
+    } else {
+      this.road.scale.z = this.edges.scale.z = 1;
+      dg.setDrawRange(0, Infinity);
+    }
     this.lineK += ((turbo ? 1 : 0) - this.lineK) * Math.min(1, dt * 3);
     this.scene.userData.speedLines = this.lineK;
     this.sea.position.z = this.carZ;
@@ -1133,7 +1173,9 @@ export class Level2 implements Level {
     if (drive && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
 
     if (this.phase === 'drive1' && !this.marcialDone) this.updateEateries(acted);
-    if (this.phase === 'drive1' && this.marcialDone && !this.campDone && this.carZ >= CAMP_Z) this.arriveCamp();
+    if (this.phase === 'drive1' && this.marcialDone && !this.gasDone) this.updateGasStop(acted);
+    if (this.phase === 'fuel') this.updateFuel(dt);
+    if (this.phase === 'drive1' && this.gasDone && !this.campDone && this.carZ >= CAMP_Z) this.arriveCamp();
     this.updateCows(dt, acted);
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
     this.updateRoute();
@@ -1284,9 +1326,14 @@ export class Level2 implements Level {
       this.roadCow.root.rotation.y = Math.PI / 2; // de través
       this.scene.add(this.roadCow.root);
     }
-    if (d < COW_BRAKE) {
+    // Si no se para a tiempo, hasta chocar de verdad con ella (con el morro), y vuelta al último punto bueno
+    if (d < 2.6) {
       if (!this.rewinding) {
-        audio.boo();
+        audio.hit();
+        vibrate([60, 40, 60]);
+        this.shakeT = 0.5;
+        this.speed = 0;
+        comicWord(ROAD.hit[1], 'hit');
         this.rewind(ROAD.cowMissed);
       }
     } else if (d < COW_NEAR) {
@@ -1402,30 +1449,16 @@ export class Level2 implements Level {
         dialogue(ROAD.campStove, () =>
           fadeFlash(() => {
             cinema.stop();
-            c.onSearched = (key) => (key === 'gasolinera' ? this.campStation() : this.campPellet());
-            c.startSearch('gasolinera');
+            c.onSearched = () => this.campPellet();
+            c.startSearch('estufa');
             this.campHintT = 0;
             this.input.reset();
-            this.hud.setObjective('⛽');
+            this.hud.setObjective('🔥');
             this.busy = false;
           }, 400),
         ),
       1900);
     }, 500);
-  }
-
-  /** En la gasolinera: no tienen. Plan B, la estufa de pellets de la cabaña. */
-  private campStation() {
-    this.busy = true;
-    this.input.reset();
-    this.hud.setArrow(null);
-    beacon.at(null);
-    dialogue(ROAD.gasStation, () => {
-      this.camp!.startSearch('estufa');
-      this.campHintT = 0;
-      this.hud.setObjective('🔥');
-      this.busy = false;
-    });
   }
 
   /** La estufa de pellets: humo, mucho humo, y no se cocina. De ahí el nombre. A la mañana siguiente, carretera. */
@@ -1660,6 +1693,157 @@ export class Level2 implements Level {
     if (!this.marcialDone && !this.rewinding && this.carZ > MARCIAL_Z + 6) this.rewind(ROAD.missedM);
   }
 
+  /**
+   * Después de Marcial: lo del gas, en bocadillos mientras conduce (sin parar el juego), y la gasolinera, donde hay
+   * que parar. Si se la pasa, vuelta al último punto bueno.
+   */
+  private updateGasStop(acted: boolean) {
+    const lines = ROAD.gasTalk;
+    while (this.gasTalkIdx < lines.length && this.carZ >= lines[this.gasTalkIdx].at) {
+      const l = lines[this.gasTalkIdx++];
+      const her = l.who === 'Margaux';
+      bark(her ? 'Margaux' : this.him(), l.text, her ? 'r' : 'l');
+    }
+    const d = GAS_Z - this.carZ;
+    if (d < 70 && d > -6) {
+      this.hud.setAction(ROAD.gasBtn, false);
+      if (acted) this.stopFuel();
+    }
+    if (!this.rewinding && this.carZ > GAS_Z + 8) this.rewind(ROAD.missedGas);
+  }
+
+  /** Para en la gasolinera: se mete bajo la marquesina, Gas baja, entra en la tienda y vuelve sin cartucho. */
+  private stopFuel() {
+    this.phase = 'fuel';
+    this.fuelT = -1;
+    this.hud.setAction(null);
+    this.showLaneButtons(false);
+    this.things.forEach((t) => this.scene.remove(t.obj));
+    this.things = [];
+    audio.chime(1);
+  }
+
+  /** El conductor sentado del coche (para esconderlo mientras Gas va a la tienda). */
+  private seatedDriver() {
+    return this.car.body.children.find((c) => c !== this.car.azul && (c as THREE.Group).isGroup && c.getObjectByProperty('isSkinnedMesh', true));
+  }
+
+  private updateFuel(dt: number) {
+    const parked = Math.abs(GAS_Z + 1 - this.carZ) < 1.2 && this.speed < 0.4 && Math.abs(this.carX + 6.4) < 0.3;
+    if (this.fuelT < 0) {
+      if (!parked) return;
+      // Baja Gas por su puerta (la izquierda) y va a la tienda
+      this.fuelT = 0;
+      if (!this.fuelGas) {
+        this.fuelGas = makePerson(GAS_DIARIO);
+        this.scene.add(this.fuelGas.root);
+      }
+      const drv = this.seatedDriver();
+      if (drv) drv.visible = false;
+      const z = this.carZ;
+      this.fuelPath = [new THREE.Vector3(this.carX + 1.15, 0, z + 0.1), new THREE.Vector3(this.carX + 1.2, 0, z + 3.4), new THREE.Vector3(-12.2, 0, z + 3.4), new THREE.Vector3(-13.4, 0, z + 3.4)];
+      this.fuelGas.root.visible = true;
+      this.fuelGas.root.position.copy(this.fuelPath[0]);
+    }
+    const g = this.fuelGas!;
+    this.fuelT += dt;
+    // Camino de ida (andando ligero), un rato dentro, y de vuelta por el mismo sitio
+    const SPEED = 2.1;
+    const lens = this.fuelPath.slice(1).map((p, i) => p.distanceTo(this.fuelPath[i]));
+    const total = lens.reduce((a, b) => a + b, 0);
+    const goT = total / SPEED, inside = 1.8;
+    const t = this.fuelT;
+    let along = -1;
+    if (t < goT) along = t * SPEED;
+    else if (t < goT + inside) along = -2;
+    else if (t < goT * 2 + inside) along = total - (t - goT - inside) * SPEED;
+    if (along >= 0) {
+      g.root.visible = true;
+      let k = 0, a = along;
+      while (k < lens.length - 1 && a > lens[k]) a -= lens[k++];
+      const p0 = this.fuelPath[k], p1 = this.fuelPath[k + 1];
+      const f = Math.min(1, a / lens[k]);
+      const back = t >= goT + inside;
+      g.root.position.lerpVectors(p0, p1, f);
+      g.root.rotation.y = Math.atan2((p1.x - p0.x) * (back ? -1 : 1), (p1.z - p0.z) * (back ? -1 : 1));
+      animatePerson(g, dt, 'walk', 0.9);
+    } else if (along === -2) g.root.visible = false;
+    if (t >= goT * 2 + inside && this.phase === 'fuel' && !this.busy) {
+      this.busy = true;
+      g.root.visible = false;
+      const drv = this.seatedDriver();
+      if (drv) drv.visible = true;
+      dialogue(ROAD.gasNone, () => {
+        this.busy = false;
+        this.gasDone = true;
+        this.checkpoint = GAS_Z + 8;
+        this.phase = 'drive1';
+        this.nextSpawn = this.carZ + 60;
+        this.updateHud();
+      });
+    }
+  }
+
+  /** La gasolinera de carretera, a la derecha: marquesina con su rótulo, dos surtidores, la tienda y el poste de precios. */
+  private buildGasStation() {
+    const g = new THREE.Group();
+    const m = new Merger();
+    m.add(G.box, 0x5c5f66, -8.5, 0.02, 0, 0, 0, 0, 9, 0.04, 16); // la explanada
+    for (const [x, z] of [[-4.6, -5], [-4.6, 5], [-9.6, -5], [-9.6, 5]]) m.add(G.box, 0xe8e8e2, x, 2.3, z, 0, 0, 0, 0.32, 4.6, 0.32);
+    m.add(G.box, 0xf4f4f0, -7.1, 4.75, 0, 0, 0, 0, 6.6, 0.55, 12.4); // marquesina
+    m.add(G.box, 0x1d6b3a, -7.1, 4.75, 0, 0, 0, 0, 6.66, 0.22, 12.46);
+    for (const z of [-2.4, 2.4]) {
+      m.add(G.box, 0xbfc3c8, -9.0, 0.12, z, 0, 0, 0, 1.0, 0.24, 1.6); // isleta
+      m.add(G.rbox, 0xd7263d, -9.0, 0.95, z, 0, 0, 0, 0.6, 1.5, 0.9); // surtidor
+      m.add(G.box, 0x1a1a1a, -8.69, 1.25, z, 0, 0, 0, 0.02, 0.3, 0.5);
+      m.add(G.box, 0x2a2a2a, -8.7, 0.8, z + 0.38, 0.4, 0, 0, 0.05, 0.6, 0.05); // manguera
+    }
+    // La tienda, con su escaparate y la puerta hacia la explanada
+    m.add(G.box, 0xefe9dc, -16.5, 1.7, 1.5, 0, 0, 0, 6, 3.4, 9);
+    m.add(G.box, 0x1d6b3a, -16.5, 3.5, 1.5, 0, 0, 0, 6.3, 0.3, 9.3);
+    m.add(G.box, 0x2f3a46, -13.47, 1.35, -0.6, 0, 0, 0, 0.05, 1.8, 4.2); // escaparate
+    m.add(G.box, 0x2a3440, -13.47, 1.1, 3.4, 0, 0, 0, 0.06, 2.2, 1.1); // puerta
+    m.add(G.box, 0xc9ced4, -13.44, 1.1, 3.4, 0, 0, 0, 0.03, 0.06, 0.8);
+    // Poste de precios
+    m.add(G.box, 0x8a8f96, -4.2, 2.6, -9.5, 0, 0, 0, 0.25, 5.2, 0.25);
+    m.add(G.box, 0x1d6b3a, -4.2, 5.4, -9.5, 0, 0, 0, 0.3, 1.4, 1.6);
+    g.add(m.mesh());
+    const sign = (w: number, h: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, cw: number, ch: number) =>
+      new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: canvasTex(draw, cw, ch) }));
+    const lettering = (text: string, bg: string) => (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `800 ${h * 0.6}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, w / 2, h * 0.55);
+    };
+    const front = sign(6.2, 0.36, lettering('GASOLINERA', '#1d6b3a'), 512, 32);
+    front.rotation.y = Math.PI / 2;
+    front.position.set(-3.76, 4.75, 0);
+    g.add(front);
+    const shop = sign(5.4, 0.42, lettering('TIENDA · 24 H', '#1d6b3a'), 512, 40);
+    shop.rotation.y = Math.PI / 2;
+    shop.position.set(-13.32, 3.5, 1.5);
+    g.add(shop);
+    const price = sign(1.5, 1.3, (ctx, w, h) => {
+      ctx.fillStyle = '#1d6b3a';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `800 ${h * 0.2}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('⛽', w / 2, h * 0.24);
+      ctx.font = `700 ${h * 0.13}px Georgia, serif`;
+      ctx.fillText('95   1,52', w / 2, h * 0.55);
+      ctx.fillText('Diésel   1,45', w / 2, h * 0.8);
+    }, 160, 140);
+    price.rotation.y = Math.PI / 2;
+    price.position.set(-4.04, 5.4, -9.5);
+    g.add(price);
+    return g;
+  }
+
   private stopMarcial() {
     this.marcialDone = true;
     this.checkpoint = MARCIAL_Z + 8;
@@ -1735,6 +1919,13 @@ export class Level2 implements Level {
       // Se para antes del puente y la cámara sube: el Ebro, el casco viejo y las torres de La Redonda
       this.camTarget.set(this.carX - 5, 3.4, this.carZ - 9);
       this.camLook.set(this.carX + 3, 9, this.carZ + 100);
+    } else if (this.phase === 'fuel') {
+      // En la gasolinera: desde el otro lado de la carretera, el coche bajo la marquesina y la tienda detrás
+      this.camTarget.set(3.2, 3.0, GAS_Z + 11);
+      this.camLook.lerp(new THREE.Vector3(-8.5, 1.4, GAS_Z + 0.5), 1 - Math.exp(-dt * 3));
+      this.camera.position.lerp(this.camTarget, 1 - Math.exp(-dt * 2.5));
+      this.camera.lookAt(this.camLook);
+      return;
     } else if (this.phase === 'arriveSV') {
       this.camTarget.set(this.carX - 6, 4, this.carZ - 7);
       this.camLook.set(this.carX + 2, 2, this.carZ + 14);
@@ -1783,9 +1974,26 @@ export class Level2 implements Level {
           this.legStart = 0;
           this.marcialDone = false;
           this.campDone = false;
+          this.gasDone = false;
+          this.gasTalkIdx = 0;
           this.cowIdx = 0;
           this.eateryTried.clear();
           this.reset(MARCIAL_Z - 120);
+          this.phase = 'drive1';
+          this.updateHud();
+        },
+      },
+      {
+        label: '1b2 · La gasolinera',
+        run: () => {
+          clean();
+          this.legStart = 0;
+          this.marcialDone = true;
+          this.campDone = false;
+          this.gasDone = false;
+          this.gasTalkIdx = 0;
+          this.cowIdx = 1;
+          this.reset(MARCIAL_Z + 20);
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -1797,6 +2005,8 @@ export class Level2 implements Level {
           this.legStart = 0;
           this.marcialDone = true;
           this.campDone = false;
+          this.gasDone = true;
+          this.gasTalkIdx = 99;
           this.cowIdx = 0;
           this.reset(CAMP_Z - 60);
           this.phase = 'drive1';
@@ -1808,7 +2018,8 @@ export class Level2 implements Level {
         run: () => {
           clean();
           this.legStart = 0;
-          this.marcialDone = this.campDone = true;
+          this.marcialDone = this.campDone = this.gasDone = true;
+          this.gasTalkIdx = 99;
           this.cowIdx = 0;
           this.reset(1000);
           this.phase = 'drive1';
@@ -1819,7 +2030,8 @@ export class Level2 implements Level {
         label: '3 · Llegar a San Vicente',
         run: () => {
           clean();
-          this.marcialDone = this.campDone = true;
+          this.marcialDone = this.campDone = this.gasDone = true;
+          this.gasTalkIdx = 99;
           this.stormSaid = 2;
           this.reset(LEG1 - 60);
           this.legStart = 0;

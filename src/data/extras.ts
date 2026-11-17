@@ -45,7 +45,7 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
   },
   3: {
     // (conduciendo, nada de charla de fondo: solo las reacciones a lo que pasa en la carretera)
-    camp: [b('Marc', 'Lo llevo todo. Cartas, hornillo…'), b('Margaux', '¿Seguro que todo?')],
+    camp: [b('Marc', 'Mira qué cabaña. Y tiene estufa.'), b('Margaux', 'Al menos dormiremos calentitos.')],
   },
   4: {
     airport: [

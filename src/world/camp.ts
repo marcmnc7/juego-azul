@@ -3,7 +3,7 @@ import { Surf } from '../core/surfaces';
 import { audio } from '../core/audio';
 import { Sky, Sun, glowTexture, toon } from '../core/gfx';
 import { Lost } from '../core/lost';
-import { AZUL_DIARIO, GAS_DIARIO, castLook } from '../data/characters';
+import { AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { G, Merger, makePerson, animatePerson, seatedRootY, seatPose, Person } from '../entities/models';
 import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
@@ -20,8 +20,8 @@ import type { Box2 } from './ferreries';
 // el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: en un claro
 // entre matorral y pinos, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
 
-export type CampSpot = 'gasolinera' | 'estufa';
-const SPOT_LABEL: Record<CampSpot, string> = { gasolinera: '⛽ Preguntar', estufa: '🔥 Probar la estufa' };
+export type CampSpot = 'estufa';
+const SPOT_LABEL: Record<CampSpot, string> = { estufa: '🔥 Probar la estufa' };
 
 export class Camp {
   scene = new THREE.Scene();
@@ -29,8 +29,6 @@ export class Camp {
   private fx: Particles;
   readonly azul: Person;
   readonly gas: Person;
-  /** El de la gasolinera, en su ventanilla. */
-  private clerk: Person;
   private glow: THREE.Sprite;
   private t = 0;
   private lost = new Lost();
@@ -58,7 +56,6 @@ export class Camp {
   active: CampSpot | null = null;
   onSearched: ((key: CampSpot) => void) | null = null;
   private spots: Record<CampSpot, { at: THREE.Vector3; reach: number }> = {
-    gasolinera: { at: new THREE.Vector3(9.4, 0, -8.1), reach: 1.8 },
     estufa: { at: new THREE.Vector3(2.35, 0, 1.75), reach: 1.25 },
   };
   /** La estufa de pellets (para encuadrarla) y su humo. */
@@ -147,19 +144,6 @@ export class Camp {
       m.add(G.box, 0x6b4a2e, px - 0.62, 0.14, pz + 0.05, 0, 0.3, 0, 0.4, 0.28, 0.3); // saco de pellets
       this.colliders.push({ minX: px - 0.32, maxX: px + 0.32, minZ: pz - 0.3, maxZ: pz + 0.3 });
     }
-    // La gasolinera de al lado del camping: marquesina, un surtidor y la caseta con su ventanilla
-    {
-      const [gx, gz] = [9.6, -10.6];
-      m.add(G.box, 0xf2f0ea, gx, 1.3, gz, 0, 0, 0, 3.2, 2.6, 2.4);
-      m.add(G.box, 0x1d6b3a, gx, 2.7, gz, 0, 0, 0, 3.5, 0.3, 2.7);
-      m.add(G.box, 0x2a3440, gx - 0.6, 1.35, gz + 1.22, 0, 0, 0, 1.4, 0.9, 0.06); // ventanilla
-      m.add(G.box, 0x7a6a58, gx - 0.6, 0.88, gz + 1.3, 0, 0, 0, 1.5, 0.06, 0.25); // repisa
-      for (const [dx, dz] of [[-2.6, 2.2], [-0.4, 3.0]]) m.add(G.cyl, 0xd8d8d0, gx + dx, 1.6, gz + dz, 0, 0, 0, 0.14, 3.2, 0.14);
-      m.add(G.box, 0x1d6b3a, gx - 1.5, 3.25, gz + 2.6, 0, 0, 0, 3.6, 0.3, 2.2); // marquesina
-      m.add(G.rbox, 0xd7263d, gx - 1.7, 0.75, gz + 3.0, 0, 0, 0, 0.55, 1.5, 0.4); // surtidor
-      m.add(G.box, 0x1a1a1a, gx - 1.7, 1.15, gz + 3.21, 0, 0, 0, 0.36, 0.25, 0.02);
-      this.colliders.push({ minX: gx - 1.8, maxX: gx + 1.8, minZ: gz - 1.4, maxZ: gz + 1.3 }, { minX: gx - 2.05, maxX: gx - 1.35, minZ: gz + 2.7, maxZ: gz + 3.3 });
-    }
     sc.add(m.mesh());
 
     // El coche de Azul (el Ford Focus gris), aparcado al lado
@@ -187,42 +171,18 @@ export class Camp {
       sc.add(sp);
     }
 
-    // El rótulo de la marquesina
-    {
-      const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(3.4, 0.28),
-        new THREE.MeshBasicMaterial({
-          map: canvasTex((ctx, w, h) => {
-            ctx.fillStyle = '#1d6b3a';
-            ctx.fillRect(0, 0, w, h);
-            ctx.fillStyle = '#f4f1e4';
-            ctx.font = `800 ${h * 0.62}px Georgia, serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('GASOLINERA · 24 H', w / 2, h * 0.54);
-          }, 512, 42),
-        }),
-      );
-      sign.position.set(9.6 - 1.5, 3.25, -10.6 + 3.71);
-      sc.add(sign);
-    }
-    // La olla, que solo aparece encima de la estufa cuando se intenta cocinar ahí
+    // El pollo, que solo aparece cuando se intenta cocinar: directamente encima de la estufa, sin olla (muslos y contramuslos)
     {
       const pm = new Merger(false);
-      pm.add(G.cyl, 0xb8bcc2, 0, 0.11, 0, 0, 0, 0, 0.3, 0.2, 0.3);
-      pm.add(G.box, 0x2a2a2a, 0.2, 0.17, 0, 0, 0, 0, 0.12, 0.03, 0.04);
-      pm.add(G.box, 0x2a2a2a, -0.2, 0.17, 0, 0, 0, 0, 0.12, 0.03, 0.04);
+      for (const [x, z, r] of [[-0.12, -0.06, 0.4], [0.06, 0.08, -0.7], [0.14, -0.1, 1.6], [-0.06, 0.12, 2.6]] as const) {
+        pm.add(G.sphere, 0xf1c9a5, x, 0.05, z, 0, r, 0.15, 0.17, 0.09, 0.12); // la carne
+        pm.add(G.cyl, 0xf4ead8, x + Math.cos(r) * 0.11, 0.04, z - Math.sin(r) * 0.11, 0, r, Math.PI / 2, 0.025, 0.09, 0.025); // el hueso
+      }
       this.pot.add(pm.mesh());
-      this.pot.position.set(this.pellet.x - 0.05, 1.045, this.pellet.z - 0.05);
+      this.pot.position.set(this.pellet.x - 0.02, 1.045, this.pellet.z - 0.02);
       this.pot.visible = false;
       sc.add(this.pot);
     }
-    this.clerk = makePerson(castLook({ skin: 0xe2b08c, shirt: 0x1d6b3a, pants: 0x2a2a2a, hair: 0x3a2a1c, hairStyle: 'short', male: true, beard: true }, 'camarero_laurel'));
-    // (en la puerta de la caseta, junto a la ventanilla)
-    this.clerk.root.position.set(9.6 + 0.75, 0, -10.6 + 1.65);
-    this.clerk.root.rotation.y = -0.5;
-    sc.add(this.clerk.root);
-
     // Azul y Gas, sentados uno frente al otro
     this.azul = makePerson(AZUL_DIARIO);
     this.gas = makePerson(GAS_DIARIO);
@@ -441,7 +401,6 @@ export class Camp {
       this.gas.armR.rotation.x = -0.9 + Math.sin(this.t * 1.7) * 0.04;
       this.azul.armL.rotation.x = -0.7;
     }
-    animatePerson(this.clerk, dt, 'idle');
     // El humo de la estufa de pellets
     if (this.smokeT > 0) {
       this.smokeT -= dt;

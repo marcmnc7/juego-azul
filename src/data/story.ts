@@ -264,6 +264,23 @@ export const ROAD = {
   ] as Line[][],
   notM: (n: string) => `«${n}»… no empieza por M 😅`,
   missedM: '¡Eh, que ese empezaba por M! Media vuelta…',
+  /** Después de Marcial, en el coche (bocadillos mientras conduce, sin parar): lo del gas. at: metro de la carretera. */
+  gasTalk: [
+    { at: 830, who: 'Margaux', text: 'Oye, ¿y el gas para el hornillo? ¿Lo llevas?' },
+    { at: 910, who: 'Marc', text: 'No. Lo compramos en una gasolinera antes de llegar.' },
+    { at: 990, who: 'Margaux', text: '¿Y si no tienen?' },
+    { at: 1060, who: 'Marc', text: 'Tendrán. Es camping gas: lo tienen en todas.' },
+    { at: 1120, who: 'Margaux', text: 'Confío…' },
+    { at: 1200, who: 'Marc', text: 'Mira, ahí hay una. Paramos.' },
+  ],
+  gasBtn: '⛽ Parar en la gasolinera',
+  missedGas: '¡La gasolinera! Nos la hemos pasado. Media vuelta…',
+  /** Gas vuelve de la tienda (inventado: Marc, cámbialo si quieres). */
+  gasNone: [
+    { who: 'Marc', text: 'Nada. No tienen cartuchos.' },
+    { who: 'Margaux', text: '«Tendrán», decías.' },
+    { who: 'Marc', text: 'Ya improvisaremos en la cabaña. Algo habrá.' },
+  ] as Line[],
   marcial: [
     { who: 'Narrador', text: 'Cafetería Marcial. La primera con M. Juego ganado.' },
     { who: 'Narrador', text: '📷 Recuerdo desbloqueado: Cafetería Marcial.' },
@@ -276,30 +293,24 @@ export const ROAD = {
   /** La noche del camping, entre Marcial y San Vicente. */
   camp: [
     { who: 'Narrador', text: 'Esa noche, a una cabaña de leña. Iba a ser cenita de camping: cartas y el camping gas.' },
-    { who: 'Narrador', text: 'Ni gas, ni gasolinera, ni estufa. Esa noche no se cocinó.' },
+    { who: 'Narrador', text: 'Ni gas, ni estufa. Esa noche no se cocinó.' },
   ] as Line[],
   // Sin gas: Gas ya sabía que no lo llevaba, contaba con comprarlo en la gasolinera de al lado. No tenían, y la estufa
   // de pellets de la cabaña tampoco sirvió para cocinar (lo que pasó; las frases, inventadas: Marc, cámbialas si quieres)
+  // En la cabaña, sin gas (en la gasolinera no tenían): el pollo, directamente encima de la estufa de pellets. Salió
+  // mal y no se pudo cocinar (lo que pasó; las frases, inventadas: Marc, cámbialas si quieres)
   campStove: [
-    { who: 'Marc', text: 'Hornillo, listo. Cartas, listas.' },
-    { who: 'Margaux', text: '¿Y el gas?' },
-    { who: 'Marc', text: 'El cartucho lo compramos en la gasolinera de aquí al lado. Seguro que tienen.' },
-    { who: 'Margaux', text: '¿No lo has traído?' },
-    { who: 'Marc', text: 'Confía.' },
+    { who: 'Marc', text: 'Bueno. Sin gas, el hornillo no sirve de nada.' },
+    { who: 'Margaux', text: '¿Y el pollo?' },
+    { who: 'Marc', text: 'Plan B: esa estufa de pellets. Lo ponemos encima, directamente.' },
   ] as Line[],
-  gasStation: [
-    { who: 'Marc', text: 'Buenas. ¿Tenéis cartuchos de camping gas?' },
-    { who: 'Gasolinero', text: '¿De camping gas? Uy, no. De esos no tenemos.' },
-    { who: 'Margaux', text: '«Confía», decía.' },
-    { who: 'Marc', text: 'Plan B: en la cabaña hay una estufa de pellets. Cocinamos ahí.' },
-  ] as Line[],
-  pelletTry: [{ who: 'Narrador', text: 'La olla, encima de la estufa de pellets. ¿Qué podría salir mal?' }] as Line[],
+  pelletTry: [{ who: 'Narrador', text: 'El pollo, directamente encima de la estufa de pellets. ¿Qué podría salir mal?' }] as Line[],
   pelletFail: [
-    { who: 'Narrador', text: 'Humo. Mucho humo. Y la olla, fría.' },
+    { who: 'Narrador', text: 'Humo. Mucho humo. Y el pollo, crudo.' },
     { who: 'Margaux', text: 'Gas… creo que así no.' },
     { who: 'Marc', text: 'Vale. Esta noche no se cocina.' },
   ] as Line[],
-  campHint: { gasolinera: 'La gasolinera está ahí al lado, junto a la carretera.', estufa: 'La estufa de pellets, la del rincón de la cabaña.' },
+  campHint: { estufa: 'La estufa de pellets, la del rincón de la cabaña.' },
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
   terrace: [
     { who: 'Narrador', text: 'La terraza de El Ancla.' },
