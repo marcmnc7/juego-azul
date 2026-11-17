@@ -5,3 +5,8 @@ Licencia: CC0 1.0 Universal (dominio público) — https://creativecommons.org/p
 Origen: https://quaternius.com/packs/universalanimationlibrary.html (copia en OpenGameArt:
 https://opengameart.org/content/universal-animation-library y .../universal-animation-library-2).
 Convertidos con scripts/anims_ual.mjs: solo esqueleto y animaciones, huesos renombrados a los de Mixamo.
+
+donkey.glb y horse_q.glb
+-----------------------
+Burro y caballo del "Ultimate Animated Animal Pack" de Quaternius (poly.pizza/m/qmX6nhnvp7 y poly.pizza/m/qvTrSG9pZF).
+Licencia: CC0 1.0 Universal (dominio público). Preparados con scripts/animal_glb.mjs (solo las animaciones que se usan).

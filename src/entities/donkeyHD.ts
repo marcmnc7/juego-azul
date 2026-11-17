@@ -1,180 +1,87 @@
 import * as THREE from 'three';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadGLB } from '../core/assets';
-import horseUrl from '../assets/chars/horse.glb';
+// Burro y caballo animados de Quaternius (Ultimate Animated Animal Pack, CC0), preparados con scripts/animal_glb.mjs:
+// quietos, comiendo, al paso y al galope, con su esqueleto. El jinete es un personaje sentado encima.
+import donkeyUrl from '../assets/chars/donkey.glb';
+import horseUrl from '../assets/chars/horse_q.glb';
 import { boneAnchor, makeRigPerson, rigTickers } from './rig';
 import { castLook } from '../data/characters';
 import type { Donkey } from './models';
 
-// Ases de la prueba de concepto: el caballo glTF de los ejemplos de three.js (galope con morph
-// targets) convertido en ase: orejas largas, pelo pardo y hocico claro. El jinete es un personaje
-// glTF sentado, con frac y bombín.
-
 interface Prepared {
-  geo: THREE.BufferGeometry;
-  clip: THREE.AnimationClip;
-  name: string;
+  gltf: GLTF;
+  clips: Record<string, THREE.AnimationClip>;
   scale: number;
-  minY: number;
-  backY: number;
-  /** Momento del galope con las cuatro patas más recogidas: la pose de estar parado. */
-  standT: number;
-  /** Metros que avanza en un ciclo de galope (para que las patas no patinen). */
-  stride: number;
+  /** Altura del lomo (donde va la silla), ya en metros, y dónde cae a lo largo (para centrar la silla). */
+  back: number;
+  backZ: number;
+  /** Velocidad (m/s) a la que el paso y el galope pisan sin patinar. */
+  walkV: number;
+  gallopV: number;
 }
 
 let prep: Prepared | null = null;
-/** El mismo caballo sin alargar las orejas, para los caballos negros de Sant Joan. */
 let prepHorse: Prepared | null = null;
 let loading: Promise<void> | null = null;
 
-export const donkeyReady = () => !!prep;
+export const donkeyReady = () => !!prep && !!prepHorse;
 
 export function preloadDonkey() {
-  loading ??= loadGLB(horseUrl)
-    .then((g) => {
-      const src = g.scene.getObjectByProperty('isMesh', true) as THREE.Mesh;
-      prep = prepare(src, g.animations[0], 2.9, 1.15, true);
-      prepHorse = prepare(src, g.animations[0], 1, 1.6);
+  loading ??= Promise.all([loadGLB(donkeyUrl), loadGLB(horseUrl)])
+    .then(([d, h]) => {
+      // Un burro menorquín: lomo a 1,15 m; los caballos de Sant Joan, altos (1,6 m a la cruz)
+      prep = prepare(d, 1.15, 1.1, 4.2);
+      prepHorse = prepare(h, 1.6, 1.55, 6.5);
     })
-    .catch((e) => console.warn('[donkey] no se pudo cargar el ase', e));
+    .catch((e) => console.warn('[donkey] no se pudieron cargar los animales', e));
   return loading;
 }
 
-function prepare(src: THREE.Mesh, clip: THREE.AnimationClip, earScale: number, backHeight: number, donkey = false): Prepared {
-  const geo = src.geometry.clone();
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const morphs = geo.morphAttributes.position as THREE.BufferAttribute[];
-  const n = pos.count;
-
-  // Orejas: los vértices de arriba de la cabeza, alargados desde su base (también en cada fotograma)
-  const EAR_Y = 172, EAR_Z = 100, S = earScale;
-  for (const side of [-1, 1]) {
-    const ear: number[] = [];
-    for (let i = 0; i < n; i++) if (pos.getY(i) > EAR_Y && pos.getZ(i) > EAR_Z && Math.sign(pos.getX(i) + 0.5) === side) ear.push(i);
-    if (!ear.length) continue;
-    const low = ear.filter((i) => pos.getY(i) < EAR_Y + 2.5);
-    const baseOf = (get: (i: number) => THREE.Vector3) => {
-      const c = new THREE.Vector3();
-      for (const i of low.length ? low : ear) c.add(get(i));
-      return c.divideScalar(low.length || ear.length);
-    };
-    const B = (i: number) => new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
-    const P = baseOf(B);
-    const nb = new Map<number, THREE.Vector3>();
-    for (const i of ear) nb.set(i, B(i).sub(P).multiplyScalar(S).add(P));
-    for (const m of morphs) {
-      const A = (i: number) => B(i).add(new THREE.Vector3(m.getX(i), m.getY(i), m.getZ(i)));
-      const Pk = baseOf(A);
-      for (const i of ear) {
-        const a = A(i).sub(Pk).multiplyScalar(S).add(Pk).sub(nb.get(i)!);
-        m.setXYZ(i, a.x, a.y, a.z);
+function prepare(gltf: GLTF, backHeight: number, walkV: number, gallopV: number): Prepared {
+  const clips: Record<string, THREE.AnimationClip> = {};
+  for (const c of gltf.animations) clips[c.name] = c;
+  // Caras unidas y normales suaves: con facetas parecían de papiroflexia al lado de los personajes
+  gltf.scene.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    // (sus atributos vienen intercalados en un solo búfer: se separan antes de unir los vértices)
+    const flat = m.geometry.clone();
+    for (const [k, a] of Object.entries(flat.attributes)) if ((a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) flat.setAttribute(k, (a as THREE.InterleavedBufferAttribute).clone());
+    const g = mergeVertices(flat, 1e-4);
+    g.computeVertexNormals();
+    m.geometry = g;
+  });
+  // El lomo, medido en la pose de quieto: lo más alto de la parte central del cuerpo (sin cuello ni cabeza)
+  const mixer = new THREE.AnimationMixer(gltf.scene);
+  mixer.clipAction(clips.Idle).play();
+  mixer.update(0);
+  gltf.scene.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(gltf.scene, true);
+  const z0 = box.min.z, L = box.max.z - box.min.z;
+  let back = 0, backZ = 0;
+  const v = new THREE.Vector3();
+  gltf.scene.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    const P = m.geometry.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i);
+      m.applyBoneTransform(i, v);
+      v.applyMatrix4(m.matrixWorld);
+      const t = (v.z - z0) / L;
+      // (la grupa y el lomo, por delante de la cola y por detrás de la cruz: ni cuello ni cabeza)
+      if (t > 0.3 && t < 0.5 && v.y - box.min.y > back) {
+        back = v.y - box.min.y;
+        backZ = v.z;
       }
     }
-    for (const i of ear) pos.setXYZ(i, nb.get(i)!.x, nb.get(i)!.y, nb.get(i)!.z);
-  }
-
-  if (donkey) burro(pos, morphs);
-
-  // Medidas: lomo (donde va la silla), suelo y hocico
-  let minY = Infinity, backY = -Infinity;
-  for (let i = 0; i < n; i++) {
-    minY = Math.min(minY, pos.getY(i));
-    if (Math.abs(pos.getZ(i)) < 25) backY = Math.max(backY, pos.getY(i));
-  }
-  const scale = backHeight / (backY - minY);
-
-  // Pelo: el marrón del caballo pasa a ser el color del ase (lo pone el material), lo oscuro
-  // (crin, cascos, cola) más oscuro y lo claro, crema
-  const col = geo.attributes.color as THREE.BufferAttribute;
-  for (let i = 0; i < n; i++) {
-    const r = col.getX(i);
-    if (r > 0.45) col.setXYZ(i, 2.2, 2.0, 1.8);
-    else if (r > 0.2) col.setXYZ(i, 1, 1, 1);
-    else col.setXYZ(i, 0.3, 0.27, 0.25);
-  }
-  geo.deleteAttribute('normal');
-
-  // Pose de parado y zancada, midiendo las pezuñas a lo largo del galope
-  const feet: number[] = [];
-  for (let i = 0; i < n; i++) if (pos.getY(i) < minY + 12) feet.push(i);
-  const dummy = new THREE.Mesh(src.geometry, new THREE.MeshBasicMaterial());
-  dummy.name = src.name;
-  dummy.updateMorphTargets();
-  const mixer = new THREE.AnimationMixer(dummy);
-  const act = mixer.clipAction(clip).play();
-  let standT = 0, best = Infinity, reach = 0;
-  for (let k = 0; k < 30; k++) {
-    act.time = (k / 30) * clip.duration;
-    mixer.update(0);
-    let lo = Infinity, hi = -Infinity;
-    for (const i of feet) {
-      let z = pos.getZ(i);
-      dummy.morphTargetInfluences!.forEach((w, m) => (z += w * morphs[m].getZ(i)));
-      lo = Math.min(lo, z);
-      hi = Math.max(hi, z);
-    }
-    if (hi - lo < best) (best = hi - lo), (standT = act.time);
-    reach = Math.max(reach, hi - lo);
-  }
-  // El lomo de verdad es el de la pose de parado (el galope lo sube unos centímetros respecto a la
-  // malla en reposo): ahí van la manta y el jinete, que si no se hundían en él
-  act.time = standT;
-  mixer.update(0);
-  let standBack = -Infinity;
-  for (let i = 0; i < n; i++) {
-    let y = pos.getY(i), z = pos.getZ(i);
-    dummy.morphTargetInfluences!.forEach((w, m) => {
-      y += w * morphs[m].getY(i);
-      z += w * morphs[m].getZ(i);
-    });
-    if (Math.abs(z) < 25) standBack = Math.max(standBack, y);
-  }
-  mixer.uncacheRoot(dummy);
-  // Caras unidas y normales suaves: con facetas, los animales parecían de papiroflexia al lado de los personajes
-  const smooth = mergeVertices(geo, 0.01);
-  smooth.computeVertexNormals();
-  return { geo: smooth, clip, name: src.name, scale, minY, backY: Math.max(backY, standBack), standT, stride: reach * scale * 1.6 };
-}
-
-/**
- * Del caballo al burro: patas más cortas, barriga más ancha y una cabeza grande y pesada.
- * Se deforma la posición final de cada vértice (base y base + cada morph), así el galope sigue valiendo.
- */
-function burro(pos: THREE.BufferAttribute, morphs: THREE.BufferAttribute[]) {
-  const n = pos.count;
-  let y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (let i = 0; i < n; i++) {
-    y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i));
-    z0 = Math.min(z0, pos.getZ(i)); z1 = Math.max(z1, pos.getZ(i));
-  }
-  const H = y1 - y0, L = z1 - z0;
-  const legTop = y0 + H * 0.42; // por encima, cuerpo; por debajo, patas
-  const neckZ = z1 - L * 0.3; // a partir de aquí, cuello y cabeza
-  const hp = new THREE.Vector3(0, y0 + H * 0.62, neckZ); // la cabeza crece desde la base del cuello
-  const f = (v: THREE.Vector3) => {
-    if (v.y < legTop) v.y = legTop - (legTop - v.y) * 0.58;
-    else v.x *= 1 + 0.16 * Math.min(1, (v.y - legTop) / (H * 0.15));
-    if (v.z > neckZ && v.y > hp.y - H * 0.1) {
-      const k = Math.min(1, (v.z - neckZ) / (L * 0.12));
-      v.sub(hp).multiplyScalar(1 + 0.22 * k).add(hp);
-      v.y -= k * H * 0.06; // la lleva más baja que un caballo
-    }
-    return v;
-  };
-  const b = new THREE.Vector3(), a = new THREE.Vector3();
-  const base: THREE.Vector3[] = [];
-  for (let i = 0; i < n; i++) base.push(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
-  for (const m of morphs)
-    for (let i = 0; i < n; i++) {
-      a.set(m.getX(i), m.getY(i), m.getZ(i)).add(base[i]);
-      f(a).sub(f(b.copy(base[i])));
-      m.setXYZ(i, a.x, a.y, a.z);
-    }
-  for (let i = 0; i < n; i++) {
-    f(b.copy(base[i]));
-    pos.setXYZ(i, b.x, b.y, b.z);
-  }
+  });
+  mixer.stopAllAction();
+  mixer.uncacheRoot(gltf.scene);
+  return { gltf, clips, scale: backHeight / back, back: backHeight, backZ: backZ * (backHeight / back), walkV, gallopV };
 }
 
 const lin = (hex: number) => new THREE.Color(hex);
@@ -192,17 +99,31 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   inner.position.z = 0.75;
   pivot.add(inner);
 
-  const mat = new THREE.MeshStandardMaterial({ color: lin(coat), vertexColors: true, roughness: horse ? 0.55 : 0.9, metalness: 0 });
-  const mesh = new THREE.Mesh(P.geo, mat);
-  mesh.name = P.name;
-  mesh.scale.setScalar(P.scale);
-  mesh.position.y = -P.minY * P.scale;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.frustumCulled = false;
-  mesh.updateMorphTargets();
-  inner.add(mesh);
-  const back = (P.backY - P.minY) * P.scale;
+  // El animal, con su pelo del color que pide la escena (cuerpo, tonos claros y oscuros) y la crin más oscura
+  const model = SkeletonUtils.clone(P.gltf.scene);
+  model.scale.setScalar(P.scale);
+  // (el lomo, justo debajo de la silla)
+  model.position.z = -P.backZ - 0.05;
+  const base = lin(coat);
+  const shade = (k: number) => base.clone().multiplyScalar(k);
+  model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isMesh) return;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    m.frustumCulled = false;
+    const src = m.material as THREE.MeshStandardMaterial;
+    // (el caballo menorquín, negro con brillo: algo de reflejo para que se le vea el volumen)
+    const mat = new THREE.MeshStandardMaterial({ name: src.name, color: src.color.clone(), roughness: horse ? 0.36 : 0.9, metalness: horse ? 0.12 : 0 });
+    if (src.name === 'Main') mat.color.copy(horse ? base.clone().lerp(new THREE.Color(0x3a2e28), 0.25) : base);
+    else if (src.name === 'Main_Light') mat.color.copy(horse ? base.clone().lerp(new THREE.Color(0x6a5446), 0.3) : base.clone().lerp(new THREE.Color(0xe8e0d4), 0.55));
+    else if (src.name === 'Main_Dark') mat.color.copy(shade(0.72));
+    else if (src.name === 'Hair') mat.color.copy(horse ? shade(0.5) : shade(0.45));
+    else if (src.name === 'Muzzle') mat.color.copy(horse ? shade(0.6) : new THREE.Color(0xd8cfc2));
+    m.material = mat;
+  });
+  inner.add(model);
+  const back = P.back;
 
   // La silla: manta que abraza el lomo, asiento de cuero con arzón y borrén, cincha y estribos
   const tack = new THREE.Group();
@@ -287,12 +208,23 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   });
   root.add(shadow);
 
-  const mixer = new THREE.AnimationMixer(mesh);
-  const act = mixer.clipAction(P.clip).play();
-  act.time = horse ? Math.random() * P.clip.duration : P.standT; // el burro empieza parado, no a medio galope
+  // Quieto, al paso y al galope, mezclados según lo rápido que vaya; quieto, de vez en cuando baja la cabeza o
+  // come (el burro más que el caballo)
+  const mixer = new THREE.AnimationMixer(model);
+  const act = {
+    idle: mixer.clipAction(P.clips.Idle).play(),
+    rest: mixer.clipAction(P.clips[horse ? 'Idle_2' : 'Eating'] ?? P.clips.Idle).play(),
+    walk: mixer.clipAction(P.clips.Walk).play(),
+    gallop: mixer.clipAction(P.clips.Gallop).play(),
+  };
+  const w = { idle: 1, rest: 0, walk: 0, gallop: 0 };
+  for (const k of Object.keys(act) as (keyof typeof act)[]) {
+    act[k].time = Math.random() * act[k].getClip().duration;
+    act[k].setEffectiveWeight(w[k]);
+  }
   const last = new THREE.Vector3(NaN, 0, 0);
   let speed = 0;
-  let walk = 0;
+  let restT = 4 + Math.random() * 8;
   const tick = (dt: number) => {
     if (!root.parent) return;
     const p = root.position;
@@ -300,33 +232,23 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
     const d = Math.hypot(p.x - last.x, p.z - last.z);
     last.copy(p);
     const v = dt > 0 && d < 2 ? d / dt / (root.scale.z || 1) : 0;
-    speed += (v - speed) * Math.min(1, dt * 6);
-    if (!horse && speed > 0.2) {
-      // El burro va al paso: las patas van y vienen alrededor de la pose de parado, sin galopar
-      // (a la cadencia de un burro: una zancada y media por segundo, con el lomo balanceándose y el jinete encima)
-      walk += dt * (4.2 + speed * 3.2);
-      const D = P.clip.duration;
-      act.time = (P.standT + Math.sin(walk) * D * 0.12 + D) % D;
-      act.timeScale = 0;
-      mixer.update(0);
-      inner.position.y = Math.abs(Math.sin(walk)) * 0.035;
-      inner.rotation.z = Math.sin(walk) * 0.022;
-      inner.rotation.y = Math.sin(walk) * 0.018;
-    } else if (speed > 0.2) {
-      act.timeScale = THREE.MathUtils.clamp((speed / P.stride) * P.clip.duration, 0.3, 1.6);
-      mixer.update(dt);
-    } else {
-      // Parado: vuelve poco a poco a la pose con las cuatro patas en el suelo
-      inner.position.y *= 0.9;
-      inner.rotation.z *= 0.9;
-      inner.rotation.y *= 0.9;
-      let dtT = P.standT - act.time;
-      const D = P.clip.duration;
-      dtT -= Math.round(dtT / D) * D;
-      act.time = (act.time + dtT * Math.min(1, dt * 4) + D) % D;
-      act.timeScale = 0;
-      mixer.update(0);
+    speed += (v - speed) * Math.min(1, dt * 5);
+    // Cuánto de cada uno: parado, al paso hasta ~1,6 veces su paso natural y luego al galope
+    const moving = THREE.MathUtils.smoothstep(speed, 0.08, 0.35);
+    const gal = THREE.MathUtils.smoothstep(speed, P.walkV * 1.5, P.walkV * 2.4);
+    if (moving < 0.05) restT -= dt;
+    else restT = 4 + Math.random() * 8;
+    const resting = restT < 0 && restT > -(horse ? 3.3 : 6) ? 1 : 0;
+    if (restT < -(horse ? 3.3 : 6)) restT = 5 + Math.random() * 10;
+    const want = { idle: (1 - moving) * (1 - resting), rest: (1 - moving) * resting, walk: moving * (1 - gal), gallop: moving * gal };
+    for (const k of Object.keys(act) as (keyof typeof act)[]) {
+      w[k] += (want[k] - w[k]) * Math.min(1, dt * 5);
+      act[k].setEffectiveWeight(w[k]);
     }
+    // Las patas al ritmo de lo que avanza (sin patinar), dentro de un margen natural
+    act.walk.timeScale = THREE.MathUtils.clamp(speed / P.walkV, 0.55, 1.5);
+    act.gallop.timeScale = THREE.MathUtils.clamp(speed / P.gallopV, 0.6, 1.4);
+    mixer.update(dt);
   };
   rigTickers.add(tick);
   return { root, pivot, legs, head };
