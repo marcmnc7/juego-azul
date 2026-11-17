@@ -170,7 +170,9 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     const title = el('div', 'll-title', `${T.title} <span>Ronda ${rounds} · Tú ${hearts(myTokens)} · Gas ${hearts(gasTokens)}</span>`);
     const gasInfo = el('div', 'll-gas');
     top.append(title, gasInfo);
-    const log = el('div', 'pr-log ll-log', T.start);
+    // (las reglas, solo en la primera ronda; lo que pasa se lee y se va: no se queda tapando la escena)
+    const log = el('div', 'pr-log ll-log', rounds === 1 ? T.start : '');
+    let logTimer = rounds === 1 ? window.setTimeout(() => (log.textContent = ''), 9000) : 0;
     const bottom = el('div', 'll-bottom');
     const help = el('div', 'pr-help ll-help');
     const meRow = el('div', 'pr-row me');
@@ -234,6 +236,8 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     };
     const say = (t: string) => {
       log.textContent = t;
+      clearTimeout(logTimer);
+      logTimer = window.setTimeout(() => (log.textContent = ''), 5500);
       audio.talk();
     };
     const end = (iWin: boolean, why: string) => {

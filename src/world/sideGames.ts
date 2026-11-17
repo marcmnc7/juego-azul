@@ -1702,6 +1702,17 @@ export class RockHop {
       m.add(new THREE.CylinderGeometry(s * 0.46, s * 0.56, 0.1, 12), r.safe ? 0xc9a36b : 0x9c8058, r.x, h - 0.03, r.z, 0, i, 0);
     });
     this.root.add(m.mesh());
+    // Un collar de espuma donde cada roca toca el agua: sin él parecían flotar encima del mar
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false });
+    HOP_ROCKS.forEach((r, i) => {
+      const s = r.safe ? 1.5 : 1.15;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(s * 0.66, s * 0.8, 20, 1).rotateX(-Math.PI / 2), ringMat);
+      ring.position.set(r.x, seaY + 0.03, r.z);
+      ring.scale.set(1.15, 1, 1);
+      ring.rotation.y = i * 1.3;
+      ring.userData.noCast = true;
+      this.root.add(ring);
+    });
     const fg = new THREE.PlaneGeometry(2.6, 7).rotateX(-Math.PI / 2);
     this.foam = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ map: hopFoamTexture(), color: 0xffffff, transparent: true, alphaTest: 0.05, depthWrite: false }));
     // (se mueve: que no se doble a mano alzada donde nace)

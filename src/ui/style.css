@@ -1702,3 +1702,4 @@ html, body { background: #000; }
 .pk.done .pk-bag { animation: pkGulp .5s ease-out 2; }
 #ui:has(.pk) .hud-top, #ui:has(.pk) .action-btn, #ui:has(.pk) .stick-base, #ui:has(.pk) .mission-card { display: none !important; }
 .pk ~ .bark, #ui:has(.pk) .bark { z-index: 31; }
+.ll-log:empty { display: none; }
