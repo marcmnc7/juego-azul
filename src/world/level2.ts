@@ -1779,6 +1779,8 @@ export class Level2 implements Level {
     disposeScene(this.scene);
     if (this.terrace) disposeScene(this.terrace.scene);
     if (this.camp) disposeScene(this.camp.scene);
+    // (si se sale a mitad de los pinchos, sus etiquetas no se quedan en el capítulo siguiente)
+    this.laurel?.stopPinchos();
     if (this.laurel) disposeScene(this.laurel.scene);
   }
 }
