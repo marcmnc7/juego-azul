@@ -1,6 +1,5 @@
 import { GIFTS, Gift } from '../data/gifts';
 import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
-import { MINI_GAMES } from './minis';
 import { audio } from '../core/audio';
 import type { SaveData } from '../core/save';
 import type { LevelResult } from '../world/level';
@@ -10,6 +9,19 @@ import { KEEPSAKES, keepsakesFor, QUIZ, TEASERS, type Keepsake } from '../data/e
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
+import { GATE, openDay, now, faking, daysUntil, longDate, left, MONTHS } from '../core/calendar';
+import cover1 from '../assets/covers/c1.jpg';
+import cover2 from '../assets/covers/c2.jpg';
+import cover3 from '../assets/covers/c3.jpg';
+import cover4 from '../assets/covers/c4.jpg';
+import cover5 from '../assets/covers/c5.jpg';
+import cover6 from '../assets/covers/c6.jpg';
+import cover7 from '../assets/covers/c7.jpg';
+import cover8 from '../assets/covers/c8.jpg';
+import cover9 from '../assets/covers/c9.jpg';
+
+/** Portada de cada capítulo: una imagen del propio juego (scripts de captura en docs/PLAN-reparto-vroid.md). */
+const COVERS = [cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9];
 
 // Interfaz HTML encima del canvas: pantallas, HUD, diálogos y vales.
 const root = document.getElementById('ui')!;
@@ -74,7 +86,6 @@ export function installGate(ios: boolean) {
   s.append(
     eyebrow,
     el('h1', 'display', 'Para<br><em>Azul</em>'),
-    sticker(STICKERS.oso, 'title-sticker'),
     el('p', 'lead', 'Este juego se abre desde la pantalla de inicio: así va a pantalla completa y sin barras.'),
     list,
     el('p', 'fine', 'Solo hay que hacerlo una vez.'),
@@ -82,66 +93,15 @@ export function installGate(ios: boolean) {
   root.append(s);
 }
 
-/**
- * Calendario de adviento de la portada: los nueve días (del 20 al 28 de noviembre), hechos, el de hoy y los que
- * faltan, y debajo la cuenta atrás en vivo hasta el siguiente capítulo.
- */
-function adventCalendar(save: SaveData) {
-  const wrap = el('div', 'advent');
-  const row = el('div', 'advent-days');
-  const done = new Set(save.levelsDone);
-  const nextI = LEVELS.findIndex((l) => !done.has(l.id));
-  const today = new Date();
-  LEVELS.forEach((lv, i) => {
-    const d = openDay(i);
-    const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-    const cls = done.has(lv.id) ? ' done' : i === nextI && Date.now() >= d.getTime() ? ' ready' : Date.now() >= d.getTime() ? ' open' : '';
-    const t = el('div', 'advent-day' + cls + (isToday ? ' today' : '') + (i === LEVELS.length - 1 ? ' last' : ''), `<b>${d.getDate()}</b><span>${done.has(lv.id) ? '✓' : i === LEVELS.length - 1 ? '🎂' : Date.now() >= d.getTime() ? lv.emoji : '🔒'}</span>`);
-    row.append(t);
-  });
-  const line = el('div', 'advent-count');
-  wrap.append(row, line);
-  const tick = () => {
-    if (!wrap.isConnected) return;
-    line.innerHTML = countdownLine(save);
-    setTimeout(tick, 1000);
-  };
-  // (primero se pinta, luego se engancha a la portada)
-  line.innerHTML = countdownLine(save);
-  setTimeout(tick, 1000);
-  return wrap;
-}
-
-/** «El capítulo 4 se abre en 2 días, 5 h y 13 min», «¡Hoy toca el capítulo 4!», o la sorpresa final. */
-function countdownLine(save: SaveData) {
-  const done = new Set(save.levelsDone);
-  const i = LEVELS.findIndex((l) => !done.has(l.id));
-  if (i < 0) return '💌 Todo completado: te espera la sorpresa final';
-  const d = openDay(i);
-  const ms = d.getTime() - Date.now();
-  const lv = LEVELS[i];
-  if (ms <= 0) return i > 0 && !done.has(LEVELS[i - 1].id) ? `Te queda pendiente el capítulo ${i}` : `<b>¡Ya puedes jugar el capítulo ${lv.id}!</b>`;
-  const sec = Math.floor(ms / 1000);
-  const dd = Math.floor(sec / 86400), hh = Math.floor((sec % 86400) / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const left = dd > 0 ? `${dd} ${dd === 1 ? 'día' : 'días'}, ${hh} h y ${mm} min` : `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
-  return `${i === 0 ? 'El primer capítulo' : `El capítulo ${lv.id}`} se abre en <b>${left}</b>`;
-}
-
 /** Portada. Si se le pasa la carga, el botón espera (con porcentaje) a que todo esté listo, para que luego cada capítulo abra al momento. */
-export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }, save?: SaveData) {
+export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }, _save?: SaveData) {
+  void _save;
   clearScreens();
-  const s = el('div', 'screen title-screen');
-  const eyebrow = el('div', 'eyebrow', 'De Gas, para ti');
+  const s = el('div', 'screen hm-title');
+  const eyebrow = el('div', 'hm-eyebrow', 'De Gas, para ti');
   testTaps(eyebrow);
-  s.append(
-    eyebrow,
-    el('h1', 'display', 'Para<br><em>Azul</em>'),
-    sticker(STICKERS.oso, 'title-sticker'),
-    el('p', 'lead', 'Un pequeño juego sobre nuestra historia. Cada capítulo que completes desbloquea un regalo de verdad.'),
-  );
-  if (save) s.append(adventCalendar(save));
-  const b = el('button', 'big-btn', 'Empezar ▸') as HTMLButtonElement;
+  s.append(el('div', 'hm-glow'), eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), el('p', 'hm-lead', 'Nueve capítulos de nuestra historia. Cada uno esconde un regalo de verdad.'));
+  const b = el('button', 'hm-btn', 'Empezar') as HTMLButtonElement;
   b.onclick = () => {
     audio.unlock();
     onStart();
@@ -161,11 +121,64 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
       ready = true;
       b.disabled = false;
       b.classList.remove('loading');
-      b.innerHTML = 'Empezar ▸';
+      b.innerHTML = 'Empezar';
     });
   }
-  s.append(b, el('p', 'fine', 'Con el sonido activado 🔊'));
+  s.append(b, el('p', 'hm-fine', 'Mejor con el sonido activado'));
   root.append(s);
+}
+
+/** ¿Todavía es pronto para entrar? (antes del 26 de noviembre solo se ve la cuenta atrás) */
+export const beforeGate = () => now() < GATE.getTime();
+
+/**
+ * Cuenta atrás hasta el día en que se puede entrar: el cielo de noche, unas lucecitas que caen y los números grandes.
+ * Cuando llega a cero, sigue sola.
+ */
+export function countdownScreen(onOpen: () => void) {
+  clearScreens();
+  const s = el('div', 'screen cd-screen');
+  const sky = el('div', 'cd-sky');
+  for (let i = 0; i < 46; i++) {
+    const st = el('i', 'cd-star');
+    st.style.left = `${Math.random() * 100}%`;
+    st.style.top = `${Math.random() * 70}%`;
+    st.style.animationDelay = `${Math.random() * 4}s`;
+    st.style.setProperty('--sz', `${1 + Math.random() * 2.2}px`);
+    sky.append(st);
+  }
+  for (let i = 0; i < 18; i++) {
+    const f = el('i', 'cd-fall');
+    f.style.left = `${Math.random() * 100}%`;
+    f.style.animationDelay = `${-Math.random() * 12}s`;
+    f.style.animationDuration = `${9 + Math.random() * 8}s`;
+    sky.append(f);
+  }
+  const eyebrow = el('div', 'hm-eyebrow', 'De Gas, para ti');
+  testTaps(eyebrow);
+  const units: [string, string][] = [['d', 'días'], ['h', 'horas'], ['m', 'min'], ['s', 'seg']];
+  const clock = el('div', 'cd-clock');
+  const cells: Record<string, HTMLElement> = {};
+  for (const [k, label] of units) {
+    const c = el('div', 'cd-cell');
+    cells[k] = el('b', '', '00');
+    c.append(cells[k], el('span', '', label));
+    clock.append(c);
+  }
+  s.append(sky, eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), el('p', 'cd-lead', 'Algo se está preparando.<br>Todavía no se puede abrir…'), clock, el('p', 'cd-date', `Se abre el ${longDate(GATE)}`), el('p', 'hm-fine', 'Paciencia. Merecerá la pena.'));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tick = () => {
+    if (!s.isConnected) return;
+    const l = left(GATE);
+    cells.d.textContent = pad(l.d);
+    cells.h.textContent = pad(l.h);
+    cells.m.textContent = pad(l.m);
+    cells.s.textContent = pad(l.s);
+    if (l.done) return void setTimeout(onOpen, 600);
+    setTimeout(tick, 1000);
+  };
+  root.append(s);
+  tick();
 }
 
 export interface MapOptions {
@@ -176,16 +189,7 @@ export interface MapOptions {
   onReset: () => void;
 }
 
-/** Cumpleaños: el último capítulo se abre ese día y cada uno de los anteriores, un día antes. */
-const BIRTHDAY = new Date(2026, 10, 28); // 28 de noviembre (en JavaScript los meses empiezan en 0)
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-function openDay(i: number) {
-  const d = new Date(BIRTHDAY);
-  d.setDate(d.getDate() - (LEVELS.length - 1 - i));
-  return d;
-}
-
-type Tab = 'story' | 'album' | 'gifts' | 'games';
+type Tab = 'story' | 'album';
 let lastTab: Tab = 'story';
 
 /** Hoja que sube desde abajo (detalles, ajustes): se cierra tocando fuera, con ✕ o deslizando hacia abajo. */
@@ -225,25 +229,32 @@ function sheet(build: (body: HTMLElement, close: () => void) => void, cls = '') 
 
 type Shot = { src?: string; chat?: Memory['chat']; caption: string; sticker?: boolean; level: number };
 /**
- * Final de un capítulo, en una sola pantalla: estrellas y números, el regalo (una caja que hay que abrir), las
- * fotos que pasan al álbum y lo que viene mañana. Un único botón abajo para seguir.
+ * Final de un capítulo: su portada arriba con confeti, las estrellas, el regalo (una caja que hay que abrir), las fotos
+ * que pasan al álbum y cuándo se abre el siguiente. Un único botón abajo para seguir.
  */
 export function chapterComplete(n: number, result: LevelResult | undefined, gift: Gift | null, nextTeaser: number | null, onClose: () => void) {
   clearScreens();
-  const o = el('div', 'screen app-screen done-screen');
-  const body = el('main', 'ap-body');
-  body.append(el('div', 'ap-kicker center', `Capítulo ${n} · ${LEVELS[n - 1].name}`), el('h1', 'gift-title', '¡Capítulo superado!'));
+  const o = el('div', 'screen dn-screen');
+  const hero = el('header', 'dn-hero');
+  const img = el('img', 'dn-cover') as HTMLImageElement;
+  img.src = COVERS[n - 1];
+  img.alt = '';
+  hero.append(img, el('div', 'dn-shade'));
+  const ht = el('div', 'dn-hero-txt');
+  ht.append(el('div', 'hm-chip', `Capítulo ${n}`), el('h1', 'dn-title', LEVELS[n - 1].name), el('p', 'dn-sub', '¡Capítulo superado!'));
+  hero.append(ht);
+  const body = el('main', 'dn-body');
   if (result) body.append(resultBlock(result));
-  const btn = el('button', 'big-btn ap-play', 'Seguir ▸');
+  const btn = el('button', 'hm-btn', 'Seguir');
   let giftOpen = !gift;
   if (gift) {
-    const card = el('section', 'ap-card gift-card');
-    card.append(el('div', 'ap-kicker', 'Tienes un regalo'));
+    const card = el('section', 'dn-card dn-gift');
+    const kick = el('div', 'dn-kicker', 'Tienes un regalo');
     const box = el('button', 'giftbox');
     box.append(el('div', 'lid'), el('div', 'base'), el('div', 'ribbon'));
     const hint = el('p', 'gift-hint', 'Toca la caja para abrirla');
-    card.append(box, hint);
-    const open = () => {
+    card.append(kick, box, hint);
+    box.onclick = () => {
       if (giftOpen) return;
       giftOpen = true;
       box.classList.add('open');
@@ -254,21 +265,20 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
       cssConfetti(o);
       setTimeout(() => {
         box.remove();
-        card.querySelector('.ap-kicker')!.textContent = '¡Regalo desbloqueado!';
+        kick.textContent = '¡Regalo desbloqueado!';
         const v = voucher(gift);
-        v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano 📸 · también está en Regalos'));
+        v.append(el('div', 'redeem', 'Haz una captura para tenerlo a mano · también lo tienes en este capítulo, en el menú'));
         card.append(v);
-        btn.textContent = 'Seguir ▸';
+        btn.textContent = 'Seguir';
       }, 650);
     };
-    box.onclick = open;
-    btn.textContent = '🎁 Abrir el regalo';
+    btn.textContent = 'Abrir el regalo';
     body.append(card);
   }
   const photos: Shot[] = memoriesFor(n);
   if (photos.length) {
-    const card = el('section', 'ap-card');
-    card.append(el('div', 'ap-kicker', `${photos.length === 1 ? 'Una foto' : `${photos.length} fotos`} para el álbum`));
+    const card = el('section', 'dn-card');
+    card.append(el('div', 'dn-kicker', `${photos.length === 1 ? 'Una foto nueva' : `${photos.length} fotos nuevas`} en el álbum`));
     const strip = el('div', 'ap-strip');
     photos.forEach((m, i) => {
       const t = el('button', 'ap-photo');
@@ -280,21 +290,26 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     card.append(strip);
     body.append(card);
   }
-  if (nextTeaser && TEASERS[nextTeaser]) {
+  if (nextTeaser) {
     const lv = LEVELS[nextTeaser - 1];
-    const card = el('section', 'ap-card teaser-card');
     const d = openDay(nextTeaser - 1);
-    const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(new Date().setHours(0, 0, 0, 0)).getTime()) / 86400000);
-    card.append(el('div', 'ap-kicker', `Capítulo ${nextTeaser} · ${days <= 0 ? 'ya se puede jugar' : days === 1 ? 'mañana' : `el ${d.getDate()} de ${MONTHS[d.getMonth()]}`}`), el('div', 'teaser-row', `<span class="teaser-emoji">${lv.emoji}</span><span class="teaser-hint">«${TEASERS[nextTeaser]}»</span>`));
+    const days = daysUntil(d);
+    const card = el('section', 'dn-card dn-next');
+    const th = el('img', 'dn-next-img') as HTMLImageElement;
+    th.src = COVERS[nextTeaser - 1];
+    th.alt = '';
+    const txt = el('div', 'dn-next-txt');
+    txt.append(el('div', 'dn-kicker', `Capítulo ${nextTeaser} · ${days <= 0 ? 'ya se puede jugar' : days === 1 ? 'mañana' : `el ${longDate(d)}`}`), el('div', 'dn-next-hint', TEASERS[nextTeaser] ? `«${TEASERS[nextTeaser]}»` : lv.name));
+    card.append(th, txt);
     body.append(card);
   }
-  const foot = el('div', 'ap-foot');
+  const foot = el('div', 'dn-foot');
   foot.append(btn);
   btn.onclick = () => {
     if (!giftOpen) return (o.querySelector('.giftbox') as HTMLButtonElement | null)?.click();
     onClose();
   };
-  o.append(body, foot);
+  o.append(hero, body, foot);
   root.append(o);
   audio.fanfare();
   cssConfetti(o, 40);
@@ -354,43 +369,42 @@ function lightbox(items: Shot[], start: number) {
 }
 
 /**
- * Menú principal, como una app: pestañas abajo (historia, álbum, regalos, minijuegos), el siguiente capítulo
- * bien grande arriba y el resto en una lista compacta; los detalles, en hojas que suben desde abajo.
+ * Menú principal: el capítulo que toca, con su portada bien grande (si aún no se ha abierto, borrosa y con la cuenta
+ * atrás), y debajo el calendario con los nueve capítulos. El álbum y los ajustes, arriba.
  */
 export function mapScreen(save: SaveData, opts: MapOptions, tab: Tab = lastTab) {
-  // Al cambiar de pestaña no se vuelve a fundir toda la pantalla: solo entra el contenido
-  const switching = !!root.querySelector('.app-screen:not(.done-screen)');
+  const switching = !!root.querySelector('.hm-screen');
   clearScreens();
   lastTab = tab;
   const done = new Set(save.levelsDone);
-  const s = el('div', 'screen app-screen' + (switching ? ' still' : ''));
-  const head = el('header', 'ap-head');
-  const brand = el('div', 'ap-brand');
-  brand.append(el('div', 'ap-logo', 'Para <em>Azul</em>'), el('div', 'ap-sub', opts.test ? '🛠 Modo prueba · todo abierto' : `${save.levelsDone.length} de ${LEVELS.length} capítulos`));
-  const gear = el('button', 'ap-icon', '⚙️');
+  const s = el('div', 'screen hm-screen' + (switching ? ' still' : ''));
+  const head = el('header', 'hm-head');
+  const brand = el('div', 'hm-brand');
+  brand.append(el('div', 'hm-logo', 'Para <em>Azul</em>'), el('div', 'hm-sub', opts.test && !faking() ? 'Modo prueba · todo abierto' : `${save.levelsDone.length} de ${LEVELS.length} capítulos`));
+  const btns = el('div', 'hm-head-btns');
+  if (tab === 'album') {
+    const back = el('button', 'hm-icon', '‹');
+    back.setAttribute('aria-label', 'Volver');
+    back.onclick = () => mapScreen(save, opts, 'story');
+    btns.append(back);
+  } else {
+    const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length + (save.found?.length ?? 0);
+    const alb = el('button', 'hm-icon hm-album', `<span>📷</span>${seen ? `<i>${seen}</i>` : ''}`);
+    alb.setAttribute('aria-label', 'Álbum');
+    alb.onclick = () => mapScreen(save, opts, 'album');
+    btns.append(alb);
+  }
+  const gear = el('button', 'hm-icon', '⚙︎');
   gear.setAttribute('aria-label', 'Ajustes');
   gear.onclick = () => settingsSheet(opts);
-  head.append(brand, gear);
-  const body = el('main', 'ap-body');
-  const tabs = el('nav', 'ap-tabs');
-  const seen = MEMORIES.filter((m) => opts.test || done.has(m.level)).length;
-  const defs: [Tab, string, string, string][] = [
-    ['story', '🗺️', 'Historia', ''],
-    ['album', '📷', 'Álbum', `${seen + (save.found?.length ?? 0)}`],
-    ['gifts', '🎁', 'Regalos', `${save.giftsUnlocked.length}`],
-    ['games', '🎮', 'Juegos', ''],
-  ];
-  for (const [id, icon, label, badge] of defs) {
-    void badge;
-    const b = el('button', 'ap-tab' + (id === tab ? ' on' : ''), `<span class="ap-tab-i">${icon}</span><span>${label}</span>`);
-    b.onclick = () => id !== tab && mapScreen(save, opts, id);
-    tabs.append(b);
-  }
-  if (tab === 'story') storyTab(body, save, opts);
-  else if (tab === 'album') albumTab(body, save, opts.test);
-  else if (tab === 'gifts') giftsTab(body, save);
-  else gamesTab(body, save, opts);
-  s.append(head, body, tabs);
+  btns.append(gear);
+  head.append(brand, btns);
+  const body = el('main', 'hm-body');
+  if (tab === 'album') {
+    body.append(el('h2', 'hm-h2', 'Nuestro álbum'));
+    albumTab(body, save, opts.test);
+  } else storyTab(body, save, opts);
+  s.append(head, body);
   root.append(s);
 }
 
@@ -398,51 +412,88 @@ function chapterState(i: number, save: SaveData, test: boolean) {
   const done = new Set(save.levelsDone);
   const lv = LEVELS[i];
   const day = openDay(i);
-  const early = Date.now() < day.getTime();
-  const unlocked = test || (!early && (i === 0 || done.has(LEVELS[i - 1].id)));
-  return { lv, day, early, unlocked, done: done.has(lv.id) };
+  const early = now() < day.getTime();
+  // (en modo prueba todo está abierto, salvo si se está fingiendo otro día para ver el calendario)
+  const open = test && !faking();
+  const unlocked = open || (!early && (i === 0 || done.has(LEVELS[i - 1].id)));
+  return { lv, day, early: early && !open, unlocked, done: done.has(lv.id) };
+}
+
+/** Cuenta atrás en vivo (días, horas, minutos y segundos) hasta d, dentro de el. */
+function liveCountdown(d: Date) {
+  const box = el('div', 'hm-count');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tick = () => {
+    if (!box.isConnected && box.dataset.on) return;
+    box.dataset.on = '1';
+    const l = left(d);
+    box.innerHTML = l.d > 0 ? `<b>${l.d}</b><span>${l.d === 1 ? 'día' : 'días'}</span><b>${pad(l.h)}</b><span>h</span><b>${pad(l.m)}</b><span>min</span>` : `<b>${pad(l.h)}</b><span>h</span><b>${pad(l.m)}</b><span>min</span><b>${pad(l.s)}</b><span>s</span>`;
+    setTimeout(tick, 1000);
+  };
+  tick();
+  return box;
 }
 
 function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   const states = LEVELS.map((_, i) => chapterState(i, save, opts.test));
   const allDone = LEVELS.every((l) => save.levelsDone.includes(l.id));
-  // El que toca: el primero sin hacer (abierto o por abrir)
   const nextI = states.findIndex((c) => !c.done);
-  const hero = el('section', 'ap-hero');
+  const hero = el('section', 'hm-hero');
   if (nextI < 0 || allDone) {
     hero.classList.add('final');
-    hero.append(el('div', 'ap-kicker', 'Has llegado al final'), el('div', 'ap-hero-emoji', '💌'), el('h2', '', 'La sorpresa final'), el('p', '', 'Un crucigrama y, al resolverlo, la carta.'));
-    const b = el('button', 'big-btn ap-play', 'Abrir ▸');
+    const img = el('img', 'hm-hero-img') as HTMLImageElement;
+    img.src = COVERS[8];
+    hero.append(img, el('div', 'hm-hero-shade'));
+    const t = el('div', 'hm-hero-txt');
+    t.append(el('div', 'hm-chip', 'Has llegado al final'), el('h2', 'hm-hero-title', 'La sorpresa final'), el('p', 'hm-hero-place', 'Un crucigrama y, al resolverlo, la carta.'));
+    const b = el('button', 'hm-btn', 'Abrir');
     b.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
-    hero.append(b);
+    t.append(b);
+    hero.append(t);
   } else {
     const c = states[nextI];
-    hero.append(el('div', 'ap-kicker', `${c.done ? 'Otra vez' : 'Siguiente'} · Capítulo ${c.lv.id}`), el('div', 'ap-hero-emoji', c.lv.emoji), el('h2', '', c.lv.name), el('p', '', c.unlocked ? c.lv.place : TEASERS[c.lv.id] ? `«${TEASERS[c.lv.id]}»` : c.lv.place));
+    const img = el('img', 'hm-hero-img' + (c.unlocked ? '' : ' locked')) as HTMLImageElement;
+    img.src = COVERS[nextI];
+    img.alt = '';
+    hero.append(img, el('div', 'hm-hero-shade'));
+    const t = el('div', 'hm-hero-txt');
+    const when = c.unlocked ? (c.done ? 'Otra vez' : 'Ya puedes jugar') : c.early ? longDate(c.day) : 'Termina el anterior';
+    t.append(el('div', 'hm-chip', `Capítulo ${c.lv.id} · ${when}`));
     if (c.unlocked) {
-      const b = el('button', 'big-btn ap-play', '▶ Jugar');
+      t.append(el('h2', 'hm-hero-title', c.lv.name), el('p', 'hm-hero-place', c.lv.place));
+      const b = el('button', 'hm-btn', 'Jugar');
       b.onclick = () => opts.onPlay(c.lv.id);
-      hero.append(b);
+      t.append(b);
     } else {
       hero.classList.add('locked');
-      hero.append(el('div', 'ap-countdown', c.early ? countdown(c.day) : '🔒 Termina el anterior'));
+      t.append(el('h2', 'hm-hero-title', TEASERS[c.lv.id] ? `«${TEASERS[c.lv.id]}»` : `Capítulo ${c.lv.id}`));
+      if (c.early) t.append(liveCountdown(c.day));
     }
+    hero.append(t);
   }
   body.append(hero);
-  body.append(el('h3', 'ap-section', 'Todos los capítulos'));
-  const list = el('div', 'ap-list');
+  body.append(el('h3', 'hm-section', 'Tu calendario'));
+  const list = el('div', 'hm-list');
   states.forEach((c, i) => {
     const kp = keepsakesFor(c.lv.id);
     const found = kp.filter((k) => save.found?.includes(k.id)).length;
-    const row = el('button', 'ap-row' + (c.done ? ' done' : c.unlocked ? ' open' : ' locked') + (i === nextI ? ' next' : ''));
-    const date = `<b>${c.day.getDate()}</b><small>${MONTHS[c.day.getMonth()].slice(0, 3)}</small>`;
-    const state = c.done ? '<span class="ap-st ok">✓</span>' : c.unlocked ? '<span class="ap-st go">▶</span>' : '<span class="ap-st">🔒</span>';
-    row.append(el('div', 'ap-date', date), el('div', 'ap-row-emoji', c.unlocked || c.done ? c.lv.emoji : '❔'));
-    const txt = el('div', 'ap-row-txt');
-    txt.append(el('div', 'ap-row-name', c.unlocked || c.done ? c.lv.name : `Capítulo ${c.lv.id}`), el('div', 'ap-row-sub', c.done ? `Completado${kp.length ? ` · 🔎 ${found}/${kp.length}` : ''}` : c.unlocked ? 'Listo para jugar' : c.early ? `Se abre el ${c.day.getDate()} de ${MONTHS[c.day.getMonth()]}` : 'Termina el anterior'));
-    row.append(txt);
-    row.insertAdjacentHTML('beforeend', state);
+    const show = c.unlocked || c.done;
+    const row = el('button', 'hm-row' + (c.done ? ' done' : c.unlocked ? ' open' : ' locked') + (i === nextI ? ' next' : '') + (i === LEVELS.length - 1 ? ' xmas' : '') + (i === 0 ? ' bday' : ''));
+    const th = el('div', 'hm-thumb');
+    const im = el('img') as HTMLImageElement;
+    im.src = COVERS[i];
+    im.alt = '';
+    im.loading = 'lazy';
+    th.append(im);
+    if (!show) th.append(el('span', 'hm-lock', '🔒'));
+    if (c.done) th.append(el('span', 'hm-ok', '✓'));
+    const date = el('div', 'hm-date', `<b>${c.day.getDate()}</b><small>${MONTHS[c.day.getMonth()].slice(0, 3)}</small>`);
+    const txt = el('div', 'hm-row-txt');
+    const tag = i === 0 ? ' <i class="hm-tag">🎂 tu cumple</i>' : i === LEVELS.length - 1 ? ' <i class="hm-tag">🎄 Navidad</i>' : '';
+    txt.append(el('div', 'hm-row-name', (show ? c.lv.name : `Capítulo ${c.lv.id}`) + tag), el('div', 'hm-row-sub', c.done ? `Completado${kp.length ? ` · ${found}/${kp.length} recuerdos` : ''}` : c.unlocked ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior'));
+    row.append(date, th, txt);
     row.onclick = () => {
-      if (!c.unlocked && !c.done) {
+      if (!show) {
         row.classList.remove('nope');
         void row.offsetWidth;
         row.classList.add('nope');
@@ -453,27 +504,14 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     };
     list.append(row);
   });
-  const fin = el('button', 'ap-row final' + (allDone || opts.test ? ' open' : ' locked'));
-  fin.append(el('div', 'ap-date', '<b>♥</b>'), el('div', 'ap-row-emoji', '💌'));
-  const ft = el('div', 'ap-row-txt');
-  ft.append(el('div', 'ap-row-name', 'La sorpresa final'), el('div', 'ap-row-sub', allDone || opts.test ? 'Lista para abrir' : 'Cuando termines todos los capítulos'));
+  const fin = el('button', 'hm-row final' + (allDone || opts.test ? ' open' : ' locked'));
+  fin.append(el('div', 'hm-date', '<b>♥</b>'), el('div', 'hm-thumb heart', '💌'));
+  const ft = el('div', 'hm-row-txt');
+  ft.append(el('div', 'hm-row-name', 'La sorpresa final'), el('div', 'hm-row-sub', allDone || opts.test ? 'Lista para abrir' : 'Cuando termines los nueve'));
   fin.append(ft);
-  fin.insertAdjacentHTML('beforeend', allDone || opts.test ? '<span class="ap-st go">▶</span>' : '<span class="ap-st">🔒</span>');
   if (allDone || opts.test) fin.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
   list.append(fin);
   body.append(list);
-}
-
-/** «Mañana», «En 3 días», o las horas que faltan si es hoy. */
-function countdown(day: Date) {
-  const ms = day.getTime() - Date.now();
-  if (ms <= 0) return 'Ya se puede abrir';
-  const h = Math.ceil(ms / 3600000);
-  const now = new Date();
-  const days = Math.round((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
-  if (days <= 0) return `⏳ Se abre en ${h} h`;
-  if (days === 1) return '⏳ Se abre mañana';
-  return `⏳ Se abre el ${day.getDate()} de ${MONTHS[day.getMonth()]} · faltan ${days} días`;
 }
 
 function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
@@ -483,19 +521,25 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     const kp = keepsakesFor(id);
     const found = kp.filter((k) => save.found?.includes(k.id)).length;
     const photos = memoriesFor(id);
-    b.append(el('div', 'ap-sheet-emoji', lv.emoji), el('div', 'ap-kicker', `Capítulo ${id}`), el('h2', '', lv.name), el('p', 'ap-sheet-place', lv.place));
+    const img = el('img', 'hm-sheet-img') as HTMLImageElement;
+    img.src = COVERS[id - 1];
+    img.alt = '';
+    b.append(img, el('div', 'hm-chip dark', `Capítulo ${id} · ${longDate(openDay(id - 1))}`), el('h2', 'hm-sheet-title', lv.name), el('p', 'hm-sheet-place', lv.place));
     const facts = el('div', 'ap-facts');
     facts.append(el('div', '', `<b>${doneIt ? '✓' : '—'}</b><span>${doneIt ? 'Completado' : 'Sin jugar'}</span>`));
     if (kp.length) facts.append(el('div', '', `<b>${found}/${kp.length}</b><span>Recuerdos escondidos</span>`));
     if (photos.length) facts.append(el('div', '', `<b>${doneIt || opts.test ? photos.length : '?'}</b><span>Fotos para el álbum</span>`));
     b.append(facts);
-    const play = el('button', 'big-btn ap-play', doneIt ? '↻ Volver a jugar' : '▶ Jugar');
+    // Su regalo, si ya lo ha ganado
+    const gift = GIFTS.find((g) => g.level === id && save.giftsUnlocked.includes(g.id));
+    if (gift) b.append(voucher(gift));
+    const play = el('button', 'hm-btn', doneIt ? 'Volver a jugar' : 'Jugar');
     play.onclick = () => {
       close();
       opts.onPlay(id);
     };
     b.append(play);
-  });
+  }, 'hm-sheet');
 }
 
 function albumTab(body: HTMLElement, save: SaveData, test: boolean) {
@@ -543,41 +587,6 @@ function thumb(m: Shot) {
   img.decoding = 'async';
   img.draggable = false;
   return img;
-}
-
-function giftsTab(body: HTMLElement, save: SaveData) {
-  body.append(el('h3', 'ap-section', `Tus regalos · ${save.giftsUnlocked.length}/${GIFTS.length}`));
-  const list = el('div', 'ap-list');
-  GIFTS.forEach((g) => {
-    const open = save.giftsUnlocked.includes(g.id);
-    const row = el('button', 'ap-row gift' + (open ? ' open' : ' locked'));
-    row.append(el('div', 'ap-row-emoji big', open ? g.icon : '🎁'));
-    const t = el('div', 'ap-row-txt');
-    t.append(el('div', 'ap-row-name', open ? g.title : 'Regalo sorpresa'), el('div', 'ap-row-sub', open ? 'Toca para verlo' : `Al terminar el capítulo ${g.level}`));
-    row.append(t);
-    row.insertAdjacentHTML('beforeend', open ? '<span class="ap-st go">›</span>' : '<span class="ap-st">🔒</span>');
-    if (open)
-      row.onclick = () =>
-        sheet((b) => {
-          b.append(voucher(g), el('p', 'ap-note', 'Haz una captura para tenerlo a mano 📸'));
-        }, 'gift-sheet');
-    list.append(row);
-  });
-  body.append(list);
-}
-
-function gamesTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
-  const done = new Set(save.levelsDone);
-  body.append(el('h3', 'ap-section', 'Minijuegos para repetir'));
-  const grid = el('div', 'ap-games');
-  MINI_GAMES.forEach((m) => {
-    const open = opts.test || done.has(m.chapter);
-    const card = el('button', 'ap-game' + (open ? '' : ' locked'));
-    card.append(el('div', 'ap-game-i', open ? m.icon : '🔒'), el('div', 'ap-row-name', open ? m.title : '???'), el('div', 'ap-row-sub', `Capítulo ${m.chapter}`));
-    if (open) card.onclick = () => m.run(() => mapScreen(save, opts, 'games'));
-    grid.append(card);
-  });
-  body.append(grid);
 }
 
 /** Ajustes: sonido, cómo se juega y, en modo prueba, borrar el progreso. */
@@ -868,81 +877,8 @@ function polaroid(m: Memory, tilt: number, withCaption = true) {
   return f;
 }
 
-const TILTS = [-5, 4, -2, 6, -4];
 
 /** Al acabar un capítulo: sus fotos caen sobre la mesa y pasan al álbum. */
-export function memories(level: number, onClose: () => void) {
-  const list = memoriesFor(level);
-  if (!list.length) return onClose();
-  clearScreens();
-  const o = el('div', 'screen memories-screen');
-  o.append(el('h1', '', 'Recuerdo desbloqueado 📸'));
-  const table = el('div', 'polaroid-table');
-  list.forEach((m, i) => {
-    const p = polaroid(m, TILTS[i % TILTS.length]);
-    p.style.animationDelay = `${0.15 + i * 0.25}s`;
-    table.append(p);
-  });
-  const b = el('button', 'big-btn', 'Guardar en el álbum');
-  b.onclick = onClose;
-  o.append(table, b);
-  root.append(o);
-  audio.pop();
-}
-
-export function miniList(save: SaveData, test: boolean, onClose: () => void) {
-  clearScreens();
-  const back = () => miniList(save, test, onClose);
-  const o = el('div', 'screen memories-screen album');
-  o.append(el('h1', '', 'Minijuegos'));
-  const done = new Set(save.levelsDone);
-  const list = el('div', 'levels');
-  MINI_GAMES.forEach((m) => {
-    const open = test || done.has(m.chapter);
-    const card = el('button', 'level-card' + (open ? '' : ' locked'));
-    card.append(el('div', 'emoji', m.icon), el('div', 'name', open ? m.title : '???'), el('div', 'place', `Capítulo ${m.chapter}`), el('div', 'state', open ? '▶ Jugar' : '🔒 Bloqueado'));
-    if (open) card.onclick = () => m.run(back);
-    list.append(card);
-  });
-  const b = el('button', 'big-btn', 'Volver');
-  b.onclick = onClose;
-  o.append(list, b);
-  root.append(o);
-}
-
-export function album(save: SaveData, test: boolean, onClose: () => void) {
-  clearScreens();
-  const o = el('div', 'screen memories-screen album');
-  o.append(el('h1', '', 'Nuestro álbum'));
-  const done = new Set(save.levelsDone);
-  const grid = el('div', 'polaroid-table');
-  MEMORIES.forEach((m, i) => {
-    if (test || done.has(m.level)) grid.append(polaroid(m, TILTS[i % TILTS.length]));
-    else {
-      const f = el('figure', 'polaroid locked', `<div class="ph">?</div><figcaption>Capítulo ${m.level}</figcaption>`);
-      f.style.setProperty('--tilt', `${TILTS[i % TILTS.length]}deg`);
-      grid.append(f);
-    }
-  });
-  o.append(grid);
-  // Los que estaban escondidos por los escenarios
-  const found = KEEPSAKES.filter((k) => save.found?.includes(k.id));
-  o.append(el('h2', 'album-sub', `Recuerdos escondidos (${found.length}/${KEEPSAKES.length})`));
-  const hidden = el('div', 'polaroid-table');
-  KEEPSAKES.forEach((k, i) => {
-    if (save.found?.includes(k.id)) hidden.append(polaroid({ level: k.chapter, src: k.src, chat: k.chat, caption: k.caption, sticker: k.sticker }, TILTS[i % TILTS.length]));
-    else {
-      const f = el('figure', 'polaroid locked', `<div class="ph">?</div><figcaption>Capítulo ${k.chapter}</figcaption>`);
-      f.style.setProperty('--tilt', `${TILTS[i % TILTS.length]}deg`);
-      hidden.append(f);
-    }
-  });
-  const b = el('button', 'big-btn', 'Volver');
-  b.onclick = onClose;
-  o.append(hidden, b);
-  root.append(o);
-}
-
 function voucher(g: Gift, locked = false) {
   const v = el('div', 'voucher' + (locked ? ' locked' : ''));
   if (locked) {

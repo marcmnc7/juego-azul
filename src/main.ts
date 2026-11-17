@@ -23,6 +23,7 @@ import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
 import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
 import { ensureCrowd } from './entities/crowdRig';
+import { initClock, faking } from './core/calendar';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
 import { castFor } from './data/characters';
@@ -30,7 +31,7 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, pauseState, openPause, Tutorial, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, Tutorial, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -711,7 +712,10 @@ if ('serviceWorker' in navigator && !/^(localhost|127\.0\.0\.1)$/.test(location.
 // En el navegador del móvil no se juega: hay que abrirlo desde la pantalla de inicio (pantalla completa, sin
 // barras, sin conexión). Dentro del artifact, en el ordenador y en modo prueba sí se puede
 const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+initClock(TEST);
 if (topLevel && !standalone && phone && !TEST) installGate(/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+// Hasta el 26 de noviembre, solo la cuenta atrás (en modo prueba se ve fingiendo el día con ?hoy=2026-11-25)
+else if (beforeGate() && (!TEST || faking())) countdownScreen(() => location.reload());
 else
   titleScreen(
     () => {
