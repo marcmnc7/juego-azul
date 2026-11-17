@@ -12,6 +12,8 @@ import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } fr
 import { rigPost } from '../entities/rig';
 import { bark, comicWord, dialogue, later, timingGauge } from '../ui/ui';
 import type { Box2 } from './ferreries';
+import { canvasTex } from './deco';
+import { comicBulbTexture } from '../core/comicTiles';
 import { disposeScene } from './level';
 
 // Los minijuegos que hay que pasar para seguir con la historia. Fallar nunca hace perder: se repite ahí mismo.
@@ -392,34 +394,91 @@ export class PinchoGame {
   errors = 0;
 
   constructor(sc: THREE.Scene, z: number, private onDone: () => void) {
-    // Una barra de madera en plena calle, con el camarero detrás y los pinchos en fila
+    // Una caseta de las fiestas de San Mateo en plena calle: barra de madera, el camarero detrás, la trasera con
+    // estantes de botellas y jamones, el toldo de rayas, el rótulo y una tira de bombillas. Los pinchos, en fila.
     const m = new Merger();
     const y = 1.08;
+    const bz = z - 1.3; // la trasera
+    for (const sx of [-1.45, 1.45]) {
+      m.add(G.box, 0x5a3a22, sx, 1.4, bz, 0, 0, 0, 0.1, 2.8, 0.1); // postes
+      m.add(G.box, 0x5a3a22, sx, 1.3, z + 0.32, 0, 0, 0, 0.08, 2.6, 0.08);
+      m.add(G.box, 0x6b4a2e, sx, 1.4, (bz + z) / 2, 0, 0, 0, 0.04, 2.6, 1.6); // costados de tablas
+    }
+    m.add(G.box, 0x6b4a2e, 0, 1.4, bz - 0.04, 0, 0, 0, 2.9, 2.8, 0.05); // trasera de tablas
+    for (const sy of [1.25, 1.75, 2.25]) {
+      m.add(G.box, 0x4a2c1a, 0, sy, bz + 0.12, 0, 0, 0, 2.6, 0.04, 0.22); // estantes
+      for (let b = 0; b < 16; b++) {
+        if ((b * 5 + Math.round(sy * 4)) % 7 === 0) continue;
+        const hb = 0.24 + ((b * 3) % 3) * 0.03;
+        m.add(G.cyl, [0x2f5a3a, 0x6b2a2a, 0x3a2a18, 0x8a6a2a][(b + Math.round(sy * 2)) % 4], -1.2 + b * 0.16, sy + 0.02 + hb / 2, bz + 0.12, 0, 0, 0, 0.065, hb, 0.065);
+      }
+    }
+    for (const jx of [-0.9, -0.5]) m.add(G.capsule, 0x7a3a22, jx, 2.6, bz + 0.25, 0.25, 0, 0, 0.14, 0.2, 0.12); // jamones
+    // Toldo de rayas rojas y blancas, inclinado hacia la calle, con su faldón
+    for (let k = 0; k < 9; k++) m.add(G.box, k % 2 ? 0xf4efe4 : 0xb4283a, -1.55 + k * 0.3875 + 0.19, 2.72, (bz + z + 0.6) / 2, -0.22, 0, 0, 0.39, 0.03, 2.05);
+    for (let k = 0; k < 9; k++) m.add(G.box, k % 2 ? 0xf4efe4 : 0xb4283a, -1.55 + k * 0.3875 + 0.19, 2.42, z + 0.62, 0, 0, 0, 0.39, 0.26, 0.02);
+    for (let i = 0; i < 5; i++) {
+      m.add(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 8), [0x2f5a3a, 0x6b2a2a, 0x3a2a18][i % 3], -1.15 + i * 0.09, y + 0.12, z - 0.27);
+    }
+    // El rótulo, colgado del toldo
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 0.36),
+      new THREE.MeshBasicMaterial({
+        map: canvasTex((g, w, h) => {
+          g.fillStyle = '#2a1a10';
+          g.fillRect(0, 0, w, h);
+          g.strokeStyle = '#e8c27a';
+          g.lineWidth = 6;
+          g.strokeRect(8, 8, w - 16, h - 16);
+          g.fillStyle = '#f4e3bf';
+          g.font = 'bold 66px Georgia, serif';
+          g.textAlign = 'center';
+          g.textBaseline = 'middle';
+          g.fillText('PINCHOS · VINO', w / 2, h / 2 + 3);
+        }, 512, 124),
+      }),
+    );
+    sign.position.set(0, 2.82, z + 0.66);
+    sign.rotation.y = Math.PI;
+    this.root.add(sign);
+    // La tira de bombillas a lo largo del faldón
+    const bulb = new THREE.SpriteMaterial({ map: comicBulbTexture(), color: 0xffd38a, alphaTest: 0.5 });
+    bulb.userData.comicGlow = true;
+    for (let k = 0; k < 11; k++) {
+      const b = new THREE.Sprite(bulb);
+      b.scale.setScalar(0.05);
+      b.position.set(-1.5 + k * 0.3, 2.3 - Math.sin((k / 10) * Math.PI) * 0.06, z + 0.64);
+      this.root.add(b);
+    }
     m.add(G.box, 0x4a2c1a, 0, 0.53, z, 0, 0, 0, 2.5, 1.06, 0.62);
     m.add(G.box, 0xc9a06a, 0, y - 0.02, z, 0, 0, 0, 2.66, 0.05, 0.76);
     for (const dx of [-1, -0.5, 0, 0.5, 1]) m.add(G.box, 0x38210f, dx, 0.53, z + 0.315, 0, 0, 0, 0.03, 1, 0.01);
-    for (let i = 0; i < 2; i++) m.add(new THREE.CylinderGeometry(0.11, 0.09, 0.01, 18), 0xf4f0e6, -1.05 + i * 2.1, y + 0.01, z + 0.18);
+    for (let i = 0; i < 2; i++) m.add(new THREE.CylinderGeometry(0.11, 0.09, 0.01, 18), 0xf4f0e6, -1.2 + i * 2.4, y + 0.01, z + 0.18);
     for (let i = 0; i < 5; i++) {
       m.add(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 8), [0x2f5a3a, 0x6b2a2a, 0x3a2a18][i % 3], -1.15 + i * 0.09, y + 0.12, z - 0.27);
     }
     this.root.add(m.mesh());
     const plate = new THREE.CylinderGeometry(0.135, 0.11, 0.018, 20);
     PINCHOS.forEach((pz, i) => {
-      const x = -0.62 + i * 0.31;
+      const x = -0.84 + i * 0.42;
       const g = new Merger(false);
       g.add(plate, 0xf7f3ea, 0, 0.01, 0);
       pz.build(g, 0, 0.018, 0);
       const obj = g.mesh();
       obj.position.set(x, y, z + 0.08);
+      // (más grandes que de verdad: se reconocen desde detrás de ellos)
+      obj.scale.setScalar(1.45);
       this.root.add(obj);
-      const btn = el('button', 'side-spot', pz.icon) as HTMLButtonElement;
+      // Se toca el pincho mismo: el botón es una zona invisible sobre él con su nombre en una etiqueta de papel
+      const btn = el('button', 'side-spot pincho-tag') as HTMLButtonElement;
+      btn.append(el('span', '', pz.name));
       btn.onpointerdown = (e) => {
         e.preventDefault();
         e.stopPropagation();
         this.press(i);
       };
       uiRoot().append(btn);
-      this.items.push({ obj, at: new THREE.Vector3(x, y + 0.26, z + 0.08), btn, k: 0 });
+      this.items.push({ obj, at: new THREE.Vector3(x, y + 0.08, z + 0.08), btn, k: 0 });
     });
     sc.add(this.root);
     this.waiter = makePerson(castLook({ skin: 0xe2b08c, shirt: 0xf6f6f2, pants: 0x1a1a1a, hair: 0x2b1d14, hairStyle: 'short', male: true, beard: true }, 'camarero_laurel'));
@@ -511,7 +570,7 @@ export class PinchoGame {
     for (const it of this.items) {
       it.k = Math.max(0, it.k - dt * 1.7);
       it.obj.position.y = 1.08 + it.k * 0.16;
-      it.obj.scale.setScalar(1 + it.k * 0.28);
+      it.obj.scale.setScalar(1.45 * (1 + it.k * 0.28));
       v.copy(it.at).project(camera);
       it.btn.style.left = `${((v.x + 1) / 2) * W}px`;
       it.btn.style.top = `${((1 - v.y) / 2) * H - 8}px`;

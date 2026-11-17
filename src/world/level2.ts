@@ -18,7 +18,10 @@ import { SIDE } from '../data/story';
 import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
 import { cinema, cineTitle, headOf, rel } from '../core/cinema';
-import { Surf } from '../core/surfaces';
+import { Surf, setSurface } from '../core/surfaces';
+
+// La plancha y su carro son de acero (sin esto, el gris se dibujaba como losas de piedra)
+for (const c of [0x8d9096, 0xb4b7bc, 0x4a4c54, 0x6e727c, 0xa4a8ae]) setSurface(c, Surf.Metal);
 import { comicScene } from '../core/comic';
 import { beacon } from '../core/beacon';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
@@ -338,7 +341,8 @@ export class Level2 implements Level {
     this.svTown.position.z = LEG1 + 30;
     sc.add(this.svTown);
     this.grill = this.buildGrill();
-    this.grill.position.set(-9, 0, LEG1 + 8);
+    // Bajo los soportales de El Ancla, delante del arco del medio: detrás se ven la barra, las botellas y el toldo
+    this.grill.position.set(-11.25, 0, LEG1 + 14.55);
     sc.add(this.grill);
 
     this.logSign = makeSign(['LOGROÑO', 'Calle Laurel ↗'], '#7a1f3d');
@@ -709,8 +713,15 @@ export class Level2 implements Level {
         .add(G.box, 0xb4b7bc, 0, 0.91, 0, 0, 0, 0, 1.66, 0.03, 0.96)
         // (la plancha, gris acero oscuro con su brillo: en negro puro era un agujero en el dibujo)
         .add(G.box, 0x4a4c54, -0.14, 0.93, 0, 0, 0, 0, 1.06, 0.02, 0.76)
-        .add(G.box, 0x8a8e98, -0.14, 0.9405, -0.3, 0, 0, 0, 0.9, 0.002, 0.05)
-        .add(G.box, 0x6e727c, -0.14, 0.9405, -0.22, 0, 0, 0, 0.6, 0.002, 0.03)
+        // canal de la grasa delante y el peto de acero detrás, como en las planchas de bar
+        .add(G.box, 0x6e727c, -0.14, 0.925, -0.42, 0, 0, 0, 1.06, 0.02, 0.06)
+        .add(G.box, 0xa4a8ae, 0, 1.06, 0.47, 0, 0, 0, 1.66, 0.28, 0.02)
+        .add(G.box, 0xa4a8ae, -0.82, 1.0, 0.1, 0, 0, 0, 0.02, 0.16, 0.76)
+        .add(G.box, 0xa4a8ae, 0.82, 1.0, 0.1, 0, 0, 0, 0.02, 0.16, 0.76)
+        // aceitera, salero y la fuente con las zamburiñas que quedan por hacer
+        .add(G.cyl, 0xd9c25a, 0.5, 1.0, 0.33, 0, 0, 0, 0.045, 0.14, 0.045)
+        .add(G.cyl, 0x2f2f33, 0.5, 1.09, 0.33, 0, 0, 0, 0.02, 0.04, 0.02)
+        .add(G.cyl, 0xf2f2ee, 0.68, 0.97, 0.33, 0, 0, 0, 0.035, 0.07, 0.035)
         .add(G.cyl, 0xffffff, 0.62, 0.935, 0, 0, 0, 0, 0.26, 0.015, 0.26) // plato
         .add(G.sphere, 0xf0dc4a, -0.08, 0.955, 0.33, 0, 0, 0, 0.055, 0.045, 0.045) // limón
         .add(G.cyl, 0x6a7f3a, 0.62, 0.95, -0.28, 0, 0, 0, 0.08, 0.05, 0.08) // perejil picado
@@ -1137,13 +1148,14 @@ export class Level2 implements Level {
     // Las matas y piedras de la cuneta se quedan en la carretera: aquí salían debajo de la plancha
     for (const sc of this.scatters) sc.mesh.visible = false;
     const g = this.grill.position;
-    this.camera.position.set(g.x - 0.14, 1.72, g.z - 0.72);
+    this.camera.position.set(g.x - 0.1, 1.62, g.z - 1.0);
     this.served = 0;
     this.scallops.forEach((s, i) => {
       s.p = 0;
       s.wait = i * 0.5;
     });
     this.input.enabled = false;
+    this.route.style.display = 'none';
     window.addEventListener('pointerdown', this.onTap);
     this.updateHud();
     // (la regla, en boca de él y no en el objetivo)
@@ -1410,7 +1422,7 @@ export class Level2 implements Level {
             // Antes de bailar, una ronda en la barra: sin servirla bien no se sigue
             cinema.stop();
             // (desde más arriba: más abajo, el frente de la barra tapaba media pantalla)
-            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 3.0, -17.6), look: new THREE.Vector3(0, 1.0, -19.5), fov: 48 }]);
+            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 2.15, -17.3), look: new THREE.Vector3(0, 1.35, -19.9), fov: 50 }]);
             dialogue(SIDE.pinchos.intro, () =>
               l.startPinchos(() => {
                 cinema.stop();
@@ -1615,7 +1627,8 @@ export class Level2 implements Level {
       else if (s.p <= 1) c.copy(gold);
       else c.copy(gold).lerp(burnt, Math.min(1, (s.p - 1) * 4));
       // Brilla cuando está en su punto
-      s.root.scale.setScalar(s.p >= 0.62 && s.p <= 1 ? 1 + Math.sin(this.t * 12) * 0.05 : 1);
+      // (un poco más grandes que de verdad: en el móvil se tocan con el dedo)
+      s.root.scale.setScalar(1.4 * (s.p >= 0.62 && s.p <= 1 ? 1 + Math.sin(this.t * 12) * 0.05 : 1));
       if (s.p > 1.35) {
         audio.boo();
         this.burnt++;
@@ -1629,8 +1642,9 @@ export class Level2 implements Level {
   private updateCamera(dt: number) {
     if (this.phase === 'grill' || this.phase === 'zambDone') {
       const g = this.grill.position;
-      this.camTarget.set(g.x - 0.14, 1.72, g.z - 0.72);
-      this.camLook.set(g.x - 0.14, 0.94, g.z + 0.02);
+      // Del lado del cocinero, no desde el cielo: la plancha abajo y, detrás, el arco con la barra encendida
+      this.camTarget.set(g.x - 0.1, 1.62, g.z - 1.0);
+      this.camLook.set(g.x - 0.1, 0.9, g.z + 0.18);
     } else if (this.phase === 'logrono') {
       // Se para antes del puente y la cámara sube: el Ebro, el casco viejo y las torres de La Redonda
       this.camTarget.set(this.carX - 5, 3.4, this.carZ - 9);
@@ -1744,6 +1758,7 @@ export class Level2 implements Level {
           clean();
           this.startDrive2();
           this.reset(this.legStart + LEG2 - 50);
+          this.camera.position.set(0, 4.6, this.carZ - 8.5);
         },
       },
       { label: '✓ Completar capítulo', run: () => { clean(); this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },

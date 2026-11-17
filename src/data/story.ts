@@ -822,8 +822,8 @@ export const SIDE = {
       { who: 'Camarero', text: '¡Va, que hay cola! Te canto la ronda y me la sacas en orden.' },
       { who: 'Gas', text: 'Si aciertas, la siguiente la pago yo.' },
     ] as Line[],
-    listen: (r: number, of: number) => `🍢 ${r}/${of}`,
-    yourTurn: (i: number, n: number) => `👉 ${i}/${n}`,
+    listen: (r: number, of: number) => `Escucha · ronda ${r} de ${of}`,
+    yourTurn: (i: number, n: number) => `Tu turno · ${i}/${n}`,
     /** Lo dice el camarero, en su bocadillo (y vuelve a cantar la ronda). */
     wrong: ['Ese no era, majo. Otra vez.', 'Pero bueno… Otra vez.', 'Que no, que no. Otra vez.'],
     good: '¡RONDA!',
