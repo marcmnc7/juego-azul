@@ -209,6 +209,10 @@ export class LevelCena implements Level {
   private neighborLights: THREE.Sprite[] = [];
   private neighborParkT = -1;
   private pan: THREE.Group;
+  /** Lo que hay en la sartén: los dados de guanciale (se doran con la aguja) y la crema de huevo y pecorino. */
+  private food = new THREE.Group();
+  private foodMat = toon({ color: 0xf3c4b5 });
+  private sauce!: THREE.Mesh;
   private steam: THREE.Sprite[];
   private helmet: THREE.Group;
   private helmetAt: HelmetAt = 'rider';
@@ -285,6 +289,19 @@ export class LevelCena implements Level {
     this.place = place;
     this.doors = [place.gate, place.door];
     this.pan = place.pan;
+    for (let i = 0; i < 11; i++) {
+      const a = i * 2.4, r = 0.05 + (i % 3) * 0.055;
+      const d = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.045), this.foodMat);
+      d.position.set(Math.cos(a) * r, 0.05, Math.sin(a) * r);
+      d.rotation.y = a;
+      this.food.add(d);
+    }
+    this.sauce = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.012, 20), toon({ color: 0xf6dc8a }));
+    this.sauce.position.y = 0.038;
+    this.sauce.visible = false;
+    this.food.add(this.sauce);
+    this.food.visible = false;
+    this.pan.add(this.food);
     this.steam = place.steam;
     if (place.tablePlates) place.tablePlates.visible = false; // (los platos los pone ella para cenar)
     // La guirnalda, apagada hasta la cena
@@ -640,7 +657,15 @@ export class LevelCena implements Level {
           { title: CENA.steps.mix, duration: 2.6, button: 'Mezclar 🥚', zones: [{ to: 0.3, label: 'Revuelto', color: '#f7c94a' }, { to: 0.64, label: 'Cremosa', color: '#fff0b8', good: true }, { to: 1, label: 'Fría', color: '#e8e2d0' }] },
         ][i];
         this.steamOn(i);
-        this.cancelGauge = timingGauge({ ...opts, trap }, (q, z) => {
+        this.food.visible = true;
+        this.sauce.visible = i === 2;
+        // El guanciale se dora de verdad mientras corre la aguja: rosado, dorado y, si se pasa, negro
+        const raw = new THREE.Color(0xf3c4b5), gold = new THREE.Color(0xd99a4a), burnt = new THREE.Color(0x3e2618);
+        const onTick = i === 0 ? (x: number) => {
+          if (x < 0.62) this.foodMat.color.copy(raw).lerp(gold, x / 0.62);
+          else this.foodMat.color.copy(gold).lerp(burnt, Math.min(1, (x - 0.62) / 0.38));
+        } : undefined;
+        this.cancelGauge = timingGauge({ ...opts, trap, onTick }, (q, z) => {
           this.cancelGauge = null;
           scores.push(q);
           if (q >= 0.95) {
@@ -1307,7 +1332,10 @@ export class LevelCena implements Level {
     else {
       const m = this.moto.root.position;
       const [pos, look] =
-        this.phase === 'cook'
+        this.phase === 'cook' && this.cancelGauge
+          ? // Mientras cocina: por encima de su hombro derecho, la sartén y el vapor de cerca (lo que hay que mirar)
+            [this.v1.set(STOVE.x + 0.85, 1.85, STOVE.z + 0.75), this.v2.copy(this.pan.getWorldPosition(this.v2)).setY(this.v2.y + 0.05)]
+          : this.phase === 'cook'
           ? // Por delante de la encimera, bajo el toldo y sin la buganvilla del porche en primer plano
             [this.v1.set(STOVE.x + 1.9, 2.35, STOVE.z + 3.5), this.v2.set(STOVE.x + 0.1, 1.05, STOVE.z - 0.6)]
           : this.phase === 'dinner'

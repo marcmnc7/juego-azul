@@ -1284,6 +1284,8 @@ export interface GaugeOptions {
   button: string;
   /** Botón trampa que aparece a ratos (la nata). */
   trap?: { label: string; onPress: () => void };
+  /** Cada fotograma, dónde va la aguja (0…1): para que la escena lo enseñe (el guanciale que se dora). */
+  onTick?: (x: number) => void;
 }
 
 /**
@@ -1357,6 +1359,7 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
   const tick = () => {
     const x = Math.min(1, (performance.now() - t0) / 1000 / o.duration);
     needle.style.left = `${x * 100}%`;
+    o.onTick?.(x);
     if (trap) trap.hidden = !(Math.sin(x * 19) > 0.55);
     if (x >= 1) finish(1);
     else raf = requestAnimationFrame(tick);
