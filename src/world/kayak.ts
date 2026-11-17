@@ -266,12 +266,16 @@ export function buildFerry() {
   const hullShape = (len: number, beam: number) => {
     const s = new THREE.Shape();
     const h = beam / 2;
-    s.moveTo(-len / 2, -h);
+    // (popa de espejo con las esquinas redondeadas, como los ferris de verdad; antes, un corte en seco)
+    const r = beam * 0.2;
+    s.moveTo(-len / 2 + r, -h);
     s.lineTo(len * 0.18, -h);
     s.quadraticCurveTo(len * 0.42, -h, len / 2, 0);
     s.quadraticCurveTo(len * 0.42, h, len * 0.18, h);
-    s.lineTo(-len / 2, h);
-    s.lineTo(-len / 2, -h);
+    s.lineTo(-len / 2 + r, h);
+    s.quadraticCurveTo(-len / 2, h, -len / 2, h - r);
+    s.lineTo(-len / 2, -h + r);
+    s.quadraticCurveTo(-len / 2, -h, -len / 2 + r, -h);
     return s;
   };
   const ext = (len: number, beam: number, height: number) => new THREE.ExtrudeGeometry(hullShape(len, beam), { depth: height, bevelEnabled: false, curveSegments: 10 }).rotateX(-Math.PI / 2);
@@ -296,6 +300,34 @@ export function buildFerry() {
   for (const sz of [-1, 1]) for (const x of [-14, -4, 6]) m.add(G.capsule, 0xff7a1a, x, 8.4, sz * 6.4, 0, 0, Math.PI / 2, 1.1, 2.6, 1.1);
   // Mástil
   m.add(G.cyl, 0xdddddd, -6, 16.5, 0, 0, 0, 0, 0.2, 6, 0.2);
+  // La popa: la rampa de los coches, cerrada (gris, con su borde de franjas), y sus bisagras
+  const STERN = -31;
+  m.add(G.box, 0x5d636b, STERN - 0.06, 3.3, 0, 0, 0, 0, 0.12, 3.8, 7.4);
+  for (let i = 0; i < 9; i++) m.add(G.box, i % 2 ? 0x1a1a1a : 0xf2c230, STERN - 0.08, 1.45, -3.6 + i * 0.9, 0, 0, 0, 0.1, 0.18, 0.9);
+  for (let i = 0; i < 6; i++) m.add(G.box, 0x484d55, STERN - 0.1, 2.1 + i * 0.55, 0, 0, 0, 0, 0.06, 0.08, 7.2); // nervios de la rampa
+  for (const sz of [-2.6, 2.6]) m.add(G.cyl, 0x30343a, STERN - 0.15, 5.2, sz, Math.PI / 2, 0, 0, 0.35, 0.9, 0.35); // bisagras
+  // Cubierta de popa abierta: barandilla blanca alrededor, con sus candeleros, y dos norays
+  const rail = (x1: number, z1: number, x2: number, z2: number, y: number) => {
+    const len = Math.hypot(x2 - x1, z2 - z1), ry = -Math.atan2(z2 - z1, x2 - x1);
+    m.add(G.box, 0xf6f6f4, (x1 + x2) / 2, y + 1.05, (z1 + z2) / 2, 0, ry, 0, len, 0.08, 0.08);
+    m.add(G.box, 0xf6f6f4, (x1 + x2) / 2, y + 0.55, (z1 + z2) / 2, 0, ry, 0, len, 0.05, 0.05);
+    const n = Math.max(1, Math.round(len / 1.2));
+    for (let i = 0; i <= n; i++) m.add(G.box, 0xf6f6f4, x1 + ((x2 - x1) * i) / n, y + 0.52, z1 + ((z2 - z1) * i) / n, 0, 0, 0, 0.07, 1.05, 0.07);
+  };
+  rail(STERN + 0.4, -5.2, STERN + 0.4, 5.2, 6.5);
+  for (const sz of [-1, 1]) rail(STERN + 0.4, sz * 5.2, -26, sz * 6.3, 6.5);
+  for (const [y, len, x0] of [[9.4 - 1.45, 40, -6], [12.2 - 1.45, 32, -8]] as const) {
+    const xa = x0 - len / 2 + 0.3, w = (12.2 - (y + 1.45 - 6.5) * 0.25) / 2 - 0.2;
+    // (sobre la cubierta de abajo, por donde acaba la de arriba: terrazas escalonadas hacia popa)
+    rail(xa, -w, xa, w, y + 1.45);
+  }
+  for (const sz of [-3.8, 3.8]) {
+    m.add(G.cyl, 0x2a2e34, STERN + 1.2, 6.75, sz, 0, 0, 0, 0.45, 0.5, 0.45);
+    m.add(G.cyl, 0x2a2e34, STERN + 1.2, 7.05, sz, 0, 0, 0, 0.6, 0.1, 0.6);
+  }
+  // Ventanas grandes en la cara de popa de cada cubierta (antes, una pared ciega)
+  for (const [y, len, x0, wd] of [[6.5, 40, -6, 12.2], [9.4, 32, -8, 11.5], [12.2, 18, -10, 10.8]] as const)
+    for (let i = 0; i < 5; i++) m.add(G.box, 0x1c2633, x0 - len / 2 - 0.03, y + 0.35, -wd * 0.38 + i * wd * 0.19, 0, 0, 0, 0.06, 0.9, wd * 0.14);
   const g = new THREE.Group();
   // (navega y vira: sin doblar a mano alzada, como los coches)
   g.userData.comicBent = true;
@@ -314,5 +346,36 @@ export function buildFerry() {
   foam.position.set(22, 0.4, 0);
   foam.userData.noCast = true;
   g.add(foam);
+  // El nombre, pintado en el espejo de popa
+  const name = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 1.05),
+    new THREE.MeshBasicMaterial({
+      map: canvasTex((ctx, w, h) => {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#1d3f7a';
+        ctx.font = `800 ${h * 0.62}px Georgia, serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CIUTADELLA', w / 2, h * 0.38);
+        ctx.font = `700 ${h * 0.26}px Georgia, serif`;
+        ctx.fillText('MENORCA', w / 2, h * 0.84);
+      }, 512, 74),
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  name.rotation.y = -Math.PI / 2;
+  name.position.set(-31.12, 5.88, 0);
+  name.userData.noCast = true;
+  g.add(name);
+  // La estela: espuma blanca que se abre detrás de la popa
+  const wake = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 16),
+    new THREE.MeshBasicMaterial({ map: bowFoamTexture(), transparent: true, alphaTest: 0.05, depthWrite: false, opacity: 0.9 }),
+  );
+  wake.rotation.set(-Math.PI / 2, 0, Math.PI); // lo estrecho hacia +x, pegado a la popa
+  wake.position.set(-31 - 14.5, 0.35, 0);
+  wake.userData.noCast = true;
+  g.add(wake);
   return g;
 }
