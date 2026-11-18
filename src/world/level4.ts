@@ -1500,7 +1500,7 @@ export class Level4 implements Level {
     this.phase = 'toPool';
     this.noise = 0;
     this.updateHud();
-    bark('Azul', 'Silencio full 🤫');
+    bark('Margaux', 'Silencio full 🤫');
   }
 
   /** Bar Imperi → Pins: al llegar, el chat real de la recogida mientras llega el coche azul. */
@@ -1509,7 +1509,7 @@ export class Level4 implements Level {
     const atPins = Math.hypot(pp.x - PINS.x, pp.z - PINS.z) < 2.4;
     if (atPins && !this.saidBye && !this.byeNag) {
       this.byeNag = true;
-      bark('Azul', NIGHT.noBye);
+      bark('Margaux', NIGHT.noBye);
     }
     if (!atPins) this.byeNag = false;
     if (!this.pickedUp && !this.busy && this.saidBye && this.carT === 0 && atPins) {
@@ -1780,7 +1780,7 @@ export class Level4 implements Level {
     const p = this.player.root.position;
     mp.target = new THREE.Vector3(p.x + (Math.random() - 0.5) * 0.9, 0, p.z + (Math.random() - 0.5) * 0.9);
     mp.fast = false;
-    bark('Azul', MP.polo());
+    bark('Margaux', MP.polo());
     this.updateHud();
   }
 

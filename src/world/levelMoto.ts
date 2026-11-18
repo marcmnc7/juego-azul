@@ -729,6 +729,19 @@ export class LevelMoto implements Level {
         m.add(G.bush, 0x5d6b3a, x, 11.2, z, 0, d, 0, 3.4, 1.6, 3);
       }
     }
+    // Los cantos del monte, redondeados: a cada lado de las bocas la ladera baja en lomas (antes, una pared lisa de
+    // 20 m que lo hacía parecer una caja puesta encima de la carretera)
+    for (const [d, sg] of [[t0 + 1.6, -1], [t1 - 1.6, 1]] as const) {
+      const { p, r } = this.frame(d);
+      for (const [off, y, sx, sy] of [[-20, 2.2, 6.5, 5], [-15.5, 4.4, 6, 5.2], [-11, 6.4, 5.4, 4.6], [-6.8, 8.2, 4.2, 3.4]] as const) {
+        const x = p.x + r.x * off, z = p.z + r.z * off;
+        m.add(G.rock2, 0x6f7d45, x, y, z, 0.15 * sg, off * 0.7 + d, 0.1, sx, sy, sx * 0.9);
+      }
+    }
+    for (let d = t0 + 4; d <= t1 - 4; d += 5.5) {
+      const { p, r } = this.frame(d);
+      for (const [off, y, sc] of [[-17, 8.6, 5], [-10, 9.8, 4.4]] as const) m.add(G.rock2, 0x6f7d45, p.x + r.x * off, y, p.z + r.z * off, 0.1, d + off, 0, sc * 1.2, sc * 0.55, sc);
+    }
     const mesh = m.mesh();
     mesh.userData.noCam = true;
     this.scene.add(mesh);

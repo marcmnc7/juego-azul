@@ -1,7 +1,7 @@
 {
-  "name": "Para Margaux",
-  "short_name": "Margaux",
-  "description": "Un calendario de recuerdos, un capítulo cada día.",
+  "name": "Para Azul",
+  "short_name": "Para Azul",
+  "description": "Nueve capítulos de nuestra historia. Cada uno esconde un regalo de verdad.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

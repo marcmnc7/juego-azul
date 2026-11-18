@@ -176,6 +176,8 @@ export class Level1 implements Level {
   private eyesTo = 0;
   private pairT = 0;
   private kissT = 0;
+  /** De qué lado del perfil va la cámara antes del beso (0: sin decidir). */
+  private kissSide = 0;
   private kiss: Embrace | null = null;
   private clearR = 0;
   private carmeTo: THREE.Vector3 | null = null;
@@ -1113,6 +1115,7 @@ export class Level1 implements Level {
       if (this.pairT > 6.5) {
         this.faceToFace();
         this.stage = 'kiss';
+        this.kissSide = 0;
         this.updateHud();
       }
     }
@@ -1415,6 +1418,7 @@ export class Level1 implements Level {
       const mid = this.v2.copy(pp).lerp(mp, 0.5);
       this.carmeTo = new THREE.Vector3(mid.x - dir.z * 2.2 + dir.x * 0.6, 0, mid.z + dir.x * 2.2 + dir.z * 0.6);
       this.stage = M ? 'pairDance' : 'kiss';
+      this.kissSide = 0;
       this.pairT = 0;
       this.updateHud();
     };
@@ -1654,7 +1658,22 @@ export class Level1 implements Level {
     const mid = this.v1.copy(pp).lerp(mp, 0.5);
     const dx = mp.x - pp.x, dz = mp.z - pp.z, l = Math.hypot(dx, dz) || 1;
     const dist = this.stage === 'kissing' ? 3.4 - Math.min(1, this.kissT / 2) * 0.9 : 3.4;
-    const target = this.v2.set(mid.x - (dz / l) * dist, 1.75, mid.z + (dx / l) * dist);
+    // De los dos lados del perfil, el que tenga sitio (antes, siempre el mismo: a veces pegado al poste del toldo
+    // y al altavoz de Sa Font, que tapaban medio plano). Se decide una vez y se mantiene.
+    if (!this.kissSide) {
+      // Holgura de la línea cámara–pareja a lo que haya en el suelo (barras, altavoces, postes, paredes)
+      const clear = (sg: number) => {
+        let best = 9;
+        for (let k = 0.25; k <= 1.0001; k += 0.15) {
+          const x = mid.x - (dz / l) * 3.4 * sg * k, z = mid.z + (dx / l) * 3.4 * sg * k;
+          for (const c of this.world.colliders) best = Math.min(best, Math.hypot(Math.max(c.minX - x, 0, x - c.maxX), Math.max(c.minZ - z, 0, z - c.maxZ)));
+        }
+        return Math.min(best, camWorld.cast(mid.x, 1.6, mid.z, (-dz / l) * sg, 0.04, (dx / l) * sg, 3.6, this.world.colliders));
+      };
+      this.kissSide = clear(1) >= clear(-1) ? 1 : -1;
+    }
+    const sg = this.kissSide;
+    const target = this.v2.set(mid.x - (dz / l) * dist * sg, 1.75, mid.z + (dx / l) * dist * sg);
     this.camera.position.lerp(target, Math.min(1, dt * 3));
     this.camera.lookAt(mid.x, 1.45, mid.z);
   }

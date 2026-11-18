@@ -2549,6 +2549,77 @@ export const CHATS = {
    }
   ]
  },
+ "laVispera": {
+  "date": "22 de junio de 2026",
+  "contact": "Gas",
+  "msgs": [
+   {
+    "me": true,
+    "t": "22:58",
+    "text": "Dónde estás tu"
+   },
+   {
+    "me": false,
+    "t": "23:18",
+    "text": "Maramao"
+   },
+   {
+    "me": true,
+    "t": "23:19",
+    "text": "Ven a esclat va"
+   },
+   {
+    "me": false,
+    "t": "23:20",
+    "text": "Donde estan"
+   },
+   {
+    "me": true,
+    "t": "23:36",
+    "text": "Placa nova"
+   },
+   {
+    "me": true,
+    "t": "0:21",
+    "text": "Ven delante"
+   },
+   {
+    "me": false,
+    "t": "0:25",
+    "text": "Estoy donde pere casi"
+   },
+   {
+    "me": true,
+    "t": "0:26",
+    "text": "Dónde es eso"
+   },
+   {
+    "me": false,
+    "t": "0:27",
+    "text": "Izquierda mirando publico"
+   },
+   {
+    "me": true,
+    "t": "0:30",
+    "text": "Heladería?"
+   },
+   {
+    "me": false,
+    "t": "0:39",
+    "text": "Escalera era"
+   },
+   {
+    "me": false,
+    "t": "0:39",
+    "text": "Ahora ya en la vuelta de ses voltes"
+   },
+   {
+    "me": true,
+    "t": "0:41",
+    "text": "Pero ven delante"
+   }
+  ]
+ },
  "ubi": {
   "date": "23 de junio de 2026",
   "contact": "Gas",

@@ -1067,7 +1067,14 @@ export class Level2 implements Level {
     }
     this.lineK += ((turbo ? 1 : 0) - this.lineK) * Math.min(1, dt * 3);
     this.scene.userData.speedLines = this.lineK;
-    this.sea.position.z = this.carZ;
+    // El mar de Cantabria, solo en Cantabria: recortado donde empieza La Rioja (antes iba 200 m por delante del
+    // coche y, al salir de San Vicente, las viñas de La Rioja salían plantadas encima del agua)
+    {
+      const near = Math.max(this.carZ - 200, 1000), far = Math.min(this.carZ + 200, LEG1 + 40);
+      this.sea.scale.y = Math.max(0.001, (far - near) / 400); // (el plano va tumbado: su «y» es el largo)
+      this.sea.position.z = (far + near) / 2;
+      this.sea.userData.span = far - near;
+    }
     this.sun.follow(this.car.root.position);
     for (const s of this.scatters) s.update(this.carZ, this.scatterAt);
     this.updateStorm(dt, drive);
@@ -1095,7 +1102,7 @@ export class Level2 implements Level {
     }
     (this.scene.fog as THREE.Fog).color.lerp(this.tmpColor.set(st.fog).lerp(STORM_SKY, this.wet * 0.8), k * (1 + this.wet * 2));
     (this.ground.material as THREE.MeshToonMaterial).color.lerp(this.tmpColor.set(st.ground), k);
-    this.sea.visible = this.region === 'cantabria';
+    this.sea.visible = this.sea.userData.span > 1 && this.region !== 'madrid';
     // Hierba seca o verde en casi todo el viaje; tierra roja de viñedo en La Rioja
     const gs = this.ground.geometry.attributes.surf as THREE.BufferAttribute;
     const want = this.region === 'rioja' ? Surf.Sand : Surf.Grass;

@@ -410,7 +410,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
     // Lo de encima de la historia: recuerdos encontrados y cuántas respuestas recordaba
     if (result && extras) {
       const [a, b] = extras.score();
-      if (b) result.stats.push(['Recuerdos escondidos', `${a}/${b} 🔎`]);
+      if (b) result.stats.push(['Recuerdos escondidos', `${a}/${b} ✨`]);
       if (quizScore.total) result.stats.push(['Te acordabas', `${quizScore.right}/${quizScore.total} 💬`]);
     }
     extras?.dispose();

@@ -46,6 +46,8 @@ type Phase = 'intro' | 'wait' | 'gasComing' | 'toGate' | 'toKitchen' | 'cook' | 
 export const STREET_Z = 13.5;
 export const GATE = new THREE.Vector3(0, 0, 10.2);
 export const DOOR = new THREE.Vector3(0, 0, 0.4);
+/** La puerta de verdad de casa de Azul: arriba, en la terraza del primer piso, al final de la escalera blanca. */
+export const UP_DOOR = new THREE.Vector3(4.3, 3.22, -1.2);
 const STOVE = new THREE.Vector3(-3.1, 0, 2.3);
 const TABLE = new THREE.Vector3(2.6, 0, 5.2);
 const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
@@ -1801,9 +1803,20 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.box, 0xc8ccd0, -1.6, 4.25, 0.95, 0, 0, 0, 4.7, fat(0.05), fat(0.05));
   m.add(G.box, 0xc8ccd0, -1.6, 3.95, 0.95, 0, 0, 0, 4.7, fat(0.04), fat(0.04));
   for (let k = 0; k <= 10; k++) m.add(G.box, 0xc8ccd0, -3.9 + k * 0.46, 3.85, 0.95, 0, 0, 0, fat(0.03), 0.8, fat(0.03));
-  // Ventana pequeña del primer piso a la derecha
-  m.add(G.box, 0x2a3138, 3.2, 4.4, -1.18, 0, 0, 0, 1.0, 1.2, 0.05);
-  for (const sx of [-1, 1]) m.add(G.box, SHUTTER, 3.2 + sx * 0.75, 4.4, -1.15, 0, 0, 0, 0.5, 1.25, 0.05);
+  // Ventana pequeña del primer piso a la derecha (corrida a la izquierda: a su lado está la puerta de casa)
+  m.add(G.box, 0x2a3138, 2.3, 4.4, -1.18, 0, 0, 0, 1.0, 1.2, 0.05);
+  for (const sx of [-1, 1]) m.add(G.box, SHUTTER, 2.3 + sx * 0.75, 4.4, -1.15, 0, 0, 0, 0.5, 1.25, 0.05);
+  // La entrada de verdad de la casa: arriba, al final de la escalera blanca, por la terraza del primer piso.
+  // Marco oscuro, umbral de piedra y, delante, la barandilla de la terraza (abierta donde llega la escalera)
+  for (const [x, y, w, h] of [[UP_DOOR.x - 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x + 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x, 5.45, 1.1, 0.12]] as const)
+    m.add(G.box, 0x3a3226, x, y, -1.17, 0, 0, 0, w, h, 0.08);
+  m.add(G.box, 0xd9cfbd, UP_DOOR.x, 3.25, -1.0, 0, 0, 0, 1.2, 0.06, 0.4);
+  for (let k = 0; k <= 9; k++) m.add(G.box, 0xc8ccd0, 0.8 + k * 0.42, 3.72, 0.16, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
+  m.add(G.box, 0xc8ccd0, 2.69, 4.2, 0.16, 0, 0, 0, 3.82, fat(0.05), fat(0.05));
+  m.add(G.box, 0xc8ccd0, 2.69, 3.6, 0.16, 0, 0, 0, 3.82, fat(0.035), fat(0.035));
+  // (y por el lado de la casa de al lado, del rellano a la fachada)
+  for (let k = 0; k <= 5; k++) m.add(G.box, 0xc8ccd0, 5.04, 3.72, -1.15 + k * 0.42, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
+  m.add(G.box, 0xc8ccd0, 5.04, 4.2, -0.1, 0, 0, 0, fat(0.05), fat(0.05), 2.15);
   // Azotea: pretil, barandilla tubular y la antena
   m.add(G.box, WHITE, 0.9, 6.2, -3.6, 0, 0, 0, 8.4, 0.3, 8.6);
   for (let k = 0; k <= 14; k++) m.add(G.box, 0xc8ccd0, -3.3 + k * 0.6, 6.75, 0.62, 0, 0, 0, fat(0.04), 0.8, fat(0.04));
@@ -1840,6 +1853,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   lit.add(G.box, day ? 0x4a4036 : 0xffcf8a, 0, 1.05, 0.012, 0, 0, 0, 1.0, 2.1, 0.02);
   for (const [x, z, w] of [[-2.4, 0.76, 1.8], [-0.4, 0.76, 1.5]] as [number, number, number][]) lit.add(G.box, 0xffd9a0, x, 4.15, z, 0, 0, 0, w, 0.5, 0.02);
   sc.add(new THREE.Mesh(lit.build(), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  // Lo de dentro de la puerta de arriba, que se ve cuando se abre: el recibidor en penumbra
+  const upIn = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.1), new THREE.MeshBasicMaterial({ color: day ? 0x4a4036 : 0x2a2418 }));
+  upIn.position.set(UP_DOOR.x, UP_DOOR.y + 1.06, UP_DOOR.z + 0.012);
+  sc.add(upIn);
   // Pérgola de hierro verde cubierta de buganvilla, del porche hasta la valla de la derecha
   for (const [x, z] of [[1.6, 6.4], [4.8, 6.4], [4.8, 9.7]] as [number, number][]) {
     m.add(G.box, 0x2c5a40, x, 1.35, z, 0, 0, 0, 0.1, 2.7, 0.1);
@@ -1851,8 +1868,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     // Sobre el porche (pegada a la fachada) y por encima de la pérgola de la derecha, siempre alta
     // para no tapar la cámara al cocinar ni al cenar. Muchas matas pequeñas: de cerca, flores y hojas, no bolas
     const onPergola = i % 3 !== 0;
-    const x = onPergola ? 1.6 + ((i * 0.37) % 1) * 3.4 : -0.6 + ((i * 0.53) % 1) * 2.2;
-    const z = onPergola ? 0.9 + ((i * 0.61) % 1) * 5.6 : 0.5 + ((i * 0.29) % 1) * 0.6;
+    // (la del porche, hasta x = 1,2: la que colgaba sobre el pie de la escalera tapaba a quien sube)
+    const x = onPergola ? 1.6 + ((i * 0.37) % 1) * 3.4 : -0.8 + ((i * 0.53) % 1) * 2.0;
+    // (la de la pérgola, desde 1,5 m de la fachada: más cerca, se metía en la cabeza de quien sube la escalera)
+    const z = onPergola ? 1.5 + ((i * 0.61) % 1) * 5.0 : 0.5 + ((i * 0.29) % 1) * 0.6;
     const y = onPergola ? 2.92 + Math.sin(i * 3.1) * 0.13 : 2.2 + ((i * 0.71) % 1) * 1.0;
     const c = i % 4 === 0 ? 0x3a6a32 : i % 2 ? 0xc72a5c : 0xdb4a78;
     m.add(G.bush, c, x, y, z, 0, i, 0, 0.3 + (i % 3) * 0.09, 0.2 + (i % 2) * 0.05, 0.28 + (i % 2) * 0.12);
@@ -1932,6 +1951,17 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     door.leaf.add(glass);
   }
   sc.add(door.group);
+  // La de arriba, de madera maciza con su mirilla: también se abre hacia fuera
+  const upDoor = new Door({ hinge: new THREE.Vector3(UP_DOOR.x - 0.45, UP_DOOR.y, UP_DOOR.z + 0.04), ry: 0, width: 0.9, swing: -1.7, reach: 1.4, speed: 0.6 });
+  {
+    const dm = new Merger();
+    dm.add(G.box, 0x6b4a2e, 0.45, 1.05, 0, 0, 0, 0, 0.9, 2.1, 0.05);
+    for (const [y, h] of [[0.55, 0.7], [1.5, 0.8]] as const) dm.add(G.box, 0x5a3c24, 0.45, y, 0.03, 0, 0, 0, 0.62, h, 0.02);
+    dm.add(G.box, 0xc8a24a, 0.78, 1.0, 0.05, 0, 0, 0, 0.03, 0.16, 0.03); // pomo
+    dm.add(G.cyl, 0xc8a24a, 0.45, 1.6, 0.045, Math.PI / 2, 0, 0, 0.04, 0.01, 0.04); // mirilla
+    upDoor.leaf.add(dm.mesh());
+  }
+  sc.add(upDoor.group);
   for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.35 + Math.sin(i) * 0.1, 9.9, 0, i, 0, 0.7, 0.9, 0.6);
   for (const sx of [-5.2, 5.2]) {
     m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
@@ -2138,7 +2168,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     beam.visible = false;
     beam.position.copy(farola.lamp);
     sc.add(beam);
-    return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door, tablePlates, garland, streetLamps, wallLamps, lighthouse: lamp };
+    return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door, upDoor, tablePlates, garland, streetLamps, wallLamps, lighthouse: lamp };
   }
   // El haz: fuerte junto a la linterna y se va deshaciendo (antes, un cono macizo gris colgado del cielo)
   const beamFade = canvasTex((ctx, w, h) => {
@@ -2157,7 +2187,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   beam.visible = !day;
   beam.position.copy(farola.lamp);
   sc.add(beam);
-  return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door, tablePlates, garland, streetLamps, wallLamps, lighthouse: lamp };
+  return { pan, steam, beam, bulbs, walkers: farola.walkers, gate, door, upDoor, tablePlates, garland, streetLamps, wallLamps, lighthouse: lamp };
 }
 
 /** Color de las bombillas de la guirnalda encendidas y apagadas. */

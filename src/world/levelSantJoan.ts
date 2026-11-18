@@ -18,7 +18,7 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
-import { buildAzulHouse, STREET_Z, DOOR, GARLAND_OFF } from './levelCena';
+import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF } from './levelCena';
 import type { Door } from './door';
 import { CHATS } from '../data/chats';
 import { canvasTex, mergedPlanes } from './deco';
@@ -37,11 +37,39 @@ import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
 
-/** La víspera, solo lo bonito: que viene a las 10.45 y el «Te quiero» (Marc pidió recortar el resto). */
-const LA_NOCHE = {
-  ...CHATS.laNoche,
-  msgs: CHATS.laNoche.msgs.filter((m) => ['Mañana a las 10.45 estoy ahi', 'Descansa ahora', 'Bona nit', 'Te quiero', 'Buenas noches 🫂'].includes(m.text)),
-};
+
+// La escalera blanca de casa de Azul (la de buildAzulHouse): 10 peldaños de 30 cm pegados a la fachada, de x = 1,75
+// a 4,75 (z de 0,05 a 1,05); el rellano, hasta x = 5; y arriba, la terraza del primer piso con la puerta de casa.
+const STAIR_Z = 0.72;
+const STAIR_PATH: [number, number][] = [[1.75, STAIR_Z], [4.85, STAIR_Z], [4.85, 0.1], [4.6, -0.45]];
+const TERRACE = { minX: 0.95, maxX: 4.85, minZ: -0.85, maxZ: 0.02 };
+const TERRACE_Y = UP_DOOR.y;
+const treadTop = (k: number) => (k < 0 ? 0 : k > 9 ? 3.2 : (k + 1) * 0.3 + 0.04);
+/** La altura del suelo en la escalera (los pies, sobre la huella; el salto, al empezar cada peldaño). */
+function stairY(x: number, z: number) {
+  if (z < 0.17) return x > 0.8 ? TERRACE_Y : 0;
+  if (x < 1.75) return 0;
+  if (x >= 4.7) return THREE.MathUtils.lerp(3.04, 3.2, THREE.MathUtils.smoothstep(x, 4.7, 4.8));
+  const u = (x - 1.75) / 0.3, k = Math.floor(u);
+  return THREE.MathUtils.lerp(treadTop(k - 1), treadTop(k), THREE.MathUtils.smoothstep(u - k, 0, 0.28));
+}
+const pathLen = (path: [number, number][]) => path.slice(1).reduce((a, [x, z], i) => a + Math.hypot(x - path[i][0], z - path[i][1]), 0);
+/** Un punto de un camino (el de la escalera), a `d` metros del principio; devuelve hacia dónde mira. */
+function stairAt(path: [number, number][], d: number, out: THREE.Vector3) {
+  let rest = Math.max(0, d);
+  for (let i = 1; i < path.length; i++) {
+    const [ax, az] = path[i - 1], [bx, bz] = path[i];
+    const L = Math.hypot(bx - ax, bz - az) || 1e-6;
+    if (rest <= L || i === path.length - 1) {
+      const k = Math.min(1, rest / L);
+      out.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
+      out.y = stairY(out.x, out.z);
+      return Math.atan2(bx - ax, bz - az);
+    }
+    rest -= L;
+  }
+  return 0;
+}
 
 // Capítulo 6 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
 // Por la tarde, al acabar la bandera, Azul va desde la Plaça Espanya hacia el Born por Ses Voltes,
@@ -153,6 +181,16 @@ interface Home {
   homeLine: boolean;
   /** La puerta de casa, abierta con la llave (si no, no se abre al acercarse). */
   unlocked: boolean;
+  /** La de verdad: arriba, al final de la escalera (la de abajo es la del porche y no se abre). */
+  upDoor: Door;
+  /** Subiendo la escalera (metros recorridos por ella), o ya arriba en la terraza. */
+  climb: number | null;
+  /** Los caminos de cada uno, desde donde estaban al pie de la escalera. */
+  herPath: [number, number][];
+  hisPath: [number, number][];
+  up: boolean;
+  /** Ya le ha dicho que por el porche no se entra. */
+  porchSaid: boolean;
 }
 
 let alertTex: THREE.Texture | null = null;
@@ -294,6 +332,8 @@ export class LevelSantJoan implements Level {
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
   private v3 = new THREE.Vector3();
+  /** Adónde mira la cámara en la escalera y en la terraza de casa (suavizado). */
+  private homeLook = new THREE.Vector3();
   private tmpQ = new THREE.Quaternion();
   private up = new THREE.Vector3(0, 1, 0);
   private bounds: Box2 = { minX: BORN.minX + 0.5, maxX: BE_BOX.maxX - 0.5, minZ: BORN.minZ + 0.5, maxZ: BORN.maxZ - 0.5 };
@@ -358,8 +398,12 @@ export class LevelSantJoan implements Level {
     this.map = document.createElement('canvas');
     this.map.width = 260;
     this.map.height = 74;
-    this.map.style.cssText = 'position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 74px);width:200px;height:57px;border-radius:12px;background:rgba(20,18,40,.72);box-shadow:0 2px 10px rgba(0,0,0,.35);pointer-events:none;z-index:4;display:none';
-    document.body.append(this.map);
+    this.map.style.cssText = 'position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 74px);width:200px;height:57px;border-radius:12px;background:rgba(20,18,40,.72);box-shadow:0 2px 10px rgba(0,0,0,.35);pointer-events:none;display:none';
+    // (dentro de la interfaz y el primero: la pausa, los diálogos y los chats quedan por encima; antes iba suelto
+    // en la página, con z-index, y se veía encima del botón de Seguir de la pausa)
+    const uiRoot = document.getElementById('ui');
+    if (uiRoot) uiRoot.prepend(this.map);
+    else document.body.append(this.map);
 
     this.hud = hud(() => this.input.queueAction(), onMenu);
     this.camera.position.set(START.x + 7, 4, 0);
@@ -368,8 +412,8 @@ export class LevelSantJoan implements Level {
     later(() => {
       if (this.phase !== 'intro') return;
       const ex = CHATS.dimeExacto;
-      phoneChat(CHATS.mar, () => dialogue(SANTJOAN.night, () =>
-        phoneChat(LA_NOCHE, () =>
+      dialogue(SANTJOAN.night, () =>
+        phoneChat(CHATS.laVispera, () =>
           dialogue(SANTJOAN.morning, () =>
             phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
               dialogue(SANTJOAN.bandera, () =>
@@ -383,7 +427,7 @@ export class LevelSantJoan implements Level {
             ),
           ),
         ),
-      ));
+      );
     }, 900);
   }
 
@@ -980,7 +1024,10 @@ export class LevelSantJoan implements Level {
     c.font = '600 10px Fredoka, sans-serif';
     c.fillText('Born', sx(-15), sz(-9));
     c.fillText('Ses Voltes', sx(36), sz(-6));
-    c.fillText('Pl. Espanya', sx(71), sz(-8));
+    // (alineado a la derecha, dentro del mapa: antes se cortaba la «a» final)
+    c.textAlign = 'right';
+    c.fillText('Pl. Espanya', W - 4, sz(-8));
+    c.textAlign = 'left';
     // La ubicación que ha mandado Gas (es la del chat: la de verdad, en el móvil)
     if (this.pinOn) {
       const px = sx(this.pinPos.x);
@@ -1217,8 +1264,14 @@ export class LevelSantJoan implements Level {
 
     if (this.phase === 'meet') {
       // Se encuentran: plano de los dos, parados, abrazados, con el obelisco detrás
-      const mid = this.v1.copy(pp).lerp(this.gas.root.position, 0.5);
-      this.camera.position.lerp(this.v2.set(mid.x + Math.sign(mid.x || 1) * 3.6, 2.2, mid.z + Math.sign(mid.z || 1) * 3.6), 1 - Math.exp(-dt * 2));
+      // De perfil (antes, en diagonal: a veces quedaba a la espalda de Gas y a ella no se la veía), del lado que deja
+      // el obelisco (en el centro del Born) detrás de ellos
+      const g = this.gas.root.position;
+      const mid = this.v1.copy(pp).lerp(g, 0.5);
+      const ax = g.x - pp.x, az = g.z - pp.z, al = Math.hypot(ax, az) || 1;
+      let nx = -az / al, nz = ax / al;
+      if (nx * mid.x + nz * mid.z < 0) (nx = -nx), (nz = -nz);
+      this.camera.position.lerp(this.v2.set(mid.x + nx * 4.4, 2.0, mid.z + nz * 4.4), 1 - Math.exp(-dt * 2));
       this.camera.lookAt(mid.x, 1.4, mid.z);
     } else this.walker.camera(this.camera, dt, this.colliders);
     this.sun.follow(pp);
@@ -1720,6 +1773,9 @@ export class LevelSantJoan implements Level {
       for (const l of place.wallLamps ?? []) l.visible = false;
       if (place.garland) (place.garland.material as THREE.PointsMaterial).color.setHex(GARLAND_OFF);
       for (const sx of [-1, 1]) colliders.push({ minX: sx * 11.5 - 5.3, maxX: sx * 11.5 + 5.3, minZ: 10.1, maxZ: 10.5 });
+      // La escalera se sube (antes era un bloque): desde el patio solo se entra por abajo, por el primer peldaño
+      const si = colliders.findIndex((c) => c.minX === 1.7 && c.maxX === 5 && c.minZ === 0 && c.maxZ === 1.1);
+      if (si >= 0) colliders.splice(si, 1, { minX: 2.1, maxX: 5, minZ: 0, maxZ: 1.1 }, { minX: 1.7, maxX: 2.1, minZ: 0, maxZ: 0.45 });
       sc.add(this.player.root, this.gas.root);
       const pp = this.player.root.position;
       // Todos dentro del taxi, que llega por la calle: se bajan al parar
@@ -1739,12 +1795,13 @@ export class LevelSantJoan implements Level {
       taxi.root.position.set(HOME_STOP_X + HOME_BRAKE, 0, STREET_Z + 0.6);
       sc.add(taxi.root);
       const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.3), new THREE.MeshBasicMaterial({ color: 0xffd23f, fog: false }));
-      marker.position.set(DOOR.x, 2.6, DOOR.z + 0.7);
+      marker.position.set(1.5, 2.4, 1.2);
       marker.visible = false;
       sc.add(marker);
       this.home = {
         scene: sc, sky, sun, colliders, gate: place.gate, door: place.door, beam: place.beam, who: [], marker, taxi, rig: new CarRig(taxi),
         stage: 'arrive', v: HOME_V0, outT: 0, leaveT: 0, homeLine: false, unlocked: false,
+        upDoor: place.upDoor, climb: null, herPath: [], hisPath: [], up: false, porchSaid: false,
       };
       applyShadows(sc);
       // (la cámara ya en su sitio desde el primer fotograma: antes venía barriendo desde otro punto de la calle)
@@ -1866,7 +1923,27 @@ export class LevelSantJoan implements Level {
     h.who.length = 0;
     h.who.push(pp);
     const onFoot = h.stage === 'leave' || h.stage === 'gone';
-    if (onFoot) {
+    if (h.climb !== null) this.stepClimb(dt);
+    else if (onFoot && h.up) {
+      // Arriba, en la terraza: hasta la puerta (la barandilla delante, la fachada detrás)
+      if (this.pair) this.walker.speed = this.pair.speed();
+      this.walker.yaw = Math.PI;
+      const mag = this.walker.move(dt, free ? this.input.axes() : { x: 0, y: 0 }, [], TERRACE);
+      pp.y = TERRACE_Y;
+      this.player.root.rotation.y = this.walker.facing;
+      animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+      if (this.pair) {
+        const moving = this.pair.step(dt, this.walker.facing, []);
+        // (él, en la terraza o aún en el rellano de la escalera)
+        const g = this.gas.root.position;
+        g.x = THREE.MathUtils.clamp(g.x, TERRACE.minX - 0.05, TERRACE.maxX + 0.1);
+        g.z = THREE.MathUtils.clamp(g.z, TERRACE.minZ - 0.05, g.x > 4.62 ? 0.95 : TERRACE.maxZ + 0.1);
+        g.y = stairY(g.x, g.z);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.32);
+        this.pair.pose();
+      }
+      h.who.push(this.gas.root.position);
+    } else if (onFoot) {
       if (this.pair) {
         const lag = Math.hypot(this.gas.root.position.x - pp.x, this.gas.root.position.z - pp.z);
         this.walker.speed = lag > 2.2 ? 0.7 : this.pair.speed();
@@ -1880,11 +1957,19 @@ export class LevelSantJoan implements Level {
         this.pair.pose();
       }
       h.who.push(this.gas.root.position);
+      // Al pie de la escalera: suben juntos, ella delante y él detrás, agarrado a la barandilla
+      if (free && pp.x > 1.25 && pp.x < 2.15 && pp.z < 1.25) this.startClimb();
+      // El porche no es la entrada (la puerta de verdad está arriba): ella misma lo dice, una vez
+      if (free && !h.porchSaid && Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 1.5) {
+        h.porchSaid = true;
+        bark('Margaux', SANTJOAN.porch);
+      }
     }
-    // La cancela se abre al llegar; la puerta de casa, solo con la llave
+    // La cancela se abre al llegar; la puerta de casa, solo con la llave (la de abajo, la del porche, nunca)
     h.gate.update(dt, h.who, this.camera.position);
-    h.door.update(dt, h.unlocked ? h.who : [], this.camera.position);
-    const near = Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 2;
+    h.door.update(dt, [], this.camera.position);
+    h.upDoor.update(dt, h.unlocked ? h.who : [], this.camera.position);
+    const near = h.up && h.climb === null && Math.hypot(pp.x - UP_DOOR.x, pp.z - UP_DOOR.z) < 1.25;
     let label: string | null = null;
     if (free && near) label = h.unlocked ? SANTJOAN.sleepBtn : SANTJOAN.keysBtn;
     this.hud.setAction(label, !!label);
@@ -1894,22 +1979,88 @@ export class LevelSantJoan implements Level {
     }
     // Pistas, solo si se ha perdido
     const lostNow = this.lost.tick(`home|${h.stage}|${h.unlocked}`, dt, this.busy);
-    const show = lostNow && free && !near;
+    const show = lostNow && free && !near && h.climb === null;
     h.marker.visible = show;
     h.marker.rotation.y += dt * 2;
     if (show) {
-      const ang = Math.atan2(DOOR.x - pp.x, DOOR.z - pp.z);
+      // (abajo, el pie de la escalera; arriba, la puerta)
+      const goal = h.up ? UP_DOOR : this.v2.set(1.6, 0, 0.9);
+      h.marker.position.set(goal.x, goal.y + 2.4, goal.z + (h.up ? 0.5 : 0));
+      const ang = Math.atan2(goal.x - pp.x, goal.z - pp.z);
       const rel = Math.atan2(Math.sin(ang - this.walker.yaw), Math.cos(ang - this.walker.yaw));
       this.hud.setArrow(-rel);
-      beacon.at(DOOR);
+      beacon.at(goal);
     } else {
       this.hud.setArrow(null);
       beacon.at(null);
     }
     if (h.stage !== 'gone' && this.busy) this.homeCamera(1 - Math.exp(-dt * 2));
-    else this.walker.camera(this.camera, dt, h.colliders, 6, pp.z < 10.4 && pp.z > -0.5 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
+    else if (h.climb !== null || h.up) {
+      // En la escalera y arriba, plano propio: la buganvilla de la pérgola y el cuerpo volado tapaban a la cámara
+      // de siempre. Subiendo, desde atrás y por encima del porche; en la terraza, desde encima del patio.
+      const k = 1 - Math.exp(-dt * 3);
+      if (h.climb !== null) {
+        this.camera.position.lerp(this.v1.set(pp.x - 1.5, pp.y + 3.4, 2.0), k);
+        this.homeLook.lerp(this.v2.set(pp.x + 0.6, pp.y + 0.9, 0.7), k);
+      } else {
+        this.camera.position.lerp(this.v1.set(pp.x + 0.2, TERRACE_Y + 2.7, pp.z + 3.4), k);
+        this.homeLook.lerp(this.v2.set(pp.x - 0.1, TERRACE_Y + 1.0, pp.z - 0.9), k);
+      }
+      this.camera.lookAt(this.homeLook);
+    } else this.walker.camera(this.camera, dt, h.colliders, 6, pp.z < 10.4 && pp.z > -0.5 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
     h.sun.follow(pp);
     h.sky.update(this.camera, dt);
+  }
+
+  /** Al pie de la escalera: a partir de aquí suben solos, a su paso (ella delante; él, detrás y cojeando). */
+  private startClimb() {
+    const h = this.home!;
+    h.climb = 0;
+    const pp = this.player.root.position, g = this.gas.root.position;
+    h.herPath = [[pp.x, pp.z], ...STAIR_PATH];
+    this.homeLook.set(pp.x + 0.6, 0.9, 0.7);
+    h.hisPath = [[g.x, g.z], ...h.herPath];
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.hud.setArrow(null);
+    beacon.at(null);
+    h.marker.visible = false;
+  }
+
+  private stepClimb(dt: number) {
+    const h = this.home!;
+    const pp = this.player.root.position, g = this.gas.root.position;
+    // A tirones, como en la calle: cada peldaño con el pie bueno
+    const pace = 0.55 + 0.45 * Math.max(0, Math.sin(this.gas.auto?.ph ?? this.t * 5));
+    h.climb! += dt * pace;
+    const d = h.climb!;
+    const herLen = pathLen(h.herPath);
+    // Él va 1 m por detrás de ella, por el mismo camino (y espera donde está hasta que ella le saca ese metro)
+    const dg = d + Math.hypot(h.hisPath[0][0] - h.herPath[0][0], h.hisPath[0][1] - h.herPath[0][1]) - 1.05;
+    const hisLen = pathLen(h.hisPath);
+    const fa = stairAt(h.herPath, d, pp);
+    const fg = dg > 0 ? stairAt(h.hisPath, dg, g) : this.gas.root.rotation.y;
+    const turn = (r: THREE.Object3D, to: number) => (r.rotation.y += Math.atan2(Math.sin(to - r.rotation.y), Math.cos(to - r.rotation.y)) * Math.min(1, dt * 8));
+    turn(this.player.root, fa);
+    turn(this.gas.root, fg);
+    this.walker.facing = this.player.root.rotation.y;
+    this.walker.yaw += Math.atan2(Math.sin(fa - this.walker.yaw), Math.cos(fa - this.walker.yaw)) * Math.min(1, dt * 1.6);
+    const hisEnd = hisLen - 1.05;
+    const hisMoving = dg > 0 && dg < hisEnd;
+    if (dg > hisEnd) stairAt(h.hisPath, hisEnd, g);
+    animatePerson(this.player, dt, d < herLen ? 'walk' : 'idle', 0.45);
+    animatePerson(this.gas, dt, hisMoving ? 'walk' : 'idle', 0.32);
+    limpPose(this.gas, hisMoving);
+    if (dg >= hisEnd) {
+      // Arriba los dos: él se le vuelve a poner al lado (desde el rellano), y a la puerta
+      h.climb = null;
+      h.up = true;
+      this.walker.yaw = this.walker.facing = this.player.root.rotation.y;
+      this.lost.reset();
+      this.busy = false;
+    }
   }
 
   /** Paso nuevo (inventado): la llave, despacito, que duerme todo el mundo. */
@@ -1920,7 +2071,7 @@ export class LevelSantJoan implements Level {
     this.walker.stop();
     this.hud.setAction(null);
     const pp = this.player.root.position;
-    this.walker.facing = Math.atan2(DOOR.x - pp.x, DOOR.z - pp.z);
+    this.walker.facing = Math.atan2(UP_DOOR.x - pp.x, UP_DOOR.z - pp.z);
     bark('Margaux', SANTJOAN.keys);
     // Las llaves: dos tintineos y la cerradura, flojito
     audio.knock(0.08, 2600, 0.025);
@@ -1929,7 +2080,7 @@ export class LevelSantJoan implements Level {
       if (this.home !== h) return;
       audio.knock(0.14, 900, 0.05);
       h.unlocked = true;
-      h.door.hold(3);
+      h.upDoor.hold(3);
       this.busy = false;
     }, 1500);
   }
@@ -2104,7 +2255,8 @@ export class LevelSantJoan implements Level {
       { label: '5d · En el taxi', run: () => { this.resetTo(true); tp(80, 7, -Math.PI / 2); this.busy = true; fadeFlash(() => this.startRide(), 200); } },
       { label: '6 · Casa: llega el taxi', run: () => { this.resetTo(true); this.busy = true; this.startHome(); } },
       { label: '6b · Casa: hasta la puerta', run: () => { this.resetTo(true); this.busy = true; this.startHome(() => this.skipArrival()); } },
-      { label: '6c · Casa: la puerta, con la llave', run: () => { this.resetTo(true); this.busy = true; this.startHome(() => this.skipArrival(DOOR.x + 0.4, DOOR.z + 1.5)); } },
+      { label: '6c · Casa: la escalera', run: () => { this.resetTo(true); this.busy = true; this.startHome(() => this.skipArrival(1.2, 2.2)); } },
+      { label: '6d · Casa: arriba, la puerta con la llave', run: () => { this.resetTo(true); this.busy = true; this.startHome(() => { this.skipArrival(3.4, -0.3); this.home!.up = true; this.player.root.position.y = this.gas.root.position.y = TERRACE_Y; }); } },
       { label: '✓ Completar capítulo', run: () => { this.phase = 'done'; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }

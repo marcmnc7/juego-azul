@@ -305,9 +305,9 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     const stub = el('div', 'wn-stub');
     stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(n).padStart(2, '0')}`));
     const main = el('div', 'wn-tmain');
-    main.append(el('div', 'wn-tlabel', 'Vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
     ticket.append(stub, main);
-    const saved = el('p', 'wn-hint wn-saved', 'Lo tienes guardado en este capítulo, en el menú');
+    const saved = el('p', 'wn-hint wn-saved', 'Queda guardado en la ficha del capítulo');
     b.append(kick, env, hint, ticket, saved);
     const open = () => {
       if (giftOpen) return;
@@ -329,7 +329,7 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
   const photos: Shot[] = memoriesFor(n);
   if (photos.length) {
     const b = el('section', 'wn-beat wn-album');
-    b.append(el('div', 'wn-kicker', `Nuevo en tu álbum · ${photos.length === 1 ? '1 recuerdo' : `${photos.length} recuerdos`}`));
+    b.append(el('div', 'wn-kicker', `Nuevo en tu álbum · ${shotsLabel(photos)}`));
     const fan = el('div', 'wn-fan');
     const shown = photos.slice(0, 5);
     shown.forEach((m, i) => {
@@ -579,7 +579,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     img.alt = '';
     hero.append(img, el('div', 'hm-hero-shade'));
     const t = el('div', 'hm-hero-txt');
-    const when = c.unlocked ? (c.done ? 'Otra vez' : 'Ya puedes jugar') : c.early ? longDate(c.day) : 'Termina el anterior';
+    const when = c.unlocked ? 'Listo para jugar' : c.early ? `Se abre el ${longDate(c.day)}` : 'Termina el anterior';
     t.append(el('div', 'hm-chip', `Capítulo ${c.lv.id} · ${when}`));
     if (c.unlocked) {
       t.append(el('h2', 'hm-hero-title', c.lv.name), el('p', 'hm-hero-place', c.lv.place));
@@ -612,7 +612,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     const date = el('div', 'hm-date', `<b>${c.day.getDate()}</b><small>${MONTHS[c.day.getMonth()].slice(0, 3)}</small>`);
     const txt = el('div', 'hm-row-txt');
     const tag = i === 0 ? ' <i class="hm-tag">🎂 tu cumple</i>' : i === LEVELS.length - 1 ? ' <i class="hm-tag">🎄 Navidad</i>' : '';
-    txt.append(el('div', 'hm-row-name', (show ? c.lv.name : `Capítulo ${c.lv.id}`) + tag), el('div', 'hm-row-sub', c.done ? `Completado${kp.length ? ` · ${found}/${kp.length} recuerdos` : ''}` : c.unlocked ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior'));
+    txt.append(el('div', 'hm-row-name', (show ? c.lv.name : `Capítulo ${c.lv.id}`) + tag), el('div', 'hm-row-sub', c.done ? `Completado${kp.length ? ` · ${found}/${kp.length} recuerdos escondidos` : ''}` : c.unlocked ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior'));
     row.append(date, th, txt);
     row.onclick = () => {
       if (!show) {
@@ -657,7 +657,9 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
   const back = el('button', 'cp-back', '‹');
   back.setAttribute('aria-label', 'Volver');
   const body = el('main', 'cp-body');
-  // Lo que se lleva de este capítulo, en una lista, y cómo se completa
+  // Cómo se juega (una frase, la de cada capítulo) y, debajo, lo que se lleva. La frase va arriba: abajo quedaba
+  // tapada por el botón de Jugar en el móvil apaisado
+  if (!doneIt) body.append(el('div', 'cp-kicker', 'Cómo se juega'), el('p', 'cp-how', lv.how));
   body.append(el('div', 'cp-kicker', doneIt ? 'Lo que te llevaste' : 'Lo que te llevas'));
   const list = el('div', 'cp-list');
   const item = (icon: string, title: string, sub: string, cls = '') => {
@@ -679,11 +681,10 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     const r = item('♥', 'Un regalo de verdad', 'Se abre al terminar el capítulo', 'sealed');
     r.querySelector('.cp-ico')!.classList.add('seal');
   }
-  if (photos.length) item('📸', `${photos.length} ${photos.length === 1 ? 'recuerdo' : 'recuerdos'} para tu álbum`, doneIt ? 'Ya están en el álbum' : 'De aquellos días: se guardan al terminar');
-  if (kp.length) item('✨', `${kp.length} recuerdos escondidos`, `${found} de ${kp.length} encontrados · polaroids que brillan por el escenario`);
+  if (photos.length) item('📸', `${shotsLabel(photos)} para tu álbum`, doneIt ? 'Ya están en el álbum' : 'De aquellos días: se guardan al terminar');
+  if (kp.length) item('✨', `${kp.length} recuerdos escondidos`, `${found} de ${kp.length} encontrados · son polaroids que brillan: acércate`);
   if (doneIt) item('✓', 'Completado', 'Puedes volver a jugarlo cuando quieras', 'done');
   body.append(list);
-  if (!doneIt) body.append(el('p', 'cp-how', 'Cómo se juega: explora, habla con la gente y sigue la historia. Si te pierdes, al rato sale una flecha.'));
   const play = el('button', 'hm-btn cp-play', doneIt ? 'Volver a jugar' : 'Jugar');
   const foot = el('div', 'cp-foot');
   foot.append(play);
@@ -726,10 +727,17 @@ function albumTab(body: HTMLElement, save: SaveData, test: boolean) {
       const sh = fShots.find((f) => f.caption === k.caption)!;
       card.append(thumb(sh), el('span', 'ap-photo-cap', k.caption));
       card.onclick = () => lightbox(fShots, fShots.indexOf(sh));
-    } else card.append(el('div', 'ap-photo-lock', `🔎<small>Escondido en el capítulo ${k.chapter}</small>`));
+    } else card.append(el('div', 'ap-photo-lock', `✨<small>Escondido en el capítulo ${k.chapter}</small>`));
     g2.append(card);
   });
   body.append(g2);
+}
+
+/** «3 fotos», «3 fotos y un vídeo», «1 foto»… (lo del álbum de cada capítulo). */
+function shotsLabel(list: Shot[]) {
+  const v = list.filter((m) => m.video).length, f = list.length - v;
+  const fs = f === 1 ? '1 foto' : `${f} fotos`, vs = v === 1 ? 'un vídeo' : `${v} vídeos`;
+  return f && v ? `${fs} y ${vs}` : v ? (v === 1 ? '1 vídeo' : vs) : fs;
 }
 
 function thumb(m: Shot) {
@@ -797,7 +805,7 @@ export function howToPlay() {
       ['👉', 'Mirar', 'Arrastra en la mitad derecha para girar la cámara.'],
       ['🔴', 'Acción', 'Cuando hay algo que hacer, aparece un botón abajo a la derecha.'],
       ['✦', 'Qué hacer', 'Mira alrededor y escucha a la gente: lo irás descubriendo.'],
-      ['🔎', 'Recuerdos', 'En cada capítulo hay fotos escondidas: acércate a lo que brilla.'],
+      ['✨', 'Recuerdos escondidos', 'En cada capítulo hay polaroids escondidas que brillan: acércate y van a tu álbum.'],
       ['☰', 'Pausa', 'El botón de arriba a la derecha para el juego.'],
     ];
     const l = el('div', 'ap-help');
@@ -1238,7 +1246,7 @@ export function keepsakePop(k: Keepsake, found: number, total: number) {
     thumb = img;
   } else thumb = el('div', 'kp-thumb', k.chat ? '💬' : '📷');
   const txt = el('div', 'kp-text');
-  txt.append(el('b', '', `🔎 Recuerdo ${found}/${total} · al álbum`), el('span', '', k.caption));
+  txt.append(el('b', '', `✨ Recuerdo escondido ${found}/${total} · al álbum`), el('span', '', k.caption));
   o.append(thumb, txt);
   root.append(o);
   setTimeout(() => o.classList.add('out'), 3600);
@@ -1657,7 +1665,7 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
     typing?.remove();
     asking?.remove();
     asking = null;
-    hint.textContent = 'Toca para continuar ▸';
+    hint.textContent = 'Toca para seguir ▸';
     hint.classList.add('ready');
     skip.hidden = true;
   };
@@ -2046,7 +2054,7 @@ export class Tutorial {
     } catch {
       /* sin guardar: saldría otra vez */
     }
-    toast('✨ ¡Listo! Sigue la luz para saber a dónde ir');
+    toast('✨ ¡Listo! Ya sabes moverte');
     this.wrap.classList.add('bye');
     setTimeout(() => this.wrap.remove(), 500);
   }

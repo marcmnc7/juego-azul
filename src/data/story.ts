@@ -9,18 +9,20 @@ export interface LevelInfo {
   name: string;
   place: string;
   emoji: string;
+  /** Cómo se juega, en una frase: sale en la ficha del capítulo antes de jugarlo. */
+  how: string;
 }
 
 export const LEVELS: LevelInfo[] = [
-  { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏' },
-  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 26 de agosto de 2025', emoji: '🌙' },
-  { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗' },
-  { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸' },
-  { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️' },
-  { id: 6, name: 'Sant Joan', place: 'Ciutadella, junio de 2026', emoji: '🐎' },
-  { id: 7, name: 'Cena a escondidas', place: 'Sa Farola, 13 de julio de 2026', emoji: '🍝' },
-  { id: 8, name: 'El eclipse', place: 'Ciutadella, 12 de agosto de 2026', emoji: '🌘' },
-  { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙' },
+  { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏', how: 'Pasea por la fiesta y habla con la gente. Lleva las pomadas sin que te las tiren y, cuando un burro se pare, acarícialo.' },
+  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 26 de agosto de 2025', emoji: '🌙', how: 'Despídete de tus amigos y cruzad el jardín de sus padres sin hacer ruido: que no se encienda ninguna luz. Luego, piscina y estrellas.' },
+  { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗', how: 'De Madrid a Logroño en coche: esquiva lo que venga, para en el primer restaurante que empiece por M, saluda a las vacas y que no se queme ninguna zamburiña.' },
+  { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸', how: 'En Barajas, encuentra tu puerta mirando las pantallas: nadie te la dirá. En el estadio eres Gas: cervezas, colas del baño, buscar a Azul a oscuras y el ritmo de Fito.' },
+  { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️', how: 'Vas de paquete: échate con Gas en las curvas, saluda a las motos, aguanta la tramontana y haz fotos en cada mirador.' },
+  { id: 6, name: 'Sant Joan', place: 'Ciutadella, junio de 2026', emoji: '🐎', how: 'Busca a Gas por Ciutadella con las ubicaciones que te manda, toca caballos entre la gente y llévatelo a casa a la pata coja.' },
+  { id: 7, name: 'Cena a escondidas', place: 'Sa Farola, 13 de julio de 2026', emoji: '🍝', how: 'Vigila a que tus padres se vayan, ábrele la cancela a Gas y cocinad juntos sin que os pillen.' },
+  { id: 8, name: 'El eclipse', place: 'Ciutadella, 12 de agosto de 2026', emoji: '🌘', how: 'Un día entero con Gas: tus padres, el paseo con Joy y Eric, la cocina y, al final, el eclipse desde las rocas.' },
+  { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙', how: 'Otra vez el jaleo, pero ahora con Gas: sigue sus ubicaciones, pomadas a dos manos y a Sa Font, donde empezó todo.' },
 ];
 
 // Capítulo 1. Els de Ferreries parlen en menorquí; ella, en castellà, i entre ells dos, en castellà.
@@ -149,8 +151,8 @@ export const FERRERIES_MEET = {
 
 // Capítulo 6: Sant Joan en Ciutadella (junio de 2026). Buscar a Gas por sus ubicaciones entre caballos y avellanes.
 export const SANTJOAN = {
-  night: [{ who: 'Narrador', text: 'Ciutadella. Madrugada del 23 de junio de 2026. Mañana es Sant Joan.' }] as Line[],
-  morning: [{ who: 'Narrador', text: 'Por la mañana.' }] as Line[],
+  night: [{ who: 'Narrador', text: 'Ciutadella, 22 de junio de 2026. Las fiestas de Sant Joan ya han empezado, y esta noche os buscáis entre la gente.' }] as Line[],
+  morning: [{ who: 'Narrador', text: '23 de junio. Por la mañana.' }] as Line[],
   bandera: [{ who: 'Narrador', text: 'A las cinco y cuarto se acaba la bandera. Estás en la Plaça Espanya y hay que ir hacia el Born.' }] as Line[],
   // Objetivos: un emoji o dos palabras, sin decir qué hacer (las pistas solo salen si te pierdes)
   huntHint: '📍',
@@ -210,6 +212,8 @@ export const SANTJOAN = {
   homeHint: '😴',
   /** La puerta, con las llaves y sin hacer ruido: duerme todo el mundo (inventado). */
   keysBtn: '🔑 Abrir',
+  /** Si va a la puerta del porche: la de casa es la de arriba (inventado). */
+  porch: 'Por aquí no, que es el porche. Arriba, por la escalera.',
   keys: 'Despacito… que la puerta cruje.',
   sleepBtn: '😴 A dormir',
   after: [{ who: 'Narrador', text: 'Dos días después.' }] as Line[],
@@ -346,7 +350,7 @@ export const CONCERT = {
   /** A quien se le escapa la maleta de la tienda (inventado). */
   suitcase: [
     { who: 'Una señora', text: '¡Ay, perdona! Que se me ha escapado.' },
-    { who: 'Azul', text: '¡Uy! Otra maleta…' },
+    { who: 'Margaux', text: '¡Uy! Otra maleta…' },
     { who: 'Un señor', text: '¡Perdón, perdón! ¡Que no frena!' },
   ] as Line[],
   /** El tabaco de Azul, a la papelera de la terminal (opcional; Gas se fija al final). */
@@ -371,7 +375,7 @@ export const CONCERT = {
   /** En la cafetería de llegadas, donde la esperaba Gas («dentro aún»). Lo del chat ya se ha leído: aquí, en persona (inventado). */
   arrivalsMeet: [
     { who: 'Gas', text: '¡Por fin! Ya pensaba que te quedabas en Madrid.' },
-    { who: 'Azul', text: '¡Qué va! 26D, pasillo. Ni tan mal.' },
+    { who: 'Margaux', text: '¡Qué va! 26D, pasillo. Ni tan mal.' },
     { who: 'Gas', text: 'Pues vámonos, que el coche vip nos espera. Y mañana, Fito.' },
   ] as Line[],
   stadium: [
@@ -383,7 +387,7 @@ export const CONCERT = {
   showWc: [{ who: 'Narrador', text: 'Y Gas tiene que ir al baño. Será la primera de muchas.' }] as Line[],
   filmIntro: [
     { who: 'Narrador', text: 'Y justo ahora Fito toca un temazo. Gas, en la cola del baño.' },
-    { who: 'Azul', text: 'Se lo grabo. Que no se me escape Fito del encuadre.' },
+    { who: 'Margaux', text: 'Se lo grabo. Que no se me escape Fito del encuadre.' },
   ] as Line[],
   /** (inventado) */
   filmDone: 'Grabado. Ya lo verá.',
@@ -394,7 +398,7 @@ export const CONCERT = {
   found: [
     [
       { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
-      { who: 'Azul', text: 'Te he grabado el temón. Toma.' },
+      { who: 'Margaux', text: 'Te he grabado el temón. Toma.' },
     ],
     [{ who: 'Gas', text: '¡Aquí estás! Te has movido…' }],
     [{ who: 'Gas', text: 'Ahora sí. No me muevo de aquí.' }],
@@ -427,7 +431,7 @@ export const NIGHT = {
   /** En la terraza del Imperi, antes de irse. */
   bye: [
     { who: 'Amiga', text: '¿Ya te vas? ¿Y con quién, si se puede saber? 👀' },
-    { who: 'Azul', text: 'Con nadie… 🙃' },
+    { who: 'Margaux', text: 'Con nadie… 🙃' },
     { who: 'Amigo', text: 'Ya, ya. Con nadie. Pásalo bien 😏' },
   ] as Line[],
   noBye: 'Uy… que no me he despedido de estos.',
@@ -442,12 +446,12 @@ export const NIGHT = {
   /** En el coche, del Born a casa (bocadillos, sin parar el viaje). */
   drive: [
     { who: 'Gas', text: '¡Hola! ¿Qué tal?' },
-    { who: 'Azul', text: 'Bien, bien… ¿y tú?' },
+    { who: 'Margaux', text: 'Bien, bien… ¿y tú?' },
     { who: 'Gas', text: 'Bien. Oye… vas muy guapa.' },
-    { who: 'Azul', text: 'Jajaja, gracias. Qué random todo, ¿no?' },
+    { who: 'Margaux', text: 'Jajaja, gracias. Qué random todo, ¿no?' },
     { who: 'Gas', text: 'Un poco. A mí me gusta lo random.' },
     { who: 'Gas', text: 'Te voy a pedir una cosa: en casa, silencio. Mis padres duermen.' },
-    { who: 'Azul', text: 'Silencio full. Prometido 🤫' },
+    { who: 'Margaux', text: 'Silencio full. Prometido 🤫' },
   ] as Line[],
   /** Después de hacer el amor en las toallas: lo que se dijeron esa noche. */
   love: [{ who: 'Narrador', text: 'Solo el césped sabe qué pasó.' }] as Line[],

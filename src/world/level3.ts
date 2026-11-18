@@ -983,7 +983,7 @@ export class Level3 implements Level {
           this.phase = 'airport';
           this.lost.reset();
           this.updateHud();
-          later(() => bark('Azul', CONCERT.whichGate), 400);
+          later(() => bark('Margaux', CONCERT.whichGate), 400);
         }),
       );
     }, 500);
@@ -2344,7 +2344,7 @@ export class Level3 implements Level {
       const last = this.wrongSaid.get(g.n) ?? -99;
       if (this.t - last > 9) {
         this.wrongSaid.set(g.n, this.t);
-        bark('Azul', CONCERT.wrongGate(g.to));
+        bark('Margaux', CONCERT.wrongGate(g.to));
         this.talk(this.azul, 1.5);
       }
     }
@@ -2508,7 +2508,7 @@ export class Level3 implements Level {
     this.input.reset();
     this.hud.setAction(null);
     audio.whoosh();
-    if (this.gateStage === 2) bark('Azul', CONCERT.gateLate);
+    if (this.gateStage === 2) bark('Margaux', CONCERT.gateLate);
     for (const b of this.burgers) b.o.visible = b.live = false;
     fadeFlash(() => {
       this.phase = 'intro';
@@ -2606,7 +2606,7 @@ export class Level3 implements Level {
     // En la otra cafetería: no está («justo en la salida», dijo)
     if (!this.busy && pp.distanceTo(CAFE_OTHER) < 4.5 && this.t - this.otherCafeSaid > 14) {
       this.otherCafeSaid = this.t;
-      bark('Azul', CONCERT.otherCafe);
+      bark('Margaux', CONCERT.otherCafe);
       this.talk(this.azul, 1.5);
     }
     if (!this.busy && d < 1.6) this.meetGas();
@@ -3928,13 +3928,16 @@ export class Level3 implements Level {
     // El marco del móvil, en tebeo: borde de tinta, rótulos de tebeo y las manos de delante como siluetas negras
     const lab = "font:22px Bangers,'Arial Black',sans-serif;letter-spacing:.05em;color:#141018;background:#fffbf0;border:3px solid #141018;border-radius:6px;padding:0 8px";
     const ui = document.createElement('div');
-    ui.style.cssText = 'position:fixed;inset:17% 12% 4%;border:5px solid #141018;outline:3px solid #fffbf0;outline-offset:-9px;border-radius:22px;pointer-events:none;z-index:5;box-shadow:0 0 0 2000px rgba(20,16,24,.42)';
+    ui.style.cssText = 'position:fixed;inset:17% 12% 4%;border:5px solid #141018;outline:3px solid #fffbf0;outline-offset:-9px;border-radius:22px;pointer-events:none;box-shadow:0 0 0 2000px rgba(20,16,24,.42)';
     ui.innerHTML =
       `<div style="position:absolute;left:16px;top:10px;${lab}"><span data-rec style="color:#e2302a">●</span> REC <span data-t>0:00</span></div>` +
       `<div style="position:absolute;right:16px;top:10px;${lab}">🎸 <span data-q>0</span>%</div>` +
       '<div data-box style="position:absolute;left:29%;right:29%;top:25%;bottom:25%;border:4px dashed #fffbf0;border-radius:10px;box-shadow:0 0 0 2px #141018,inset 0 0 0 2px #141018"></div>' +
       '<div data-hands style="position:absolute;inset:0;overflow:hidden"></div>';
-    document.body.append(ui);
+    // (dentro de la interfaz y el primero, como el mapa del cap. 6: la pausa y los bocadillos, por encima)
+    const uiRoot = document.getElementById('ui');
+    if (uiRoot) uiRoot.prepend(ui);
+    else document.body.append(ui);
     this.filmUi = ui;
     this.updateHud();
   }
@@ -3991,7 +3994,7 @@ export class Level3 implements Level {
     this.camera.fov = this.camera.userData.baseFov ?? this.baseFov;
     this.camera.updateProjectionMatrix();
     audio.luck();
-    bark('Azul', CONCERT.filmDone);
+    bark('Margaux', CONCERT.filmDone);
     this.talk(this.azul);
     // Gas se ha perdido el temón; sigue en la cola (se le vuelve a ver) y Azul le escribe
     this.missed++;
@@ -4535,7 +4538,7 @@ export class Level3 implements Level {
       action = () => {
         this.smokeThrown = true;
         audio.luck();
-        bark('Azul', CONCERT.smokeDone);
+        bark('Margaux', CONCERT.smokeDone);
         this.fx.burst(BIN_POS.clone().setY(1.1), '✨', 5);
         this.updateHud();
       };
