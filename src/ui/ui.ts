@@ -305,7 +305,7 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     const stub = el('div', 'wn-stub');
     stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(n).padStart(2, '0')}`));
     const main = el('div', 'wn-tmain');
-    main.append(el('div', 'wn-tlabel', 'Vale regalo'), el('h2', 'wn-ttitle', gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    main.append(el('div', 'wn-tlabel', 'Vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
     ticket.append(stub, main);
     const saved = el('p', 'wn-hint wn-saved', 'Lo tienes guardado en este capítulo, en el menú');
     b.append(kick, env, hint, ticket, saved);
@@ -672,7 +672,7 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     const stub = el('div', 'wn-stub');
     stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(id).padStart(2, '0')}`));
     const main = el('div', 'wn-tmain');
-    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle', gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
     ticket.append(stub, main);
     list.append(ticket);
   } else if (GIFTS.some((g) => g.level === id)) {

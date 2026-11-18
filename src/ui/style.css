@@ -1946,3 +1946,4 @@ html, body { background: #000; }
 .cp-item-txt b { font: 600 17px/1.2 var(--serif); color: var(--cream); }
 .cp-item-txt span { font: 600 12.5px/1.35 var(--font); color: rgba(255, 248, 236, .62); }
 .screen p.cp-how, .cp-how { margin: 2px 0 0; font: 600 13px/1.5 var(--font); color: rgba(255, 248, 236, .55); text-shadow: none; }
+.wn-ttitle.long, .cp-ticket .wn-ttitle.long { font-size: 17px; line-height: 1.2; }

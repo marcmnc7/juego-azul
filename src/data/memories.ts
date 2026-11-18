@@ -1,8 +1,10 @@
 // Fotos y stickers sacados de nuestro chat. Cada capítulo desbloquea sus recuerdos en el álbum.
 import type { ChatMsg } from './chats';
-import vueloLpa from '../assets/recuerdos/vuelo-lpa.jpg';
 import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
-import carnaval from '../assets/recuerdos/carnaval.jpg';
+import lpaDesayuno from '../assets/recuerdos/lpa-desayuno.jpg';
+import lpaAscensor from '../assets/recuerdos/lpa-ascensor.jpg';
+import lpaConcierto from '../assets/recuerdos/lpa-concierto.jpg';
+import lpaCarnaval from '../assets/recuerdos/lpa-carnaval.jpg';
 import caballos from '../assets/recuerdos/caballos.jpg';
 import santJoan from '../assets/recuerdos/sant-joan.jpg';
 import santJoanSelfie from '../assets/recuerdos/sant-joan-selfie.jpg';
@@ -39,9 +41,10 @@ export const MEMORIES: Memory[] = [
   { level: 3, src: marcialFoto, caption: 'Cafetería Marcial. La primera con M.' },
   { level: 3, src: torreznos, caption: 'Y sus torreznos.' },
   { level: 3, src: cabana, caption: 'La cabaña. Sin gas, pero con cama.' },
-  { level: 4, src: vueloLpa, caption: '«VOY TARDEEEE?!» «tu vas pronto»' },
-  { level: 4, src: granCanaria, caption: 'Gran Canaria, marzo de 2026.' },
-  { level: 4, src: carnaval, caption: 'Todo lo que fuimos fue icónico.' },
+  { level: 4, src: lpaDesayuno, caption: 'Gran Canaria, marzo de 2026. Desayuno al sol.' },
+  { level: 4, src: lpaAscensor, caption: 'Camiseta de Fito puesta. Listos.' },
+  { level: 4, src: lpaConcierto, caption: 'Fito, en directo. Y nosotros.' },
+  { level: 4, src: lpaCarnaval, caption: 'Todo lo que fuimos fue icónico.' },
   { level: 6, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
   { level: 6, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
   { level: 6, src: santJoan, caption: '«Muy dificil si…. Deslumbras»' },
