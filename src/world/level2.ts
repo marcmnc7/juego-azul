@@ -1495,7 +1495,7 @@ export class Level2 implements Level {
     this.hud.setObjective('');
     c.standAtPellet();
     const look = c.pellet.clone().setY(1.15);
-    cinema.play([{ dur: Infinity, move: 5, pos: new THREE.Vector3(0.0, 1.75, -0.6), pos2: new THREE.Vector3(0.4, 1.7, -0.2), look, fov: 50, focus: look }]);
+    cinema.play([{ dur: Infinity, move: 5, pos: new THREE.Vector3(-1.9, 1.8, -0.4), pos2: new THREE.Vector3(-2.3, 1.7, 0.2), look, fov: 50, focus: look }]);
     dialogue(ROAD.pelletTry, () => {
       c.smoke(6);
       audio.warn();
@@ -1796,7 +1796,9 @@ export class Level2 implements Level {
       const drv = this.seatedDriver();
       if (drv) drv.visible = false;
       const z = this.carZ;
-      this.fuelPath = [new THREE.Vector3(this.carX + 1.15, 0, z + 0.1), new THREE.Vector3(this.carX + 1.2, 0, z + 3.4), new THREE.Vector3(-12.2, 0, z + 3.4), new THREE.Vector3(-13.4, 0, z + 3.4)];
+      // (hasta la puerta de la tienda, que está en GAS_Z + 3,4: antes iba 1 m más allá y atravesaba la pared)
+      const door = GAS_Z + 3.4;
+      this.fuelPath = [new THREE.Vector3(this.carX + 1.15, 0, z + 0.1), new THREE.Vector3(this.carX + 1.2, 0, door), new THREE.Vector3(-12.6, 0, door), new THREE.Vector3(-13.25, 0, door)];
       this.fuelGas.root.visible = true;
       this.fuelGas.root.position.copy(this.fuelPath[0]);
     }

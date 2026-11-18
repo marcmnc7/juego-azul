@@ -20,6 +20,9 @@ import type { Box2 } from './ferreries';
 // el camping gas) y a él se le olvidó precisamente el gas. De ahí el nombre. Escena de cine: en un claro
 // entre matorral y pinos, de noche, con la mesa plegable, las cartas, el farolillo y un hornillo que no enciende.
 
+/** Medidas de la cabaña: media anchura (x), medio fondo (z; la puerta, en -Z) y alto de las paredes. */
+const CX = 5.4, CZ = 3.2, CH = 2.4;
+
 export type CampSpot = 'estufa';
 const SPOT_LABEL: Record<CampSpot, string> = { estufa: '🔥 Probar la estufa' };
 
@@ -32,6 +35,7 @@ export class Camp {
   private glow: THREE.Sprite;
   private t = 0;
   private lost = new Lost();
+  private carCircles: { x: number; z: number; r: number }[] = [];
   private v = new THREE.Vector3();
   private colliders: Box2[] = [];
   private door!: Door;
@@ -56,10 +60,10 @@ export class Camp {
   active: CampSpot | null = null;
   onSearched: ((key: CampSpot) => void) | null = null;
   private spots: Record<CampSpot, { at: THREE.Vector3; reach: number }> = {
-    estufa: { at: new THREE.Vector3(2.35, 0, 1.75), reach: 1.25 },
+    estufa: { at: new THREE.Vector3(-3.9, 0, 1.75), reach: 1.25 },
   };
   /** La estufa de pellets (para encuadrarla) y su humo. */
-  readonly pellet = new THREE.Vector3(2.75, 0.9, 2.45);
+  readonly pellet = new THREE.Vector3(-4.7, 0.9, 2.55);
   private puffs: { s: THREE.Sprite; t: number }[] = [];
   private pot = new THREE.Group();
   /** De pie junto a la estufa (sin andar ni sentarse). */
@@ -148,7 +152,7 @@ export class Camp {
       m.add(G.box, 0x9a9ca0, px - 0.02, 0.5, pz - 0.262, 0, 0, 0, 0.34, 0.03, 0.01);
       m.add(G.box, 0x1a1b1e, px, 1.02, pz, 0, 0, 0, 0.5, 0.05, 0.46);
       m.add(G.cyl, 0x2f3136, px + 0.1, 1.9, pz + 0.1, 0, 0, 0, 0.13, 1.75, 0.13);
-      m.add(G.box, 0x6b4a2e, px - 0.62, 0.14, pz + 0.05, 0, 0.3, 0, 0.4, 0.28, 0.3); // saco de pellets
+      m.add(G.box, 0x6b4a2e, px + 0.66, 0.14, pz + 0.1, 0, 0.3, 0, 0.4, 0.28, 0.3); // saco de pellets
       this.colliders.push({ minX: px - 0.32, maxX: px + 0.32, minZ: pz - 0.3, maxZ: pz + 0.3 });
     }
     sc.add(m.mesh());
@@ -157,7 +161,11 @@ export class Camp {
     const car = makeCarHD(0x8c9096, { empty: true });
     car.root.position.set(-9, 0, -6.5);
     car.root.rotation.y = 1.1;
-    this.colliders.push({ minX: -11.4, maxX: -6.6, minZ: -8.2, maxZ: -4.8, low: true });
+    // (el coche está girado: su choque, unos círculos a lo largo, no una caja recta que sobraba por las esquinas)
+    {
+      const fx = Math.sin(1.1), fz = Math.cos(1.1);
+      for (const d of [-1.55, -0.52, 0.52, 1.55]) this.carCircles.push({ x: -9 + fx * d, z: -6.5 + fz * d, r: 0.98 });
+    }
     sc.add(car.root);
 
     // El farolillo: la única luz cálida en toda la noche
@@ -202,7 +210,7 @@ export class Camp {
 
   /** La cabaña de leña: troncos apilados con sus esquinas cruzadas, tejado de tablas, puerta y leña al lado. */
   private buildCabin(m: Merger) {
-    const X = 3.3, Z = 3, H = 2.4, LOG = 0.25, DOOR = 0.6;
+    const X = CX, Z = CZ, H = CH, LOG = 0.25, DOOR = 0.6;
     const C = [0x6b4a2e, 0x5f4128, 0x74522f];
     const n = Math.round(H / LOG);
     for (let i = 0; i < n; i++) {
@@ -232,9 +240,12 @@ export class Camp {
       const tri = new THREE.Shape([new THREE.Vector2(-Z, 0), new THREE.Vector2(Z, 0), new THREE.Vector2(0, rise)]);
       m.add(new THREE.ExtrudeGeometry(tri, { depth: 0.12, bevelEnabled: false }).rotateY(Math.PI / 2), 0x5a4128, s * X - 0.06, H, 0, 0, 0, 0, 1, 1, 1);
     }
-    // Ventanita con luz
-    m.add(G.box, 0x3f2c1c, X + 0.1, 1.45, 1, 0, 0, 0, 0.1, 0.8, 0.8);
-    m.add(G.box, 0xffc680, X + 0.16, 1.45, 1, 0, 0, 0, 0.03, 0.62, 0.62);
+    // Ventanitas con luz, una a cada lado
+    for (const s of [-1, 1]) {
+      m.add(G.box, 0x3f2c1c, s * (X + 0.1), 1.45, s > 0 ? -1.6 : 0.6, 0, 0, 0, 0.1, 0.8, 0.8);
+      m.add(G.box, 0xffc680, s * (X + 0.16), 1.45, s > 0 ? -1.6 : 0.6, 0, 0, 0, 0.03, 0.62, 0.62);
+    }
+    this.buildInterior(m);
     // La pila de leña, junto a la puerta
     for (let row = 0; row < 4; row++)
       for (let k = 0; k < 7 - row; k++) m.add(G.cyl, k % 2 ? 0x8a6a44 : 0x9a7a52, 1.45 + k * 0.22 + row * 0.11, 0.11 + row * 0.19, -Z - 0.42, Math.PI / 2, 0, 0, 0.2, 0.7, 0.2);
@@ -252,6 +263,127 @@ export class Camp {
     for (const y of [0.4, 1.6]) dm.add(G.box, 0x3f2c1c, 0.55, y, 0.03, 0, 0, 0, 1.08, 0.09, 0.02);
     this.door.leaf.add(dm.mesh());
     this.scene.add(this.door.group);
+  }
+
+  /**
+   * Dentro, como una cabaña de verdad: a la izquierda el salón (sofá, mesita, alfombra, lámpara y la estufa de pellets
+   * en el rincón), en medio la mesa, y a la derecha, tras un tabique, el dormitorio con su cama, mesilla, dos armarios
+   * y el baño con ducha, váter y lavabo.
+   */
+  private buildInterior(m: Merger) {
+    const X = CX, Z = CZ, H = CH;
+    const col = (minX: number, maxX: number, minZ: number, maxZ: number, low = false) => this.colliders.push({ minX, maxX, minZ, maxZ, low });
+    const PLANK = [0x8a6440, 0x7d5a38, 0x936b45];
+    /** Tabique de tablas verticales, de (x0,z0) a (x1,z1) (recto en x o en z), con su choque. */
+    const wall = (x0: number, z0: number, x1: number, z1: number) => {
+      const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
+      const len = alongX ? Math.abs(x1 - x0) : Math.abs(z1 - z0);
+      const n = Math.max(1, Math.round(len / 0.2));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+        m.add(G.box, PLANK[k % 3], x, H / 2, z, 0, 0, 0, alongX ? len / n + 0.002 : 0.1, H, alongX ? 0.1 : len / n + 0.002);
+      }
+      if (alongX) col(Math.min(x0, x1), Math.max(x0, x1), z0 - 0.08, z0 + 0.08);
+      else col(x0 - 0.08, x0 + 0.08, Math.min(z0, z1), Math.max(z0, z1));
+    };
+    const frame = (x: number, z: number, alongX: boolean, w: number) => {
+      for (const s of [-1, 1]) m.add(G.box, 0x4a3220, alongX ? x + s * w / 2 : x, 1.0, alongX ? z : z + s * w / 2, 0, 0, 0, 0.08, 2.0, 0.14);
+      m.add(G.box, 0x4a3220, x, 2.03, z, 0, 0, 0, alongX ? w + 0.08 : 0.14, 0.08, alongX ? 0.14 : w + 0.08);
+    };
+
+    // --- El salón ---
+    // Alfombra, sofá de tres plazas contra la pared (mira a la sala), sus cojines, mesita y lámpara de pie
+    // (la alfombra, aparte y sin dibujo de superficie: con el de la escena salía como un enlosado de ladrillo)
+    const rug = new Merger(false);
+    rug.add(G.box, 0x8e3b2c, 0, 0.035, 0, 0, 0, 0, 2.4, 0.02, 2.6);
+    rug.add(G.box, 0xd8b98a, 0, 0.04, 0, 0, 0, 0, 2.1, 0.02, 2.3);
+    rug.add(G.box, 0x8e3b2c, 0, 0.045, 0, 0, 0, 0, 1.5, 0.02, 1.7);
+    rug.add(G.box, 0xd8b98a, 0, 0.05, 0, 0, 0, 0, 1.3, 0.02, 1.5);
+    const rugMesh = rug.mesh();
+    rugMesh.position.set(-3.6, 0, -1.0);
+    this.scene.add(rugMesh);
+    const SOFA = 0x3f6a6a, SOFA_D = 0x335858;
+    m.add(G.rbox, SOFA_D, -4.75, 0.22, -1.0, 0, 0, 0, 0.9, 0.44, 2.2); // base
+    m.add(G.rbox, SOFA, -4.7, 0.5, -1.0, 0, 0, 0, 0.75, 0.16, 2.0); // asiento
+    m.add(G.rbox, SOFA, -5.1, 0.78, -1.0, 0, 0, -0.1, 0.22, 0.7, 2.1); // respaldo
+    for (const z of [-2.1, 0.1]) m.add(G.rbox, SOFA_D, -4.75, 0.6, z, 0, 0, 0, 0.9, 0.42, 0.2); // brazos
+    for (const [z, c] of [[-1.6, 0xe0b23a], [-0.4, 0xe0b23a], [-1.0, 0x2a3b55]] as const) m.add(G.rbox, c, -4.88, 0.78, z, 0, 0, -0.25, 0.14, 0.4, 0.42); // cojines
+    col(-5.3, -4.25, -2.25, 0.25);
+    m.add(G.rbox, 0x6b4a2e, -3.55, 0.36, -1.0, 0, 0, 0, 0.62, 0.05, 1.0); // mesita
+    for (const [dx, dz] of [[-0.25, -0.42], [0.25, -0.42], [-0.25, 0.42], [0.25, 0.42]]) m.add(G.box, 0x5a3d24, -3.55 + dx, 0.17, -1.0 + dz, 0, 0, 0, 0.05, 0.34, 0.05);
+    m.add(G.cyl, 0xf4efe2, -3.6, 0.43, -1.15, 0, 0, 0, 0.12, 0.1, 0.12); // taza
+    m.add(G.box, 0x7a2a2a, -3.5, 0.4, -0.8, 0, 0.4, 0, 0.22, 0.03, 0.3); // un libro
+    col(-3.9, -3.2, -1.55, -0.45, true);
+    m.add(G.cyl, 0x2a2a2a, -4.95, 0.75, -2.65, 0, 0, 0, 0.04, 1.5, 0.04); // lámpara de pie
+    m.add(G.cyl, 0x2a2a2a, -4.95, 0.02, -2.65, 0, 0, 0, 0.32, 0.04, 0.32);
+    m.add(new THREE.CylinderGeometry(0.16, 0.24, 0.3, 14, 1, true), 0xf0d9a8, -4.95, 1.55, -2.65);
+    // Un cuadro y una estantería con libros encima del sofá
+    m.add(G.box, 0x4a3220, -X + 0.18, 1.55, -1.0, 0, 0, 0, 0.05, 0.62, 0.9);
+    m.add(G.box, 0x6f9ec2, -X + 0.21, 1.55, -1.0, 0, 0, 0, 0.02, 0.5, 0.78);
+    m.add(G.box, 0x4f8a4a, -X + 0.22, 1.42, -1.0, 0, 0, 0, 0.02, 0.18, 0.78);
+
+    // --- El dormitorio, tras el tabique (puerta hacia la sala) ---
+    const PX = 1.9;
+    wall(PX, -Z + 0.15, PX, -0.45);
+    wall(PX, 0.55, PX, Z - 0.15);
+    frame(PX, 0.05, false, 1.0);
+    m.add(G.box, 0x4a3220, PX, H - 0.1, 0.05, 0, 0, 0, 0.1, 0.2, 1.0); // dintel hasta el techo
+    // La cama de matrimonio, con el cabecero contra la pared: colcha clara, manta mostaza y cojines (como en la foto)
+    const BZ = -0.85, BX = 4.25;
+    m.add(G.box, 0x3a2a1c, BX, 0.18, BZ, 0, 0, 0, 2.05, 0.28, 1.65); // somier
+    m.add(G.rbox, 0xf1ece0, BX, 0.42, BZ, 0, 0, 0, 2.0, 0.22, 1.6); // colchón y sábanas
+    m.add(G.rbox, 0xb8862e, BX - 0.55, 0.55, BZ, 0, 0, 0, 0.7, 0.05, 1.66); // la manta a los pies
+    m.add(G.box, 0x6b4a2e, X - 0.12, 0.85, BZ, 0, 0, 0, 0.1, 1.05, 1.8); // cabecero de madera
+    m.add(G.rbox, 0xcdb89a, X - 0.17, 0.95, BZ, 0, 0, 0, 0.06, 0.6, 1.6); // y su tapizado
+    for (const [dz, c] of [[-0.4, 0xd9a43a], [0.4, 0xd9a43a], [0, 0x2a2f45]] as const) m.add(G.rbox, c, X - 0.38, 0.68, BZ + dz, 0, 0, 0.35, 0.16, 0.38, 0.5);
+    col(BX - 1.05, X, BZ - 0.85, BZ + 0.85);
+    // Mesilla con su lámpara
+    m.add(G.rbox, 0x6b4a2e, X - 0.3, 0.27, 0.35, 0, 0, 0, 0.45, 0.54, 0.4);
+    m.add(G.cyl, 0x2a2a2a, X - 0.3, 0.62, 0.35, 0, 0, 0, 0.08, 0.16, 0.08);
+    m.add(new THREE.CylinderGeometry(0.1, 0.15, 0.18, 12, 1, true), 0xf0d9a8, X - 0.3, 0.78, 0.35);
+    col(X - 0.55, X, 0.15, 0.55);
+    // Dos armarios contra la pared de la entrada
+    for (const ax of [2.6, 3.72]) {
+      m.add(G.box, 0x6b4a2e, ax, 1.0, -Z + 0.42, 0, 0, 0, 1.05, 2.0, 0.6);
+      m.add(G.box, 0x5a3d24, ax, 1.0, -Z + 0.725, 0, 0, 0, 0.02, 1.9, 0.01); // la raja entre las dos puertas
+      for (const s of [-1, 1]) m.add(G.box, 0xc8ccd0, ax + s * 0.07, 1.05, -Z + 0.74, 0, 0, 0, 0.03, 0.22, 0.03); // tiradores
+      m.add(G.box, 0x4a3220, ax, 2.02, -Z + 0.42, 0, 0, 0, 1.1, 0.05, 0.64);
+    }
+    col(2.05, 4.28, -Z + 0.1, -Z + 0.75);
+    // --- El baño, en el rincón del fondo ---
+    const BW = 3.0, BZ0 = 1.05;
+    wall(BW, BZ0, BW, Z - 0.15);
+    wall(BW + 0.85, BZ0, X - 0.15, BZ0);
+    frame(BW + 0.43, BZ0, true, 0.75);
+    m.add(G.box, 0x4a3220, BW + 0.43, H - 0.1, BZ0, 0, 0, 0, 0.8, 0.2, 0.1);
+    m.add(G.box, 0xe6e4de, (BW + X) / 2, 0.025, (BZ0 + Z) / 2, 0, 0, 0, X - BW - 0.2, 0.02, Z - BZ0 - 0.2); // suelo de baldosa
+    // Ducha: plato, mampara de cristal y el rociador
+    m.add(G.box, 0xf4f4f2, X - 0.62, 0.05, Z - 0.6, 0, 0, 0, 0.95, 0.08, 0.95);
+    m.add(G.box, 0xc8ccd0, X - 0.2, 1.9, Z - 0.25, 0, 0, 0, 0.04, 0.04, 0.04);
+    m.add(G.cyl, 0xc8ccd0, X - 0.35, 1.95, Z - 0.35, 0, 0, 0, 0.14, 0.03, 0.14);
+    m.add(G.cyl, 0xc8ccd0, X - 0.22, 1.35, Z - 0.22, 0, 0, 0, 0.025, 1.2, 0.025);
+    col(X - 1.12, X, Z - 1.1, Z);
+    // (la mampara, de cristal: aparte, transparente)
+    const glass = new THREE.MeshStandardMaterial({ color: 0xcfe6ee, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false });
+    for (const [w, x, z, ry] of [[0.95, X - 0.62, Z - 1.1, 0], [0.95, X - 1.1, Z - 0.62, Math.PI / 2]] as const) {
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.9), glass);
+      g.position.set(x, 1.05, z);
+      g.rotation.y = ry;
+      g.userData.noCast = true;
+      this.scene.add(g);
+    }
+    // Váter contra el fondo y lavabo con espejo en la pared de la derecha
+    m.add(G.rbox, 0xf4f4f2, BW + 0.72, 0.22, Z - 0.42, 0, 0, 0, 0.4, 0.44, 0.5);
+    m.add(G.rbox, 0xf4f4f2, BW + 0.72, 0.6, Z - 0.22, 0, 0, 0, 0.42, 0.36, 0.16);
+    m.add(G.box, 0xe8e6e0, BW + 0.72, 0.45, Z - 0.5, 0, 0, 0, 0.38, 0.03, 0.42);
+    col(BW + 0.48, BW + 0.96, Z - 0.7, Z);
+    m.add(G.rbox, 0x6b4a2e, X - 0.3, 0.42, BZ0 + 0.55, 0, 0, 0, 0.5, 0.84, 0.7); // mueble del lavabo
+    m.add(G.cyl, 0xf4f4f2, X - 0.32, 0.88, BZ0 + 0.55, 0, 0, 0, 0.42, 0.08, 0.5);
+    m.add(G.box, 0x9fb8c8, X - 0.13, 1.5, BZ0 + 0.55, 0, 0, 0, 0.03, 0.6, 0.5); // espejo
+    col(X - 0.58, X, BZ0 + 0.18, BZ0 + 0.92);
+    // Toallas colgadas
+    m.add(G.box, 0xd9a43a, BW + 0.08, 1.2, Z - 1.3, 0, 0, 0, 0.06, 0.6, 0.35);
   }
 
   /** Llegas en coche: Azul y Gas se bajan y hay que entrar en la cabaña a pie. */
@@ -318,10 +450,11 @@ export class Camp {
     this.walker = null;
     this.searching = false;
     this.standing = true;
-    this.azul.root.position.set(1.85, 0, 2.45);
-    this.azul.root.rotation.set(0, Math.atan2(this.pellet.x - 1.85, this.pellet.z - 2.45), 0);
-    this.gas.root.position.set(2.75, 0, 1.5);
-    this.gas.root.rotation.set(0, Math.atan2(this.pellet.x - 2.75, this.pellet.z - 1.5), 0);
+    const p = this.pellet;
+    this.azul.root.position.set(p.x + 1.05, 0, p.z - 0.15);
+    this.azul.root.rotation.set(0, Math.atan2(-1.05, 0.15), 0);
+    this.gas.root.position.set(p.x + 0.35, 0, p.z - 1.05);
+    this.gas.root.rotation.set(0, Math.atan2(-0.35, 1.05), 0);
   }
 
   /** Dentro: cada uno a su silla. */
@@ -362,7 +495,8 @@ export class Camp {
       const pp = this.azul.root.position;
       w.turn(input ? input.consumeCam() : 0);
       w.canJump = false;
-      const mag = w.move(dt, input ? input.axes() : { x: 0, y: 0 }, this.colliders, { minX: -12, maxX: 12, minZ: -13, maxZ: 2 });
+      // (todo el claro, también por detrás de la cabaña: antes el límite cortaba por la cabaña y era una pared invisible)
+      const mag = w.move(dt, input ? input.axes() : { x: 0, y: 0 }, this.colliders, { minX: -13, maxX: 13, minZ: -14, maxZ: 7.5 }, this.carCircles);
       this.azul.root.rotation.y = w.facing;
       animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
       this.who.length = 0;
@@ -382,9 +516,9 @@ export class Camp {
         this.onSearched?.(key);
       }
       // Pistas, solo si se ha perdido (40 s sin avanzar): la flecha y la columna sobre la puerta o el sitio que falta
-      const goal = sp ? sp.at : !this.searching && pp.z < -3.6 && !this.inside ? this.v.set(0, 0, -3) : null;
+      const goal = sp ? sp.at : !this.searching && pp.z < -CZ - 0.6 && !this.inside ? this.v.set(0, 0, -CZ) : null;
       if (this.lost.tick(this.searching ? `go-${this.active}` : 'cabin', dt, !input) && goal) {
-        const ang = Math.atan2(goal.x - pp.x, (sp ? goal.z : -2) - pp.z);
+        const ang = Math.atan2(goal.x - pp.x, (sp ? goal.z : -CZ + 1) - pp.z);
         const rel = Math.atan2(Math.sin(ang - w.yaw), Math.cos(ang - w.yaw));
         hud.setArrow(pp.distanceTo(goal) < 1.6 ? null : -rel);
         beacon.at(pp.distanceTo(goal) < 1.6 ? null : goal);
@@ -393,8 +527,8 @@ export class Camp {
         beacon.at(null);
       }
       // Pasada la puerta, ya estás dentro
-      if (pp.z > -2 && Math.abs(pp.x) < 3 && !this.inside) this.inside = true;
-      const indoor = pp.z > -3.4 && Math.abs(pp.x) < 3.4;
+      if (pp.z > -CZ + 1.2 && Math.abs(pp.x) < CX - 0.3 && !this.inside) this.inside = true;
+      const indoor = pp.z > -CZ - 0.2 && Math.abs(pp.x) < CX;
       w.camera(camera, dt, this.colliders, indoor ? 2.6 : 5.5, indoor ? 1.9 : 2.8);
     } else if (this.standing) {
       animatePerson(this.azul, dt, 'idle');
