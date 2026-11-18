@@ -527,8 +527,10 @@ export class Camp {
         beacon.at(null);
       }
       // Pasada la puerta, ya estás dentro
-      if (pp.z > -CZ + 1.2 && Math.abs(pp.x) < CX - 0.3 && !this.inside) this.inside = true;
-      const indoor = pp.z > -CZ - 0.2 && Math.abs(pp.x) < CX;
+      // (dentro de verdad: entre la puerta y la pared del fondo; antes bastaba con pasar de la puerta hacia el fondo y
+      // rodeando la cabaña por fuera, por detrás, contaba como haber entrado)
+      if (pp.z > -CZ + 1.2 && pp.z < CZ - 0.1 && Math.abs(pp.x) < CX - 0.3 && !this.inside) this.inside = true;
+      const indoor = pp.z > -CZ - 0.2 && pp.z < CZ && Math.abs(pp.x) < CX;
       w.camera(camera, dt, this.colliders, indoor ? 2.6 : 5.5, indoor ? 1.9 : 2.8);
     } else if (this.standing) {
       animatePerson(this.azul, dt, 'idle');
