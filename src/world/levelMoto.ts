@@ -1326,6 +1326,11 @@ export class LevelMoto implements Level {
     return out;
   }
 
+  /** En marcha, los globos salen por detrás de la moto (abajo), no encima de la carretera. */
+  speakerBelow() {
+    return !this.stones && (this.phase === 'ride' || this.phase === 'uturn');
+  }
+
   /** De qué lado sale el globo de cada uno en la moto (main.ts lo pregunta si speakerPoint responde). */
   speakerSide(who: string): 'l' | 'r' | undefined {
     if (this.stones) return this.stones.speakerSide(who);

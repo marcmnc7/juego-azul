@@ -1252,6 +1252,11 @@ export class Level2 implements Level {
     return this.car.body.localToWorld(new THREE.Vector3(her ? -0.4 : 0.4, 1.6, -0.25));
   }
 
+  /** Conduciendo, los globos salen por detrás del coche (abajo), no encima de la carretera. */
+  speakerBelow() {
+    return this.phase === 'drive1' || this.phase === 'drive2' || this.phase === 'cow';
+  }
+
   speakerSide(who: string): 'l' | 'r' | undefined {
     if (who === 'Camarero') return undefined;
     return who === 'Margaux' || who === 'Azul' ? 'r' : 'l';

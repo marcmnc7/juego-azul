@@ -180,12 +180,13 @@ setSpeakerResolver((who) => {
   if (!L) return null;
   // El nivel puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
   // (y hacia qué lado se abre el globo: en un coche, cada uno desde su asiento)
-  const lv = level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined };
+  const lv = level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined; speakerBelow?: () => boolean };
   const hook = lv.speakerPoint?.(who);
   if (hook) {
     _head.copy(hook).project(camera);
     if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
-    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight, side: lv.speakerSide?.(who) };
+    // (conduciendo, el globo sale por detrás, abajo: encima tapaba la carretera)
+    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight, side: lv.speakerSide?.(who), below: lv.speakerBelow?.() ?? false };
   }
   for (const f of SPEAKERS[who] ?? []) {
     const p = L[f];
@@ -355,6 +356,7 @@ function startLevel(n: number) {
   levelN = n;
   pauseState.on = false;
   pauseState.title = `Capítulo ${n} · ${LEVELS[n - 1].name}`;
+  pauseState.n = n;
   void buildLevel(n, card).catch((e) => {
     console.warn('[juego] montar capítulo', e);
     loadingLevel = false;

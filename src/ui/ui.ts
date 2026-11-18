@@ -1158,7 +1158,22 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
     t.style.opacity = String(Math.min(1, left / 300));
     const at = wa ? null : speakerAt(who);
     const W = window.innerWidth;
-    if (at && at.y > 90) {
+    if (at && at.below) {
+      // Conduciendo: abajo, por detrás del vehículo, a su lado, con el rabito hacia arriba (la carretera, despejada)
+      const w = t.offsetWidth, h = t.offsetHeight, H = window.innerHeight;
+      const sd = side ?? at.side;
+      const want = sd === 'l' ? at.x - w - 6 : sd === 'r' ? at.x + 6 : at.x - w / 2;
+      const left = Math.min(Math.max(want, 10), W - w - 10);
+      t.style.left = `${left}px`;
+      // (por encima de la barra del viaje y los botones de abajo)
+      const route = root.querySelector('.route') as HTMLElement | null;
+      const rr = route?.getBoundingClientRect();
+      const floor = rr && rr.height > 0 && getComputedStyle(route!).display !== 'none' ? rr.top - 8 : H - 18;
+      t.style.top = `${Math.min(floor, H - 18) - h}px`;
+      t.style.setProperty('--tail-x', `${Math.min(w - 16, Math.max(16, sd === 'l' ? w - 18 : sd === 'r' ? 18 : w / 2))}px`);
+      t.classList.add('anchored', 'below');
+    } else if (at && at.y > 90) {
+      t.classList.remove('below');
       const w = t.offsetWidth, h = t.offsetHeight;
       // De lado (dos que hablan uno junto al otro, como en el coche): el globo se abre hacia su lado y el rabito
       // apunta a quien habla
@@ -1223,7 +1238,7 @@ export function later(fn: () => void, ms: number) {
 }
 
 /** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */
-let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r' } | null = () => null;
+let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r'; below?: boolean } | null = () => null;
 export function setSpeakerResolver(fn: typeof speakerAt) {
   speakerAt = fn;
 }
@@ -1681,8 +1696,10 @@ export function debugPanel(items: DebugItem[]) {
 }
 
 /** Pausa: el bucle principal no hace avanzar el capítulo mientras está abierta. title: el capítulo en marcha. */
-export const pauseState = { on: false, title: '' };
+export const pauseState = { on: false, title: '', n: 0 };
 let pauseOpener: (() => void) | null = null;
+/** El objetivo de la misión en marcha (en la pausa manda sobre el del capítulo). */
+let missionObj = '';
 /** Abre la pausa del capítulo en marcha (al volver de segundo plano, p. ej.). */
 export function openPause() {
   // Con una pantalla de menú delante (el final del capítulo, el mapa) no hay nada que pausar
@@ -1744,11 +1761,25 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
   const openIt = () => {
     if (pause || !top.isConnected || root.querySelector('.screen, .gift-overlay')) return;
     pauseState.on = true;
+    // Como las fichas del menú: la portada del capítulo, su nombre en la letra de los títulos y el botón dorado
     pause = el('div', 'pause');
     const card = el('div', 'pause-card');
-    card.append(el('div', 'ap-kicker', 'Pausa'), el('h2', '', pauseState.title || 'En pausa'));
-    if (lastObj) card.append(el('p', 'pause-obj', `<span>⬆</span>${lastObj}`));
-    const resume = el('button', 'big-btn ap-play', '▶ Seguir');
+    const art = el('div', 'pc-art');
+    const acts = el('div', 'pc-acts');
+    const n = pauseState.n;
+    if (n) {
+      const img = el('img', 'pc-cover') as HTMLImageElement;
+      img.src = COVERS[n - 1];
+      img.alt = '';
+      art.append(img);
+    }
+    const txt = el('div', 'pc-txt');
+    txt.append(el('div', 'hm-chip dark', n ? `Capítulo ${n} · En pausa` : 'En pausa'), el('h2', 'pc-title', n ? LEVELS[n - 1].name : pauseState.title || 'En pausa'));
+    const shownObj = missionObj || lastObj;
+    if (shownObj) txt.append(el('p', 'pause-obj', `<span>✦</span>${shownObj}`));
+    art.append(txt);
+    card.append(art, acts);
+    const resume = el('button', 'hm-btn pc-go', 'Seguir');
     resume.onclick = closePause;
     const sound = el('button', 'ap-setting', '');
     const paintS = () => (sound.innerHTML = `<span>🔊 Sonido</span><i class="ap-switch${audio.muted ? '' : ' on'}"></i>`);
@@ -1759,7 +1790,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     };
     const help = el('button', 'ap-setting', '<span>❓ Cómo se juega</span><span class="ap-st go">›</span>');
     help.onclick = () => howToPlay();
-    card.append(resume, sound, help);
+    acts.append(resume, sound, help);
     if (debugList) {
       const dl = debugList;
       const dbg = el('details', 'pause-debug');
@@ -1774,7 +1805,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
         g.append(b);
       });
       dbg.append(g);
-      card.append(dbg);
+      acts.append(dbg);
     }
     const leave = el('button', 'ap-setting danger', '<span>🗺️ Salir al menú</span>');
     let armed = false;
@@ -1787,7 +1818,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       closePause();
       onMenu();
     };
-    card.append(leave);
+    acts.append(leave);
     pause.append(card);
     pause.onpointerdown = (e) => e.stopPropagation();
     root.append(pause);
@@ -1800,7 +1831,12 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
   if (!mission) pauseOpener = openIt;
   // (los contadores, en la misma barra que el objetivo: una sola fila arriba)
   top.append(obj, counters, el('div', 'spacer'));
-  if (!mission) top.append(menuBtn);
+  // El botón de pausa, aparte y siempre encima: los minijuegos, los chats y las misiones esconden la barra de arriba
+  // (antes, con ella se iba la pausa: en el vóley o el agility del último capítulo no había forma de pausar)
+  if (!mission) {
+    menuBtn.classList.add('pause-fab');
+    root.append(menuBtn);
+  }
 
   const act = el('button', 'action-btn hidden' + (mission ? ' m-hud' : ''));
   act.onpointerdown = (e) => {
@@ -1817,6 +1853,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     setObjective: (t) => {
       if (t === lastObj) return;
       lastObj = t;
+      if (mission) missionObj = t;
       objText.textContent = t;
       obj.classList.toggle('empty', !t);
       textShown = false;
@@ -1859,10 +1896,12 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       clearTimeout(objTimer);
       closePause();
       if (pauseOpener === openIt) pauseOpener = null;
+      if (mission) missionObj = '';
       top.remove();
       counters.remove();
       act.remove();
       hint.remove();
+      menuBtn.remove();
     },
   };
 }
