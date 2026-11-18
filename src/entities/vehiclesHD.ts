@@ -50,9 +50,11 @@ function paint(color: number) {
 export function seated(look: PersonLook, scale: number, hands: number) {
   const p = makeRigPerson(look, scale, new THREE.Object3D());
   p.rig!.force = { legL: 1, legR: 1, armL: 1, armR: 1 };
-  p.legL.rotation.set(-1.45, 0, -0.08);
-  p.legR.rotation.set(-1.45, 0, 0.08);
-  p.kneeL.rotation.x = p.kneeR.rotation.x = 1.35;
+  // Las piernas hacia delante, al hueco de los pedales, como en un asiento de coche: con las rodillas dobladas en
+  // vertical los pies bajaban del suelo del coche y asomaban por debajo de la carrocería
+  p.legL.rotation.set(-1.38, 0, -0.08);
+  p.legR.rotation.set(-1.38, 0, 0.08);
+  p.kneeL.rotation.x = p.kneeR.rotation.x = 0.72;
   p.armL.rotation.set(-hands, 0, -0.05);
   p.armR.rotation.set(-hands, 0, 0.05);
   p.elbowL.rotation.x = p.elbowR.rotation.x = -0.6;
