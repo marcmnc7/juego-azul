@@ -520,6 +520,8 @@ if (TEST)
         return canvas.toDataURL('image/png');
       },
       skip: dbgSkip,
+      /** Anima a los personajes un paso (con la página oculta el bucle casi no corre). */
+      rig: (dt = 0.033) => updateRigPeople(dt),
       /** Abre el capítulo n y pasa la introducción. */
       go: async (n: number) => {
         startLevel(n);

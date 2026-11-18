@@ -657,14 +657,15 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
   const back = el('button', 'cp-back', '‹');
   back.setAttribute('aria-label', 'Volver');
   const body = el('main', 'cp-body');
-  const facts = el('div', 'cp-facts');
-  facts.append(el('div', 'cp-fact', `<b>${doneIt ? '✓' : '✦'}</b><span>${doneIt ? 'Completado' : 'Por estrenar'}</span>`));
-  if (kp.length) facts.append(el('div', 'cp-fact', `<b>${found}/${kp.length}</b><span>Recuerdos escondidos</span>`));
-  if (photos.length) facts.append(el('div', 'cp-fact', `<b>${doneIt || opts.test ? photos.length : '?'}</b><span>${photos.length === 1 ? 'Recuerdo' : 'Recuerdos'} para el álbum</span>`));
-  body.append(facts);
-  const teaser = TEASERS[id];
-  if (teaser) body.append(el('p', 'cp-quote', teaser.startsWith('«') ? teaser : `«${teaser}»`));
-  // Su regalo, si ya lo ha ganado: el vale de papel con su talón
+  // Lo que se lleva de este capítulo, en una lista, y cómo se completa
+  body.append(el('div', 'cp-kicker', doneIt ? 'Lo que te llevaste' : 'Lo que te llevas'));
+  const list = el('div', 'cp-list');
+  const item = (icon: string, title: string, sub: string, cls = '') => {
+    const r = el('div', 'cp-item ' + cls);
+    r.append(el('div', 'cp-ico', icon), el('div', 'cp-item-txt', `<b>${title}</b><span>${sub}</span>`));
+    list.append(r);
+    return r;
+  };
   const gift = GIFTS.find((g) => g.level === id && save.giftsUnlocked.includes(g.id));
   if (gift) {
     const ticket = el('div', 'wn-ticket cp-ticket');
@@ -673,13 +674,16 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     const main = el('div', 'wn-tmain');
     main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle', gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
     ticket.append(stub, main);
-    body.append(ticket);
+    list.append(ticket);
   } else if (GIFTS.some((g) => g.level === id)) {
-    // Aún sin ganar: el sobre cerrado, para que se sepa que hay algo esperando
-    const sealed = el('div', 'cp-sealed');
-    sealed.append(el('div', 'cp-seal', '♥'), el('div', 'cp-sealed-txt', '<b>Un regalo de verdad</b><span>Te espera al terminar este capítulo</span>'));
-    body.append(sealed);
+    const r = item('♥', 'Un regalo de verdad', 'Se abre al terminar el capítulo', 'sealed');
+    r.querySelector('.cp-ico')!.classList.add('seal');
   }
+  if (photos.length) item('📸', `${photos.length} ${photos.length === 1 ? 'recuerdo' : 'recuerdos'} para tu álbum`, doneIt ? 'Ya están en el álbum' : 'De aquellos días: se guardan al terminar');
+  if (kp.length) item('✨', `${kp.length} recuerdos escondidos`, `${found} de ${kp.length} encontrados · polaroids que brillan por el escenario`);
+  if (doneIt) item('✓', 'Completado', 'Puedes volver a jugarlo cuando quieras', 'done');
+  body.append(list);
+  if (!doneIt) body.append(el('p', 'cp-how', 'Cómo se juega: explora, habla con la gente y sigue la historia. Si te pierdes, al rato sale una flecha.'));
   const play = el('button', 'hm-btn cp-play', doneIt ? 'Volver a jugar' : 'Jugar');
   const foot = el('div', 'cp-foot');
   foot.append(play);

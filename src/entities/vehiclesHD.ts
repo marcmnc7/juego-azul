@@ -55,6 +55,8 @@ export function seated(look: PersonLook, scale: number, hands: number) {
   p.legL.rotation.set(-1.38, 0, -0.08);
   p.legR.rotation.set(-1.38, 0, 0.08);
   p.kneeL.rotation.x = p.kneeR.rotation.x = 0.72;
+  // (y las espinillas y los pies, recogidos: desde fuera no se ven, y así nunca asoman bajo la carrocería)
+  for (const b of ['LeftLeg', 'RightLeg']) p.rig?.bones.get(b)?.scale.setScalar(0.45);
   p.armL.rotation.set(-hands, 0, -0.05);
   p.armR.rotation.set(-hands, 0, 0.05);
   p.elbowL.rotation.x = p.elbowR.rotation.x = -0.6;
