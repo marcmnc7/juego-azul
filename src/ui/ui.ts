@@ -636,32 +636,65 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   body.append(list);
 }
 
+/**
+ * La ficha de un capítulo, a pantalla completa y con el aire de la home (antes, un panel que subía desde abajo): la
+ * portada grande con su nombre, lo que lleva hecho, una frase de lo que viene, su vale si ya lo ha ganado y Jugar.
+ */
 function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
   const lv = LEVELS[id - 1];
   const doneIt = save.levelsDone.includes(id);
-  sheet((b, close) => {
-    const kp = keepsakesFor(id);
-    const found = kp.filter((k) => save.found?.includes(k.id)).length;
-    const photos = memoriesFor(id);
-    const img = el('img', 'hm-sheet-img') as HTMLImageElement;
-    img.src = COVERS[id - 1];
-    img.alt = '';
-    b.append(img, el('div', 'hm-chip dark', `Capítulo ${id} · ${longDate(openDay(id - 1))}`), el('h2', 'hm-sheet-title', lv.name), el('p', 'hm-sheet-place', lv.place));
-    const facts = el('div', 'ap-facts');
-    facts.append(el('div', '', `<b>${doneIt ? '✓' : '—'}</b><span>${doneIt ? 'Completado' : 'Sin jugar'}</span>`));
-    if (kp.length) facts.append(el('div', '', `<b>${found}/${kp.length}</b><span>Recuerdos escondidos</span>`));
-    if (photos.length) facts.append(el('div', '', `<b>${doneIt || opts.test ? photos.length : '?'}</b><span>Fotos para el álbum</span>`));
-    b.append(facts);
-    // Su regalo, si ya lo ha ganado
-    const gift = GIFTS.find((g) => g.level === id && save.giftsUnlocked.includes(g.id));
-    if (gift) b.append(voucher(gift));
-    const play = el('button', 'hm-btn', doneIt ? 'Volver a jugar' : 'Jugar');
-    play.onclick = () => {
-      close();
-      opts.onPlay(id);
-    };
-    b.append(play);
-  }, 'hm-sheet');
+  const kp = keepsakesFor(id);
+  const found = kp.filter((k) => save.found?.includes(k.id)).length;
+  const photos = memoriesFor(id);
+  const o = el('div', 'screen cp-screen');
+  const hero = el('header', 'cp-hero');
+  const img = el('img', 'cp-cover') as HTMLImageElement;
+  img.src = COVERS[id - 1];
+  img.alt = '';
+  const ht = el('div', 'cp-hero-txt');
+  ht.append(el('div', 'cp-chip', `Capítulo ${id} · ${longDate(openDay(id - 1))}`), el('h1', 'cp-title', lv.name), el('p', 'cp-place', lv.place));
+  hero.append(img, el('div', 'cp-shade'), ht);
+  const back = el('button', 'cp-back', '‹');
+  back.setAttribute('aria-label', 'Volver');
+  const body = el('main', 'cp-body');
+  const facts = el('div', 'cp-facts');
+  facts.append(el('div', 'cp-fact', `<b>${doneIt ? '✓' : '✦'}</b><span>${doneIt ? 'Completado' : 'Por estrenar'}</span>`));
+  if (kp.length) facts.append(el('div', 'cp-fact', `<b>${found}/${kp.length}</b><span>Recuerdos escondidos</span>`));
+  if (photos.length) facts.append(el('div', 'cp-fact', `<b>${doneIt || opts.test ? photos.length : '?'}</b><span>${photos.length === 1 ? 'Recuerdo' : 'Recuerdos'} para el álbum</span>`));
+  body.append(facts);
+  const teaser = TEASERS[id];
+  if (teaser) body.append(el('p', 'cp-quote', teaser.startsWith('«') ? teaser : `«${teaser}»`));
+  // Su regalo, si ya lo ha ganado: el vale de papel con su talón
+  const gift = GIFTS.find((g) => g.level === id && save.giftsUnlocked.includes(g.id));
+  if (gift) {
+    const ticket = el('div', 'wn-ticket cp-ticket');
+    const stub = el('div', 'wn-stub');
+    stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(id).padStart(2, '0')}`));
+    const main = el('div', 'wn-tmain');
+    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle', gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    ticket.append(stub, main);
+    body.append(ticket);
+  } else if (GIFTS.some((g) => g.level === id)) {
+    // Aún sin ganar: el sobre cerrado, para que se sepa que hay algo esperando
+    const sealed = el('div', 'cp-sealed');
+    sealed.append(el('div', 'cp-seal', '♥'), el('div', 'cp-sealed-txt', '<b>Un regalo de verdad</b><span>Te espera al terminar este capítulo</span>'));
+    body.append(sealed);
+  }
+  const play = el('button', 'hm-btn cp-play', doneIt ? 'Volver a jugar' : 'Jugar');
+  const foot = el('div', 'cp-foot');
+  foot.append(play);
+  body.append(foot);
+  const close = () => {
+    o.classList.add('out');
+    setTimeout(() => o.remove(), 220);
+  };
+  back.onclick = close;
+  play.onclick = () => {
+    o.remove();
+    opts.onPlay(id);
+  };
+  o.append(hero, body, back);
+  root.append(o);
 }
 
 function albumTab(body: HTMLElement, save: SaveData, test: boolean) {
@@ -1006,15 +1039,6 @@ function polaroid(m: Memory, tilt: number, withCaption = true) {
 
 
 /** Al acabar un capítulo: sus fotos caen sobre la mesa y pasan al álbum. */
-function voucher(g: Gift, locked = false) {
-  const v = el('div', 'voucher' + (locked ? ' locked' : ''));
-  if (locked) {
-    v.append(el('div', 'label', 'Bloqueado'), el('div', 'icon', '❔'), el('h2', '', '???'), el('p', '', 'Sigue jugando para descubrirlo.'));
-  } else {
-    v.append(el('div', 'label', 'Vale regalo'), el('div', 'icon', g.icon), el('h2', '', g.title), el('p', '', g.description), el('div', 'redeem', g.howToRedeem));
-  }
-  return v;
-}
 
 /** Confeti de papel por CSS sobre la interfaz. */
 function cssConfetti(parent: HTMLElement, n = 70) {
@@ -1159,19 +1183,18 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
     const at = wa ? null : speakerAt(who);
     const W = window.innerWidth;
     if (at && at.below) {
-      // Conduciendo: abajo, por detrás del vehículo, a su lado, con el rabito hacia arriba (la carretera, despejada)
+      // Conduciendo: pegado al vehículo, a su lado y a la altura de la carrocería, con el rabito hacia el asiento de
+      // quien habla (ni encima del coche ni lejos: la carretera de delante, despejada)
       const w = t.offsetWidth, h = t.offsetHeight, H = window.innerHeight;
-      const sd = side ?? at.side;
-      const want = sd === 'l' ? at.x - w - 6 : sd === 'r' ? at.x + 6 : at.x - w / 2;
-      const left = Math.min(Math.max(want, 10), W - w - 10);
+      const sd = side ?? at.side ?? 'r';
+      const gap = 34; // del asiento al borde del coche, más un respiro
+      const want = sd === 'l' ? at.x - gap - w : at.x + gap;
+      const left = Math.min(Math.max(want, 8), W - w - 8);
       t.style.left = `${left}px`;
-      // (por encima de la barra del viaje y los botones de abajo)
-      const route = root.querySelector('.route') as HTMLElement | null;
-      const rr = route?.getBoundingClientRect();
-      const floor = rr && rr.height > 0 && getComputedStyle(route!).display !== 'none' ? rr.top - 8 : H - 18;
-      t.style.top = `${Math.min(floor, H - 18) - h}px`;
-      t.style.setProperty('--tail-x', `${Math.min(w - 16, Math.max(16, sd === 'l' ? w - 18 : sd === 'r' ? 18 : w / 2))}px`);
-      t.classList.add('anchored', 'below');
+      t.style.top = `${Math.min(Math.max(at.y + 6 - h / 2, 70), H - h - 10)}px`;
+      t.style.setProperty('--tail-y', `${Math.min(h - 12, Math.max(12, at.y + 6 - (Math.min(Math.max(at.y + 6 - h / 2, 70), H - h - 10))))}px`);
+      t.classList.remove('to-l', 'to-r');
+      t.classList.add('anchored', 'below', sd === 'l' ? 'to-r' : 'to-l');
     } else if (at && at.y > 90) {
       t.classList.remove('below');
       const w = t.offsetWidth, h = t.offsetHeight;

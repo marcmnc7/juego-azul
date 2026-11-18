@@ -1844,9 +1844,13 @@ html, body { background: #000; }
 .wn-ct-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 10px 10px 8px; border-radius: 14px; background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
 .wn-ct-cell b { font: 600 clamp(26px, 6vh + 6px, 38px)/1 var(--serif); color: var(--warm); font-variant-numeric: tabular-nums; }
 .wn-ct-cell span { font: 800 10px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 248, 236, .6); }
-/* Conduciendo: el globo abajo, por detrás del vehículo, con el rabito hacia arriba */
-.comic-mode .bark.anchored.below::before { top: auto; bottom: calc(100% - 1px); border-width: 0 7px 13px 7px; border-color: transparent transparent var(--ink-c) transparent; }
-.comic-mode .bark.anchored.below::after { top: auto; bottom: calc(100% - 4px); border-width: 0 4px 9px 4px; border-color: transparent transparent var(--paper-c) transparent; }
+/* Conduciendo: el globo pegado al vehículo, a su lado, con el rabito de lado hacia el asiento */
+.comic-mode .bark.anchored.below::before, .comic-mode .bark.anchored.below::after { left: auto; right: auto; top: var(--tail-y, 50%); bottom: auto; margin-left: 0; }
+.comic-mode .bark.anchored.below.to-r::before { left: calc(100% - 1px); margin-top: -7px; border-width: 7px 0 7px 13px; border-color: transparent transparent transparent var(--ink-c); }
+.comic-mode .bark.anchored.below.to-r::after { left: calc(100% - 4px); margin-top: -4px; border-width: 4px 0 4px 9px; border-color: transparent transparent transparent var(--paper-c); }
+.comic-mode .bark.anchored.below.to-l::before { right: calc(100% - 1px); margin-top: -7px; border-width: 7px 13px 7px 0; border-color: transparent var(--ink-c) transparent transparent; }
+.comic-mode .bark.anchored.below.to-l::after { right: calc(100% - 4px); margin-top: -4px; border-width: 4px 9px 4px 0; border-color: transparent var(--paper-c) transparent transparent; }
+.comic-mode .bark.below { max-width: min(210px, 30vw); }
 
 /* =====================================================================================================
    Pausa (noviembre de 2026): el botón siempre a mano y la tarjeta como las fichas del menú.
@@ -1879,3 +1883,53 @@ html, body { background: #000; }
   .pause-card { grid-template-columns: 1fr; width: min(420px, 100%); }
   .pc-cover { aspect-ratio: 16 / 9; flex: none; }
 }
+
+/* =====================================================================================================
+   Ficha de capítulo (noviembre de 2026): a pantalla completa, con el aire de la home.
+   ===================================================================================================== */
+.screen.cp-screen {
+  display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-items: stretch; align-content: start; padding: 0; gap: 0; text-align: left; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: var(--night); color: var(--cream); z-index: 40; animation: cpIn .32s cubic-bezier(.2, .8, .2, 1) both;
+}
+.screen.cp-screen::before { display: none; }
+.screen.cp-screen.out { opacity: 0; transform: translateX(24px); transition: opacity .2s ease, transform .2s ease; }
+@keyframes cpIn { from { opacity: 0; transform: translateX(28px); } }
+.cp-hero { position: relative; width: 100%; height: 54dvh; min-height: 260px; overflow: hidden; }
+.cp-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: hmKen 18s ease-in-out infinite alternate; }
+.cp-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12, 22, 38, .35) 0%, rgba(12, 22, 38, 0) 30%, rgba(12, 22, 38, .55) 66%, var(--night) 100%); }
+.cp-hero-txt { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(22px, env(safe-area-inset-left)) 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.cp-chip { padding: 6px 12px; border-radius: 999px; font: 800 11px/1 var(--font); letter-spacing: .16em; text-transform: uppercase; color: #3a2408; background: linear-gradient(180deg, #ffd98e, #f6b252); }
+.screen h1.cp-title, .cp-title { margin: 0; font: 600 clamp(32px, 9vw, 46px)/1.02 var(--serif); letter-spacing: -.01em; color: var(--cream); -webkit-text-stroke: 0; text-shadow: 0 2px 20px rgba(0, 0, 0, .35); }
+.screen p.cp-place, .cp-place { margin: 0; font: 700 14px/1.35 var(--font); color: rgba(255, 248, 236, .75); text-shadow: none; }
+.cp-back {
+  position: fixed; z-index: 41; top: calc(env(safe-area-inset-top) + 12px); left: max(14px, env(safe-area-inset-left));
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; padding-bottom: 3px;
+  font: 400 30px/1 var(--serif); color: var(--cream); background: rgba(12, 22, 38, .45); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+.cp-body { display: flex; flex-direction: column; justify-content: flex-start; gap: 14px; width: 100%; box-sizing: border-box; padding: 8px max(22px, env(safe-area-inset-right)) 0 max(22px, env(safe-area-inset-left)); }
+.cp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.cp-fact { display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 11px; border-radius: 16px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+.cp-fact b { font: 600 24px/1 var(--serif); color: var(--warm); }
+.cp-fact span { font: 800 10.5px/1.25 var(--font); letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 248, 236, .6); }
+.screen p.cp-quote, .cp-quote { margin: 2px 0 0; font: italic 500 clamp(18px, 4.6vw, 22px)/1.35 var(--serif); color: rgba(255, 248, 236, .88); text-shadow: none; }
+.wn-ticket.cp-ticket { position: relative; opacity: 1; transform: none; pointer-events: auto; width: 100%; min-height: 0; animation: none; }
+.cp-ticket .wn-tmain { padding: 14px 16px 14px 20px; }
+.cp-ticket .wn-ttitle { font-size: 21px; }
+.screen p.wn-tdesc { color: #5a4630; text-shadow: none; }
+.cp-foot { position: sticky; bottom: 0; margin-top: auto; padding: 14px 0 max(18px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(12, 22, 38, 0), var(--night) 36%); }
+.cp-foot .hm-btn.cp-play { width: 100%; max-width: none; margin: 0; }
+/* En horizontal: la portada a la izquierda, a toda altura, y lo demás a la derecha */
+@media (orientation: landscape) {
+  .screen.cp-screen { grid-template-rows: none; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); overflow: hidden; }
+  .cp-hero { height: 100dvh; min-height: 0; }
+  .cp-shade { background: linear-gradient(180deg, rgba(12, 22, 38, .3) 0%, rgba(12, 22, 38, 0) 30%, rgba(12, 22, 38, .75) 100%), linear-gradient(90deg, rgba(12, 22, 38, 0) 70%, var(--night) 100%); }
+  .cp-hero-txt { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .cp-body { overflow-y: auto; padding-top: max(18px, env(safe-area-inset-top)); }
+  .cp-title { font-size: clamp(28px, 6vh + 10px, 44px); }
+}
+.cp-sealed { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: linear-gradient(135deg, #f7eedc, #ecdcbf); color: #3a2a18; box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .7); }
+.cp-seal { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 900 18px/1 var(--font); color: #f6c7c7; background: radial-gradient(circle at 35% 30%, #d84a55, #9c1f2c); box-shadow: 0 2px 0 rgba(0, 0, 0, .25), inset 0 0 0 3px rgba(255, 255, 255, .12); }
+.cp-sealed-txt { display: flex; flex-direction: column; gap: 2px; }
+.cp-sealed-txt b { font: 600 18px/1.15 var(--serif); color: #2f2210; }
+.cp-sealed-txt span { font: 700 13px/1.3 var(--font); color: #7a5a3a; }
