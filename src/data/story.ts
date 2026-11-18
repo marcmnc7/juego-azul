@@ -651,6 +651,16 @@ export const MOTO = {
     missed: 'Te ha saludado… ¡y tú nada!',
   },
   photoHint: '📷 ¡Foto!',
+  /** En cada apartadero de ida, ya parados: ella, antes de arrancar (lo pidió Marc), y Gas si no hace la foto. */
+  bayGo: 'Qué bonito… ¡Vámonos!',
+  bayNag: '¿No le haces una foto?',
+  /** El túnel: el brrruuum de dentro (inventado salvo la idea). */
+  tunnel: {
+    warn: 'Túnel. Ya sabes lo que toca dentro…',
+    btn: '🏍️ ¡Brrruuum!',
+    ok: '¡JAJAJA! ¡Cómo retumba!',
+    miss: '¡Eh! En los túneles se hace brrruuum. Otra vez.',
+  },
   /** (ella, al sacar la foto en un mirador) [inventadas] */
   photoOk: ['¡Qué bonito! 📷', 'Otra para el álbum.', 'Esta es la buena.'],
   /** (Gas, cuando no le acompañas en la curva) [inventadas] */
@@ -677,8 +687,8 @@ export const MOTO = {
     meh: 'Bueno… se intuye el faro.',
   },
   /** Media vuelta y a la cala (pasos nuevos). [inventadas] */
-  uturn: 'Media vuelta. Aquí al lado baja un camino a una cala.',
-  calaStop: 'Aquí. Se baja a pie por el Camí de Ronda.',
+  uturn: 'Media vuelta. ¿Has visto antes ese campo de rosas?',
+  calaStop: 'Aquí, junto a las rosas. Paramos un rato.',
   back: [
     { who: 'Narrador', text: 'Esa noche, cena y helado en L’Escala. Con el conjunto de paseo, claro.' },
     { who: 'Narrador', text: 'El lunes por la mañana devolvéis la moto.' },
@@ -949,6 +959,24 @@ export const SIDE = {
     bump: '¡Cuidado, que pasamos!',
     few: [{ who: 'Margaux', text: '¿Una? ¿Y la tuya? Anda, otra ronda.' }] as Line[],
     done: (n: number) => [{ who: 'Margaux', text: n === 3 ? '¡Las tres y sin derramar! Esta de más, para luego.' : 'Dos de tres. Una para cada uno, perfecto.' }] as Line[],
+  },
+  /** Cap. 5: las fotos en el campo de rosas (lo de pararse a hacerle fotos pasó; las frases, inventadas). */
+  roses: {
+    start: [
+      { who: 'Narrador', text: 'De vuelta, una planicie entera llena de rosas de colores.' },
+      { who: 'Margaux', text: '¡Para, para, para! ¡Hazme fotos aquí!' },
+      { who: 'Gas', text: 'Tú posa, que yo disparo.' },
+    ] as Line[],
+    hint: 'Apunta arrastrando · dispara cuando pose',
+    btn: '📸 Disparar',
+    ok: ['¡Esa! Esa me la quedo.', '¡Qué bien sale el fondo!', '¡Perfecta! Ya tienes foto de perfil.'],
+    blur: '¡Que me estaba moviendo! Espera a que pose.',
+    cut: '¡Me has cortado! Encuádrame bien.',
+    poseName: { arriba: '🌹 ¡Brazos arriba!', cadera: '🌹 Mano en la cadera', beso: '🌹 Un beso', rosa: '🌹 Con una rosa', saludo: '🌹 ¡Hola!' } as Record<string, string>,
+    end: [
+      { who: 'Margaux', text: 'A ver, a ver… ¡Me encantan! Mándamelas todas.' },
+      { who: 'Gas', text: 'Venga, que se nos hace de noche.' },
+    ] as Line[],
   },
   stones: {
     start: [

@@ -1,4 +1,4 @@
-import { StoneSkip } from './sideGames';
+import { RoseShoot } from './sideGames';
 import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
@@ -44,8 +44,6 @@ const BRAKE = 3.2;
 const BRAKE_MAX = 5;
 /** Aceleración lateral cómoda en curva: en las cerradas frena. */
 const LAT_G = 3.6;
-/** En los miradores, despacio para que dé tiempo a la foto. */
-const PHOTO_V = 6.5;
 /** Medio ancho del asfalto: carril de 3 m y arcén de 0,6. La línea de borde, de 3,0 a 3,12. */
 const HALF = 3.6;
 const EDGE = 3.0;
@@ -66,6 +64,9 @@ const CALA_AT = 0.9;
 /** Apartaderos: medio largo (con 4 m de cuña a cada lado) y cuánto se abren hacia el mar. */
 const BAY_HALF = 13;
 const BAY_W = 3.4;
+/** El túnel (corto, en la ladera): dentro hay que darle al botón para el brrruuum. */
+const TUNNEL_AT = 0.4;
+const TUNNEL_LEN = 30;
 /** Dónde sopla la tramontana. */
 const WIND_AT = 0.58;
 const WIND_SECS = 11;
@@ -114,6 +115,20 @@ const barkTime = (text: string) => (2100 + Math.min(2400, text.length * 55)) / 1
 const isGas = (who: string) => /^(Gas|Marc)$/.test(who);
 const isAzul = (who: string) => /^(Azul|Margaux)$/.test(who);
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * Para apoyar cosas en una roca: devuelve la altura más baja de la roca bajo una planta cuadrada de medio lado h
+ * centrada en (x, z) (el centro y las cuatro esquinas), o -3 si no hay roca debajo (agua).
+ */
+function groundProbe(mesh: THREE.Object3D) {
+  mesh.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 200);
+  const at = (x: number, z: number) => {
+    ray.ray.origin.set(x, 100, z);
+    return ray.intersectObject(mesh, false)[0]?.point.y ?? -3;
+  };
+  return (x: number, z: number, h: number) => Math.min(at(x, z), at(x - h, z - h), at(x + h, z - h), at(x - h, z + h), at(x + h, z + h));
+}
 
 interface Oncoming {
   kind: 'moto' | 'car';
@@ -164,6 +179,14 @@ export class LevelMoto implements Level {
   private wobbleT = 0;
   private photos = 0;
   private photoTaken = PHOTO_AT.map(() => false);
+  /** Los apartaderos de ida: Gas para en cada uno; cuando ella dice «¡Vámonos!», se sale. bayStop: en cuál está parado. */
+  private bayGone = PHOTO_AT.map(() => false);
+  private bayStop = -1;
+  private bayNagT = 0;
+  /** El túnel: si ya se hizo el brrruuum, si Gas ya avisó, y la vuelta atrás en marcha. */
+  private tunnelDone = false;
+  private tunnelSaid = false;
+  private tunnelBack = false;
   private oncoming: Oncoming[] = [];
   private nextEv = 0;
   private waves = 0;
@@ -373,6 +396,8 @@ export class LevelMoto implements Level {
           tri(prev[0], cur[2], cur[0], prev[0], prev[2], cur[2]);
         }
       }
+      // (los extremos del prisma, cerrados por las dos caras: si no, en un hueco del pretil se veía por dentro)
+      if (y1 > y0 && (i === 0 || i === n)) tri(cur[0], cur[1], cur[3], cur[0], cur[3], cur[2], cur[0], cur[3], cur[1], cur[0], cur[2], cur[3]);
       prev = cur;
     }
     const g = new THREE.BufferGeometry();
@@ -502,7 +527,7 @@ export class LevelMoto implements Level {
       const yaw = Math.atan2(r.rz, -r.rx);
       // Bionda del lado del mar: un tramo seguido hasta la muestra siguiente, con su poste (abierta en los apartaderos)
       const r2 = ringAt(i + 2);
-      if (!this.inBay(mi, 1) && !this.inBay(r2.u * L, 1)) {
+      if (!this.inBay(mi, 1) && !this.inBay(r2.u * L, 1) && !this.inTunnel(mi, 2) && !this.inTunnel(r2.u * L, 2)) {
         const ax = r.x + r.rx * 4.6, az = r.z + r.rz * 4.6, bx = r2.x + r2.rx * 4.6, bz = r2.z + r2.rz * 4.6;
         md.add(G.box, RAIL_POST, ax, 0.35, az, 0, yaw, 0, 0.08, 0.7, 0.08);
         md.add(G.box, RAIL, (ax + bx) / 2, 0.6, (az + bz) / 2, 0, Math.atan2(bx - ax, bz - az), 0, 0.05, 0.22, Math.hypot(bx - ax, bz - az) + 0.04);
@@ -594,36 +619,52 @@ export class LevelMoto implements Level {
     {
       const r = ringAt(Math.floor(SAMPLES * 0.72));
       const cx = r.x + r.rx * 70, cz = r.z + r.rz * 70;
-      md.add(G.rock2, 0x6f6a62, cx, -3, cz, 0, 0.4, 0, 60, 14, 40);
+      // (la roca, medida: cada casa se apoya donde está la roca de verdad, en el punto más bajo de su planta y
+      // metida un poco; antes, a una altura a ojo, quedaban flotando por los lados de la isla)
+      const isle = new Merger().add(G.rock2, 0x6f6a62, cx, -3, cz, 0, 0.4, 0, 60, 14, 40);
+      const isleMesh = isle.mesh();
+      sc.add(isleMesh);
+      const top = groundProbe(isleMesh);
       for (let k = 0; k < 26; k++) {
         const a = (k / 26) * Math.PI * 2;
         const rr2 = 6 + (k % 5) * 3.5;
         const hx = cx + Math.cos(a) * rr2 * 1.3, hz = cz + Math.sin(a) * rr2 * 0.8;
-        const hy = 3.2 + (1 - rr2 / 22) * 4;
-        md.add(G.box, 0xf6f1e6, hx, hy, hz, 0, a, 0, 3.4, 3.6 + (k % 3), 3.2);
-        md.add(G.box, 0xb8623e, hx, hy + 2 + (k % 3) * 0.5, hz, 0, a, 0, 3.6, 0.3, 3.4);
+        const base = top(hx, hz, 2);
+        if (base < 0.6) continue; // (en la orilla, al agua: ahí no va casa)
+        const h = 3.6 + (k % 3);
+        md.add(G.box, 0xf6f1e6, hx, base - 1 + (h + 1) / 2, hz, 0, a, 0, 3.4, h + 1, 3.2);
+        md.add(G.box, 0xb8623e, hx, base + h + 0.1, hz, 0, a, 0, 3.6, 0.3, 3.4);
       }
-      md.add(G.box, 0xf6f1e6, cx, 10, cz, 0, 0, 0, 5, 7, 9);
-      md.add(G.box, 0xf6f1e6, cx + 2, 14.5, cz - 4, 0, 0, 0, 2.4, 9, 2.4);
-      md.add(G.box, 0x3a3a3a, cx + 2, 17, cz - 5.21, 0, 0, 0, 0.9, 1.4, 0.05);
+      const cb = top(cx, cz, 4.5);
+      md.add(G.box, 0xf6f1e6, cx, cb - 1 + 4, cz, 0, 0, 0, 5, 8, 9);
+      md.add(G.box, 0xf6f1e6, cx + 2, cb + 7.5, cz - 4, 0, 0, 0, 2.4, 9, 2.4);
+      md.add(G.box, 0x3a3a3a, cx + 2, cb + 10, cz - 5.21, 0, 0, 0, 0.9, 1.4, 0.05);
     }
     // Cap de Creus: faro blanco sobre las rocas, al final de la carretera. De día, apagado
     const end = ringAt(SAMPLES);
     const fx = end.x + end.rx * 14 + 10, fz = end.z + end.rz * 14 + 16;
     // El faro real: edificio blanco alargado de dos plantas con la torre cuadrada en medio y la linterna
     // encima, sobre el promontorio de pizarra gris que cae al mar
-    this.lighthouse.set(fx, 13, fz);
-    md.add(G.rock2, 0x6f6a62, fx, -2, fz, 0, 0.3, 0, 30, 18, 24);
-    md.add(G.rock2, 0x7d766b, (fx + end.x) / 2, -3, (fz + end.z) / 2, 0, 1.1, 0, 22, 12, 18);
-    md.add(G.rock, 0x6f6a62, fx + 12, -1, fz - 6, 0, 0.7, 0, 9, 6, 8);
-    md.add(G.box, 0xf6f1e6, fx, 9.6, fz, 0, 0, 0, 11, 5, 5.5);
-    md.add(G.box, 0xe9dcc2, fx, 12.2, fz, 0, 0, 0, 11.4, 0.3, 5.9);
-    for (let k = 0; k < 4; k++) for (const sz of [-1, 1]) md.add(G.box, 0x2f6b46, fx - 4.2 + k * 2.8, 9.8, fz + sz * 2.77, 0, 0, 0, 0.9, 1.5, 0.05);
-    md.add(G.box, 0xf6f1e6, fx, 14.6, fz, 0, 0, 0, 2.6, 4.6, 2.6);
-    md.add(G.box, 0xe9dcc2, fx, 17, fz, 0, 0, 0, 3.2, 0.3, 3.2);
-    md.add(G.cyl, LANTERN, fx, 17.9, fz, 0, 0, 0, 1.5, 1.5, 1.5);
-    md.add(G.cyl, LANTERN_TOP, fx, 18.9, fz, 0, 0, 0, 1.7, 0.5, 1.7);
-    md.add(G.cone, LANTERN_TOP, fx, 19.4, fz, 0, Math.PI / 4, 0, 1.6, 0.6, 1.6);
+    const prom = new Merger()
+      .add(G.rock2, 0x6f6a62, fx, -2, fz, 0, 0.3, 0, 30, 18, 24)
+      .add(G.rock2, 0x7d766b, (fx + end.x) / 2, -3, (fz + end.z) / 2, 0, 1.1, 0, 22, 12, 18)
+      .add(G.rock, 0x6f6a62, fx + 12, -1, fz - 6, 0, 0.7, 0, 9, 6, 8);
+    const promMesh = prom.mesh();
+    sc.add(promMesh);
+    // (el edificio, apoyado en la roca de verdad: en lo más bajo de su planta, con un zócalo de piedra que entra
+    // en la roca; antes, a 7 m a ojo, se quedaba flotando)
+    const fb = groundProbe(promMesh)(fx, fz, 5.5);
+    const dy = fb - 7.1;
+    this.lighthouse.set(fx, 13 + dy, fz);
+    md.add(G.box, 0x8f877a, fx, fb - 1.2, fz, 0, 0, 0, 12, 2.6, 6.6); // zócalo
+    md.add(G.box, 0xf6f1e6, fx, 9.6 + dy, fz, 0, 0, 0, 11, 5, 5.5);
+    md.add(G.box, 0xe9dcc2, fx, 12.2 + dy, fz, 0, 0, 0, 11.4, 0.3, 5.9);
+    for (let k = 0; k < 4; k++) for (const sz of [-1, 1]) md.add(G.box, 0x2f6b46, fx - 4.2 + k * 2.8, 9.8 + dy, fz + sz * 2.77, 0, 0, 0, 0.9, 1.5, 0.05);
+    md.add(G.box, 0xf6f1e6, fx, 14.6 + dy, fz, 0, 0, 0, 2.6, 4.6, 2.6);
+    md.add(G.box, 0xe9dcc2, fx, 17 + dy, fz, 0, 0, 0, 3.2, 0.3, 3.2);
+    md.add(G.cyl, LANTERN, fx, 17.9 + dy, fz, 0, 0, 0, 1.5, 1.5, 1.5);
+    md.add(G.cyl, LANTERN_TOP, fx, 18.9 + dy, fz, 0, 0, 0, 1.7, 0.5, 1.7);
+    md.add(G.cone, LANTERN_TOP, fx, 19.4 + dy, fz, 0, Math.PI / 4, 0, 1.6, 0.6, 1.6);
     // Montañas al fondo
     for (let i = 0; i < 10; i++) {
       const r = ringAt(Math.floor((i / 10) * SAMPLES));
@@ -632,8 +673,73 @@ export class LevelMoto implements Level {
       // Bosque de encinas y pinos por la ladera
       for (let k = 0; k < 6; k++) md.add(G.bush, k % 2 ? 0x4d6e3a : 0x5a7a40, r.x + r.rx * (d + 12 + k * 4) + Math.sin(k * 2.1 + i) * 18, 6 + (k % 3) * 4, r.z + r.rz * (d + 12 + k * 4) + Math.cos(k * 1.7 + i) * 18, 0, k, 0, 22, 9, 18);
     }
+    // La planicie de rosas de colores, en la ladera junto al último apartadero (donde paran a la vuelta)
+    {
+      const COLS = [0xd7263d, 0xff5fa2, 0xffd23f, 0xffffff, 0xff8c42, 0xc2185b];
+      const c0 = CALA_AT * L;
+      for (let k = 0; k < 260; k++) {
+        const mm = c0 - 45 + rnd() * 75;
+        const d = -(5.4 + rnd() * 16);
+        const { p, r } = this.frame(mm);
+        const y = THREE.MathUtils.lerp(0.15, 3.6, Math.min(1, (-d - 5) / 18));
+        md.add(G.sphere, COLS[k % COLS.length], p.x + r.x * d, y + 0.35, p.z + r.z * d, 0, 0, 0, 0.28, 0.24, 0.28);
+        if (k % 2 === 0) md.add(G.bush, 0x3f6a32, p.x + r.x * d, y + 0.12, p.z + r.z * d, 0, k, 0, 0.7, 0.4, 0.7);
+      }
+    }
     this.buildSigns(md);
     sc.add(md.mesh());
+    this.buildTunnel();
+  }
+
+  /**
+   * El túnel, corto, metido en la ladera: paredes de hormigón a los dos lados, techo, las dos bocas con su marco de
+   * piedra y el monte encima (roca y matas), y lucecitas amarillas dentro (no iluminan: se ven encendidas).
+   */
+  private buildTunnel() {
+    const t0 = TUNNEL_AT * this.len, t1 = t0 + TUNNEL_LEN;
+    const m = new Merger();
+    const WALL = 0x6a665e, STONE = 0x8f877a, ROCK = 0x7a7468;
+    m.add(this.band(-HALF - 1.4, -HALF - 0.8, 0, 5, t0, t1, 1), WALL); // pared de la montaña
+    m.add(this.band(HALF + 1.3, HALF + 1.9, -0.6, 5, t0, t1, 1), WALL); // pared del mar
+    m.add(this.band(-HALF - 1.4, HALF + 1.9, 5, 5.6, t0, t1, 1), WALL); // techo
+    // Las bocas: jambas y dintel de piedra, más anchos y altos que el túnel
+    for (const [a, b] of [[t0 - 1.2, t0], [t1, t1 + 1.2]]) {
+      m.add(this.band(-HALF - 3.5, -HALF - 0.8, 0, 8, a, b, 0.6), STONE);
+      m.add(this.band(HALF + 1.3, HALF + 3.4, -1.5, 8, a, b, 0.6), STONE);
+      m.add(this.band(-HALF - 3.5, HALF + 3.4, 5, 8, a, b, 0.6), STONE);
+    }
+    // El monte por encima (que el túnel atraviese algo) y sus rocas y matas
+    // (macizo hasta el suelo del lado de la montaña y del mar; por encima de la calzada, solo el techo)
+    m.add(this.band(-22, -HALF - 1.4, 0, 9.5, t0 + 0.6, t1 - 0.6, 1.5), 0x6f7d45);
+    m.add(this.band(-HALF - 1.4, HALF + 1.9, 5.6, 9.5, t0 + 0.6, t1 - 0.6, 1.5), 0x6f7d45);
+    m.add(this.band(HALF + 1.9, HALF + 3, -3, 9.5, t0 + 0.6, t1 - 0.6, 1.5), ROCK);
+    // (por encima y a los lados, rocas grandes y matas: que parezca ladera y no una caja)
+    let k = 0;
+    for (let d = t0 - 3; d <= t1 + 3; d += 5, k++) {
+      const { p, r } = this.frame(d);
+      const at = (off: number) => [p.x + r.x * off, p.z + r.z * off] as const;
+      const inside = d > t0 + 0.5 && d < t1 - 0.5;
+      for (const [off, y, sc] of [[-20, 1.2, 9], [-13, 3.6, 6], [-6.5, inside ? 9.6 : 7.5, inside ? 5 : 3.2], [0, 10.2, 4.2], [5.5, inside ? 9.2 : -1, inside ? 3.6 : 3]] as const) {
+        if (!inside && off > -8 && off < 5) continue; // (en la boca, nada delante del hueco)
+        const [x, z] = at(off + Math.sin(k * 2.3) * 1.2);
+        m.add(G.rock2, (k + off) % 3 === 0 ? 0x7a7468 : 0x6f7d45, x, y, z, 0.2, k * 1.7 + off, 0, sc * 1.3, sc * 0.75, sc * 1.1);
+      }
+      if (inside) {
+        const [x, z] = at(-3 + Math.sin(k) * 3);
+        m.add(G.bush, 0x5d6b3a, x, 11.2, z, 0, d, 0, 3.4, 1.6, 3);
+      }
+    }
+    const mesh = m.mesh();
+    mesh.userData.noCam = true;
+    this.scene.add(mesh);
+    // Lucecitas en la pared de la montaña, cada 6 m
+    const lamps = new Merger(false);
+    for (let d = t0 + 3; d < t1 - 1; d += 6) {
+      const { p, r, t } = this.frame(d);
+      lamps.add(G.box, 0xffe28a, p.x + r.x * (-HALF - 0.78), 4.1, p.z + r.z * (-HALF - 0.78), 0, Math.atan2(t.x, t.z), 0, 0.08, 0.18, 0.6);
+    }
+    const lm = new THREE.Mesh(lamps.build(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    this.scene.add(lm);
   }
 
   /**
@@ -788,7 +894,7 @@ export class LevelMoto implements Level {
   private updateHud() {
     const pct = this.total > 0 ? Math.round((this.good / this.total) * 100) : 100;
     // Objetivos mínimos: un emoji, sin decir qué hacer
-    const obj: Record<Phase, string> = { intro: '', pack: '🎒', ride: this.windOn ? '🌬️' : '🏍️', creus: '📷', uturn: '🏍️', back: '🏍️', cala: '🪨', done: '' };
+    const obj: Record<Phase, string> = { intro: '', pack: '🎒', ride: this.windOn ? '🌬️' : '🏍️', creus: '📷', uturn: '🏍️', back: '🏍️', cala: '🌹', done: '' };
     this.hud.setObjective(obj[this.phase]);
     const riding = this.phase === 'ride' || this.phase === 'creus' || this.phase === 'uturn' || this.phase === 'back';
     this.hud.setCounters(riding ? `<span class="chip">🏍️ ${pct}%</span><span class="chip">✌️ ${this.waves}/${this.motosMet}</span><span class="chip">📷 ${this.photos}/4</span>` : '');
@@ -854,6 +960,11 @@ export class LevelMoto implements Level {
     this.good = this.total = 0;
     this.photos = 0;
     this.photoTaken = PHOTO_AT.map((u) => u < at - PHOTO_WIN);
+    this.bayGone = PHOTO_AT.map((u) => u < at - PHOTO_WIN);
+    this.bayStop = -1;
+    this.tunnelDone = TUNNEL_AT < at;
+    this.tunnelSaid = this.tunnelDone;
+    this.tunnelBack = false;
     this.waves = this.motosMet = this.wrongWaves = 0;
     this.nextEv = ONCOMING.findIndex(([meet]) => (meet - at) * this.len > 10);
     if (this.nextEv < 0) this.nextEv = ONCOMING.length;
@@ -899,11 +1010,12 @@ export class LevelMoto implements Level {
       if (k < 1e-4) continue;
       v = Math.min(v, Math.sqrt(LAT_G / k + 2 * BRAKE * d));
     }
+    // En cada apartadero de ida, Gas entra y para (hasta que ella dice «¡Vámonos!»)
     PHOTO_AT.forEach((at, i) => {
-      if (this.photoTaken[i]) return;
-      const a = (at - PHOTO_WIN) * this.len, b = (at + PHOTO_WIN) * this.len;
-      if (m > b) return;
-      v = Math.min(v, Math.sqrt(PHOTO_V * PHOTO_V + 2 * BRAKE * Math.max(0, a - m)));
+      if (this.bayGone[i]) return;
+      const mb = at * this.len;
+      if (m > mb + 1) return;
+      v = Math.min(v, Math.sqrt(2 * BRAKE * Math.max(0, mb - m)));
     });
     v = Math.min(v, Math.sqrt(2 * BRAKE * Math.max(0, this.stopM() - m)));
     return v;
@@ -929,8 +1041,33 @@ export class LevelMoto implements Level {
     this.s += (this.speed * dt) / this.len;
     // Antes de parar, se arrima al borde (para luego dar la vuelta en lo ancho de la carretera)
     const m = this.s * this.len;
-    this.steerOff(THREE.MathUtils.lerp(OFF_RIDE, OFF_STOP, THREE.MathUtils.smoothstep(m, this.stopM() - 30, this.stopM() - 4)), dt);
+    let off = THREE.MathUtils.lerp(OFF_RIDE, OFF_STOP, THREE.MathUtils.smoothstep(m, this.stopM() - 30, this.stopM() - 4));
+    // En los apartaderos de ida: se mete dentro (hacia el mar) y, al irse, vuelve a su carril
+    let pull = 0;
+    PHOTO_AT.forEach((at, i) => {
+      const mb = at * this.len;
+      if (m < mb - BAY_HALF || m > mb + BAY_HALF) return;
+      const kin = THREE.MathUtils.smoothstep(m, mb - BAY_HALF + 1, mb - 3);
+      const kout = this.bayGone[i] ? 1 - THREE.MathUtils.smoothstep(m, mb + 1, mb + BAY_HALF - 1) : 1;
+      pull = Math.max(pull, kin * kout);
+      if (!this.bayGone[i] && this.bayStop !== i && m > mb - 1.5 && this.speed < 0.35) {
+        this.bayStop = i;
+        this.speed = 0;
+        this.bayNagT = 9;
+        this.updateHud();
+      }
+    });
+    off = THREE.MathUtils.lerp(off, HALF + BAY_W * 0.45, pull);
+    this.steerOff(off, dt);
+    if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) {
+      this.bayNagT -= dt;
+      if (this.bayNagT <= 0) {
+        this.bayNagT = 14;
+        this.say('Gas', MOTO.bayNag);
+      }
+    }
     if (m >= this.stopM() - 0.3 && this.speed < 0.4) this.arrive();
+    this.updateTunnel(m);
     this.updateTraffic(dt);
     // Lo que se dicen por el camino, entre una cosa y otra
     const T = MOTO.talk;
@@ -953,6 +1090,58 @@ export class LevelMoto implements Level {
     this.say('Margaux', MOTO.photoOk[(this.photos - 1) % MOTO.photoOk.length]);
     this.fx.burst(this.v1.copy(this.moto.root.position).setY(2.4), '📷', 4, 1.2, 0.6);
     this.updateHud();
+    // Y antes de arrancar, ella: «Qué bonito… ¡Vámonos!»
+    if (this.bayStop === i) {
+      later(() => {
+        if (this.phase !== 'ride' || this.bayStop !== i) return;
+        this.say('Margaux', MOTO.bayGo);
+        later(() => {
+          if (this.bayStop !== i) return;
+          this.bayGone[i] = true;
+          this.bayStop = -1;
+          this.updateHud();
+        }, barkTime(MOTO.bayGo) * 1000 * 0.7);
+      }, 1500);
+    }
+  }
+
+  /**
+   * El túnel: Gas avisa antes; dentro, el botón del brrruuum (se oye y retumba). Si se sale sin hacerlo, vuelta
+   * atrás (fundido) a antes del túnel, y a probar otra vez.
+   */
+  private updateTunnel(m: number) {
+    if (this.tunnelDone || this.tunnelBack) return;
+    const t0 = TUNNEL_AT * this.len, t1 = t0 + TUNNEL_LEN;
+    if (!this.tunnelSaid && m > t0 - 55) {
+      this.tunnelSaid = true;
+      this.say('Gas', MOTO.tunnel.warn);
+    }
+    if (m > t1 + 2) {
+      this.tunnelBack = true;
+      vibrate(60);
+      fadeFlash(() => {
+        this.s = (t0 - 70) / this.len;
+        this.speed = SPEED * 0.8;
+        this.snapCam = true;
+        this.placeMoto();
+        this.tunnelBack = false;
+        this.say('Gas', MOTO.tunnel.miss);
+      }, 500);
+    }
+  }
+
+  private inTunnel(m: number, pad = 0) {
+    const t0 = TUNNEL_AT * this.len;
+    return m > t0 - pad && m < t0 + TUNNEL_LEN + pad;
+  }
+
+  private brum() {
+    this.tunnelDone = true;
+    audio.rev();
+    vibrate([40, 30, 80]);
+    comicWord('¡BRRRUUUM!', 'cheer');
+    this.speed = Math.min(SPEED * 1.15, this.speed + 3);
+    later(() => this.say('Margaux', MOTO.tunnel.ok), 700);
   }
 
   /**
@@ -1148,7 +1337,7 @@ export class LevelMoto implements Level {
       this.clearTransient();
       this.phase = 'cala';
       this.updateHud();
-      this.stones = new StoneSkip(() => this.endCala(), { azul: AZUL_MOTO, gas: GAS_MOTO }, { input: this.input, hud: this.hud });
+      this.stones = new RoseShoot(() => this.endCala(), { azul: AZUL_MOTO }, { input: this.input, hud: this.hud });
     });
   }
 
@@ -1232,12 +1421,16 @@ export class LevelMoto implements Level {
     let label: string | null = null;
     let act: (() => void) | null = null;
     if (riding) {
-      PHOTO_AT.forEach((at, i) => {
-        if (!this.photoTaken[i] && Math.abs(this.s - at) < PHOTO_WIN) {
-          label = MOTO.photoHint;
-          act = () => this.takePhoto(i);
-        }
-      });
+      if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) {
+        const i = this.bayStop;
+        label = MOTO.photoHint;
+        act = () => this.takePhoto(i);
+      }
+      // En el túnel: ¡brrruuum!
+      if (!label && !this.tunnelDone && !this.tunnelBack && this.inTunnel(this.s * this.len)) {
+        label = MOTO.tunnel.btn;
+        act = () => this.brum();
+      }
       // Viene alguien de frente: el botón de saludar sale igual para motos y coches (hay que fijarse)
       const o = label ? null : this.waveTarget();
       if (o) {
@@ -1652,18 +1845,19 @@ export class LevelMoto implements Level {
       { label: '1 · La mochila', run: () => this.startPack() },
       { label: '2 · En moto (desde L’Escala)', run: () => this.startRide() },
       { label: '3 · Primer mirador (foto)', run: () => this.startRide(PHOTO_AT[0] - 60 / L, SPEED) },
+      { label: '3b · El túnel', run: () => this.startRide(TUNNEL_AT - 70 / L, SPEED) },
       { label: '4 · Tramontana', run: () => this.startRide(WIND_AT - 40 / L, SPEED) },
       { label: '5 · Llegada a la valla', run: () => { this.startRide(CLOSED_AT - 90 / L, SPEED); this.nextEv = ONCOMING.length; this.talkI = MOTO.talk.findIndex((l) => l.at >= CLOSED_AT - 90 / L); if (this.talkI < 0) this.talkI = MOTO.talk.length; } },
       { label: '6 · Foto del faro', run: () => { stopHere(); this.faroReady = true; this.say('Gas', MOTO.faroAsk); } },
       { label: '7 · Media vuelta', run: () => { stopHere(); this.faroDone = true; this.startUturn(); } },
       { label: '8 · Al apartadero', run: () => { stopHere(); this.faroDone = true; this.startUturn(); this.uTh = Math.PI; this.updateUturn(0.016); } },
-      { label: '9 · La cala (ranas)', run: () => { this.clearTransient(); this.phase = 'cala'; this.speed = 0; this.moto.root.visible = false; this.startCala(); } },
+      { label: '9 · El campo de rosas (fotos)', run: () => { this.clearTransient(); this.phase = 'cala'; this.speed = 0; this.moto.root.visible = false; this.startCala(); } },
       { label: '10 · Esa noche y el lunes', run: () => this.finish() },
       { label: '✓ Completar capítulo', run: () => { this.clearTransient(); this.phase = 'done'; this.completed = true; this.onComplete({ stars: 3, stats: [['Modo prueba', '✓']] }); } },
     ];
   }
 
-  private stones: StoneSkip | null = null;
+  private stones: RoseShoot | null = null;
   private windK = 0;
   private windOff = 0;
   private windOn = false;

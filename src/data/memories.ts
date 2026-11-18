@@ -12,6 +12,11 @@ import marcialFoto from '../assets/recuerdos/marcial.jpg';
 import torreznos from '../assets/recuerdos/torreznos.jpg';
 import cabana from '../assets/recuerdos/cabana.jpg';
 import ferreriesSelfie from '../assets/recuerdos/ferreries-selfie.jpg';
+import moto1 from '../assets/recuerdos/moto-1.jpg';
+import moto2 from '../assets/recuerdos/moto-2.jpg';
+import moto3 from '../assets/recuerdos/moto-3.jpg';
+import motoVideo from '../assets/recuerdos/moto-video.mp4';
+import motoPoster from '../assets/recuerdos/moto-video.jpg';
 import ferreriesVideo from '../assets/recuerdos/ferreries-video.mp4';
 import ferreriesPoster from '../assets/recuerdos/ferreries-video.jpg';
 import stOso from '../assets/recuerdos/st-oso.webp';
@@ -45,6 +50,10 @@ export const MEMORIES: Memory[] = [
   { level: 4, src: lpaAscensor, caption: 'Camiseta de Fito puesta. Listos.' },
   { level: 4, src: lpaConcierto, caption: 'Fito, en directo. Y nosotros.' },
   { level: 4, src: lpaCarnaval, caption: 'Todo lo que fuimos fue icónico.' },
+  { level: 5, src: moto1, caption: 'La moto. Y el garaje, antes de salir.' },
+  { level: 5, src: motoPoster, video: motoVideo, caption: 'Cargando la moto: casco, chupa y maleta.' },
+  { level: 5, src: moto2, caption: 'Comiendo en la Costa Brava.' },
+  { level: 5, src: moto3, caption: 'Cena en L’Escala.' },
   { level: 6, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
   { level: 6, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
   { level: 6, src: santJoan, caption: '«Muy dificil si…. Deslumbras»' },

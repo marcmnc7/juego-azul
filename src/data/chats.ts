@@ -3753,7 +3753,7 @@ export const CHATS = {
    {
     "me": false,
     "t": "21:15",
-    "text": "- Moto de Jueves 30 por la tarde a Lunes 4 por la mañana.<br>- ⁠Jueves y Domingo dormimos en casa.<br>- ⁠Viernes y Sábado dormimos en L'Escala.<br>- ⁠Ya hacemos videollamada para concretar plan / sitios / cosas que tienes que llevar, yo tengo idea ya de todo pero aterricemos juntos.<br>- ⁠Ya me pasas horarios de tren (preferiblemente llega el jueves ya que la idea es salir pronto el viernes y sera un día bastante largo y divertito)<br>- ⁠Disfruta mucho de la feria!!!!!!"
+    "text": "- Moto de Jueves 30 por la tarde a Lunes 4 por la mañana.<br>- ⁠Jueves y Domingo dormimos en casa.<br>- ⁠Viernes y Sábado dormimos en L'Escala.<br>- ⁠Ya hacemos videollamada para concretar plan / sitios / cosas que tienes que llevar, yo tengo idea ya de todo pero aterricemos juntos.<br>- ⁠Ya me pasas horarios de tren (preferiblemente llega el jueves ya que la idea es salir pronto el viernes y sera un día bastante largo y divertito)<br>- ⁠Disfruta mucho de la feria!!!!!! <Se editó este mensaje.>"
    },
    {
     "me": true,
@@ -3764,6 +3764,66 @@ export const CHATS = {
     "me": true,
     "t": "22:01",
     "text": "Ay es que eres lo mejor te juro"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "No puc"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "🫰🏼"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "Tiernisimo graciasgracias y gracias"
+   },
+   {
+    "me": true,
+    "t": "22:01",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "22:09",
+    "text": "Lourdes me dijo que si te portas bien tengo +1 para su boda"
+   },
+   {
+    "me": true,
+    "t": "22:09",
+    "text": "Ahhahaah"
+   },
+   {
+    "me": false,
+    "t": "22:49",
+    "text": "Sii dormir algo dificil porque ya esta todo bastante complicado por este puente pero creo que prou beee"
+   },
+   {
+    "me": false,
+    "t": "22:49",
+    "text": "Si pots"
+   },
+   {
+    "me": false,
+    "t": "22:49",
+    "text": "Tomayaaa que bonito!!!!"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Hahahaha que presiong"
+   },
+   {
+    "me": false,
+    "t": "22:51",
+    "text": "Yo dejo el móvil yaa!! Disfruta y baila mucho vale!? Y piensa que mañana tienes que rendir que es el día bueno hahaahah ya me cuentas!! 💃💃💃 besitosss Azuul ❤️😘"
+   },
+   {
+    "me": false,
+    "t": "22:52",
+    "text": "Bona nit! ✨🫰🏻"
    }
   ]
  },

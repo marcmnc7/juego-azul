@@ -643,6 +643,8 @@ export class Audio {
   perfect() { this.cue('perfect'); this.sfx([24, 28, 31, 36], 0.04, 'square', 0.08); this.sfx([19, 24, 28, 31], 0.05, 'triangle'); }
   warn() { this.sfx([5, 5], 0.1, 'square', 0.06); }
   whoosh() { if (this.ctx) this.noiseSwell(0.5, 0.35, 600, 2400); }
+  /** Acelerón de moto en un túnel: brrruuum (sierra grave que sube, con eco de ruido). */
+  rev() { this.sfx([-29, -27, -24, -19, -17, -12], 0.06, 'sawtooth', 0.22); if (this.ctx) this.noiseSwell(0.7, 0.6, 150, 900); }
   pop() { this.cue('pop'); this.sfx([24, 31], 0.03, 'sine', 0.25); }
   splash() { this.cue('splash'); if (this.ctx) this.noiseSwell(0.9, 0.5, 400, 3000); }
   /** Campanita de estrella: cada una un poco más aguda. */

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { audio } from '../core/audio';
 import { cinema } from '../core/cinema';
 import { Sky, Sun, settleAmbient, applyShadows, makeSea, vibrate } from '../core/gfx';
-import { steerTo, type SteerState } from '../core/steer';
+import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
+import { comicFlash } from '../core/comic';
 import { Walker, type Circle } from '../core/walker';
 import type { Input } from '../core/input';
 import { Lost } from '../core/lost';
@@ -11,7 +12,7 @@ import { SIDE } from '../data/story';
 import { twoBone } from '../entities/embrace';
 import type { Particles } from '../entities/fx';
 import { G, Merger, animatePerson, makePerson, type Person, type PersonLook } from '../entities/models';
-import { rigPost } from '../entities/rig';
+import { rigPost, leanTorso } from '../entities/rig';
 import { bark, comicWord, dialogue, later, timingGauge, type Hud } from '../ui/ui';
 import type { Box2 } from './ferreries';
 import { canvasTex } from './deco';
@@ -2803,5 +2804,296 @@ export class PeeAim3D {
     this.cab.group.visible = false;
     this.camera.fov = this.fov0;
     this.camera.updateProjectionMatrix();
+  }
+}
+
+// ---------------- Capítulo 5: fotos en el campo de rosas ----------------
+
+type RosePose = 'arriba' | 'cadera' | 'beso' | 'rosa' | 'saludo';
+const ROSE_POSES: RosePose[] = ['arriba', 'cadera', 'beso', 'rosa', 'saludo'];
+const ROSE_NEED = 3;
+
+/**
+ * De vuelta, la planicie llena de rosas de colores: Gas para la moto y Azul se mete entre las rosas a posar. Juegas
+ * con Gas, con el móvil: Azul va de un sitio a otro y, en cada sitio, posa un momento (sale «¡Ahora!»); hay que
+ * tenerla dentro del recuadro (arrastrar o el joystick para apuntar) y disparar mientras posa. Tres buenas y listo.
+ */
+export class RoseShoot {
+  scene = new THREE.Scene();
+  private sky: Sky;
+  private sun: Sun;
+  private azul: Person;
+  private t = 0;
+  private yaw = 0;
+  private pitch = -0.02;
+  private state: 'move' | 'pose' | 'relax' | 'done' = 'move';
+  private stT = 0;
+  private pose: RosePose = 'arriba';
+  private poseI = 0;
+  private target = new THREE.Vector3();
+  private st: SteerState & { walk: number } = { walk: 0 };
+  private good = 0;
+  private shots = 0;
+  private ui: HTMLDivElement;
+  private cue: HTMLElement;
+  private count: HTMLElement;
+  private box: HTMLElement;
+  private rose: THREE.Object3D;
+  private first = true;
+  private started = false;
+  private finished = false;
+  private tmp = new THREE.Vector3();
+  private readonly eye = new THREE.Vector3(0, 1.6, -7.5);
+
+  constructor(private onDone: () => void, looks: { azul?: PersonLook }, private ctl: { input: Input; hud: Hud }) {
+    const sc = this.scene;
+    sc.userData.hemiScale = 0.35;
+    const sunDir = new THREE.Vector3(-0.4, 0.7, -0.55).normalize();
+    sc.fog = new THREE.Fog(0xd6e6f0, 70, 340);
+    this.sky = new Sky({ top: 0x2a6fd0, mid: 0x7fbdf2, bottom: 0xdcebf4, clouds: { count: 5, tint: 0xffffff }, avoid: sunDir });
+    sc.add(this.sky.group);
+    sc.add(new THREE.HemisphereLight(0xcfe6ff, 0x5a6a3a, 1.0));
+    this.sun = new Sun(sc, 0xfff0d6, 2.1, sunDir, 22);
+    // La planicie: hierba, y al fondo las lomas del Cap de Creus y una franja de mar
+    const m = new Merger();
+    m.add(G.box, 0x6f8a45, 0, -0.05, 20, 0, 0, 0, 160, 0.1, 140);
+    for (let i = 0; i < 12; i++) m.add(G.rock2, i % 2 ? 0x7d8a5a : 0x6f7d4a, -90 + i * 16, -6, 95 + Math.sin(i * 1.7) * 10, 0, i, 0, 40, 22 + (i % 4) * 6, 30);
+    for (let i = 0; i < 8; i++) m.add(G.bush, 0x4d6e3a, -40 + i * 11, 0.8, 52 + Math.sin(i) * 5, 0, i, 0, 6, 3, 5);
+    // La carretera por detrás y la moto aparcada en el arcén
+    m.add(G.box, 0x4a4a50, 0, 0.0, -12, 0, 0, 0, 160, 0.06, 7);
+    const ground = m.mesh();
+    sc.add(ground);
+    const sea = makeSea([600, 300], 0x12577f, sunDir, {});
+    sea.position.set(120, -0.2, 40);
+    sc.add(sea);
+    // Las rosas: miles de flores de colores (una sola malla para las flores y otra para las matas)
+    const COLS = [0xd7263d, 0xff5fa2, 0xffd23f, 0xffffff, 0xff8c42, 0xc2185b, 0xff9ec7, 0xe9433a];
+    // Rosales: matas redondeadas y, en cada una, unas cuantas rosas asomando por arriba (metidas en la mata, no
+    // encima: si no, parecían vasitos flotando)
+    const NB = 1400, PER = 7;
+    const bloom = new THREE.DodecahedronGeometry(0.085, 0).scale(1, 0.75, 1);
+    const heads = new THREE.InstancedMesh(bloom, new THREE.MeshToonMaterial({ color: 0xffffff }), NB * PER);
+    const bushes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.2, 1), new THREE.MeshToonMaterial({ color: 0x35602c }), NB);
+    const d = new THREE.Object3D();
+    const col = new THREE.Color();
+    let s = 11;
+    const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    let h = 0;
+    for (let i = 0; i < NB; i++) {
+      const x = (rnd() - 0.5) * 34, z = -2 + rnd() * 30;
+      const sy = 0.9 + rnd() * 0.35, sxz = 1.05 + rnd() * 0.3;
+      d.position.set(x, 0.2 * sy * 0.8, z);
+      d.rotation.set(0, rnd() * 3, 0);
+      d.scale.set(sxz, sy, sxz);
+      d.updateMatrix();
+      bushes.setMatrixAt(i, d.matrix);
+      const c = COLS[Math.floor(rnd() * COLS.length)];
+      for (let k = 0; k < PER; k++) {
+        const a = rnd() * Math.PI * 2, th = rnd() * 1.2;
+        const dir = new THREE.Vector3(Math.cos(a) * Math.sin(th), Math.cos(th), Math.sin(a) * Math.sin(th));
+        d.position.set(x + dir.x * 0.2 * sxz * 0.92, 0.2 * sy * 0.8 + dir.y * 0.2 * sy * 0.92, z + dir.z * 0.2 * sxz * 0.92);
+        d.lookAt(d.position.x + dir.x, d.position.y + dir.y, d.position.z + dir.z);
+        d.rotateX(Math.PI / 2);
+        d.scale.setScalar(0.85 + rnd() * 0.4);
+        d.updateMatrix();
+        heads.setMatrixAt(h, d.matrix);
+        col.setHex(rnd() < 0.8 ? c : COLS[Math.floor(rnd() * COLS.length)]);
+        heads.setColorAt(h++, col);
+      }
+    }
+    sc.add(heads, bushes);
+    this.azul = makePerson(looks.azul ?? MARGAUX_LOOK);
+    this.azul.root.position.set(0, 0, 4);
+    this.azul.root.rotation.y = Math.PI;
+    sc.add(this.azul.root);
+    // La rosa que coge para una pose (en la mano derecha)
+    const rm = new Merger(false).add(new THREE.IcosahedronGeometry(0.06, 1), 0xd7263d, 0, 0.18, 0).add(G.cyl, 0x2f6b2a, 0, 0.06, 0, 0, 0, 0, 0.012, 0.22, 0.012);
+    this.rose = rm.mesh();
+    this.rose.visible = false;
+    const hand = this.azul.rig?.bones.get('RightHand') ?? this.azul.handR;
+    hand.add(this.rose);
+    applyShadows(sc);
+    settleAmbient(sc);
+    // El móvil de Gas: marco, recuadro, contador y el aviso de «¡Ahora!»
+    const ui = document.createElement('div');
+    ui.className = 'rose-phone';
+    ui.innerHTML = '<div class="rp-box"></div><div class="rp-count">📸 0/3</div><div class="rp-cue">✨ ¡Ahora!</div><div class="rp-hint"></div>';
+    uiRoot().append(ui);
+    this.ui = ui;
+    this.box = ui.querySelector('.rp-box')!;
+    this.count = ui.querySelector('.rp-count')!;
+    this.cue = ui.querySelector('.rp-cue')!;
+    (ui.querySelector('.rp-hint') as HTMLElement).textContent = SIDE.roses.hint;
+    ui.hidden = true;
+    cinema.stop();
+    later(() =>
+      dialogue(SIDE.roses.start, () => {
+        this.started = true;
+        ui.hidden = false;
+        this.nextSpot();
+      }),
+    600);
+  }
+
+  /** Se va a otro sitio entre las rosas (cerca, para que haya que reencuadrar). */
+  private nextSpot() {
+    const a = Math.random() * Math.PI * 2;
+    const r = 1 + Math.random() * 2.2;
+    this.target.set(THREE.MathUtils.clamp(this.azul.root.position.x + Math.cos(a) * r, -4, 4), 0, THREE.MathUtils.clamp(this.azul.root.position.z + Math.sin(a) * r, 2.5, 7));
+    this.state = 'move';
+    this.stT = 0;
+  }
+
+  private shoot() {
+    if (!this.started || this.state === 'done') return;
+    this.shots++;
+    audio.pop();
+    vibrate(25);
+    comicFlash(0xffffff, 0.45);
+    // ¿Dentro del recuadro? (de la cabeza a la cadera)
+    const cam = this.lastCam;
+    const inBox = (v: THREE.Vector3) => {
+      v.project(cam);
+      return Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.55 && v.z < 1;
+    };
+    const head = (this.azul.rig?.bones.get('Head') ?? this.azul.head).getWorldPosition(this.tmp.clone());
+    const hips = this.azul.root.position.clone().setY(0.9);
+    const framed = inBox(head) && inBox(hips);
+    if (!framed) {
+      comicWord('¡CLIC!', 'hit');
+      bark('Margaux', SIDE.roses.cut);
+      return;
+    }
+    if (this.state !== 'pose' || this.stT < 0.55) {
+      comicWord('¡CLIC!', 'hit');
+      bark('Margaux', SIDE.roses.blur);
+      return;
+    }
+    this.good++;
+    comicWord('¡CLIC!', 'perfect');
+    audio.luck();
+    bark('Margaux', SIDE.roses.ok[(this.good - 1) % SIDE.roses.ok.length]);
+    this.count.textContent = `📸 ${this.good}/${ROSE_NEED}`;
+    // La foto, que se queda un momento en la esquina (una polaroid)
+    const pol = el('div', 'rp-polaroid', SIDE.roses.poseName[this.pose]);
+    this.ui.append(pol);
+    later(() => pol.remove(), 2200);
+    this.state = 'relax';
+    this.stT = 0;
+    if (this.good >= ROSE_NEED) {
+      this.state = 'done';
+      later(() => {
+        this.ui.hidden = true;
+        this.ctl.hud.setAction(null);
+        dialogue(SIDE.roses.end, () => {
+          if (this.finished) return;
+          this.finished = true;
+          this.onDone();
+        });
+      }, 1600);
+    }
+  }
+
+  private lastCam!: THREE.PerspectiveCamera;
+
+  update(dt: number, camera: THREE.Camera) {
+    const cam = camera as THREE.PerspectiveCamera;
+    this.lastCam = cam;
+    this.t += dt;
+    const input = this.ctl.input;
+    // El móvil: arrastrar o el joystick apuntan (y zoom de móvil, para que salga grande)
+    if (this.started && this.state !== 'done') {
+      const ax = input.axes();
+      this.yaw = THREE.MathUtils.clamp(this.yaw - ax.x * 1.1 * dt - input.consumeCam() * 0.5, -0.6, 0.6);
+      this.pitch = THREE.MathUtils.clamp(this.pitch + ax.y * 0.6 * dt, -0.25, 0.25);
+    } else input.consumeCam();
+    const sway = Math.sin(this.t * 1.3) * 0.006 + Math.sin(this.t * 2.9) * 0.004;
+    cam.position.copy(this.eye);
+    if (this.first) {
+      this.first = false;
+      cam.fov = cam.fov || 50;
+    }
+    cam.fov += ((this.started ? (cam.aspect < 1 ? 34 : 26) : 50) - cam.fov) * Math.min(1, dt * 3);
+    cam.updateProjectionMatrix();
+    this.tmp.set(this.eye.x + Math.sin(this.yaw + sway) * 10, this.eye.y + Math.tan(this.pitch + sway) * 10 - 0.3, this.eye.z + Math.cos(this.yaw + sway) * 10);
+    cam.lookAt(this.tmp);
+    cam.updateMatrixWorld();
+    // Azul: va a otro sitio, se gira hacia el móvil, posa un momento y se relaja
+    const az = this.azul;
+    this.stT += dt;
+    const toCam = Math.atan2(this.eye.x - az.root.position.x, this.eye.z - az.root.position.z);
+    this.rose.visible = false;
+    leanTorso(az, 0, 0, 0);
+    if (!this.started || this.state === 'done') {
+      faceTo(az.root, toCam, dt, 3);
+      animatePerson(az, dt, this.state === 'done' ? 'wave' : 'idle');
+    } else if (this.state === 'move') {
+      const left = steerTo(az.root, this.st, this.target.x, this.target.z, 1.1, dt, [], 2, 0.3);
+      animatePerson(az, dt, steerSpeed(this.st) > 0.08 ? 'walk' : 'idle');
+      if (left < 0.15 || this.stT > 4) {
+        this.state = 'pose';
+        this.stT = 0;
+        this.pose = ROSE_POSES[this.poseI++ % ROSE_POSES.length];
+      }
+    } else if (this.state === 'pose') {
+      faceTo(az.root, toCam, dt, 8);
+      // (primero se gira y se coloca; la pose dura lo justo)
+      const p = this.pose;
+      animatePerson(az, dt, p === 'saludo' ? 'wave' : 'idle');
+      if (p === 'arriba') {
+        az.armL.rotation.set(-2.9, 0, 0.15);
+        az.armR.rotation.set(-2.9, 0, -0.15);
+      } else if (p === 'cadera') {
+        az.armL.rotation.set(0.15, 0, 0.75);
+        az.armR.rotation.set(0.15, 0, -0.75);
+        az.elbowL.rotation.x = az.elbowR.rotation.x = -1.5;
+      } else if (p === 'beso') {
+        az.armR.rotation.set(-1.45, 0, -0.25);
+        az.elbowR.rotation.x = -2.1;
+      } else if (p === 'rosa') {
+        this.rose.visible = true;
+        az.armR.rotation.set(-1.7, 0, -0.1);
+        az.elbowR.rotation.x = -1.2;
+        leanTorso(az, 0.12, 0, 0.1);
+      }
+      if (this.stT > 2.4) {
+        this.state = 'relax';
+        this.stT = 0;
+      }
+    } else if (this.state === 'relax') {
+      animatePerson(az, dt, 'idle');
+      if (this.stT > 0.6) this.nextSpot();
+    }
+    const posing = this.state === 'pose' && this.stT > 0.55;
+    this.cue.classList.toggle('on', posing);
+    // ¿Está en el recuadro? (el borde, verde)
+    if (this.started) {
+      const v = (az.rig?.bones.get('Head') ?? az.head).getWorldPosition(this.tmp).project(cam);
+      this.box.classList.toggle('in', Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.55);
+    }
+    // El botón de disparar
+    const can = this.started && this.state !== 'done';
+    this.ctl.hud.setAction(can ? SIDE.roses.btn : null, can);
+    if (input.consumeAction() && can) this.shoot();
+    this.sun.follow(az.root.position);
+    this.sky.update(cam, dt);
+  }
+
+  speakerPoint(who: string) {
+    if (!/^(Azul|Margaux)$/.test(who)) return null;
+    const head = this.azul.rig?.bones.get('Head') ?? this.azul.head;
+    const out = head.getWorldPosition(new THREE.Vector3());
+    out.y += 0.38;
+    return out;
+  }
+
+  speakerSide(who: string): 'l' | 'r' | undefined {
+    return /^(Azul|Margaux)$/.test(who) ? 'r' : undefined;
+  }
+
+  dispose() {
+    this.ui.remove();
+    this.ctl.hud.setAction(null);
+    disposeScene(this.scene);
   }
 }

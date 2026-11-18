@@ -1947,3 +1947,13 @@ html, body { background: #000; }
 .cp-item-txt span { font: 600 12.5px/1.35 var(--font); color: rgba(255, 248, 236, .62); }
 .screen p.cp-how, .cp-how { margin: 2px 0 0; font: 600 13px/1.5 var(--font); color: rgba(255, 248, 236, .55); text-shadow: none; }
 .wn-ttitle.long, .cp-ticket .wn-ttitle.long { font-size: 17px; line-height: 1.2; }
+/* Cap. 5: el móvil de Gas en el campo de rosas */
+.rose-phone { position: fixed; inset: 14% 8% 6%; z-index: 6; pointer-events: none; border: 5px solid #141018; outline: 3px solid #fffbf0; outline-offset: -9px; border-radius: 22px; box-shadow: 0 0 0 2000px rgba(20, 16, 24, .38); }
+.rose-phone .rp-box { position: absolute; left: 28%; right: 28%; top: 18%; bottom: 14%; border: 4px dashed #fffbf0; border-radius: 10px; box-shadow: 0 0 0 2px #141018, inset 0 0 0 2px #141018; transition: border-color .15s; }
+.rose-phone .rp-box.in { border-color: #5fcf80; }
+.rose-phone .rp-count, .rose-phone .rp-cue { position: absolute; top: 10px; font: 22px Bangers, 'Arial Black', sans-serif; letter-spacing: .05em; color: #141018; background: #fffbf0; border: 3px solid #141018; border-radius: 6px; padding: 0 8px; }
+.rose-phone .rp-count { right: 16px; }
+.rose-phone .rp-cue { left: 50%; transform: translateX(-50%) scale(.8); opacity: 0; transition: opacity .12s, transform .12s; background: #ffd23f; }
+.rose-phone .rp-cue.on { opacity: 1; transform: translateX(-50%) scale(1); }
+.rose-phone .rp-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: max-content; max-width: 90%; font: 700 13px/1.3 var(--font); color: #fffaf0; text-shadow: 0 1px 3px rgba(0,0,0,.7); animation: hintOut 7s ease forwards; }
+.rose-phone .rp-polaroid { position: absolute; left: 14px; bottom: 34px; padding: 10px 10px 26px; background: #fffbf0; border: 3px solid #141018; border-radius: 4px; transform: rotate(-6deg); font: 18px Bangers, 'Arial Black', sans-serif; color: #141018; animation: screenIn .3s ease both; box-shadow: 4px 4px 0 #141018; }
