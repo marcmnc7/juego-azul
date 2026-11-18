@@ -1166,6 +1166,8 @@ let barkEnd = 0;
 let barkRaf = 0;
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
 export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
+  // (los mensajes de móvil sueltos, el bocadillo verde con 📱, no salen en ningún nivel: los chats van en el móvil)
+  if (text.startsWith('(WhatsApp) ') || text.startsWith('📱')) return;
   // Con un diálogo abierto, el comentario espera a que acabe (salían los dos a la vez, uno encima del otro)
   if (root.querySelector('.dialogue')) {
     if (waited < 8000) later(() => bark(who, text, side, waited + 300), 300);

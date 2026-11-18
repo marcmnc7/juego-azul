@@ -55,27 +55,33 @@ const AISLE_X = -8.5;
 const WC_X = 17;
 const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
 const FILM_SECS = 15;
-// Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona): el pasillo largo de tiendas y, al fondo, la
-// sala de embarque, ancha, con seis puertas a destinos distintos (cuál es la suya lo dicen las pantallas)
+// Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona): el pasillo largo de tiendas; al fondo, la
+// sala de embarque, ancha, con las puertas 20 a 25; y, por un pasillito al final de la sala (detrás de las tiendas),
+// el ala de las puertas 26 a 29. Cuál es la suya lo dicen las pantallas: nadie más
 const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
 /** Línea de los mostradores de embarque (las puertas, 3,2 m más allá: la cristalera de la pista). */
 const GZ = 43;
 /** La sala de embarque, de lado a lado, entre el final del pasillo y la cristalera de las puertas. */
 const LOUNGE = { minX: 254, maxX: 338, minZ: AIR.maxZ, maxZ: GZ + 3.2 };
-/** Las puertas de la sala (la de Azul, la 26: «Yo tengo 26D», del chat). */
+/** El pasillito que sale del extremo de la sala, y el ala de las puertas 26 a 29. */
+const CONN = { minX: 234, maxX: 254, minZ: 31, maxZ: 35.5 };
+const PIER = { minX: 182, maxX: 234, minZ: 31, maxZ: GZ + 3.2 };
+/** Las puertas (la de Azul, la 26: «Yo tengo 26D», del chat; al fondo del ala). */
 const GATES: { n: number; x: number; to: string; code: string; time: string; status: string; plane?: number }[] = [
-  { n: 22, x: 260, to: 'Tenerife Norte', code: 'IB 1843', time: '16:55', status: 'CERRADO', plane: 0x1f4fa8 },
-  { n: 23, x: 273, to: 'París-Orly', code: 'VY 8002', time: '17:05', status: 'EN HORA' },
-  { n: 24, x: 286, to: 'Lisboa', code: 'TP 1027', time: '17:10', status: 'RETRASADO', plane: 0x2f7d4b },
-  { n: 25, x: 306, to: 'Palma', code: 'UX 6075', time: '17:20', status: 'EN HORA' },
-  { n: 26, x: 319, to: 'Gran Canaria', code: 'VY 3112', time: '17:15', status: 'EMBARCANDO', plane: 0xf2c233 },
-  { n: 27, x: 332, to: 'Bilbao', code: 'IB 0451', time: '17:35', status: 'EN HORA' },
+  { n: 20, x: 260, to: 'Sevilla', code: 'IB 0122', time: '16:50', status: 'CERRADO' },
+  { n: 21, x: 273, to: 'Tenerife Norte', code: 'IB 1843', time: '16:55', status: 'CERRADO', plane: 0x1f4fa8 },
+  { n: 22, x: 286, to: 'París-Orly', code: 'VY 8002', time: '17:05', status: 'EN HORA' },
+  { n: 23, x: 306, to: 'Lisboa', code: 'TP 1027', time: '17:10', status: 'RETRASADO', plane: 0x2f7d4b },
+  { n: 24, x: 319, to: 'Palma', code: 'UX 6075', time: '17:20', status: 'EN HORA' },
+  { n: 25, x: 332, to: 'Bilbao', code: 'IB 0451', time: '17:35', status: 'EN HORA' },
+  { n: 26, x: 188.5, to: 'Gran Canaria', code: 'VY 3112', time: '17:15', status: 'EMBARCANDO', plane: 0xf2c233 },
+  { n: 27, x: 201.5, to: 'Lanzarote', code: 'FR 6324', time: '17:25', status: 'EN HORA' },
+  { n: 28, x: 214.5, to: 'Roma', code: 'VY 6102', time: '17:40', status: 'EN HORA', plane: 0xd7263d },
+  { n: 29, x: 227.5, to: 'Ámsterdam', code: 'KL 1704', time: '17:50', status: 'EN HORA' },
 ];
-/** Segundos hasta que cierran la puerta 26 (y cada maleta que te da, dos menos). */
-const GATE_SECS = 75;
 /** Hasta dónde se anda en la terminal: el pasillo y la sala de embarque, hasta los mostradores. */
-const AIR_WALK = { minX: LOUNGE.minX + 0.32, maxX: LOUNGE.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: GZ };
-const GATE_X = 319;
+const AIR_WALK = { minX: PIER.minX + 0.32, maxX: LOUNGE.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: GZ };
+const GATE_X = 188.5;
 /** La cristalera de las puertas, y el finger de la 26: sube desde la puerta hasta la del avión. */
 const GATE_WALL = GZ + 3.2;
 const FINGER_LEN = 10.5;
@@ -692,10 +698,18 @@ export class Level3 implements Level {
   private cabinView: ((dt: number) => void) | null = null;
   /** Gas el primero de la cola: los demás, un sitio más atrás. */
   private qShift = 0;
+  /** Gas en la cola del baño (como uno más), si puede ya entrar, y qué pasa al entrar y al salir. */
+  private gasNpc: Npc | null = null;
+  private gasMayEnter = false;
+  private wcPlan: { hard: number; lines: Line[]; next: () => void } | null = null;
   /** Las gafas: cabinas ya miradas, y puertas que traquetean (averiadas u ocupadas). */
   private glassOpened = new Set<number>();
+  /** La cabina de las gafas (ocupada hasta que se llama), si ya ha salido quien estaba, llamadas y a qué puerta se ha dicho algo. */
+  private glassCab = -1;
+  private glassOut = false;
+  private knocks = 0;
+  private doorSaid = -1;
   private wcShake = WC_Z.map(() => 0);
-  private gateT = GATE_SECS;
   private gateStage = 0;
   /** La cola de embarque de la puerta 26 y en qué punto está Azul. */
   private gateQ: GateNpc[] = [];
@@ -710,9 +724,14 @@ export class Level3 implements Level {
   private slideK = 0;
   /** Gente sentada en el aeropuerto (se les pone la pose cada fotograma). */
   private seated: Person[] = [];
+  /** Gente quieta (mirando aviones) y gente de paso por la sala y el ala. */
+  private idlers: Person[] = [];
+  private wanderers: ({ p: Person; a: [number, number]; b: [number, number]; toB: boolean; wait: number; walk: number; c: Circle } & SteerState)[] = [];
   /** Maletas dando vueltas en las cintas de llegadas, y la gente de llegadas (para animarla). */
   private belts: { o: THREE.Mesh; cx: number; cz: number; u: number }[] = [];
   private arrPeople: Person[] = [];
+  private arrSeated: Person[] = [];
+  private arrWanderers: ({ p: Person; a: [number, number]; b: [number, number]; toB: boolean; wait: number; walk: number; c: Circle } & SteerState)[] = [];
   private otherCafeSaid = -99;
   /** Cuándo dijo Azul que una puerta no era la suya. */
   private wrongSaid = new Map<number, number>();
@@ -1066,7 +1085,13 @@ export class Level3 implements Level {
     for (const s of [-1, 1])
       for (let k = 0; k < 2; k++) {
         const x = cx + s * 4.7, z0 = GZ - 10 + k * 3.2;
-        m.add(G.box, 0x4a525c, x, 0.3, z0, 0, 0, 0, 0.5, 0.05, 2.4);
+        // (la viga justo debajo de los asientos: si no, parecían flotar)
+        m.add(G.box, 0x4a525c, x, 0.395, z0, 0, 0, 0, 0.4, 0.05, 2.4);
+        // Las patas: dos pies de acero con su placa en el suelo
+        for (const dz of [-0.85, 0.85]) {
+          m.add(G.box, 0x9aa3ad, x, 0.2, z0 + dz, 0, 0, 0, 0.08, 0.4, 0.08);
+          m.add(G.box, 0x9aa3ad, x, 0.015, z0 + dz, 0, 0, 0, 0.46, 0.03, 0.12);
+        }
         for (let j = 0; j < 4; j++) {
           m.add(G.rbox, 0x2b3a55, x, 0.47, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.5, 0.1, 0.5);
           m.add(G.rbox, 0x2b3a55, x + s * 0.22, 0.75, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.08, 0.5, 0.5);
@@ -1278,6 +1303,13 @@ export class Level3 implements Level {
     lfloor.position.set(lcx, 0.011, (Lg.minZ + Lg.maxZ) / 2);
     lfloor.userData.noCast = true;
     sc.add(lfloor);
+    // El ala de las puertas 26 a 29 y el pasillito que llega a ella desde la sala
+    for (const R of [PIER, CONN]) {
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(R.maxX - R.minX + 0.4, R.maxZ - R.minZ + 0.3).rotateX(-Math.PI / 2), paving);
+      f.position.set((R.minX + R.maxX) / 2, 0.012, (R.minZ + R.maxZ) / 2);
+      f.userData.noCast = true;
+      sc.add(f);
+    }
     const m = new Merger();
     // Cristaleras a los dos lados del pasillo, en tramos de 3 m: así se comban a mano alzada con la cubierta y no se
     // abre una rendija arriba (de una pieza de 66 m solo se movían las esquinas)
@@ -1295,6 +1327,7 @@ export class Level3 implements Level {
     // En la sala, las lamas van de lado a lado (a lo ancho), a la altura de la cubierta del pasillo
     for (let z = Lg.minZ + 0.2; z <= Lg.maxZ; z += 0.42) ceil.add(G.box, 0xd9b26a, lcx, 6.9, z, 0, 0, 0, Lg.maxX - Lg.minX + 0.6, 0.06, 0.24);
     for (let x = Lg.minX + 2; x < Lg.maxX; x += 4) ceil.add(G.box, 0xb8905a, x, 7.0, (Lg.minZ + Lg.maxZ) / 2, 0, 0, 0, 0.1, 0.1, Lg.maxZ - Lg.minZ);
+    for (let z = PIER.minZ + 0.2; z <= PIER.maxZ; z += 0.42) ceil.add(G.box, 0xd9b26a, (PIER.minX + PIER.maxX) / 2, 6.9, z, 0, 0, 0, PIER.maxX - PIER.minX + 0.6, 0.06, 0.24);
     const cm = ceil.mesh();
     cm.userData.noCast = true;
     sc.add(cm);
@@ -1316,6 +1349,15 @@ export class Level3 implements Level {
       lroof.position.set(lcx, 7.15, (Lg.minZ + Lg.maxZ) / 2);
       lroof.userData.noCast = true;
       sc.add(lroof);
+      const proof = new THREE.Mesh(new THREE.PlaneGeometry(PIER.maxX - PIER.minX + 1.4, PIER.maxZ - PIER.minZ + 1).rotateX(Math.PI / 2), roofMat);
+      proof.position.set((PIER.minX + PIER.maxX) / 2, 7.15, (PIER.minZ + PIER.maxZ) / 2);
+      proof.userData.noCast = true;
+      sc.add(proof);
+      // (el pasillito, bajo: techo plano a 3,6 m)
+      const croof = new THREE.Mesh(new THREE.PlaneGeometry(CONN.maxX - CONN.minX + 0.6, CONN.maxZ - CONN.minZ + 0.4).rotateX(Math.PI / 2), toon({ color: 0xe9ecef, side: THREE.DoubleSide }));
+      croof.position.set((CONN.minX + CONN.maxX) / 2, 3.6, (CONN.minZ + CONN.maxZ) / 2);
+      croof.userData.noCast = true;
+      sc.add(croof);
       // (el disco de cielo y su aro, sin doblar los dos: si no, el aro se separaba del disco)
       const skyMat = new THREE.MeshBasicMaterial({ color: 0xeaf4ff, fog: false, toneMapped: false });
       const ringMat = toon({ color: 0xf2f2ee, roughness: 0.5 });
@@ -1332,6 +1374,7 @@ export class Level3 implements Level {
       };
       for (let z = A.minZ - 1; z <= A.maxZ - 3; z += 7.5) for (const x of [cx - 3, cx + 3]) skylight(x, 6.5 + Math.sin(z * 0.3) * 0.35, z);
       for (let x = Lg.minX + 7; x < Lg.maxX - 4; x += 12) skylight(x, 6.82, (Lg.minZ + Lg.maxZ) / 2 - 1);
+      for (let x = PIER.minX + 7; x < PIER.maxX - 4; x += 12) skylight(x, 6.82, (PIER.minZ + PIER.maxZ) / 2 - 1);
     }
     m.add(G.box, 0xd8dde3, cx, 3.9, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 7.8, 0.3);
     // La sala: la pared de atrás (a los lados de la boca del pasillo) con sus tiendas, y cristaleras en los extremos
@@ -1341,13 +1384,35 @@ export class Level3 implements Level {
         m.add(G.box, 0xd8dde3, (x + xb) / 2, 3.9, Lg.minZ - 0.15, 0, 0, 0, xb - x + 0.02, 7.8, 0.3);
       }
     }
+    // (el extremo de la sala que da al pasillito tiene su hueco, con dintel encima)
+    m.add(G.box, 0xd8dde3, Lg.minX - 0.15, 5.7, (CONN.minZ + CONN.maxZ) / 2, 0, 0, 0, 0.3, 4.2, CONN.maxZ - CONN.minZ + 0.02);
+    m.add(G.box, 0xd8dde3, Lg.minX - 0.15, 3.9, (Lg.minZ + CONN.minZ) / 2, 0, 0, 0, 0.3, 7.8, CONN.minZ - Lg.minZ + 0.02);
     for (const x of [Lg.minX - 0.15, Lg.maxX + 0.15]) {
-      for (let z = Lg.minZ; z < Lg.maxZ - 0.01; z += 3) {
+      for (let z = x < Lg.minX ? CONN.maxZ : Lg.minZ; z < Lg.maxZ - 0.01; z += 3) {
         const zb = Math.min(Lg.maxZ, z + 3);
         m.add(G.box, 0xb4d4ea, x, 3.9, (z + zb) / 2, 0, 0, 0, 0.2, 7.8, zb - z + 0.02);
         for (const y of [2.4, 4.6]) m.add(G.box, 0x5a6470, x, y, (z + zb) / 2, 0, 0, 0, 0.26, 0.08, zb - z + 0.02);
       }
     }
+    // El ala: pared de atrás, cristalera del fondo, y la pared que la separa de la sala (con el hueco del pasillito)
+    for (let x = PIER.minX; x < PIER.maxX - 0.01; x += 3) {
+      const xb = Math.min(PIER.maxX, x + 3);
+      m.add(G.box, 0xd8dde3, (x + xb) / 2, 3.9, PIER.minZ - 0.15, 0, 0, 0, xb - x + 0.02, 7.8, 0.3);
+    }
+    for (let z = PIER.minZ; z < PIER.maxZ - 0.01; z += 3) {
+      const zb = Math.min(PIER.maxZ, z + 3);
+      m.add(G.box, 0xb4d4ea, PIER.minX - 0.15, 3.9, (z + zb) / 2, 0, 0, 0, 0.2, 7.8, zb - z + 0.02);
+      for (const y of [2.4, 4.6]) m.add(G.box, 0x5a6470, PIER.minX - 0.15, y, (z + zb) / 2, 0, 0, 0, 0.26, 0.08, zb - z + 0.02);
+      if (z >= CONN.maxZ - 0.01) m.add(G.box, 0xd8dde3, PIER.maxX + 0.15, 3.9, (z + zb) / 2, 0, 0, 0, 0.3, 7.8, zb - z + 0.02);
+    }
+    m.add(G.box, 0xd8dde3, PIER.maxX + 0.15, 3.9, (CONN.maxZ + 37) / 2, 0, 0, 0, 0.3, 7.8, 37 - CONN.maxZ + 0.02);
+    m.add(G.box, 0xd8dde3, PIER.maxX + 0.15, 5.7, (CONN.minZ + CONN.maxZ) / 2, 0, 0, 0, 0.3, 4.2, CONN.maxZ - CONN.minZ + 0.02);
+    // El pasillito: paredes con carteles de Canarias y de la T4, y su techo bajo
+    for (const z of [CONN.minZ - 0.12, CONN.maxZ + 0.12])
+      for (let x = CONN.minX; x < CONN.maxX - 0.01; x += 3) {
+        const xb = Math.min(CONN.maxX, x + 3);
+        m.add(G.box, 0xd8dde3, (x + xb) / 2, 1.8, z, 0, 0, 0, xb - x + 0.02, 3.6, 0.24);
+      }
     // Entre puerta y puerta, el mismo tramo de cristalera hasta el siguiente (la de la pista, de lado a lado)
     const covered = GATES.map((g) => [g.x - 6.5, g.x + 6.5] as const);
     for (let x = Lg.minX; x < Lg.maxX - 0.01; x += 1.625) {
@@ -1370,11 +1435,18 @@ export class Level3 implements Level {
       // Sala: pared de atrás a los lados del pasillo, extremos y cristalera de las puertas
       { minX: Lg.minX - 0.4, maxX: A.minX - 0.02, minZ: Lg.minZ - 0.4, maxZ: Lg.minZ + 0.02 },
       { minX: A.maxX + 0.02, maxX: Lg.maxX + 0.4, minZ: Lg.minZ - 0.4, maxZ: Lg.minZ + 0.02 },
-      { minX: Lg.minX - 0.4, maxX: Lg.minX - 0.02, minZ: Lg.minZ - 0.4, maxZ: Lg.maxZ + 0.4 },
+      { minX: Lg.minX - 0.4, maxX: Lg.minX - 0.02, minZ: CONN.maxZ, maxZ: Lg.maxZ + 0.4 },
+      { minX: Lg.minX - 0.4, maxX: Lg.minX - 0.02, minZ: Lg.minZ - 0.4, maxZ: CONN.minZ },
+      // Pasillito y ala
+      { minX: CONN.minX, maxX: CONN.maxX, minZ: CONN.minZ - 0.5, maxZ: CONN.minZ },
+      { minX: CONN.minX, maxX: CONN.maxX, minZ: CONN.maxZ, maxZ: CONN.maxZ + 0.5 },
+      { minX: PIER.minX - 0.4, maxX: PIER.maxX + 0.4, minZ: PIER.minZ - 0.5, maxZ: PIER.minZ },
+      { minX: PIER.minX - 0.4, maxX: PIER.minX - 0.02, minZ: PIER.minZ - 0.4, maxZ: PIER.maxZ + 0.4 },
+      { minX: PIER.maxX + 0.02, maxX: PIER.maxX + 0.4, minZ: CONN.maxZ, maxZ: PIER.maxZ + 0.4 },
       { minX: Lg.maxX + 0.02, maxX: Lg.maxX + 0.4, minZ: Lg.minZ - 0.4, maxZ: Lg.maxZ + 0.4 },
     );
     // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
-    this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: Lg.minX - 1, maxX: Lg.maxX + 1, minZ: GATE_WALL - 0.1, maxZ: GATE_WALL + 4 });
+    this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: PIER.minX - 1, maxX: Lg.maxX + 1, minZ: GATE_WALL - 0.1, maxZ: GATE_WALL + 4 });
     for (const g of GATES) this.buildGate(m, g, g.n === 26);
     // Fuera, la pista: asfalto de lado a lado de la sala, con sus líneas amarillas de guiado hasta cada puerta
     {
@@ -1401,6 +1473,7 @@ export class Level3 implements Level {
     }
     // (en la sala, una fila de pilares rojos entre las puertas, lejos de las colas)
     for (const x of [266.5, 279.5, 296, 312.5, 325.5]) pillar(x, 34.5, 0xd7263d);
+    for (const x of [195, 208, 221]) pillar(x, 33.6, 0xd7263d);
     // Bancos de espera del pasillo
     for (const z of [-27.25, -19.75, -12.25, 10.25, 25.25]) {
       for (const x of [A.minX + 0.6, A.maxX - 0.6]) {
@@ -1439,19 +1512,19 @@ export class Level3 implements Level {
     // Pantallas de salidas: una a la entrada del pasillo y un tótem en medio de la sala (de cara al pasillo y a la sala)
     const dep = this.departuresTex();
     const board = (x: number, y: number, z: number, ry: number, w: number) => {
-      const p = new THREE.Mesh(flatPlane(w, w / 2), new THREE.MeshBasicMaterial({ map: dep }));
+      const p = new THREE.Mesh(flatPlane(w, w * 0.7), new THREE.MeshBasicMaterial({ map: dep }));
       p.position.set(x, y, z);
       p.rotation.y = ry;
       sc.add(p);
     };
     // (colgada sobre el pasillo, de cara a quien llega: se ve nada más empezar)
     board(cx, 4.4, A.minZ + 9.85, Math.PI, 4.4);
-    m.add(G.box, 0x1a1f28, cx, 4.4, A.minZ + 9.95, 0, 0, 0, 4.6, 2.4, 0.1);
+    m.add(G.box, 0x1a1f28, cx, 4.4, A.minZ + 9.95, 0, 0, 0, 4.6, 3.3, 0.1);
     for (const s of [-1, 1]) m.add(G.box, 0x3f4750, cx + s * 1.6, 6.0, A.minZ + 9.95, 0, 0, 0, 0.05, 1.0, 0.05);
-    m.add(G.box, 0x1a1f28, lcx, 2.75, 37.5, 0, 0, 0, 3.4, 1.9, 0.3);
-    m.add(G.box, 0x4a525c, lcx, 0.9, 37.5, 0, 0, 0, 0.4, 1.8, 0.3);
-    board(lcx, 2.75, 37.33, Math.PI, 3.2);
-    board(lcx, 2.75, 37.67, 0, 3.2);
+    m.add(G.box, 0x1a1f28, lcx, 2.95, 37.5, 0, 0, 0, 3.4, 2.5, 0.3);
+    m.add(G.box, 0x4a525c, lcx, 0.85, 37.5, 0, 0, 0, 0.4, 1.7, 0.3);
+    board(lcx, 2.95, 37.33, Math.PI, 3.2);
+    board(lcx, 2.95, 37.67, 0, 3.2);
     this.colliders.push({ minX: lcx - 0.3, maxX: lcx + 0.3, minZ: 37.3, maxZ: 37.7 });
     sc.add(m.mesh());
     const sign = (text: string, x: number, y: number, z: number, ry: number, w: number, bg: string, fg: string) => {
@@ -1465,8 +1538,14 @@ export class Level3 implements Level {
     sign('Salidas · Departures', cx, 6.05, A.minZ + 9.88, Math.PI, 3.2, '#262b33', '#ffd23f');
     // Carteles de dirección a la salida del pasillo, como en Barajas: amarillo sobre negro
     // (mirando hacia la sala, las puertas 25 a 27 quedan a la izquierda: x mayor)
-    sign('← Puertas 25 – 27', cx + 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
-    sign('Puertas 22 – 24 →', cx - 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
+    sign('← Puertas 23 – 25', cx + 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
+    sign('Puertas 20 – 22 →', cx - 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
+    // (las 26 a 29, solo encima del pasillito del fondo de la sala, y dentro de él)
+    sign('Puertas 26 – 29', Lg.minX + 0.1, 4.6, (CONN.minZ + CONN.maxZ) / 2, Math.PI / 2, 2.8, '#141018', '#ffd23f');
+    sign('Puertas 26 – 29', PIER.maxX - 0.1, 4.6, (CONN.minZ + CONN.maxZ) / 2, -Math.PI / 2, 2.8, '#141018', '#ffd23f');
+    // Carteles de las paredes del pasillito (Canarias, y el aviso de siempre)
+    sign('Gran Canaria · Isla de Sol', 244, 1.9, CONN.maxZ - 0.01, Math.PI, 3, '#1f6f8b', PAPER);
+    sign('No deje su equipaje', 247, 1.9, CONN.minZ + 0.01, 0, 2.6, '#262b33', '#ffd23f');
     // (sin luces de punto en el techo: la luz es la del día que entra por la cubierta; las lámparas no iluminan)
     // Maletas de cabina que se escapan rodando de las tiendas por el pasillo
     const bun = new Merger()
@@ -1501,15 +1580,47 @@ export class Level3 implements Level {
       { skin: 0xc98e64, shirt: 0xd8cfc0, pants: 0x222222, hair: 0x111111, hairStyle: 'bun' },
       { skin: 0xe2b08c, shirt: 0xb4364c, pants: 0x2a2a2a, hair: 0x3a2414, hairStyle: 'short', male: true, beard: true },
     ];
+    const hue = (i: number) => new THREE.Color().setHSL((i * 0.137) % 1, 0.5, 0.45).getHex();
+    for (let i = 0; i < 6; i++) seatLooks.push({ ...LOOKS[i % LOOKS.length], shirt: hue(i + 3) });
     const seats = this.gateSeats.filter((st) => Math.abs(st.x - GATE_X) > 7);
     seatLooks.forEach((lk, i) => {
-      const st = seats[(i * 5 + 3) % seats.length];
+      const st = seats[(i * 7 + 3) % seats.length];
       const p = makePerson(lk);
       p.root.position.set(st.x - Math.sign(Math.sin(st.face)) * 0.05, 0, st.z);
       p.root.position.y = seatedRootY(p, 0.52);
       p.root.rotation.y = st.face;
       sc.add(p.root);
       this.seated.push(p);
+    });
+    // Gente mirando los aviones por la cristalera
+    for (const [x, i] of [[279.5, 0], [299, 1], [208, 2], [325.5, 3]] as const) {
+      const p = makePerson({ ...LOOKS[(i + 2) % LOOKS.length], shirt: hue(i + 11) });
+      p.root.position.set(x, 0, GATE_WALL - 0.7);
+      p.root.rotation.y = 0;
+      sc.add(p.root);
+      this.idlers.push(p);
+      this.gateCircles.push({ x, z: GATE_WALL - 0.7, r: 0.35 });
+    }
+    // Y gente de paso, con su maleta: por la sala, del pasillo a las puertas, y por el ala
+    const routes: [number, number, number, number][] = [
+      [258, 38.8, 336, 38.8],
+      [262, 39.8, 330, 39.8],
+      [299, 18, 299, 40.2],
+      [293, 22, 268, 40.6],
+      [194, 39.2, 232, 39.2],
+      [252, 33.2, 200, 38.4],
+      [303, 31.8, 334, 38],
+    ];
+    routes.forEach(([ax, az, bx, bz], i) => {
+      const p = makePerson({ ...LOOKS[(i + 1) % LOOKS.length], shirt: hue(i + 20) });
+      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777, 0x2e9e5b][i % 5], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
+      markProps(p);
+      const k = (i * 0.37) % 1;
+      p.root.position.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
+      sc.add(p.root);
+      const c = { x: p.root.position.x, z: p.root.position.z, r: 0.35 };
+      this.gateCircles.push(c);
+      this.wanderers.push({ p, a: [ax, az], b: [bx, bz], toB: i % 2 === 0, wait: 0, walk: 0, c });
     });
   }
 
@@ -1525,7 +1636,7 @@ export class Level3 implements Level {
       for (const [t, x] of [['HORA', 24], ['DESTINO', 130], ['VUELO', 450], ['PUERTA', 600], ['ESTADO', 690]] as const) inkText(g, t, x, 92, 22, '#b9c6d6');
       const rows = [...GATES].sort((a, b) => a.time.localeCompare(b.time));
       rows.forEach((r, i) => {
-        const y = 136 + i * 52;
+        const y = 136 + i * 50;
         const col = r.status === 'EMBARCANDO' ? '#4ade80' : r.status === 'CERRADO' ? '#f87171' : r.status === 'RETRASADO' ? '#fbbf24' : PAPER;
         inkText(g, r.time, 24, y, 30, PAPER);
         inkText(g, r.to, 130, y, 30, PAPER, 300);
@@ -1533,7 +1644,7 @@ export class Level3 implements Level {
         inkText(g, String(r.n), 610, y, 34, '#ffd23f');
         inkText(g, r.status, 690, y, 26, col, w - 710);
       });
-    }, 900, 450);
+    }, 900, 630);
   }
 
   /**
@@ -1564,6 +1675,80 @@ export class Level3 implements Level {
       }
       if (collide) this.colliders.push({ minX: Math.min(x0, x1) - 0.14, maxX: Math.max(x0, x1) + 0.14, minZ: Math.min(z0, z1) - 0.14, maxZ: Math.max(z0, z1) + 0.14 });
     };
+    /** Silla de cafetería: asiento, respaldo y cuatro patas (mirando a ry). */
+    const chair = (x: number, z: number, ry: number, col = 0x9c4a2a) => {
+      const fx = Math.sin(ry), fz = Math.cos(ry);
+      m.add(G.rbox, col, x, 0.46, z, 0, ry, 0, 0.42, 0.05, 0.42);
+      m.add(G.rbox, col, x - fx * 0.19, 0.72, z - fz * 0.19, 0, ry, 0, 0.42, 0.46, 0.04);
+      for (const [a, b] of [[-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
+        const lx = a * 0.17, lz = b * 0.17;
+        m.add(G.cyl, 0x22262c, x + lx * Math.cos(ry) + lz * Math.sin(ry), 0.22, z - lx * Math.sin(ry) + lz * Math.cos(ry), 0, 0, 0, 0.03, 0.44, 0.03);
+      }
+    };
+    /** Mesa redonda de cafetería con su pie y su base. */
+    const table = (x: number, z: number, top = 0x2b2f35) => {
+      m.add(G.cyl, top, x, 0.74, z, 0, 0, 0, 0.75, 0.04, 0.75);
+      m.add(G.cyl, 0x22262c, x, 0.37, z, 0, 0, 0, 0.06, 0.72, 0.06);
+      m.add(G.cyl, 0x22262c, x, 0.02, z, 0, 0, 0, 0.45, 0.03, 0.45);
+      this.colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: z - 0.45, maxZ: z + 0.45, round: true });
+    };
+    /** Palmera de interior en su jardinera redonda de hormigón, con tierra y piedrecitas. */
+    const palmPot = (x: number, z: number, h = 3.1) => {
+      m.add(G.cyl, 0xb9b4aa, x, 0.35, z, 0, 0, 0, 1.3, 0.7, 1.3);
+      m.add(G.cyl, 0x5a4632, x, 0.69, z, 0, 0, 0, 1.15, 0.04, 1.15);
+      for (let i = 0; i < 5; i++) m.add(G.cyl, 0x7a6448, x + Math.sin(i * 0.4) * 0.12, 0.7 + (i + 0.5) * ((h - 0.7) / 5), z, 0, 0, 0.04, 0.24 - i * 0.02, (h - 0.7) / 5, 0.24 - i * 0.02);
+      palmCrown(m, x + 0.15, h, z, 1.5, 13);
+      this.colliders.push({ minX: x - 0.7, maxX: x + 0.7, minZ: z - 0.7, maxZ: z + 0.7, round: true });
+    };
+    /** Carro de equipaje (con maletas, si lleva). */
+    const trolley = (x: number, z: number, ry: number, loaded: boolean) => {
+      const fx = Math.sin(ry), fz = Math.cos(ry);
+      m.add(G.box, 0x9aa3ad, x, 0.32, z, 0, ry, 0, 0.5, 0.04, 0.95);
+      m.add(G.box, 0x9aa3ad, x - fx * 0.45, 0.62, z - fz * 0.45, 0, ry, 0, 0.5, 0.6, 0.04);
+      m.add(G.box, 0x22262c, x - fx * 0.5, 0.95, z - fz * 0.5, 0, ry, 0, 0.52, 0.05, 0.05);
+      for (const a of [-1, 1]) for (const b of [-0.4, 0.4]) m.add(G.cyl, 0x22262c, x + a * 0.2 * Math.cos(ry) + b * fx, 0.07, z - a * 0.2 * Math.sin(ry) + b * fz, 0, ry, Math.PI / 2, 0.14, 0.04, 0.14);
+      if (loaded) {
+        m.add(G.rbox, [0x1f5fbf, 0xd7263d, 0x222222][Math.abs(Math.round(x + z)) % 3], x, 0.55, z, 0, ry, 0, 0.44, 0.42, 0.7);
+        m.add(G.rbox, [0xf2c233, 0x2e9e5b, 0x7a5cff][Math.abs(Math.round(x * 3 + z)) % 3], x + fx * 0.05, 0.86, z + fz * 0.05, 0, ry + 0.2, 0, 0.36, 0.22, 0.5);
+      }
+      this.colliders.push({ minX: x - 0.45, maxX: x + 0.45, minZ: z - 0.45, maxZ: z + 0.45, low: true });
+    };
+    /** Cartel de anuncio retroiluminado en la pared, con su marco. */
+    const poster = (x: number, y: number, z: number, ry: number, title: string, sky: string, ground: string) => {
+      const t = comicTex((g, w, h) => {
+        const gr = g.createLinearGradient(0, 0, 0, h * 0.6);
+        gr.addColorStop(0, sky);
+        gr.addColorStop(1, '#fde7b0');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, w, h);
+        g.fillStyle = '#ffd23f';
+        g.beginPath();
+        g.arc(w * 0.75, h * 0.28, h * 0.11, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#2a7fc0';
+        g.fillRect(0, h * 0.55, w, h * 0.12);
+        g.fillStyle = ground;
+        g.beginPath();
+        g.moveTo(0, h);
+        g.quadraticCurveTo(w * 0.3, h * 0.5, w * 0.6, h * 0.7);
+        g.quadraticCurveTo(w * 0.85, h * 0.6, w, h * 0.75);
+        g.lineTo(w, h);
+        g.fill();
+        g.strokeStyle = INK;
+        g.lineWidth = 6;
+        g.strokeRect(3, 3, w - 6, h - 6);
+        g.textAlign = 'left';
+        inkText(g, title, 18, h * 0.16, 34, PAPER, w - 36);
+      }, 256, 384);
+      const p = new THREE.Mesh(flatPlane(1.4, 2.1), new THREE.MeshBasicMaterial({ map: t }));
+      p.position.set(x, y, z);
+      p.rotation.y = ry;
+      sc.add(p);
+      m.add(G.box, 0x3f4750, x - Math.sin(ry) * 0.04, y, z - Math.cos(ry) * 0.04, 0, ry, 0, 1.55, 2.25, 0.06);
+    };
+    // Rodapié oscuro a lo largo de las paredes de fuera (y de la aduana)
+    for (const [x0, z0, x1, z1] of [[A.minX, A.minZ, A.minX, A.maxZ], [A.maxX, A.minZ, A.maxX, A.maxZ], [A.minX, A.minZ, A.maxX, A.minZ]] as const)
+      m.add(G.box, 0x4a525c, (x0 + x1) / 2 + (x0 === x1 ? (x0 < 400 ? 0.02 : -0.02) : 0), 0.06, (z0 + z1) / 2 + (z0 === z1 ? 0.02 : 0), 0, 0, 0, Math.abs(x1 - x0) + 0.04, 0.12, Math.abs(z1 - z0) + 0.04);
     // Paredes de fuera; la de delante, con el hueco de las puertas de la calle (x 398…404)
     wall(A.minX - 0.12, A.minZ, A.minX - 0.12, A.maxZ);
     wall(A.maxX + 0.12, A.minZ, A.maxX + 0.12, A.maxZ);
@@ -1677,14 +1862,16 @@ export class Level3 implements Level {
       m.add(G.box, 0x9fd3e8, x + 3.2, 1.35, z + 1.4, 0, 0, 0, 0.7, 0.5, 1.4);
       m.add(G.box, 0x6b4a31, x + 4.4, 1.5, z, 0, 0, 0, 0.4, 3, 5.5); // estantería del fondo
       this.colliders.push({ minX: x + 2.75, maxX: x + 4.7, minZ: z - 2.6, maxZ: z + 2.6, low: true });
-      for (const [tx, tz] of [[x, z - 2], [x - 1.2, z + 1.2], [x + 0.9, z + 2.6]] as const) {
-        m.add(G.cyl, 0x22262c, tx, 0.38, tz, 0, 0, 0, 0.07, 0.76, 0.07);
-        m.add(G.cyl, 0xd9b26a, tx, 0.77, tz, 0, 0, 0, 0.8, 0.04, 0.8);
-        for (const s of [-1, 1]) {
-          m.add(G.cyl, 0x9c4a2a, tx + s * 0.65, 0.46, tz, 0, 0, 0, 0.36, 0.06, 0.36);
-          m.add(G.cyl, 0x22262c, tx + s * 0.65, 0.23, tz, 0, 0, 0, 0.05, 0.46, 0.05);
-        }
-        this.colliders.push({ minX: tx - 0.9, maxX: tx + 0.9, minZ: tz - 0.45, maxZ: tz + 0.45, round: true });
+      // Frente de la barra con su franja de color, carta colgada, tazas y bollería en la vitrina
+      m.add(G.box, 0x1f6f8b, x + 2.78, 0.75, z, 0, 0, 0, 0.04, 0.25, 4.9);
+      for (let i = 0; i < 5; i++) m.add(G.cyl, 0xffffff, x + 3.1, 1.13, z - 2 + i * 0.25, 0, 0, 0, 0.08, 0.07, 0.08);
+      for (let i = 0; i < 4; i++) m.add(G.sphere, 0xd9a35a, x + 3.2, 1.2, z + 0.9 + i * 0.3, 0, 0, 0, 0.16, 0.08, 0.12);
+      m.add(G.box, 0x1a1f28, x + 4.55, 2.6, z, 0, 0, 0, 0.05, 0.9, 2.2); // carta
+      // Mesas con sus sillas (en dos, alguien tomando algo)
+      for (const [tx, tz] of [[x, z - 2], [x - 1.4, z + 1.0], [x + 0.6, z + 2.8], [x - 2.2, z - 1.6]] as const) {
+        table(tx, tz);
+        chair(tx - 0.62, tz, Math.PI / 2);
+        chair(tx + 0.62, tz, -Math.PI / 2);
       }
     }
     // Tiendas del lado derecho: farmacia y prensa (cuartos con su escaparate) y una isla de recuerdos
@@ -1714,11 +1901,48 @@ export class Level3 implements Level {
       m.add(G.box, 0xdedbd3, x, H / 2, z, 0, 0, 0, 0.7, H, 0.7);
       this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
     }
-    for (const [x, z] of [[396, 6], [406, 6], [396, 16], [406, 15]] as const) {
-      m.add(G.cyl, 0x8a5a37, x, 0.4, z, 0, 0, 0, 0.9, 0.8, 0.9);
-      m.add(G.cone, 0x2f7d4b, x, 1.4, z, 0, 0.5, 0, 1.1, 1.4, 1.1);
-      this.colliders.push({ minX: x - 0.5, maxX: x + 0.5, minZ: z - 0.5, maxZ: z + 0.5, round: true });
+    for (const [x, z] of [[396, 7], [406, 7], [396, 16], [406, 15.5], [386, -26], [416, -30]] as const) palmPot(x, z);
+    // Pilares revestidos: zócalo y cabeza de acero
+    for (const [x, z] of [[392, 2], [410, 2], [392, 12], [410, 10]] as const) {
+      m.add(G.box, 0x9aa3ad, x, 0.15, z, 0, 0, 0, 0.78, 0.3, 0.78);
+      m.add(G.box, 0x9aa3ad, x, H - 0.15, z, 0, 0, 0, 0.78, 0.3, 0.78);
     }
+    // Lo de un aeropuerto: carros de equipaje, máquinas de vending, papeleras, reloj, cartel de suelo mojado
+    for (const [x, z, ry, l] of [[392, -18, 0.3, true], [407.5, -27, -1.2, true], [380, -30, 0.1, false], [380.6, -30, 0.1, false], [381.2, -30, 0.1, false], [399, 9.5, 2.6, true], [389, 17, -0.4, false]] as const) trolley(x, z, ry, l);
+    for (const [x, col] of [[A.minX + 0.45, 0xd7263d], [A.minX + 0.45, 0x1f5fbf]] as const) {
+      const z = col === 0xd7263d ? 0.5 : 1.5;
+      m.add(G.rbox, col, x, 0.95, z, 0, 0, 0, 0.7, 1.9, 0.85);
+      m.add(G.box, 0x9fd3e8, x + 0.36, 1.15, z - 0.1, 0, 0, 0, 0.02, 1.0, 0.55);
+      for (let j = 0; j < 4; j++) m.add(G.box, [0xf2c233, 0x2e9e5b, 0xd7263d, 0xffffff][j], x + 0.34, 0.8 + j * 0.24, z - 0.1, 0, 0, 0, 0.03, 0.12, 0.5);
+      this.colliders.push({ minX: A.minX, maxX: A.minX + 0.85, minZ: z - 0.45, maxZ: z + 0.45 });
+    }
+    for (const [x, z] of [[398.8, -15], [403.2, -15], [391, 6], [411, 6], [388, -18], [420, 9]] as const) {
+      m.add(G.cyl, 0x5a6470, x, 0.4, z, 0, 0, 0, 0.42, 0.8, 0.42);
+      m.add(G.cyl, 0x22262c, x, 0.82, z, 0, 0, 0, 0.46, 0.04, 0.46);
+      this.colliders.push({ minX: x - 0.24, maxX: x + 0.24, minZ: z - 0.24, maxZ: z + 0.24, round: true });
+    }
+    m.add(G.cone, 0xf2c233, 404, 0.3, 0, 0, 0.6, 0, 0.35, 0.6, 0.35); // suelo mojado
+    m.add(G.cyl, 0xffffff, 401, 3.6, ARR_SPLIT - 0.2, Math.PI / 2, 0, 0, 0.7, 0.06, 0.7); // reloj
+    // Aduana: mostrador con su agente, junto al paso
+    m.add(G.rbox, 0x2f5d3a, 395.5, 0.55, ARR_SPLIT - 1.6, 0, 0, 0, 1.8, 1.1, 0.7);
+    m.add(G.box, 0xe9ecef, 395.5, 1.12, ARR_SPLIT - 1.6, 0, 0, 0, 1.9, 0.05, 0.8);
+    this.colliders.push({ minX: 394.5, maxX: 396.5, minZ: ARR_SPLIT - 2, maxZ: ARR_SPLIT - 1.2, low: true });
+    // Reclamación de equipajes (objetos perdidos): un cuarto con su mostrador en la sala de equipajes
+    wall(424, -34, 424, -27, 3.2, 0x1f6f8b);
+    wall(424, -27, 426, -27, 3.2, 0x1f6f8b);
+    m.add(G.rbox, 0xe9ecef, 427.5, 0.55, -27.4, 0, 0, 0, 3, 1.1, 0.7);
+    this.colliders.push({ minX: 425.8, maxX: A.maxX, minZ: -27.8, maxZ: -27 });
+    // Carteles de Gran Canaria en las paredes
+    poster(A.minX + 0.08, 2.2, -20, Math.PI / 2, 'Maspalomas', '#5aa9e6', '#f2c97a');
+    poster(A.minX + 0.08, 2.2, -27, Math.PI / 2, 'Roque Nublo', '#7cc0ef', '#8a6a4a');
+    poster(A.maxX - 0.08, 2.2, -16.5, -Math.PI / 2, 'Las Canteras', '#4a9be0', '#f6d89a');
+    poster(A.minX + 0.08, 2.2, 3, Math.PI / 2, 'Bienvenidos', '#5aa9e6', '#2f7d4b');
+    poster(409.4, 2.2, ARR_SPLIT + 0.14, 0, 'Gran Canaria', '#7cc0ef', '#f2c97a');
+    poster(392.6, 2.2, ARR_SPLIT + 0.14, 0, 'Welcome', '#4a9be0', '#d9a35a');
+    // (las paredes de la cafetería de Gas, por fuera: carteles y una franja de azulejo)
+    poster(407.36, 1.9, 13.2, -Math.PI / 2, 'Café canario', '#d98a4a', '#6b4a31');
+    poster(407.36, 1.9, 16.2, -Math.PI / 2, 'Bocadillos', '#e6b05a', '#9c4a2a');
+    m.add(G.box, 0xe9d8b8, 407.34, 0.45, 14.6, 0, 0, 0, 0.04, 0.9, 7.2);
     // La cafetería de Gas: junto a las puertas de la calle, cerrada por la pared del vestíbulo; se entra por el lado
     // de la salida. Barra contra la pared de delante, cafetera, vitrina, mesas altas
     wall(407.5, 11, 407.5, 18.2, 3.2, 0x9c4a2a);
@@ -1728,6 +1952,17 @@ export class Level3 implements Level {
     m.add(G.box, 0x22222a, 416.4, 1.2, A.maxZ - 0.3, 0, 0, 0, 0.7, 0.55, 0.5); // cafetera
     m.add(G.box, 0x9fd3e8, 419.8, 1.35, A.maxZ - 0.8, 0, 0, 0, 1.6, 0.5, 0.7); // vitrina de bocadillos
     m.add(G.box, 0x7a5434, A.maxX - 0.3, 1.6, 17, 0, 0, 0, 0.4, 3.2, 10); // estantería de botellas, al fondo
+    m.add(G.box, 0x9c4a2a, 418, 0.75, A.maxZ - 1.22, 0, 0, 0, 6, 0.25, 0.04); // franja del frente de la barra
+    m.add(G.box, 0x1a1f28, 418, 2.6, A.maxZ - 0.05, 0, 0, 0, 3.2, 0.9, 0.05); // carta sobre la barra
+    for (let i = 0; i < 6; i++) m.add(G.cyl, 0xffffff, 415.6 + i * 0.3, 1.13, A.maxZ - 0.75, 0, 0, 0, 0.08, 0.07, 0.08);
+    for (let i = 0; i < 5; i++) m.add(G.sphere, 0xd9a35a, 419.3 + i * 0.25, 1.2, A.maxZ - 0.8, 0, 0, 0, 0.14, 0.07, 0.11);
+    // Taburetes altos con respaldo, en las mesas altas
+    for (const [x, z] of [[416.3, 15], [417.7, 15], [419.7, 18.6], [421.1, 18.6], [411, 13.3], [411, 14.7]] as const) {
+      m.add(G.cyl, 0x9c4a2a, x, 0.76, z, 0, 0, 0, 0.36, 0.05, 0.36);
+      m.add(G.cyl, 0x22262c, x, 0.38, z, 0, 0, 0, 0.04, 0.76, 0.04);
+      m.add(G.cyl, 0x22262c, x, 0.3, z, Math.PI / 2, 0, 0, 0.3, 0.02, 0.3);
+      m.add(G.cyl, 0x22262c, x, 0.02, z, 0, 0, 0, 0.32, 0.03, 0.32);
+    }
     for (let j = 0; j < 3; j++) for (let i = 0; i < 8; i++) m.add(G.cyl, [0x2f7d4b, 0x8a5a37, 0xf4c95e][(i + j) % 3], A.maxX - 0.42, 0.8 + j * 0.7, 13 + i * 1.1, 0, 0, 0, 0.12, 0.34, 0.12);
     this.colliders.push({ minX: 414.9, maxX: 421.1, minZ: A.maxZ - 1.3, maxZ: A.maxZ }, { minX: A.maxX - 0.6, maxX: A.maxX, minZ: 12, maxZ: 22 });
     for (const [x, z] of [[CAFE_GAS.x + 0.75, CAFE_GAS.z + 0.2], [417, 15], [420.4, 18.6], [411, 14]] as const) {
@@ -1746,6 +1981,7 @@ export class Level3 implements Level {
     for (const z of [14, 19]) {
       m.add(G.box, 0x4a5a6c, A.minX + 0.6, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
       m.add(G.box, 0x4a5a6c, A.minX + 0.35, 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
+      for (const dz of [-1.2, 1.2]) m.add(G.box, 0x9aa3ad, A.minX + 0.6, 0.2, z + dz, 0, 0, 0, 0.5, 0.4, 0.06);
       this.colliders.push({ minX: A.minX, maxX: A.minX + 0.95, minZ: z - 1.5, maxZ: z + 1.5 });
     }
     // Los aseos, en la pared de la derecha de la sala de equipajes (una puerta con su letrero)
@@ -1854,12 +2090,64 @@ export class Level3 implements Level {
     worker.root.rotation.y = Math.PI;
     sc.add(worker.root);
     this.arrPeople.push(worker);
+    // Más gente: en las cintas, con cartel esperando, en la aduana, en objetos perdidos, en información, limpiando,
+    // sentada en el Café Atlántico y en la cafetería de Gas, y de paso con sus maletas
+    const hue = (i: number) => new THREE.Color().setHSL((i * 0.173) % 1, 0.5, 0.45).getHex();
+    const more: [PersonLook, number, number, number, 'stand' | 'sign' | 'sit'][] = [
+      [{ ...LOOKS[0], shirt: hue(1) }, 384, -21.6, Math.PI, 'stand'],
+      [{ ...LOOKS[3], shirt: hue(2) }, 412, -21.8, Math.PI, 'stand'],
+      [{ ...LOOKS[4], shirt: hue(3) }, 410.2, -26.3, 0, 'stand'],
+      [{ ...LOOKS[5], shirt: hue(4) }, 406.3, -11.4, -Math.PI * 0.55, 'sign'],
+      [{ ...LOOKS[1], shirt: hue(5) }, 395.8, -6.4, Math.PI * 0.6, 'sign'],
+      [{ skin: 0xd9a27c, shirt: 0x2f5d3a, pants: 0x2f5d3a, hair: 0x1f1610, hairStyle: 'short', male: true }, 395.5, ARR_SPLIT - 0.8, Math.PI, 'stand'],
+      [{ skin: 0xf0c8a6, shirt: 0x1f6f8b, pants: 0x1f2d4d, hair: 0x6b3f22, hairStyle: 'pony' }, 427.5, -28.3, 0, 'stand'],
+      [{ skin: 0xe2b08c, shirt: 0x1f6f8b, pants: 0x1f2d4d, hair: 0x3a2414, hairStyle: 'bun' }, 401, 3.4, Math.PI, 'stand'],
+      [{ skin: 0xc98e64, shirt: 0x7a8a5a, pants: 0x3b4a6b, hair: 0x111111, hairStyle: 'short', male: true }, 403.8, 0.6, 2.2, 'stand'],
+      [{ ...LOOKS[2], shirt: hue(6) }, CAFE_OTHER.x - 0.62, CAFE_OTHER.z - 2, Math.PI / 2, 'sit'],
+      [{ ...LOOKS[4], shirt: hue(7) }, CAFE_OTHER.x - 1.4 + 0.62, CAFE_OTHER.z + 1.0, -Math.PI / 2, 'sit'],
+      [{ ...LOOKS[0], shirt: hue(8) }, CAFE_OTHER.x - 2.2 - 0.62, CAFE_OTHER.z - 1.6, Math.PI / 2, 'sit'],
+    ];
+    for (const [lk, x, z, ry, mode] of more) {
+      const p = makePerson(lk);
+      p.root.position.set(x, 0, z);
+      p.root.rotation.y = ry;
+      if (mode === 'sit') {
+        p.root.position.y = seatedRootY(p, 0.49);
+        this.arrSeated.push(p);
+      } else this.arrPeople.push(p);
+      if (mode === 'sign') {
+        // Con su cartel en alto: un nombre escrito a mano
+        const sg = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.32), new THREE.MeshBasicMaterial({ map: signTex(x > 400 ? 'Sra. Pérez' : 'Hans', '#fffbf0', '#141018', 256, 160), side: THREE.DoubleSide }));
+        sg.position.set(0, 1.35, 0.32);
+        p.body.add(sg);
+        p.armL.rotation.set(-1.2, 0, 0.1);
+        p.armR.rotation.set(-1.2, 0, -0.1);
+      }
+      sc.add(p.root);
+      if (mode !== 'sit') this.arrCircles.push({ x, z, r: 0.35 });
+    }
+    // De paso: de las cintas a la salida, del alquiler de coches a la calle, por el vestíbulo
+    const routes: [number, number, number, number][] = [
+      [400, -26, 401, -9],
+      [374, -8, 398, 22],
+      [418, -3.5, 399, 8],
+      [380, -22, 420, -20],
+    ];
+    routes.forEach(([ax, az, bx, bz], i) => {
+      const p = makePerson({ ...LOOKS[(i + 2) % LOOKS.length], shirt: hue(i + 12) });
+      p.body.add(new Merger().add(G.rbox, [0x1f5fbf, 0xd7263d, 0x222222, 0x2e9e5b][i], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
+      markProps(p);
+      p.root.position.set(ax, 0, az);
+      sc.add(p.root);
+      const c = { x: ax, z: az, r: 0.35 };
+      this.arrCircles.push(c);
+      this.arrWanderers.push({ p, a: [ax, az], b: [bx, bz], toB: true, wait: 0, walk: 0, c });
+    });
   }
 
   private startAirport() {
     this.phase = 'airport';
     this.scene.add(this.airGroup, this.arrGroup);
-    this.gateT = GATE_SECS;
     this.gateStage = 0;
     this.resetGate();
     if (this.player !== this.azul) {
@@ -1898,30 +2186,7 @@ export class Level3 implements Level {
 
   private stepAirport(dt: number) {
     const pp = this.player.root.position;
-    // La puerta se cierra. Si se acaba el tiempo, te llaman por megafonía y te esperan un poco: pero se nota
-    const before = Math.ceil(this.gateT);
-    this.gateT = Math.max(0, this.gateT - dt);
-    if (Math.ceil(this.gateT) !== before) this.updateHud();
-    if (this.gateStage === 0 && this.gateT < 10) {
-      this.gateStage = 1;
-      bark('Megafonía', CONCERT.gateLast);
-      audio.warn();
-      vibrate(40);
-    } else if (this.gateStage === 1 && this.gateT <= 0) {
-      this.gateStage = 2;
-      this.gateT = 9;
-      bark('Megafonía', CONCERT.gateClosing);
-      audio.warn();
-      vibrate([60, 40, 60]);
-      this.walker.shake(0.25);
-      // (a estas alturas, los de la cola ya han embarcado)
-      for (const g of this.gateQ)
-        if (g.state === 'line') {
-          g.state = 'gone';
-          g.p.root.visible = false;
-          g.circle.x = g.circle.z = 1e4;
-        }
-    }
+    // (sin reloj: el tiempo que haga falta para encontrar la puerta)
     // Viajeros: van y vuelven por el pasillo esquivando a Azul y entre ellos, sin girar en seco
     this.playerCircle.x = pp.x;
     this.playerCircle.z = pp.z;
@@ -1986,7 +2251,6 @@ export class Level3 implements Level {
       if (this.invuln <= 0 && Math.hypot(b.o.position.x - pp.x, b.o.position.z - pp.z) < 0.6 && b.o.position.y < 2) {
         this.invuln = 1.2;
         this.burgerHits++;
-        this.gateT = Math.max(1, this.gateT - 2);
         this.walker.knock.set(Math.sign(b.v.x) * 6, 0, -2);
         this.walker.shake(0.3);
         audio.hit();
@@ -2015,6 +2279,24 @@ export class Level3 implements Level {
         this.talk(this.azul, 1.5);
       }
     }
+  }
+
+  /** La gente de paso por la sala y el ala, y la que mira los aviones (también mientras Azul hace cola). */
+  private stepAirPeople(dt: number) {
+    // La gente de paso por la sala y el ala: va de un sitio a otro, espera un poco y vuelve
+    const avoid = [this.playerCircle, ...this.wanderers.map((w) => w.c)];
+    for (const w of this.wanderers) {
+      const [tx, tz] = w.toB ? w.b : w.a;
+      if (w.wait > 0) {
+        w.wait -= dt;
+        animatePerson(w.p, dt, 'idle');
+        if (w.wait <= 0) w.toB = !w.toB;
+      } else if (steerTo(w.p.root, w, tx, tz, 1.3, dt, avoid, 2.5, 0.32, w.c) < 0.4) w.wait = 1.5 + Math.random() * 4;
+      else animatePerson(w.p, dt, steerSpeed(w) > 0.1 ? 'walk' : 'idle');
+      w.c.x = w.p.root.position.x;
+      w.c.z = w.p.root.position.z;
+    }
+    for (const p of this.idlers) animatePerson(p, dt, 'idle');
   }
 
   /** El final de la cola de embarque (donde se pondría Azul ahora). */
@@ -2212,6 +2494,25 @@ export class Level3 implements Level {
       b.o.rotation.y = Math.atan2(this.tmpV.x - b.o.position.x, this.tmpV.z - b.o.position.z) + Math.PI / 2;
     }
     for (const p of this.arrPeople) animatePerson(p, dt, 'idle');
+    for (const p of this.arrSeated) {
+      animatePerson(p, dt, 'idle');
+      seatPose(p);
+    }
+    {
+      const me = { x: pp.x, z: pp.z, r: 0.38 };
+      const avoid = [me, ...this.arrCircles];
+      for (const w of this.arrWanderers) {
+        const [tx, tz] = w.toB ? w.b : w.a;
+        if (w.wait > 0) {
+          w.wait -= dt;
+          animatePerson(w.p, dt, 'idle');
+          if (w.wait <= 0) w.toB = !w.toB;
+        } else if (steerTo(w.p.root, w, tx, tz, 1.25, dt, avoid, 2.5, 0.32, w.c) < 0.4) w.wait = 2 + Math.random() * 4;
+        else animatePerson(w.p, dt, steerSpeed(w) > 0.1 ? 'walk' : 'idle');
+        w.c.x = w.p.root.position.x;
+        w.c.z = w.p.root.position.z;
+      }
+    }
     // Gas, en su mesa: mirando el móvil hasta que la ve entrar en la cafetería
     const d = Math.hypot(pp.x - gp.x, pp.z - gp.z);
     const sees = d < 9 && pp.x > 407 && pp.z > 11;
@@ -3136,7 +3437,14 @@ export class Level3 implements Level {
     const head = this.queue[0];
     if (head && this.headT <= 0) {
       const i = this.freeToilet();
-      if (i >= 0) {
+      if (i >= 0 && head === this.gasNpc) {
+        // Le toca a Gas (si ya puede: no en mitad del vídeo o de un diálogo)
+        if (this.gasMayEnter && !this.busyDialog()) {
+          this.queue.shift();
+          this.headT = 0.8;
+          this.gasEnterWc(i);
+        }
+      } else if (i >= 0) {
         this.queue.shift();
         head.mode = 'toWc';
         head.wc = i;
@@ -3160,6 +3468,8 @@ export class Level3 implements Level {
       e.tx = this.v1.x;
       e.tz = Q_Z;
     });
+    // Gas en la cola: avanza con ella (le lleva el juego)
+    if (this.gasNpc && !this.auto && this.queue.includes(this.gasNpc)) this.stepTo(this.gas, this.gasNpc, this.gasNpc.tx, this.gasNpc.tz, 1.5, dt, Math.PI / 2);
     // Los que andan sueltos esquivan a Gas y a los que caminan (no a la cola, que es apretada)
     this.playerCircle.x = pp.x;
     this.playerCircle.z = pp.z;
@@ -3175,7 +3485,7 @@ export class Level3 implements Level {
           [n.tx, n.tz] = n.next;
           n.next = undefined;
         } else if (!n.next && Math.hypot(n.p.root.position.x - n.tx, n.p.root.position.z - n.tz) < 0.12) {
-          this.wcBusyT[n.wc] = 12 + Math.random() * 10;
+          this.wcBusyT[n.wc] = this.gasNpc ? 2 + Math.random() * 2 : 12 + Math.random() * 10;
           this.wcRes[n.wc] = false;
           this.wcDoors[n.wc].hold(0.4);
           this.hide(n);
@@ -3229,21 +3539,63 @@ export class Level3 implements Level {
     this.walker.stop();
     this.trip++;
     this.phase = 'wc';
-    this.gasQueued = true;
     const t = this.tailSpot(new THREE.Vector3());
-    this.auto = { p: this.gas, st: { walk: 0 }, pts: [[t.x, t.z]], speed: 1.3, face: Math.PI / 2 };
+    const first = this.trip === 1;
+    // A la cola, de verdad: avanza cuando los de delante entran; cuando le toca y hay cabina, entra y dentro, el urinario
+    this.wcPlan = { hard: first ? 0 : 1, lines: first ? SIDE.pee.first : [], next: first ? () => this.startSeek() : () => this.afterTrip() };
+    this.gasMayEnter = false;
+    this.auto = { p: this.gas, st: { walk: 0 }, pts: [[t.x, t.z]], speed: 1.3, face: Math.PI / 2, done: () => this.gasJoinQueue() };
     audio.whoosh();
     this.updateHud();
     const chat = CHATS.temon;
-    if (this.trip === 1) {
-      // Fito empieza el temón: Gas se lo cuenta por el chat y Azul lo graba desde su sitio
+    if (first) {
+      // Fito empieza el temón: Gas se lo cuenta por el chat y Azul lo graba desde su sitio (mientras, la cola avanza)
       later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(0, 2) }, () => {
         this.phase = 'film';
         dialogue(CONCERT.filmIntro, () => this.startFilm());
       }), 1500);
     } else {
-      later(() => dialogue(SIDE.pee.again, () => this.wcVisit(1, () => this.afterTrip())), 1500);
+      later(() => dialogue(SIDE.pee.again, () => (this.gasMayEnter = true)), 1500);
     }
+  }
+
+  /** Gas se pone el último de la cola (y la cola va más deprisa: cada uno entra y sale en un momento). */
+  private gasJoinQueue() {
+    const st: Npc = { p: this.gas, mode: 'queue', tx: 0, tz: 0, wc: -1, walk: 0, circle: { x: 1e4, z: 1e4, r: 0.32 } };
+    this.gasNpc = st;
+    if (!this.queue.includes(st)) this.queue.push(st);
+    // (los de delante ya no tardan tanto: si no, era esperar un minuto mirando)
+    WC_Z.forEach((_, i) => {
+      if (!WC_BROKEN.includes(i) && this.wcBusyT[i] > 0 && this.wcBusyT[i] < Infinity) this.wcBusyT[i] = Math.min(this.wcBusyT[i], 1.5 + Math.random() * 3);
+    });
+    while (this.queue.indexOf(st) > 4) {
+      // (como mucho cuatro delante: los primeros entran ya)
+      const n = this.queue.shift()!;
+      this.hide(n);
+    }
+  }
+
+  /** Le toca a Gas y la cabina i está libre: va, se le abre la puerta, entra y, dentro, el urinario. */
+  private gasEnterWc(i: number) {
+    const plan = this.wcPlan;
+    this.gasNpc = null;
+    this.wcRes[i] = true;
+    this.auto = {
+      p: this.gas,
+      st: { walk: 0 },
+      pts: [[WC_X - 1.0, WC_Z[i]], [WC_X - 0.3, WC_Z[i]]],
+      speed: 1.3,
+      done: () => {
+        // Dentro: la puerta se cierra y la cabina queda ocupada (en rojo)
+        this.gas.root.visible = false;
+        this.wcRes[i] = false;
+        this.wcBusyT[i] = Infinity;
+        audio.knock(0.4, 160, 0.1);
+        const go = () => later(() => fadeFlash(() => this.enterCabin(plan?.hard ?? 0, i, plan?.next ?? (() => this.startSeek())), 450), 300);
+        if (plan?.lines.length) later(() => dialogue(plan.lines, go), 400);
+        else go();
+      },
+    };
   }
 
   /**
@@ -3258,30 +3610,60 @@ export class Level3 implements Level {
     this.trip++;
     this.phase = 'glasses';
     this.glassOpened.clear();
+    this.pickGlassesCabin();
     this.updateHud();
     bark('Un señor de Telde', CONCERT.queueComplain);
     later(() => bark('Gas', CONCERT.glassesReply), 1700);
     later(() => bark('Gas', SIDE.glasses.title), 3600);
   }
 
-  /** Gas intenta abrir la cabina i buscando las gafas. */
-  private tryCabin(i: number) {
-    if (WC_BROKEN.includes(i) || !this.wcFree(i)) {
-      const busyIn = !WC_BROKEN.includes(i);
-      this.wcShake[i] = 0.5;
-      audio.knock(0.4, busyIn ? 240 : 160, 0.08);
-      if (busyIn) bark('Alguien', SIDE.glasses.occupied);
-      else bark('Gas', SIDE.glasses.broken);
+  /** Las gafas están en una cabina ocupada (quien está dentro las ha visto): hay que llamar y esperar a que salga. */
+  private pickGlassesCabin() {
+    const ok = WC_Z.map((_, k) => k).filter((k) => !WC_BROKEN.includes(k));
+    const busy = ok.filter((k) => !this.wcFree(k));
+    const g = busy.length ? busy[busy.length - 1] : ok[ok.length - 1];
+    this.wcBusyT[g] = Infinity;
+    this.wcRes[g] = false;
+    this.glassCab = g;
+    this.glassOut = false;
+  }
+
+  /** Llama a una cabina ocupada: le contestan desde dentro (en la de las gafas, quien está dentro sale). */
+  private knockCabin(i: number) {
+    this.wcShake[i] = 0.35;
+    audio.knock(0.45, 240, 0.06);
+    later(() => audio.knock(0.45, 240, 0.06), 160);
+    if (i === this.glassCab && !this.glassOut) {
+      this.busy = true;
+      this.input.reset();
+      this.walker.stop();
+      this.hud.setAction(null);
+      bark('Alguien', SIDE.glasses.hasThem);
+      later(() => {
+        // Sale: la puerta se abre, se aparta y la cabina se queda abierta para Gas
+        const n = this.spawn(WC_X - 0.3, WC_Z[i]);
+        n.mode = 'leave';
+        n.tx = WC_X - 1.1;
+        n.tz = WC_Z[i] + (WC_Z[i] > WC_Z[2] ? 0.9 : -0.9);
+        n.next = [2 + Math.random() * 6, -2 + Math.random() * 6];
+        this.wcDoors[i].hold(6);
+        this.wcBusyT[i] = 0;
+        this.wcRes[i] = true; // (nadie de la cola se la quita: es para Gas)
+        this.glassOut = true;
+        later(() => {
+          bark('Alguien', SIDE.glasses.handed);
+          this.busy = false;
+        }, 900);
+      }, 2400);
       return;
     }
-    if (this.glassOpened.has(i)) {
-      bark('Gas', SIDE.glasses.already);
-      return;
-    }
+    bark('Alguien', SIDE.glasses.knockReply[this.knocks++ % SIDE.glasses.knockReply.length]);
+  }
+
+  /** Abre una cabina libre y se asoma: la cabina por dentro, desde la puerta, mirando a la repisa. */
+  private peekCabin(i: number) {
+    const isIt = i === this.glassCab;
     this.glassOpened.add(i);
-    // Nunca en la primera que se mira: en la segunda libre (o en la única que quede)
-    const others = WC_Z.map((_, k) => k).filter((k) => k !== i && !WC_BROKEN.includes(k) && this.wcFree(k) && !this.glassOpened.has(k));
-    const isIt = this.glassOpened.size >= 2 || others.length === 0;
     this.busy = true;
     this.input.reset();
     this.walker.stop();
@@ -3291,7 +3673,6 @@ export class Level3 implements Level {
     audio.knock(0.25, 420, 0.06);
     later(() =>
       fadeFlash(() => {
-        // Se asoma: la cabina por dentro, desde la puerta, mirando a la repisa
         this.cabin.group.visible = true;
         this.cabin.glasses.visible = isIt;
         const fov0 = this.camera.fov;
@@ -3319,6 +3700,7 @@ export class Level3 implements Level {
               this.camera.updateProjectionMatrix();
               this.wcRes[i] = false;
               if (isIt) {
+                this.glassCab = -1;
                 this.phase = 'wc';
                 this.updateHud();
                 this.afterTrip();
@@ -3330,59 +3712,16 @@ export class Level3 implements Level {
     450);
   }
 
+  /** ¿Hay un diálogo o un chat abierto? */
+  private busyDialog() {
+    return !!document.querySelector('.dialogue, .phone-overlay') || this.phase === 'film';
+  }
+
   /** Vuelve del baño: otra canción que se ha perdido, y a buscar a Azul. */
   private afterTrip() {
     this.missed++;
     bark('Gas', CONCERT.songLost[Math.min(this.missed - 1, CONCERT.songLost.length - 1)]);
     later(() => this.startSeek(), 900);
-  }
-
-  /**
-   * Al baño de verdad: cuando por fin le toca (fundido: los de delante ya han entrado), Gas va a una cabina libre,
-   * se le abre la puerta y entra; dentro, el urinario (en 3D); luego sale y la cola sigue. Después, `next`.
-   */
-  private wcVisit(hard: number, next: () => void) {
-    this.busy = true;
-    this.phase = 'wc';
-    this.input.reset();
-    this.walker.stop();
-    this.hud.setAction(null);
-    this.auto = null;
-    this.updateHud();
-    fadeFlash(() => {
-      // Le toca: es el primero de la cola, y detrás va llegando gente
-      for (const n of this.queue) this.hide(n);
-      this.queue.length = 0;
-      this.qShift = 1;
-      this.gasQueued = false;
-      this.gas.root.visible = true;
-      this.gas.root.position.set(Q_X0, 0, Q_Z);
-      this.gas.root.rotation.y = this.walker.facing = Math.PI / 2;
-      // Una cabina que funcione: la libre más cercana (si no hay ninguna, la que antes vaya a quedar libre)
-      let i = this.freeToilet();
-      if (i < 0) {
-        const ok = WC_Z.map((_, k) => k).filter((k) => !WC_BROKEN.includes(k));
-        i = ok.reduce((a, b) => (this.wcBusyT[a] <= this.wcBusyT[b] ? a : b));
-        this.wcBusyT[i] = 0;
-      }
-      this.wcRes[i] = true;
-      later(() => {
-        this.auto = {
-          p: this.gas,
-          st: { walk: 0 },
-          pts: [[WC_X - 1.0, WC_Z[i]], [WC_X - 0.3, WC_Z[i]]],
-          speed: 1.3,
-          done: () => {
-            // Dentro: la puerta se cierra y la cabina queda ocupada (en rojo)
-            this.gas.root.visible = false;
-            this.wcRes[i] = false;
-            this.wcBusyT[i] = Infinity;
-            audio.knock(0.4, 160, 0.1);
-            later(() => fadeFlash(() => this.enterCabin(hard, i, next), 450), 500);
-          },
-        };
-      }, 600);
-    }, 600);
   }
 
   private enterCabin(hard: number, i: number, next: () => void) {
@@ -3489,7 +3828,7 @@ export class Level3 implements Level {
     this.busy = true;
     this.updateHud();
     const chat = CHATS.temon;
-    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(2, 6) }, () => dialogue(SIDE.pee.first, () => this.wcVisit(0, () => this.startSeek()))), 1500);
+    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(2, 6) }, () => (this.gasMayEnter = true)), 1500);
   }
 
   private filmPct() {
@@ -3676,7 +4015,6 @@ export class Level3 implements Level {
     if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
-    if (this.phase === 'airport') chips += `<span class="chip${this.gateT < 10 || this.gateStage === 2 ? ' chip-alert' : ''}">🚪 ${Math.ceil(this.gateT)}s</span>`;
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
@@ -3729,14 +4067,9 @@ export class Level3 implements Level {
   /** A dónde iría la pista (solo sale si lleva 40 s sin avanzar). */
   private target(): THREE.Vector3 | null {
     switch (this.phase) {
-      case 'airport': {
-        const [x, z] = this.gateTail();
-        return this.v1.set(x, 0, z);
-      }
+      // (en el aeropuerto, ni flecha ni marcador: la puerta y a Gas se los encuentra ella)
       case 'gateQueue':
         return this.gateStep === 'ask' ? GATE_SCAN : null;
-      case 'arrivals':
-        return this.gas.root.position;
       case 'beers':
         return this.beers ? (this.beers.stage === 'carry' ? this.beers.friendAt : BAR_POS) : null;
       case 'toWc':
@@ -3910,6 +4243,7 @@ export class Level3 implements Level {
     const scripted = !!this.auto || this.phase === 'gateQueue';
     this.invuln -= dt;
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
+    if (this.airGroup.parent && this.player.root.position.x > 100 && this.player.root.position.x < 350) this.stepAirPeople(dt);
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
     this.walker.canJump = walking;
@@ -4043,13 +4377,27 @@ export class Level3 implements Level {
         action = () => this.deliverBeers();
       }
     } else if (walking && this.phase === 'glasses') {
-      // Delante de la puerta de una cabina: abrirla
-      for (let i = 0; i < WC_Z.length; i++)
-        if (Math.abs(pp.z - WC_Z[i]) < 0.62 && pp.x > WC_X - 2.3 && pp.x < WC_X - 0.5) {
+      // Delante de la puerta de una cabina: según cómo esté, abrirla, llamar o nada (y Gas lo comenta)
+      let near = -1;
+      for (let i = 0; i < WC_Z.length; i++) if (Math.abs(pp.z - WC_Z[i]) < 0.62 && pp.x > WC_X - 2.3 && pp.x < WC_X - 0.5) near = i;
+      if (near >= 0) {
+        const i = near;
+        if (i === this.glassCab && this.glassOut) {
           label = SIDE.glasses.door;
-          action = () => this.tryCabin(i);
-          break;
+          action = () => this.peekCabin(i);
+        } else if (WC_BROKEN.includes(i) || this.glassOpened.has(i)) {
+          if (this.doorSaid !== i) {
+            this.doorSaid = i;
+            bark('Gas', WC_BROKEN.includes(i) ? SIDE.glasses.broken : SIDE.glasses.already);
+          }
+        } else if (!this.wcFree(i)) {
+          label = SIDE.glasses.knock;
+          action = () => this.knockCabin(i);
+        } else {
+          label = SIDE.glasses.door;
+          action = () => this.peekCabin(i);
         }
+      } else this.doorSaid = -1;
     } else if (walking && this.phase === 'toWc') {
       if (this.trip === 1) {
         if (Math.hypot(pp.x - (WC_X - 1.3), pp.z - WC_Z[2]) < 2.4) {
@@ -4206,6 +4554,12 @@ export class Level3 implements Level {
       this.cabinView = null;
       this.cabin.group.visible = false;
       this.qShift = 0;
+      this.queue = this.queue.filter((n) => n.p !== this.gas);
+      this.gasNpc = null;
+      this.gasMayEnter = false;
+      if (this.glassCab >= 0) this.wcBusyT[this.glassCab] = 5;
+      this.glassCab = -1;
+      this.glassOut = false;
       this.busy = false;
       this.auto = null;
       this.gasQueued = false;
@@ -4298,7 +4652,9 @@ export class Level3 implements Level {
           // (Gas ya en la cola: al acabar de grabar se le ve ahí)
           this.gas.root.position.copy(this.tailSpot(new THREE.Vector3()));
           this.gas.root.rotation.y = this.walker.facing = Math.PI / 2;
-          this.gasQueued = true;
+          this.wcPlan = { hard: 0, lines: SIDE.pee.first, next: () => this.startSeek() };
+          this.gasMayEnter = false;
+          this.gasJoinQueue();
           this.phase = 'film';
           this.startFilm();
         },

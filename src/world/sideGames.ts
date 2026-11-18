@@ -2439,8 +2439,9 @@ export class GlassesHunt {
 /** Medidas de la cabina por dentro (el suelo en y = 0; la pared del urinario, en +z; la puerta, en -z). */
 const CAB = { w: 1.12, d: 1.22, h: 2.2 };
 /** El urinario: centro de la taza en la pared del fondo, y sus semiejes (en la pared: u a lo ancho, v a lo alto). */
-const BOWL = { x: 0.24, y: 0.76, z: CAB.d / 2 - 0.24, ru: 0.13, rv: 0.11 };
-const FLY = { u: 0.03, v: -0.035 };
+const BOWL = { x: 0.24, y: 0.76, z: CAB.d / 2 - 0.24, ru: 0.14, rv: 0.12 };
+/** La pegatina de la mosca: en el centro de la taza, un poco abajo (apuntar a ella es apuntar dentro). */
+const FLY = { u: 0, v: -0.02 };
 
 function flyTexture() {
   return canvasTex((g, w, h) => {
@@ -2500,7 +2501,8 @@ export class Cabin3D {
     const W = CAB.d / 2;
     // (cuerpo de cerámica en forma de concha alargada, medio metido en la pared; la taza, un hueco más oscuro)
     m.add(G.capsule, 0xeef1f2, BOWL.x, 0.86, W - 0.1, 0, 0, 0, 0.38, 0.3, 0.3);
-    m.add(G.sphere, 0xc3ccd2, BOWL.x, BOWL.y - 0.02, BOWL.z + 0.03, 0, 0, 0, BOWL.ru * 2.1, BOWL.rv * 2.4, 0.12);
+    // (la taza que se ve es exactamente la que cuenta: misma elipse)
+    m.add(G.sphere, 0xc3ccd2, BOWL.x, BOWL.y, BOWL.z + 0.03, 0, 0, 0, BOWL.ru * 2, BOWL.rv * 2, 0.12);
     m.add(G.capsule, 0xe4e9ec, BOWL.x, BOWL.y - BOWL.rv * 1.1, BOWL.z - 0.01, 0, 0, Math.PI / 2, 0.06, 0.1, 0.06); // el labio de abajo
     m.add(G.cyl, 0x7d878e, BOWL.x, BOWL.y - 0.07, BOWL.z + 0.0, Math.PI / 2 - 0.4, 0, 0, 0.06, 0.01, 0.06);
     m.add(G.cyl, 0xc0c4cc, BOWL.x, 1.32, W - 0.05, 0, 0, 0, 0.03, 0.26, 0.03); // tubo de la cisterna
@@ -2523,9 +2525,8 @@ export class Cabin3D {
     g.add(mesh);
     // La pegatina de la mosca, dentro de la taza
     const fly = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: flyTexture(), transparent: true, alphaTest: 0.4 }));
-    fly.position.set(BOWL.x + FLY.u, BOWL.y + FLY.v, BOWL.z - 0.04);
+    fly.position.set(BOWL.x + FLY.u, BOWL.y + FLY.v, BOWL.z - 0.032);
     fly.rotation.y = Math.PI;
-    fly.rotation.x = 0.3;
     g.add(fly);
     // Las gafas de sol de Gas (en la repisa, si están)
     const gm = new Merger(false);
@@ -2655,13 +2656,13 @@ export class PeeAim3D {
     const u = this.aim.x;
     const v = this.aim.y * press + (-BOWL.y + 0.05) * (1 - press);
     const inBowl = (u / BOWL.ru) ** 2 + (v / BOWL.rv) ** 2 < 1;
-    const onFly = Math.hypot(u - FLY.u, v - FLY.v) < 0.03;
+    const onFly = Math.hypot(u - FLY.u, v - FLY.v) < 0.035;
     this.total += dt;
     if (inBowl) this.inside += dt;
     if (onFly) this.onFly += dt;
     // Dónde da: en la taza (un poco hundida), en la pared del fondo o, si cae muy bajo, en el suelo
     const y = BOWL.y + v;
-    if (inBowl) this.hit.set(BOWL.x + u, y, BOWL.z);
+    if (inBowl) this.hit.set(BOWL.x + u, y, BOWL.z - 0.03 + 0.06 * (1 - Math.sqrt(Math.max(0, 1 - (u / BOWL.ru) ** 2 - (v / BOWL.rv) ** 2))));
     else if (y > 0.02) this.hit.set(BOWL.x + u, y, Math.abs(u) < 0.18 && y > 0.45 && y < 1.2 ? CAB.d / 2 - 0.31 : CAB.d / 2 - 0.01);
     else this.hit.set(BOWL.x + u, 0.005, CAB.d / 2 - 0.12);
     // El chorro: un arco que sale de Gas, más fino cuanto menos fuerza
@@ -2671,7 +2672,7 @@ export class PeeAim3D {
     this.stream.geometry.dispose();
     this.stream.geometry = new THREE.TubeGeometry(curve, 18, 0.0035 + press * 0.0035, 5, false);
     // La mira, en la pared (verde si cae dentro)
-    this.reticle.position.set(BOWL.x + this.aim.x, BOWL.y + this.aim.y, BOWL.z - 0.08);
+    this.reticle.position.set(BOWL.x + this.aim.x, BOWL.y + this.aim.y, BOWL.z - 0.036);
     this.reticleMat.color.setHex(inBowl ? 0x5fcf80 : 0xe2543a);
     // Salpicaduras: en la taza rebotan poco; fuera caen al suelo y hacen charco
     for (let i = 0; i < 2; i++) {

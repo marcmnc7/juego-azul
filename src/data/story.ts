@@ -1031,11 +1031,17 @@ export const SIDE = {
     title: '🕶️ ¿En qué cabina te las has dejado?',
     hint: 'Acércate a una puerta y ábrela',
     door: '🚪 Abrir',
+    knock: '✊ Llamar',
+    /** Lo que contestan desde dentro de una ocupada (inventado). */
+    knockReply: ['¡Ocupado!', '¡Que hay cola, eh!', '¡Un momento, hombre!'],
+    /** En la de las gafas, quien está dentro (inventado). */
+    hasThem: '¿Unas gafas de sol? Sí, aquí hay unas… ¡Ya salgo!',
+    handed: 'Ahí las tienes, en la repisa.',
     already: 'Aquí ya he mirado',
     broken: 'Averiado. Esta ni se abre',
     /** La voz de quien está dentro (inventado). */
     occupied: '¡OCUPADO!',
     empty: ['Aquí no están', 'Tampoco. Qué asco, por cierto', 'Nada. Solo papel por el suelo', 'Ni rastro'],
-    found: '🕶️ ¡Aquí estaban, en la repisa!',
+    found: '🕶️ ¡Mis gafas! En la repisa, donde las dejé.',
   },
 };
