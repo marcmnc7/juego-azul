@@ -412,6 +412,8 @@ export const CONCERT = {
   /** Los de la cola, al verle mirar las cabinas sin hacer cola (inventado). */
   queueComplain: '¡Eh, mi niño, que hay cola!',
   glassesReply: '¡Solo miro si están mis gafas!',
+  /** Lo que se dice en la cola de los baños mientras Gas espera (inventado). */
+  queueBanter: ['¡Venga, que se acaba el concierto!', '¿Pero qué hace ahí dentro tanto rato?', 'Tres averiadas, mi niño. Tres.', 'Esta me la sé… ¡y me la estoy perdiendo!', '¡Toc, toc! ¿Te queda mucho?'],
   gasSmoke: { who: 'Gas', text: '¿Y el tabaco? ¿A la papelera? Esa es mi Azul.' } as Line,
   /** Al acabar el ritmo (inventado). */
   rhythmDone: (hits: number, total: number) => `¡${hits} de ${total}! Qué concierto.`,
@@ -1013,10 +1015,10 @@ export const SIDE = {
     end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
   },
   pee: {
-    first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con la mosca pegada en el urinario de la cabina mirándole.' }] as Line[],
-    again: [{ who: 'Narrador', text: 'Otra vez el urinario. Y otra cerveza más que la última.' }] as Line[],
+    first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con una mosca pintada dentro del váter, mirándole.' }] as Line[],
+    again: [{ who: 'Narrador', text: 'Otra vez a la cola del váter. Y otra cerveza más que la última.' }] as Line[],
     title: '🎯 Apunta a la mosca',
-    hint: 'Arrastra el dedo para apuntar. Al final pierde fuerza: apunta más arriba',
+    hint: 'Arrastra el dedo para apuntar dentro del váter. Al final pierde fuerza: apunta más al fondo',
     tank: 'Vejiga',
     great: '🎯 Ni una gota fuera. Así da gusto',
     ok: '🎯 Casi todo dentro. Nadie tiene que saberlo',

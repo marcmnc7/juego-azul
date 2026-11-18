@@ -165,7 +165,7 @@ setSurface(0x7d8087, Surf.Asphalt); // la pista del aeropuerto
 /** Alguien del público con vida propia: hace cola, entra al baño, sale, o intenta colarse. */
 interface Npc extends SteerState {
   p: Person;
-  mode: 'free' | 'queue' | 'toWc' | 'leave' | 'tail';
+  mode: 'free' | 'queue' | 'toWc' | 'closing' | 'leave' | 'tail';
   tx: number;
   tz: number;
   wc: number;
@@ -173,6 +173,10 @@ interface Npc extends SteerState {
   circle: Circle;
   /** Siguiente punto del camino (para no cortar por las cabinas al entrar o salir del WC). */
   next?: [number, number];
+  /** Cómo espera en la cola: mirando el móvil, bailando lo que suena, impaciente o quieto. */
+  mood?: 'phone' | 'dance' | 'impatient' | 'idle';
+  /** Ya dentro de la cabina, de cara a la puerta mientras se cierra. */
+  t?: number;
 }
 /** Los de la cola de embarque de la puerta 26: esperan, enseñan la tarjeta en el torno y entran al finger. */
 interface GateNpc extends SteerState {
@@ -426,6 +430,67 @@ interface RNote {
 }
 
 // Riff original en Mi menor (semitonos respecto a La4). Índice = corchea dentro de 2 compases.
+/**
+ * Maleta de cabina de ruedas, de verdad: cuerpo, ruedas, asa extensible de dos varillas con su empuñadura. El punto
+ * de giro, en las ruedas. Va en la raíz de quien la lleva (ver caseStep).
+ */
+function rollCase(color: number) {
+  const g = new THREE.Group();
+  const m = new Merger();
+  m.add(G.rbox, color, 0, 0.31, 0, 0, 0, 0, 0.36, 0.5, 0.22);
+  m.add(G.box, new THREE.Color(color).multiplyScalar(0.7).getHex(), 0, 0.31, 0.112, 0, 0, 0, 0.3, 0.42, 0.01); // bolsillo
+  for (const x of [-0.13, 0.13]) {
+    m.add(G.cyl, 0x111111, x, 0.04, -0.07, 0, 0, Math.PI / 2, 0.08, 0.04, 0.08); // rueda
+    m.add(G.cyl, 0x9aa3ad, x * 0.75, 0.7, -0.085, 0, 0, 0, 0.018, 0.34, 0.018); // varilla del asa
+  }
+  m.add(G.box, 0x222222, 0, 0.87, -0.085, 0, 0, 0, 0.24, 0.035, 0.04); // empuñadura
+  m.add(G.box, 0x222222, 0, 0.58, 0.0, 0, 0, 0, 0.12, 0.025, 0.05); // asa de arriba
+  const mesh = m.mesh();
+  mesh.userData.comicBent = true;
+  g.add(mesh);
+  return g;
+}
+
+/**
+ * Le pone a alguien su maleta de ruedas (a su izquierda) y, al andar, la mano izquierda agarra la empuñadura de
+ * verdad (IK del brazo, después de animar). `posts`: donde se apuntan esas funciones (se quitan al salir).
+ */
+function giveCase(p: Person, color: number, posts: ((dt: number) => void)[]) {
+  const c = rollCase(color);
+  c.position.set(0.38, 0, 0.02);
+  p.root.add(c);
+  p.root.userData.case = c;
+  p.root.userData.caseK = 0;
+  markProps(p);
+  const r = p.rig;
+  if (!r) return;
+  const grip = new THREE.Vector3(), pole = new THREE.Vector3();
+  const post = () => {
+    if (!p.root.visible || !p.root.parent || (p.root.userData.caseK as number) < 0.35) return;
+    const up = r.bones.get('LeftArm'), lo = r.bones.get('LeftForeArm'), hand = r.bones.get('LeftHand');
+    if (!up || !lo || !hand) return;
+    c.updateWorldMatrix(true, false);
+    grip.set(0, 0.87, -0.085).applyMatrix4(c.matrixWorld);
+    // (el codo hacia fuera y abajo)
+    pole.set(0.6, 0.6, 0.1).applyMatrix4(p.root.matrixWorld);
+    twoBone(up, lo, hand, grip, pole, Math.min(1, ((p.root.userData.caseK as number) - 0.35) / 0.4));
+  };
+  rigPost.add(post);
+  posts.push(post);
+}
+
+/**
+ * La maleta, cada fotograma (después de animar): andando, tirada de la empuñadura, detrás y algo a la izquierda,
+ * inclinada hacia la mano, con el brazo izquierdo un poco atrás; quieto, de pie a su lado y el brazo suelto.
+ */
+function caseStep(p: Person, walking: boolean, dt: number) {
+  const c = p.root.userData.case as THREE.Group | undefined;
+  if (!c) return;
+  const k = (p.root.userData.caseK = THREE.MathUtils.clamp((p.root.userData.caseK as number) + (walking ? dt : -dt) * 3, 0, 1));
+  c.position.set(THREE.MathUtils.lerp(0.38, 0.21, k), 0, THREE.MathUtils.lerp(0.02, -0.52, k));
+  c.rotation.x = 0.46 * k;
+}
+
 const RIFF_A: [number, number][] = [[0, -17], [2, -17], [3, -14], [4, -12], [6, -14], [8, -17], [10, -17], [11, -14], [12, -10], [13, -12], [14, -14]];
 const RIFF_B: [number, number][] = [[0, -12], [2, -12], [3, -10], [4, -7], [6, -10], [8, -12], [10, -14], [12, -17], [14, -17]];
 const SONG = [RIFF_A, RIFF_A, RIFF_B, RIFF_A, RIFF_B, RIFF_B, RIFF_A];
@@ -701,6 +766,12 @@ export class Level3 implements Level {
   /** Gas en la cola del baño (como uno más), si puede ya entrar, y qué pasa al entrar y al salir. */
   private gasNpc: Npc | null = null;
   private gasMayEnter = false;
+  /** La cabina a la que va Gas (para abrirle la puerta), y lo que se dice en la cola. */
+  private gasDoor = -1;
+  /** Gas girándose dentro de la cabina antes de cerrar (hacia dónde). */
+  private gasTurn: number | null = null;
+  private banterT = 4;
+  private banterI = 0;
   private wcPlan: { hard: number; lines: Line[]; next: () => void } | null = null;
   /** Las gafas: cabinas ya miradas, y puertas que traquetean (averiadas u ocupadas). */
   private glassOpened = new Set<number>();
@@ -1169,8 +1240,7 @@ export class Level3 implements Level {
       const p = makePerson(lk);
       const [x, z] = gateSlot(i);
       p.root.position.set(x, 0, z);
-      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf][i], 0.42, 0.35, -0.22, 0, 0, 0, 0.34, 0.55, 0.24).mesh());
-      markProps(p);
+      giveCase(p, [0x222222, 0xd7263d, 0x1f5fbf][i], this.posts);
       sc.add(p.root);
       const circle = { x, z, r: 0.32 };
       this.gateQ.push({ p, walk: 0, state: 'line', t: 0, circle });
@@ -1566,8 +1636,7 @@ export class Level3 implements Level {
     // Viajeros con prisa, de un lado a otro del pasillo (se dan la vuelta antes de la sala de embarque)
     for (let i = 0; i < 4; i++) {
       const p = makePerson({ ...LOOKS[i], shirt: [0x34495e, 0x8e44ad, 0x16a085, 0xc0392b][i] });
-      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777][i], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
-      markProps(p);
+      giveCase(p, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777][i], this.posts);
       p.root.position.set(A.minX + 2 + i * 2.6, 0, -22 + i * 11);
       sc.add(p.root);
       this.travelers.push({ p, dir: i % 2 ? 1 : -1, x: p.root.position.x, walk: 0, c: { x: 0, z: 0, r: 0.35 } });
@@ -1613,8 +1682,7 @@ export class Level3 implements Level {
     ];
     routes.forEach(([ax, az, bx, bz], i) => {
       const p = makePerson({ ...LOOKS[(i + 1) % LOOKS.length], shirt: hue(i + 20) });
-      p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777, 0x2e9e5b][i % 5], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
-      markProps(p);
+      giveCase(p, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777, 0x2e9e5b][i % 5], this.posts);
       const k = (i * 0.37) % 1;
       p.root.position.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
       sc.add(p.root);
@@ -2135,8 +2203,7 @@ export class Level3 implements Level {
     ];
     routes.forEach(([ax, az, bx, bz], i) => {
       const p = makePerson({ ...LOOKS[(i + 2) % LOOKS.length], shirt: hue(i + 12) });
-      p.body.add(new Merger().add(G.rbox, [0x1f5fbf, 0xd7263d, 0x222222, 0x2e9e5b][i], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
-      markProps(p);
+      giveCase(p, [0x1f5fbf, 0xd7263d, 0x222222, 0x2e9e5b][i], this.posts);
       p.root.position.set(ax, 0, az);
       sc.add(p.root);
       const c = { x: ax, z: az, r: 0.35 };
@@ -2198,7 +2265,9 @@ export class Level3 implements Level {
       if (steerTo(t.p.root, t, t.tx, tz, 1.6, dt, others, 2.5, 0.32, t.c) < 0.4) t.dir *= -1;
       // Vuelve poco a poco a su carril tras esquivar
       r.x += (t.tx - r.x) * Math.min(1, dt * 0.6);
-      animatePerson(t.p, dt, steerSpeed(t) > 0.1 ? 'walk' : 'idle');
+      const tw = steerSpeed(t) > 0.1;
+      animatePerson(t.p, dt, tw ? 'walk' : 'idle');
+      caseStep(t.p, tw, dt);
       t.c.x = r.x;
       t.c.z = r.z;
     }
@@ -2290,9 +2359,14 @@ export class Level3 implements Level {
       if (w.wait > 0) {
         w.wait -= dt;
         animatePerson(w.p, dt, 'idle');
+        caseStep(w.p, false, dt);
         if (w.wait <= 0) w.toB = !w.toB;
       } else if (steerTo(w.p.root, w, tx, tz, 1.3, dt, avoid, 2.5, 0.32, w.c) < 0.4) w.wait = 1.5 + Math.random() * 4;
-      else animatePerson(w.p, dt, steerSpeed(w) > 0.1 ? 'walk' : 'idle');
+      else {
+        const ww = steerSpeed(w) > 0.1;
+        animatePerson(w.p, dt, ww ? 'walk' : 'idle');
+        caseStep(w.p, ww, dt);
+      }
       w.c.x = w.p.root.position.x;
       w.c.z = w.p.root.position.z;
     }
@@ -2379,6 +2453,7 @@ export class Level3 implements Level {
         }
         g.p.root.position.y = fingerY(g.p.root.position.z);
       }
+      if (g.state !== 'gone') caseStep(g.p, steerSpeed(g) > 0.1, dt);
       g.circle.x = g.state === 'gone' ? 1e4 : g.p.root.position.x;
       g.circle.z = g.state === 'gone' ? 1e4 : g.p.root.position.z;
     }
@@ -2506,9 +2581,14 @@ export class Level3 implements Level {
         if (w.wait > 0) {
           w.wait -= dt;
           animatePerson(w.p, dt, 'idle');
+          caseStep(w.p, false, dt);
           if (w.wait <= 0) w.toB = !w.toB;
         } else if (steerTo(w.p.root, w, tx, tz, 1.25, dt, avoid, 2.5, 0.32, w.c) < 0.4) w.wait = 2 + Math.random() * 4;
-        else animatePerson(w.p, dt, steerSpeed(w) > 0.1 ? 'walk' : 'idle');
+        else {
+          const ww = steerSpeed(w) > 0.1;
+          animatePerson(w.p, dt, ww ? 'walk' : 'idle');
+          caseStep(w.p, ww, dt);
+        }
         w.c.x = w.p.root.position.x;
         w.c.z = w.p.root.position.z;
       }
@@ -3274,14 +3354,20 @@ export class Level3 implements Level {
     for (let i = 0; i < WC_Z.length; i++) {
       const z = WC_Z[i];
       const fx = WC_X - 0.62; // cara de la puerta
-      m.add(G.box, 0x2a63c4, WC_X, 1.15, z, 0, 0, 0, 1.2, 2.3, 1.3); // cabina de plástico
+      // Cabina de plástico, hueca: fondo, laterales, el marco de la puerta (dintel y jambas), techo blanco y base
+      m.add(G.box, 0x2a63c4, WC_X + 0.58, 1.15, z, 0, 0, 0, 0.05, 2.3, 1.3);
+      for (const sz of [-1, 1]) m.add(G.box, 0x2a63c4, WC_X, 1.15, z + sz * 0.63, 0, 0, 0, 1.2, 2.3, 0.05);
+      m.add(G.box, 0x2a63c4, fx + 0.02, 2.2, z, 0, 0, 0, 0.06, 0.2, 1.3);
+      for (const sz of [-1, 1]) m.add(G.box, 0x2a63c4, fx + 0.02, 1.1, z + sz * 0.6, 0, 0, 0, 0.06, 2.2, 0.1);
       m.add(G.cyl, 0xe9eef5, WC_X, 2.36, z, 0, 0, 0, 1.45, 0.14, 1.45); // techo blanco
       m.add(G.box, 0xe9eef5, WC_X, 0.04, z, 0, 0, 0, 1.3, 0.08, 1.4); // base
-      // Lo de dentro, que se ve con la puerta abierta
-      const dark = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.0), new THREE.MeshBasicMaterial({ color: 0x0c1220 }));
-      dark.position.set(fx - 0.004, 1.08, z);
-      dark.rotation.y = -Math.PI / 2;
-      sc.add(dark);
+      // Dentro (se ve con la puerta abierta): suelo oscuro, el váter al fondo con su asiento negro, el rollo y la rejilla
+      m.add(G.box, 0x4c535c, WC_X, 0.085, z, 0, 0, 0, 1.1, 0.01, 1.2);
+      m.add(G.box, 0xe9eef5, WC_X + 0.4, 0.62, z, 0, 0, 0, 0.18, 0.5, 0.46); // depósito
+      m.add(G.box, 0xe9eef5, WC_X + 0.2, 0.25, z, 0, 0, 0, 0.42, 0.34, 0.36); // taza
+      m.add(G.box, 0x2a2d33, WC_X + 0.2, 0.43, z, 0, 0, 0, 0.44, 0.03, 0.38); // asiento
+      m.add(G.cyl, 0xf6f2e8, WC_X + 0.1, 0.95, z + 0.52, Math.PI / 2, 0, 0, 0.12, 0.12, 0.12);
+      m.add(G.box, 0x5d7fa8, WC_X + 0.55, 2.0, z, 0, 0, 0, 0.02, 0.12, 0.45);
       // La puerta: bisagra en el lado de +z, se abre hacia fuera cuando alguien entra o sale. Su x local
       // va de la bisagra al tirador y su -z local mira hacia fuera
       const box = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
@@ -3298,6 +3384,18 @@ export class Level3 implements Level {
       const ind = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.04), box);
       ind.position.set(0.86, 1.2, -0.04);
       door.leaf.add(pl, ind);
+      if (WC_BROKEN.includes(i)) {
+        // Averiada: un folio pegado con cinta y dos tiras de cinta de obra en aspa
+        const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.3), new THREE.MeshBasicMaterial({ map: signTex('AVERIADO', '#fffbf0', '#c0392b', 256, 180) }));
+        paper.position.set(0.45, 1.05, -0.035);
+        paper.rotation.set(0, Math.PI, 0.06);
+        const tape = new Merger(false);
+        for (const sgn of [-1, 1]) {
+          tape.add(G.box, 0xd7263d, 0.5, 1.15, -0.03, 0, 0, sgn * 0.75, 1.1, 0.06, 0.005);
+          for (let k = -2; k <= 2; k++) tape.add(G.box, 0xfffbf0, 0.5 + Math.cos(sgn * 0.75) * k * 0.2, 1.15 + Math.sin(sgn * 0.75) * k * 0.2, -0.033, 0, 0, sgn * 0.75, 0.08, 0.062, 0.005);
+        }
+        door.leaf.add(paper, tape.mesh());
+      }
       sc.add(door.group);
       this.wcDoors.push(door);
       // Piloto grande encima de la puerta, visible desde lejos: bombilla de tebeo (verde o roja)
@@ -3361,7 +3459,7 @@ export class Level3 implements Level {
       p.root.visible = false;
       p.root.position.set(1e4, 0, 1e4);
       this.scene.add(p.root);
-      const n: Npc = { p, mode: 'free', tx: 0, tz: 0, wc: -1, walk: Math.random() * 6, circle: { x: 1e4, z: 1e4, r: 0.32 } };
+      const n: Npc = { p, mode: 'free', tx: 0, tz: 0, wc: -1, walk: Math.random() * 6, circle: { x: 1e4, z: 1e4, r: 0.32 }, mood: (['phone', 'dance', 'impatient', 'idle'] as const)[i % 4] };
       this.npcs.push(n);
     }
     for (let k = 0; k < 7; k++) {
@@ -3419,11 +3517,12 @@ export class Level3 implements Level {
       if (this.wcBusyT[i] <= 0) continue;
       this.wcBusyT[i] -= dt;
       // Va a salir alguien: primero se abre la puerta
-      if (this.wcBusyT[i] < 0.5 && !this.wcRes[i]) this.wcDoors[i].hold(1.3);
+      if (this.wcBusyT[i] < 0.6 && !this.wcRes[i]) this.wcDoors[i].hold(2.2);
       if (this.wcBusyT[i] <= 0 && !this.wcRes[i]) {
         // Sale alguien (de dentro, por la puerta abierta) y se vuelve al concierto
-        const n = this.spawn(WC_X - 0.3, WC_Z[i]);
+        const n = this.spawn(WC_X - 0.2, WC_Z[i]);
         n.mode = 'leave';
+        n.p.root.rotation.y = -Math.PI / 2; // (de cara a la puerta: sale andando hacia delante)
         // Primero sale por la puerta, recto; luego al concierto
         n.tx = WC_X - 1.2;
         n.tz = WC_Z[i];
@@ -3451,7 +3550,7 @@ export class Level3 implements Level {
         // Delante de su puerta y luego dentro (la puerta se le abre al llegar)
         head.tx = WC_X - 1.0;
         head.tz = WC_Z[i];
-        head.next = [WC_X - 0.3, WC_Z[i]];
+        head.next = [WC_X - 0.2, WC_Z[i]];
         this.wcRes[i] = true;
         this.headT = 0.8;
       }
@@ -3479,18 +3578,33 @@ export class Level3 implements Level {
     for (const n of this.npcs) {
       if (n.mode === 'free') continue;
       const r = n.p.root.position;
-      if (n.mode === 'queue') this.stepTo(n.p, n, n.tx, n.tz, 1.5, dt, Math.PI / 2);
-      else if (n.mode === 'toWc') {
+      if (n.mode === 'queue') {
+        // Avanza andando; parado, cada uno a lo suyo
+        this.stepTo(n.p, n, n.tx, n.tz, 1.5, dt, Math.PI / 2, false);
+        if (steerSpeed(n) > 0.08) animatePerson(n.p, dt, 'walk');
+        else this.queueMood(n, dt);
+      } else if (n.mode === 'toWc') {
+        // Al acercarse a su cabina, la abre
+        if (Math.hypot(r.x - (WC_X - 0.62), r.z - WC_Z[n.wc]) < 1.3) this.wcDoors[n.wc].hold(0.5);
         if (this.stepTo(n.p, n, n.tx, n.tz, 1.6, dt, undefined, true, this.movingAvoid, n.circle) && n.next) {
           [n.tx, n.tz] = n.next;
           n.next = undefined;
         } else if (!n.next && Math.hypot(n.p.root.position.x - n.tx, n.p.root.position.z - n.tz) < 0.12) {
-          this.wcBusyT[n.wc] = this.gasNpc ? 2 + Math.random() * 2 : 12 + Math.random() * 10;
+          // Dentro: se da la vuelta, de cara a la puerta, y la cierra
+          n.mode = 'closing';
+          n.t = 0.7;
+          this.wcBusyT[n.wc] = this.gasNpc ? 4 + Math.random() * 3 : 12 + Math.random() * 10;
           this.wcRes[n.wc] = false;
-          this.wcDoors[n.wc].hold(0.4);
+          this.wcDoors[n.wc].hold(0.7);
+        }
+      } else if (n.mode === 'closing') {
+        faceTo(n.p.root, -Math.PI / 2, dt, 8);
+        animatePerson(n.p, dt, 'idle');
+        n.t = (n.t ?? 0) - dt;
+        if (n.t <= 0 && this.wcDoors[n.wc].open < 0.3) {
           this.hide(n);
           const d = pp.distanceTo(this.v1.set(WC_X, 0, WC_Z[n.wc]));
-          if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 160, 0.1);
+          if (d < 12) audio.knock(0.5 / (1 + d * 0.3), 160, 0.1); // el pestillo
         }
       } else if (n.mode === 'leave') {
         if (this.stepTo(n.p, n, n.tx, n.tz, 1.4, dt, undefined, true, this.movingAvoid, n.circle)) {
@@ -3510,10 +3624,28 @@ export class Level3 implements Level {
       n.circle.z = r.z;
     }
     for (const n of this.npcs) if (n.mode === 'free') n.circle.x = n.circle.z = 1e4;
+    // Las puertas no se abren solas al pasar alguien: solo cuando alguien entra o sale (las ocupadas, con alguien
+    // dentro, siempre cerradas; las averiadas, nunca). Gas, al entrar en la suya, la abre al llegar
+    if (this.gasDoor >= 0 && Math.hypot(pp.x - (WC_X - 0.62), pp.z - WC_Z[this.gasDoor]) < 1.3) this.wcDoors[this.gasDoor].hold(0.5);
     this.wcWho.length = 0;
-    for (const n of this.npcs) if (n.p.root.visible) this.wcWho.push(n.p.root.position);
-    if (this.player.root.visible) this.wcWho.push(this.player.root.position);
     for (const d of this.wcDoors) d.update(dt, this.wcWho, this.camera.position);
+    // De vez en cuando, en una ocupada, alguien se mueve dentro (la puerta da un golpecito)
+    if (Math.random() < dt * 0.25) {
+      const busy = WC_Z.map((_, k) => k).filter((k) => !WC_BROKEN.includes(k) && !this.wcFree(k) && this.wcDoors[k].open === 0);
+      const k = busy[Math.floor(Math.random() * busy.length)];
+      if (k !== undefined && pp.distanceTo(this.v1.set(WC_X, 0, WC_Z[k])) < 9) {
+        this.wcShake[k] = 0.18;
+        audio.knock(0.18, 200, 0.05);
+      }
+    }
+    // Lo que se dice en la cola mientras Gas espera en ella
+    if (this.gasNpc && this.queue.includes(this.gasNpc) && !this.busyDialog()) {
+      this.banterT -= dt;
+      if (this.banterT <= 0) {
+        this.banterT = 7 + Math.random() * 5;
+        bark('Un señor de Telde', CONCERT.queueBanter[this.banterI++ % CONCERT.queueBanter.length]);
+      }
+    }
     // (la puerta que no se abre traquetea un momento)
     this.wcShake.forEach((t, i) => {
       if (t <= 0) return;
@@ -3521,6 +3653,29 @@ export class Level3 implements Level {
       this.wcDoors[i].leaf.rotation.y += Math.sin(this.t * 70) * 0.04 * Math.min(1, t * 3);
     });
     this.paintToilets();
+  }
+
+  /** Cómo espera cada uno en la cola, parado: con el móvil, bailando lo que suena, impaciente o quieto. */
+  private queueMood(n: Npc, dt: number) {
+    const p = n.p;
+    faceTo(p.root, Math.PI / 2, dt, 4);
+    switch (n.mood) {
+      case 'dance':
+        animatePerson(p, dt, 'dance', 0, this.t * Math.PI * 2 + n.walk);
+        break;
+      case 'impatient':
+        // Gesticula de vez en cuando, mirando a las cabinas
+        animatePerson(p, dt, Math.sin(this.t * 0.7 + n.walk) > 0.6 ? 'talk' : 'idle');
+        break;
+      case 'phone':
+        animatePerson(p, dt, 'idle');
+        p.armR.rotation.x = -1.3;
+        p.elbowR.rotation.x = -1.1;
+        p.head.rotation.x = 0.35;
+        break;
+      default:
+        animatePerson(p, dt, 'idle');
+    }
   }
 
   /** Final de la cola, donde Gas se pone. */
@@ -3580,20 +3735,26 @@ export class Level3 implements Level {
     const plan = this.wcPlan;
     this.gasNpc = null;
     this.wcRes[i] = true;
+    this.gasDoor = i;
     this.auto = {
       p: this.gas,
       st: { walk: 0 },
-      pts: [[WC_X - 1.0, WC_Z[i]], [WC_X - 0.3, WC_Z[i]]],
+      pts: [[WC_X - 1.0, WC_Z[i]], [WC_X - 0.2, WC_Z[i]]],
       speed: 1.3,
       done: () => {
-        // Dentro: la puerta se cierra y la cabina queda ocupada (en rojo)
-        this.gas.root.visible = false;
+        // Dentro, se da la vuelta (de cara a la puerta) y la cierra: la cabina queda ocupada (en rojo)
+        this.gasDoor = -1;
+        this.gasTurn = -Math.PI / 2;
         this.wcRes[i] = false;
         this.wcBusyT[i] = Infinity;
-        audio.knock(0.4, 160, 0.1);
-        const go = () => later(() => fadeFlash(() => this.enterCabin(plan?.hard ?? 0, i, plan?.next ?? (() => this.startSeek())), 450), 300);
-        if (plan?.lines.length) later(() => dialogue(plan.lines, go), 400);
-        else go();
+        later(() => {
+          this.gasTurn = null;
+          this.gas.root.visible = false;
+          audio.knock(0.4, 160, 0.1);
+          const go = () => later(() => fadeFlash(() => this.enterCabin(plan?.hard ?? 0, i, plan?.next ?? (() => this.startSeek())), 450), 300);
+          if (plan?.lines.length) later(() => dialogue(plan.lines, go), 400);
+          else go();
+        }, 900);
       },
     };
   }
@@ -3641,8 +3802,9 @@ export class Level3 implements Level {
       bark('Alguien', SIDE.glasses.hasThem);
       later(() => {
         // Sale: la puerta se abre, se aparta y la cabina se queda abierta para Gas
-        const n = this.spawn(WC_X - 0.3, WC_Z[i]);
+        const n = this.spawn(WC_X - 0.2, WC_Z[i]);
         n.mode = 'leave';
+        n.p.root.rotation.y = -Math.PI / 2;
         n.tx = WC_X - 1.1;
         n.tz = WC_Z[i] + (WC_Z[i] > WC_Z[2] ? 0.9 : -0.9);
         n.next = [2 + Math.random() * 6, -2 + Math.random() * 6];
@@ -3731,11 +3893,21 @@ export class Level3 implements Level {
         // Sale: la puerta se abre, la cabina queda libre y él vuelve al concierto
         this.qShift = 0;
         this.gas.root.visible = true;
-        this.gas.root.position.set(WC_X - 0.3, 0, WC_Z[i]);
+        this.gas.root.position.set(WC_X - 0.2, 0, WC_Z[i]);
         this.gas.root.rotation.y = this.walker.facing = -Math.PI / 2;
         this.wcBusyT[i] = 0;
-        this.wcDoors[i].hold(1.4);
-        this.auto = { p: this.gas, st: { walk: 0 }, pts: [[WC_X - 1.8, WC_Z[i]]], speed: 1.3, done: () => next() };
+        this.wcRes[i] = true; // (hasta que salga, que no entre nadie)
+        this.wcDoors[i].hold(2.2);
+        this.auto = {
+          p: this.gas,
+          st: { walk: 0 },
+          pts: [[WC_X - 1.8, WC_Z[i]]],
+          speed: 1.3,
+          done: () => {
+            this.wcRes[i] = false;
+            next();
+          },
+        };
       }, 450);
     });
   }
@@ -4240,7 +4412,8 @@ export class Level3 implements Level {
     // Personaje que se lleva (Azul en el aeropuerto y en llegadas, Gas en el estadio)
     const walking = !this.busy && !this.auto && (this.phase === 'beers' || this.phase === 'toWc' || this.phase === 'glasses' || this.phase === 'airport' || this.phase === 'seek' || this.phase === 'arrivals');
     // (andando sola por la cola de embarque o hasta la del baño: la lleva el juego, no el joystick)
-    const scripted = !!this.auto || this.phase === 'gateQueue';
+    // (Gas en la cola del baño también: anda con la cola, no con el joystick)
+    const scripted = !!this.auto || this.phase === 'gateQueue' || this.gasTurn !== null || (!!this.gasNpc && this.queue.includes(this.gasNpc));
     this.invuln -= dt;
     if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
     if (this.airGroup.parent && this.player.root.position.x > 100 && this.player.root.position.x < 350) this.stepAirPeople(dt);
@@ -4260,6 +4433,10 @@ export class Level3 implements Level {
     if (this.phase === 'arrivals') this.stepArrivals(dt);
     if (this.phase === 'film') this.stepFilm(dt);
     this.side?.update(dt);
+    if (this.gasTurn !== null) {
+      faceTo(this.gas.root, this.gasTurn, dt, 7);
+      animatePerson(this.gas, dt, 'idle');
+    }
     {
       const pp0 = this.player.root.position;
       const m = this.movers[0];
@@ -4290,7 +4467,8 @@ export class Level3 implements Level {
     if (!scripted) {
       this.player.root.rotation.y = this.walker.facing;
       if (live) animatePerson(this.player, dt, this.phase === 'ending' ? 'cheer' : 'dance', 0, beat * Math.PI);
-      else if (this.talkers.has(this.player)) animatePerson(this.player, dt, 'talk');
+      // (hablando y andando a la vez: anda; si no, se deslizaba con los gestos de hablar)
+      else if (this.talkers.has(this.player) && mag < 0.03) animatePerson(this.player, dt, 'talk');
       else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
     }
     // Azul (si no la llevas): en su sitio, bailando, o con el móvil en alto haciendo flash; mira a Gas si viene

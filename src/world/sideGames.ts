@@ -2439,9 +2439,13 @@ export class GlassesHunt {
 /** Medidas de la cabina por dentro (el suelo en y = 0; la pared del urinario, en +z; la puerta, en -z). */
 const CAB = { w: 1.12, d: 1.22, h: 2.2 };
 /** El urinario: centro de la taza en la pared del fondo, y sus semiejes (en la pared: u a lo ancho, v a lo alto). */
-const BOWL = { x: 0.24, y: 0.76, z: CAB.d / 2 - 0.24, ru: 0.14, rv: 0.12 };
-/** La pegatina de la mosca: en el centro de la taza, un poco abajo (apuntar a ella es apuntar dentro). */
-const FLY = { u: 0, v: -0.02 };
+/**
+ * El váter de la cabina, contra el fondo: centro de la taza (en planta), altura de la tapa y del líquido azul, y la
+ * elipse del agujero (u a lo ancho, w hacia el fondo): lo que cae dentro de ella cae dentro del váter.
+ */
+const BOWL = { x: 0, z: 0.16, rim: 0.43, liquid: 0.25, ru: 0.15, rw: 0.19, outU: 0.23, outW: 0.28 };
+/** La mosca, pintada dentro de la taza, en la pendiente del fondo, justo encima del líquido. */
+const FLY = { u: 0, w: 0.085 };
 
 function flyTexture() {
   return canvasTex((g, w, h) => {
@@ -2465,6 +2469,11 @@ function flyTexture() {
   }, 64, 64);
 }
 
+/** La loza del váter (por fuera, o la misma vista desde dentro). */
+function toonBowl(side: THREE.Side) {
+  return new THREE.MeshToonMaterial({ color: side === THREE.BackSide ? 0xd9e0e4 : 0xeef1f2, side });
+}
+
 /**
  * El interior de una cabina portátil como las del estadio, de verdad, en 3D: paredes de plástico azul con sus
  * nervios, suelo de plástico, rejilla de ventilación arriba, el urinario de pared con la pegatina de la mosca, el
@@ -2474,6 +2483,7 @@ function flyTexture() {
 export class Cabin3D {
   readonly group = new THREE.Group();
   readonly glasses: THREE.Object3D;
+  readonly shoes: THREE.Object3D;
   /** La repisa (lo que se mira al buscar las gafas). */
   readonly shelf = new THREE.Vector3(-CAB.w / 2 + 0.1, 1.42, -0.02);
 
@@ -2497,36 +2507,75 @@ export class Cabin3D {
     // Rejilla de ventilación arriba, en la pared del fondo
     m.add(G.box, 0x5d7fa8, 0, CAB.h - 0.2, CAB.d / 2 - 0.02, 0, 0, 0, 0.45, 0.12, 0.03);
     for (let i = 0; i < 6; i++) m.add(G.box, 0x1b3f80, -0.19 + i * 0.076, CAB.h - 0.2, CAB.d / 2 - 0.04, 0, 0, 0, 0.012, 0.1, 0.01);
-    // Contra el fondo: el urinario de pared (a la izquierda, mirando desde la puerta) y el váter (a la derecha)
+    // Contra el fondo, el váter: depósito, tapa levantada contra él, la taza (abierta: por dentro se ve el líquido
+    // azul de los portátiles), el asiento negro y su pie; a la derecha, el pedal de la descarga
     const W = CAB.d / 2;
-    // (cuerpo de cerámica en forma de concha alargada, medio metido en la pared; la taza, un hueco más oscuro)
-    m.add(G.capsule, 0xeef1f2, BOWL.x, 0.86, W - 0.1, 0, 0, 0, 0.38, 0.3, 0.3);
-    // (la taza que se ve es exactamente la que cuenta: misma elipse)
-    m.add(G.sphere, 0xc3ccd2, BOWL.x, BOWL.y, BOWL.z + 0.03, 0, 0, 0, BOWL.ru * 2, BOWL.rv * 2, 0.12);
-    m.add(G.capsule, 0xe4e9ec, BOWL.x, BOWL.y - BOWL.rv * 1.1, BOWL.z - 0.01, 0, 0, Math.PI / 2, 0.06, 0.1, 0.06); // el labio de abajo
-    m.add(G.cyl, 0x7d878e, BOWL.x, BOWL.y - 0.07, BOWL.z + 0.0, Math.PI / 2 - 0.4, 0, 0, 0.06, 0.01, 0.06);
-    m.add(G.cyl, 0xc0c4cc, BOWL.x, 1.32, W - 0.05, 0, 0, 0, 0.03, 0.26, 0.03); // tubo de la cisterna
-    const tx = -0.28;
-    m.add(G.rbox, LIGHT, tx, 0.21, W - 0.28, 0, 0, 0, 0.38, 0.42, 0.46);
-    m.add(G.rbox, 0xd9dfe3, tx, 0.44, W - 0.3, 0, 0, 0, 0.4, 0.045, 0.46); // tapa, bajada
-    m.add(G.rbox, LIGHT, tx, 0.66, W - 0.06, 0, 0, 0, 0.44, 0.44, 0.1); // depósito
+    m.add(G.rbox, LIGHT, 0, 0.62, W - 0.11, 0, 0, 0, 0.46, 0.5, 0.2);
+    m.add(G.rbox, 0x2a2d33, 0, 0.75, W - 0.24, -0.12, 0, 0, 0.36, 0.48, 0.035); // tapa
+    m.add(G.rbox, LIGHT, 0, 0.08, BOWL.z + 0.04, 0, 0, 0, 0.26, 0.16, 0.34); // pie (por debajo del líquido)
+    m.add(G.box, 0x4a525c, 0.3, 0.025, BOWL.z - 0.1, 0, 0, 0, 0.1, 0.05, 0.16); // pedal
+    // (la taza, una pieza aparte: cilindro abierto por fuera y, por dentro, la misma cara vista del revés)
+    const bowlGeo = new THREE.CylinderGeometry(0.5, 0.38, 1, 28, 1, true);
+    const outer = new THREE.Mesh(bowlGeo, toonBowl(THREE.FrontSide));
+    const inner = new THREE.Mesh(bowlGeo, toonBowl(THREE.BackSide));
+    for (const o of [outer, inner]) {
+      o.position.set(BOWL.x, BOWL.rim / 2, BOWL.z);
+      o.scale.set(BOWL.outU * 2, BOWL.rim, BOWL.outW * 2);
+      o.userData.comicBent = true;
+      o.userData.noCast = true;
+      g.add(o);
+    }
+    inner.scale.multiplyScalar(0.97);
+    const liquid = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x2f6fd6 }));
+    liquid.position.set(BOWL.x, BOWL.liquid, BOWL.z);
+    // (de pared a pared de la taza a esa altura: no se ve el fondo abierto)
+    liquid.scale.set(0.4, 1, 0.47);
+    g.add(liquid);
+    const seat = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.075, 8, 32).rotateX(Math.PI / 2), new THREE.MeshToonMaterial({ color: 0x2a2d33 }));
+    seat.position.set(BOWL.x, BOWL.rim + 0.01, BOWL.z);
+    seat.scale.set(BOWL.outU * 1.85, 1, BOWL.outW * 1.85);
+    seat.userData.comicBent = true;
+    g.add(seat);
     // El rollo de papel (con su soporte), en la pared de la izquierda, y papel por el suelo
     m.add(G.box, 0x9aa4ad, CAB.w / 2 - 0.03, 0.95, 0.05, 0, 0, 0, 0.04, 0.12, 0.22);
     m.add(G.cyl, 0xf6f2e8, CAB.w / 2 - 0.09, 0.92, 0.05, Math.PI / 2, 0, 0, 0.12, 0.12, 0.12);
-    m.add(G.box, 0xf6f2e8, -0.1, 0.005, -0.2, 0, 0.6, 0, 0.12, 0.004, 0.3);
-    // La repisa, en la pared de la derecha, encima del váter
+    m.add(G.box, 0xf6f2e8, -0.32, 0.005, -0.05, 0, 0.6, 0, 0.1, 0.004, 0.2);
+    // La repisa, en la pared de la derecha
     m.add(G.box, LIGHT, this.shelf.x, this.shelf.y - 0.03, this.shelf.z, 0, 0, 0, 0.2, 0.035, 0.42);
     m.add(G.box, LIGHT, this.shelf.x - 0.05, this.shelf.y - 0.11, this.shelf.z, 0, 0, 0, 0.1, 0.14, 0.04);
+    // Pintadas de rotulador en las paredes (del concierto)
+    for (const [x, y, z, ry, txt] of [[CAB.w / 2 - 0.005, 1.55, -0.15, -Math.PI / 2, 'FITO ♥'], [-CAB.w / 2 + 0.005, 1.0, -0.2, Math.PI / 2, 'TELDE 2026'], [0.3, 1.6, W - 0.005, Math.PI, 'J + M']] as const) {
+      const t = canvasTex((c, w, h) => {
+        c.clearRect(0, 0, w, h);
+        c.font = "bold 46px 'Comic Sans MS', 'Marker Felt', cursive";
+        c.fillStyle = '#141018';
+        c.textAlign = 'center';
+        c.fillText(txt, w / 2, h * 0.65);
+      }, 256, 96);
+      const gr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
+      gr.position.set(x, y, z);
+      gr.rotation.y = ry;
+      g.add(gr);
+    }
+    // Las zapatillas de Gas (se ven al mirar abajo, mientras mea)
+    const shoes = new Merger(false);
+    for (const sx of [-1, 1]) {
+      shoes.add(G.rbox, 0xf4f4f4, sx * 0.11, 0.045, -0.3, 0, sx * 0.1, 0, 0.11, 0.09, 0.28);
+      shoes.add(G.box, 0x1c1d20, sx * 0.11, 0.008, -0.3, 0, sx * 0.1, 0, 0.115, 0.016, 0.285);
+    }
+    this.shoes = shoes.mesh();
+    this.shoes.visible = false;
+    g.add(this.shoes);
     // El cerrojo y el indicador por dentro de la puerta
     m.add(G.box, 0xc0c4cc, 0.42, 1.05, -CAB.d / 2 + 0.01, 0, 0, 0, 0.14, 0.05, 0.03);
     const mesh = m.mesh();
     mesh.userData.comicBent = true;
     mesh.userData.noCast = true;
     g.add(mesh);
-    // La pegatina de la mosca, dentro de la taza
+    // La pegatina de la mosca, dentro de la taza: en la pendiente del fondo, justo encima del líquido
     const fly = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: flyTexture(), transparent: true, alphaTest: 0.4 }));
-    fly.position.set(BOWL.x + FLY.u, BOWL.y + FLY.v, BOWL.z - 0.032);
-    fly.rotation.y = Math.PI;
+    fly.position.set(BOWL.x + FLY.u, BOWL.liquid + 0.02, BOWL.z + FLY.w);
+    fly.rotation.x = -Math.PI / 2 + 0.55;
     g.add(fly);
     // Las gafas de sol de Gas (en la repisa, si están)
     const gm = new Merger(false);
@@ -2604,16 +2653,15 @@ export class PeeAim3D {
     this.stream = new THREE.Mesh(new THREE.BufferGeometry(), this.streamMat);
     this.stream.frustumCulled = false;
     g.add(this.stream);
-    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.034, 20), this.reticleMat);
+    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.034, 20).rotateX(-Math.PI / 2), this.reticleMat);
     this.reticle.renderOrder = 5;
-    this.reticle.rotation.y = Math.PI;
     g.add(this.reticle);
     this.drops = new THREE.InstancedMesh(new THREE.SphereGeometry(0.009, 6, 4), new THREE.MeshBasicMaterial({ color: 0xf6dd6a }), 90);
     this.drops.frustumCulled = false;
     this.drops.count = 0;
     g.add(this.drops);
     this.fov0 = camera.fov;
-    this.aim.set(0, 0.05);
+    this.aim.set(0, 0.02);
   }
 
   private down = (e: PointerEvent) => {
@@ -2623,7 +2671,7 @@ export class PeeAim3D {
   };
   private move = (e: PointerEvent) => {
     if (!this.drag || e.pointerId !== this.drag.id) return;
-    // (de cara a la pared: arrastrar a la derecha mueve la mira a la derecha de la pantalla, que es -u)
+    // (mirando al váter desde delante: a la derecha de la pantalla es -u; arriba, hacia el fondo, +w)
     this.aim.x -= (e.clientX - this.drag.x) * this.k * 1.1;
     this.aim.y -= (e.clientY - this.drag.y) * this.k * 1.1;
     this.drag.x = e.clientX;
@@ -2635,9 +2683,9 @@ export class PeeAim3D {
 
   update(dt: number) {
     const cam = this.camera;
-    // Los ojos de Gas, de pie delante del urinario, mirando un poco hacia abajo (con el leve vaivén de estar de pie)
-    this.cab.world(BOWL.x - 0.1 + Math.sin(this.t * 0.9) * 0.01, 1.7, -0.52, cam.position);
-    cam.lookAt(this.cab.world(BOWL.x - 0.06, BOWL.y - 0.02, BOWL.z, this.ctrl));
+    // Los ojos de Gas, de pie delante del váter, mirando hacia abajo (con el leve vaivén de estar de pie)
+    this.cab.world(BOWL.x + Math.sin(this.t * 0.9) * 0.01, 1.64, -0.4, cam.position);
+    cam.lookAt(this.cab.world(BOWL.x, 0.28, BOWL.z - 0.02, this.ctrl));
     cam.fov += ((cam.aspect < 1 ? 74 : 58) - cam.fov) * Math.min(1, dt * 6);
     cam.updateProjectionMatrix();
     if (this.done) return;
@@ -2648,31 +2696,32 @@ export class PeeAim3D {
     this.drift.y += ((Math.random() - 0.5) * 520 * k - this.drift.y * 1.6) * dt;
     this.aim.x += (this.drift.x + Math.sin(this.t * 1.7) * 26 * k) * dt;
     this.aim.y += (this.drift.y + Math.cos(this.t * 1.3) * 16 * k) * dt;
-    this.aim.x = THREE.MathUtils.clamp(this.aim.x, -0.32, CAB.w / 2 - BOWL.x - 0.05);
-    this.aim.y = THREE.MathUtils.clamp(this.aim.y, -BOWL.y + 0.02, 0.9);
-    // Fuerza: al vaciarse cae más abajo
+    this.aim.x = THREE.MathUtils.clamp(this.aim.x, -0.45, 0.45);
+    this.aim.y = THREE.MathUtils.clamp(this.aim.y, -0.45, 0.4);
+    // Fuerza: al vaciarse no llega tan lejos (cae más cerca de los pies: hay que apuntar más al fondo)
     this.tank = Math.max(0, this.tank - dt / 8.5);
     const press = Math.min(1, 0.45 + this.tank * 2.2);
     const u = this.aim.x;
-    const v = this.aim.y * press + (-BOWL.y + 0.05) * (1 - press);
-    const inBowl = (u / BOWL.ru) ** 2 + (v / BOWL.rv) ** 2 < 1;
-    const onFly = Math.hypot(u - FLY.u, v - FLY.v) < 0.035;
+    const w = this.aim.y * press + -0.34 * (1 - press);
+    const inBowl = (u / BOWL.ru) ** 2 + (w / BOWL.rw) ** 2 < 1;
+    const onRim = !inBowl && (u / BOWL.outU) ** 2 + (w / BOWL.outW) ** 2 < 1;
+    const onFly = Math.hypot(u - FLY.u, w - FLY.w) < 0.04;
     this.total += dt;
     if (inBowl) this.inside += dt;
     if (onFly) this.onFly += dt;
-    // Dónde da: en la taza (un poco hundida), en la pared del fondo o, si cae muy bajo, en el suelo
-    const y = BOWL.y + v;
-    if (inBowl) this.hit.set(BOWL.x + u, y, BOWL.z - 0.03 + 0.06 * (1 - Math.sqrt(Math.max(0, 1 - (u / BOWL.ru) ** 2 - (v / BOWL.rv) ** 2))));
-    else if (y > 0.02) this.hit.set(BOWL.x + u, y, Math.abs(u) < 0.18 && y > 0.45 && y < 1.2 ? CAB.d / 2 - 0.31 : CAB.d / 2 - 0.01);
-    else this.hit.set(BOWL.x + u, 0.005, CAB.d / 2 - 0.12);
+    // Dónde da: dentro (en el líquido o en la loza de dentro), en el asiento, en el depósito o en el suelo
+    if (inBowl) this.hit.set(BOWL.x + u, BOWL.liquid + Math.max(0, w) * 0.4, BOWL.z + w * 0.8);
+    else if (onRim) this.hit.set(BOWL.x + u, BOWL.rim + 0.03, BOWL.z + w);
+    else if (w > BOWL.outW && Math.abs(u) < 0.23) this.hit.set(BOWL.x + u, 0.5, CAB.d / 2 - 0.22);
+    else this.hit.set(BOWL.x + u, 0.005, BOWL.z + w);
     // El chorro: un arco que sale de Gas, más fino cuanto menos fuerza
-    this.origin.set(BOWL.x - 0.06 + Math.sin(this.t * 2.1) * 0.004, 0.92, -0.26);
+    this.origin.set(BOWL.x + Math.sin(this.t * 2.1) * 0.004, 0.92, -0.24);
     this.ctrl.set((this.origin.x + this.hit.x) / 2, Math.max(this.origin.y, this.hit.y) + 0.08 * press, (this.origin.z + this.hit.z) / 2);
     const curve = new THREE.QuadraticBezierCurve3(this.origin, this.ctrl, this.hit);
     this.stream.geometry.dispose();
     this.stream.geometry = new THREE.TubeGeometry(curve, 18, 0.0035 + press * 0.0035, 5, false);
-    // La mira, en la pared (verde si cae dentro)
-    this.reticle.position.set(BOWL.x + this.aim.x, BOWL.y + this.aim.y, BOWL.z - 0.036);
+    // La mira, a la altura del asiento (verde si cae dentro)
+    this.reticle.position.set(BOWL.x + this.aim.x, BOWL.rim + 0.02, BOWL.z + this.aim.y);
     this.reticleMat.color.setHex(inBowl ? 0x5fcf80 : 0xe2543a);
     // Salpicaduras: en la taza rebotan poco; fuera caen al suelo y hacen charco
     for (let i = 0; i < 2; i++) {
@@ -2680,7 +2729,7 @@ export class PeeAim3D {
       if (!d) break;
       if (!this.dropState.includes(d)) this.dropState.push(d);
       d.p.copy(this.hit);
-      d.v.set((Math.random() - 0.5) * 0.6, 0.3 + Math.random() * 0.5, -0.3 - Math.random() * 0.4);
+      d.v.set((Math.random() - 0.5) * 0.6, (inBowl ? 0.15 : 0.3) + Math.random() * 0.4, (Math.random() - 0.6) * 0.5);
       d.life = 0.35 + Math.random() * 0.25;
       d.out = !inBowl;
     }
@@ -2690,6 +2739,11 @@ export class PeeAim3D {
       d.life -= dt;
       d.v.y -= 9 * dt;
       d.p.addScaledVector(d.v, dt);
+      // (dentro de la taza, las gotas se quedan en el líquido)
+      if (!d.out && d.p.y < BOWL.liquid) {
+        d.life = 0;
+        continue;
+      }
       if (d.p.y < 0.004) {
         d.life = 0;
         if (d.out && this.puddles.length < 40 && Math.random() < 0.35) {
@@ -2723,7 +2777,11 @@ export class PeeAim3D {
     const title = this.wrap.querySelector('.pee-title');
     if (title) title.textContent = say;
     comicWord(q > 0.85 ? '¡PERFECTO!' : q > 0.6 ? '¡UF!' : '¡UPS!', q > 0.85 ? 'perfect' : 'hit');
-    audio.knock(0.3, 300, 0.2); // la tapa de la cabina
+    // Y la descarga, con el pedal
+    later(() => {
+      audio.whoosh();
+      comicWord('¡FSSSH!', 'splash');
+    }, 900);
     later(() => {
       this.dispose();
       this.onDone(q);
@@ -2741,6 +2799,7 @@ export class PeeAim3D {
       o.geometry.dispose();
     }
     this.puddles.length = 0;
+    this.cab.shoes.visible = false;
     this.cab.group.visible = false;
     this.camera.fov = this.fov0;
     this.camera.updateProjectionMatrix();
