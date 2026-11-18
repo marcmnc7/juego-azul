@@ -361,12 +361,18 @@ export const CONCERT = {
   gateThanks: 'Gracias. Buen vuelo.',
   gateBtn: '🎫 Tarjeta y DNI',
   gateLate: 'Por los pelos…',
+  /** En una puerta que no es la suya (lee la pantalla). */
+  wrongGate: (to: string) => `${to}… Esta no es la mía.`,
+  /** Al empezar, en Barajas (inventado). */
+  whichGate: 'Vale. ¿Y mi puerta cuál era?',
   landed: [{ who: 'Narrador', text: 'Esa noche, en Gran Canaria.' }] as Line[],
-  /** En la cafetería de llegadas, donde la esperaba Gas («dentro aún»). Adaptado del chat de esa noche. */
+  /** En la cafetería de en medio de llegadas: no es esa (inventado). */
+  otherCafe: 'Aquí no está… «Justo en la salida», dijo.',
+  /** En la cafetería de llegadas, donde la esperaba Gas («dentro aún»). Lo del chat ya se ha leído: aquí, en persona (inventado). */
   arrivalsMeet: [
-    { who: 'Gas', text: 'Vas tarde.' },
-    { who: 'Azul', text: '¿VOY TARDE? Tú vas pronto.' },
-    { who: 'Gas', text: 'Nos han dado un coche mejor. Por vip.' },
+    { who: 'Gas', text: '¡Por fin! Ya pensaba que te quedabas en Madrid.' },
+    { who: 'Azul', text: '¡Qué va! 26D, pasillo. Ni tan mal.' },
+    { who: 'Gas', text: 'Pues vámonos, que el coche vip nos espera. Y mañana, Fito.' },
   ] as Line[],
   stadium: [
     { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
@@ -1023,7 +1029,9 @@ export const SIDE = {
       { who: 'Gas', text: 'Me las he dejado en el baño. Seguro. Ahora vuelvo.' },
     ] as Line[],
     title: '🕶️ ¿En qué cabina te las has dejado?',
-    hint: 'Toca las puertas para mirar dentro',
+    hint: 'Acércate a una puerta y ábrela',
+    door: '🚪 Abrir',
+    already: 'Aquí ya he mirado',
     broken: 'Averiado. Esta ni se abre',
     /** La voz de quien está dentro (inventado). */
     occupied: '¡OCUPADO!',

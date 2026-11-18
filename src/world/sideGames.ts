@@ -633,17 +633,14 @@ export class BeerRun {
 
   /** Las cervezas son para Azul (estaban los dos solos): se las lleva hasta su sitio del pasillo. */
   constructor(sc: THREE.Scene, private gas: Person, private walker: Walker, private fx: Particles, readonly friendAt: THREE.Vector3, aisleX: number, zs: number[], private onChange: () => void) {
-    const m = new Merger(false);
-    m.add(new THREE.CylinderGeometry(0.2, 0.17, 0.018, 24), 0x2b2f35, 0, 0, 0);
-    this.tray.add(m.mesh());
+    // (sin bandeja, que no es camarero: una en la mano izquierda y dos juntas en la derecha, delante del pecho)
     const cup = new Merger(false)
-      .add(new THREE.CylinderGeometry(0.04, 0.032, 0.13, 12), 0xe9b53a, 0, 0.065, 0)
-      .add(new THREE.CylinderGeometry(0.041, 0.041, 0.022, 12), 0xfffaf0, 0, 0.135, 0)
+      .add(new THREE.CylinderGeometry(0.04, 0.032, 0.13, 12), 0xe9b53a, 0, 0, 0)
+      .add(new THREE.CylinderGeometry(0.041, 0.041, 0.022, 12), 0xfffaf0, 0, 0.07, 0)
       .mesh();
-    for (let i = 0; i < 3; i++) {
+    for (const x of [-0.115, 0.17, -0.215]) {
       const c = cup.clone();
-      const a = (i / 3) * 6.283 + 0.5;
-      c.position.set(Math.cos(a) * 0.09, 0.01, Math.sin(a) * 0.09);
+      c.position.set(x, 0, 0.02);
       this.tray.add(c);
       this.cups.push(c);
     }
@@ -670,7 +667,7 @@ export class BeerRun {
     uiRoot().append(this.meter);
   }
 
-  /** En la barra: tres cervezas a la bandeja. */
+  /** En la barra: tres cervezas, en las manos. */
   pick() {
     this.stage = 'carry';
     this.rounds++;
@@ -689,7 +686,8 @@ export class BeerRun {
         if (!this.tray.visible) return;
         this.tray.updateWorldMatrix(true, false);
         for (const [side, sx] of [['Left', 1], ['Right', -1]] as const) {
-          t.set(sx * 0.18, -0.035, -0.04).applyMatrix4(this.tray.matrixWorld);
+          // (la mano agarra el vaso por detrás: la izquierda, el suyo; la derecha, entre los dos)
+          t.set(sx > 0 ? 0.17 : -0.165, -0.01, -0.035).applyMatrix4(this.tray.matrixWorld);
           r.bones.get(side + 'Arm')!.getWorldPosition(pole);
           pole.y -= 0.5;
           twoBone(r.bones.get(side + 'Arm')!, r.bones.get(side + 'ForeArm')!, r.bones.get(side + 'Hand')!, t, pole, 1);
@@ -710,7 +708,8 @@ export class BeerRun {
   private spill() {
     this.cupsLeft--;
     this.level = 0.42;
-    const c = this.cups.find((x) => x.visible);
+    // (primero la que va suelta en la derecha, luego la de la izquierda)
+    const c = [this.cups[2], this.cups[1], this.cups[0]].find((x) => x.visible);
     if (c) c.visible = false;
     // (salpicadura dibujada con su tinta: el emoji de la cerveza era el del sistema)
     this.fx.burst(this.tray.position.clone(), '💥', 5, 1.6, 0.6);
@@ -763,12 +762,12 @@ export class BeerRun {
     }
     this.fill.style.width = `${Math.min(100, this.level * 100)}%`;
     this.fill.style.background = this.level > 0.7 ? '#e2543a' : this.level > 0.4 ? '#f4c95d' : '#5fcf80';
-    // La bandeja: delante del pecho, inclinada según frenas y giras
+    // Los vasos: delante del pecho, en las manos, y se inclinan según frenas y giras
     const f = this.walker.facing;
     const lean = Math.min(1, this.level);
     this.tilt.x += (THREE.MathUtils.clamp(az * 0.012, -0.14, 0.14) + Math.sin(performance.now() * 0.019) * lean * 0.08 - this.tilt.x) * Math.min(1, dt * 8);
     this.tilt.y += (THREE.MathUtils.clamp(-ax * 0.012, -0.14, 0.14) + Math.cos(performance.now() * 0.023) * lean * 0.08 - this.tilt.y) * Math.min(1, dt * 8);
-    this.tray.position.set(pp.x + Math.sin(f) * 0.43, 1.2, pp.z + Math.cos(f) * 0.43);
+    this.tray.position.set(pp.x + Math.sin(f) * 0.36, 1.12, pp.z + Math.cos(f) * 0.36);
     this.tray.rotation.set(this.tilt.x, f, this.tilt.y);
   }
 
@@ -2432,5 +2431,317 @@ export class GlassesHunt {
   dispose() {
     this.timers.forEach((t) => clearTimeout(t));
     this.wrap.remove();
+  }
+}
+
+// ---------------- Capítulo 4: dentro de la cabina portátil, en 3D ----------------
+
+/** Medidas de la cabina por dentro (el suelo en y = 0; la pared del urinario, en +z; la puerta, en -z). */
+const CAB = { w: 1.12, d: 1.22, h: 2.2 };
+/** El urinario: centro de la taza en la pared del fondo, y sus semiejes (en la pared: u a lo ancho, v a lo alto). */
+const BOWL = { x: 0.24, y: 0.76, z: CAB.d / 2 - 0.24, ru: 0.13, rv: 0.11 };
+const FLY = { u: 0.03, v: -0.035 };
+
+function flyTexture() {
+  return canvasTex((g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.lineWidth = 3;
+    g.strokeStyle = '#141018';
+    g.fillStyle = '#bcd8ea';
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.ellipse(w / 2 + s * 15, h / 2 - 8, 17, 9, s * 0.5, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
+    g.fillStyle = '#141018';
+    g.beginPath();
+    g.ellipse(w / 2, h / 2 + 4, 9, 15, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(w / 2, h / 2 - 14, 6, 0, Math.PI * 2);
+    g.fill();
+  }, 64, 64);
+}
+
+/**
+ * El interior de una cabina portátil como las del estadio, de verdad, en 3D: paredes de plástico azul con sus
+ * nervios, suelo de plástico, rejilla de ventilación arriba, el urinario de pared con la pegatina de la mosca, el
+ * váter con su tapa, el rollo de papel y la repisa (donde pueden estar unas gafas de sol). Se pone lejos de todo
+ * (bajo el estadio) y la cámara se mete dentro cuando toca.
+ */
+export class Cabin3D {
+  readonly group = new THREE.Group();
+  readonly glasses: THREE.Object3D;
+  /** La repisa (lo que se mira al buscar las gafas). */
+  readonly shelf = new THREE.Vector3(-CAB.w / 2 + 0.1, 1.42, -0.02);
+
+  constructor(at: THREE.Vector3) {
+    const g = this.group;
+    g.position.copy(at);
+    g.visible = false;
+    const m = new Merger();
+    const BLUE = 0x2a63c4, RIB = 0x2457b3, LIGHT = 0xe9eef5;
+    // Suelo, techo blanco translúcido y las cuatro paredes con nervios verticales
+    m.add(G.box, 0x4c535c, 0, -0.03, 0, 0, 0, 0, CAB.w + 0.1, 0.06, CAB.d + 0.1);
+    m.add(G.box, LIGHT, 0, CAB.h + 0.03, 0, 0, 0, 0, CAB.w + 0.1, 0.06, CAB.d + 0.1);
+    for (const s of [-1, 1]) {
+      m.add(G.box, BLUE, s * (CAB.w / 2 + 0.03), CAB.h / 2, 0, 0, 0, 0, 0.06, CAB.h, CAB.d + 0.1);
+      m.add(G.box, BLUE, 0, CAB.h / 2, s * (CAB.d / 2 + 0.03), 0, 0, 0, CAB.w + 0.1, CAB.h, 0.06);
+      for (let k = -2; k <= 2; k++) {
+        m.add(G.box, RIB, s * (CAB.w / 2 - 0.005), CAB.h / 2, k * 0.24, 0, 0, 0, 0.03, CAB.h - 0.1, 0.05);
+        m.add(G.box, RIB, k * 0.22, CAB.h / 2, s * (CAB.d / 2 - 0.005), 0, 0, 0, 0.05, CAB.h - 0.1, 0.03);
+      }
+    }
+    // Rejilla de ventilación arriba, en la pared del fondo
+    m.add(G.box, 0x5d7fa8, 0, CAB.h - 0.2, CAB.d / 2 - 0.02, 0, 0, 0, 0.45, 0.12, 0.03);
+    for (let i = 0; i < 6; i++) m.add(G.box, 0x1b3f80, -0.19 + i * 0.076, CAB.h - 0.2, CAB.d / 2 - 0.04, 0, 0, 0, 0.012, 0.1, 0.01);
+    // Contra el fondo: el urinario de pared (a la izquierda, mirando desde la puerta) y el váter (a la derecha)
+    const W = CAB.d / 2;
+    // (cuerpo de cerámica en forma de concha alargada, medio metido en la pared; la taza, un hueco más oscuro)
+    m.add(G.capsule, 0xeef1f2, BOWL.x, 0.86, W - 0.1, 0, 0, 0, 0.38, 0.3, 0.3);
+    m.add(G.sphere, 0xc3ccd2, BOWL.x, BOWL.y - 0.02, BOWL.z + 0.03, 0, 0, 0, BOWL.ru * 2.1, BOWL.rv * 2.4, 0.12);
+    m.add(G.capsule, 0xe4e9ec, BOWL.x, BOWL.y - BOWL.rv * 1.1, BOWL.z - 0.01, 0, 0, Math.PI / 2, 0.06, 0.1, 0.06); // el labio de abajo
+    m.add(G.cyl, 0x7d878e, BOWL.x, BOWL.y - 0.07, BOWL.z + 0.0, Math.PI / 2 - 0.4, 0, 0, 0.06, 0.01, 0.06);
+    m.add(G.cyl, 0xc0c4cc, BOWL.x, 1.32, W - 0.05, 0, 0, 0, 0.03, 0.26, 0.03); // tubo de la cisterna
+    const tx = -0.28;
+    m.add(G.rbox, LIGHT, tx, 0.21, W - 0.28, 0, 0, 0, 0.38, 0.42, 0.46);
+    m.add(G.rbox, 0xd9dfe3, tx, 0.44, W - 0.3, 0, 0, 0, 0.4, 0.045, 0.46); // tapa, bajada
+    m.add(G.rbox, LIGHT, tx, 0.66, W - 0.06, 0, 0, 0, 0.44, 0.44, 0.1); // depósito
+    // El rollo de papel (con su soporte), en la pared de la izquierda, y papel por el suelo
+    m.add(G.box, 0x9aa4ad, CAB.w / 2 - 0.03, 0.95, 0.05, 0, 0, 0, 0.04, 0.12, 0.22);
+    m.add(G.cyl, 0xf6f2e8, CAB.w / 2 - 0.09, 0.92, 0.05, Math.PI / 2, 0, 0, 0.12, 0.12, 0.12);
+    m.add(G.box, 0xf6f2e8, -0.1, 0.005, -0.2, 0, 0.6, 0, 0.12, 0.004, 0.3);
+    // La repisa, en la pared de la derecha, encima del váter
+    m.add(G.box, LIGHT, this.shelf.x, this.shelf.y - 0.03, this.shelf.z, 0, 0, 0, 0.2, 0.035, 0.42);
+    m.add(G.box, LIGHT, this.shelf.x - 0.05, this.shelf.y - 0.11, this.shelf.z, 0, 0, 0, 0.1, 0.14, 0.04);
+    // El cerrojo y el indicador por dentro de la puerta
+    m.add(G.box, 0xc0c4cc, 0.42, 1.05, -CAB.d / 2 + 0.01, 0, 0, 0, 0.14, 0.05, 0.03);
+    const mesh = m.mesh();
+    mesh.userData.comicBent = true;
+    mesh.userData.noCast = true;
+    g.add(mesh);
+    // La pegatina de la mosca, dentro de la taza
+    const fly = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: flyTexture(), transparent: true, alphaTest: 0.4 }));
+    fly.position.set(BOWL.x + FLY.u, BOWL.y + FLY.v, BOWL.z - 0.04);
+    fly.rotation.y = Math.PI;
+    fly.rotation.x = 0.3;
+    g.add(fly);
+    // Las gafas de sol de Gas (en la repisa, si están)
+    const gm = new Merger(false);
+    for (const s of [-1, 1]) {
+      gm.add(G.sphere, 0x101014, s * 0.04, 0.02, 0, 0, 0, 0, 0.065, 0.045, 0.012);
+      gm.add(G.box, 0x101014, s * 0.085, 0.02, 0.06, 0, 0, 0, 0.006, 0.006, 0.12);
+    }
+    gm.add(G.box, 0x101014, 0, 0.03, 0, 0, 0, 0, 0.03, 0.006, 0.006);
+    this.glasses = gm.mesh();
+    this.glasses.position.set(this.shelf.x + 0.01, this.shelf.y, this.shelf.z + 0.04);
+    this.glasses.rotation.y = 0.4;
+    this.glasses.visible = false;
+    g.add(this.glasses);
+  }
+
+  /** Punto de la cabina (coordenadas de dentro) en el mundo. */
+  world(x: number, y: number, z: number, out = new THREE.Vector3()) {
+    return out.set(x, y, z).add(this.group.position);
+  }
+}
+
+/**
+ * El urinario, de verdad: la cámara son los ojos de Gas dentro de la cabina, mirando a la taza. Arrastrar apunta
+ * (la mira, en la pared); el chorro sale de abajo en un arco, se desvía solo y, al vaciarse, pierde fuerza y cae
+ * más abajo. Lo que cae fuera salpica y hace charco. Cuenta el tiempo dentro de la taza (y en la mosca).
+ */
+export class PeeAim3D {
+  private wrap = el('div', 'pee-game pee-3d');
+  private fill: HTMLElement;
+  private aim = new THREE.Vector2(0, 0);
+  private drift = new THREE.Vector2();
+  private hit = new THREE.Vector3();
+  private t = 0;
+  private tank = 1;
+  private inside = 0;
+  private total = 0;
+  private onFly = 0;
+  private done = false;
+  private drag: { id: number; x: number; y: number } | null = null;
+  private stream: THREE.Mesh;
+  private streamMat = new THREE.MeshBasicMaterial({ color: 0xf2cf3a });
+  private reticle: THREE.Mesh;
+  private reticleMat = new THREE.MeshBasicMaterial({ color: 0x5fcf80, side: THREE.DoubleSide, depthTest: false });
+  private drops: THREE.InstancedMesh;
+  private dropState: { p: THREE.Vector3; v: THREE.Vector3; life: number; out: boolean }[] = [];
+  private puddles: THREE.Mesh[] = [];
+  private puddleMat = new THREE.MeshBasicMaterial({ color: 0xd9c25a, transparent: true, opacity: 0.32, depthWrite: false });
+  private dummy = new THREE.Object3D();
+  private origin = new THREE.Vector3();
+  private ctrl = new THREE.Vector3();
+  private fov0: number;
+  /** De píxeles de arrastre a metros en la pared (la misma medida que tenía el de pantalla). */
+  private k = 0.0018;
+
+  /** hard: 0 la primera vez, 1 la siguiente (se desvía más). */
+  constructor(private cab: Cabin3D, private camera: THREE.PerspectiveCamera, private hard: number, private onDone: (q: number) => void) {
+    const head = el('div', 'pee-head');
+    head.append(el('div', 'pee-title', SIDE.pee.title));
+    const bar = el('div', 'pee-tank');
+    bar.append(el('span', '', SIDE.pee.tank));
+    const track = el('div', 'pee-track');
+    this.fill = el('div', 'pee-fill');
+    track.append(this.fill);
+    bar.append(track);
+    head.append(bar);
+    this.wrap.append(head, el('div', 'pee-hint', SIDE.pee.hint));
+    uiRoot().append(this.wrap);
+    this.wrap.addEventListener('pointerdown', this.down);
+    window.addEventListener('pointermove', this.move);
+    window.addEventListener('pointerup', this.up);
+    window.addEventListener('pointercancel', this.up);
+    const g = cab.group;
+    g.visible = true;
+    cab.glasses.visible = false;
+    this.stream = new THREE.Mesh(new THREE.BufferGeometry(), this.streamMat);
+    this.stream.frustumCulled = false;
+    g.add(this.stream);
+    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.034, 20), this.reticleMat);
+    this.reticle.renderOrder = 5;
+    this.reticle.rotation.y = Math.PI;
+    g.add(this.reticle);
+    this.drops = new THREE.InstancedMesh(new THREE.SphereGeometry(0.009, 6, 4), new THREE.MeshBasicMaterial({ color: 0xf6dd6a }), 90);
+    this.drops.frustumCulled = false;
+    this.drops.count = 0;
+    g.add(this.drops);
+    this.fov0 = camera.fov;
+    this.aim.set(0, 0.05);
+  }
+
+  private down = (e: PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  private move = (e: PointerEvent) => {
+    if (!this.drag || e.pointerId !== this.drag.id) return;
+    // (de cara a la pared: arrastrar a la derecha mueve la mira a la derecha de la pantalla, que es -u)
+    this.aim.x -= (e.clientX - this.drag.x) * this.k * 1.1;
+    this.aim.y -= (e.clientY - this.drag.y) * this.k * 1.1;
+    this.drag.x = e.clientX;
+    this.drag.y = e.clientY;
+  };
+  private up = (e: PointerEvent) => {
+    if (this.drag && e.pointerId === this.drag.id) this.drag = null;
+  };
+
+  update(dt: number) {
+    const cam = this.camera;
+    // Los ojos de Gas, de pie delante del urinario, mirando un poco hacia abajo (con el leve vaivén de estar de pie)
+    this.cab.world(BOWL.x - 0.1 + Math.sin(this.t * 0.9) * 0.01, 1.7, -0.52, cam.position);
+    cam.lookAt(this.cab.world(BOWL.x - 0.06, BOWL.y - 0.02, BOWL.z, this.ctrl));
+    cam.fov += ((cam.aspect < 1 ? 74 : 58) - cam.fov) * Math.min(1, dt * 6);
+    cam.updateProjectionMatrix();
+    if (this.done) return;
+    this.t += dt;
+    // Se desvía solo: un vaivén y una deriva que cambia de rumbo (más la segunda vez)
+    const k = (1 + this.hard * 0.8) * this.k;
+    this.drift.x += ((Math.random() - 0.5) * 900 * k - this.drift.x * 1.6) * dt;
+    this.drift.y += ((Math.random() - 0.5) * 520 * k - this.drift.y * 1.6) * dt;
+    this.aim.x += (this.drift.x + Math.sin(this.t * 1.7) * 26 * k) * dt;
+    this.aim.y += (this.drift.y + Math.cos(this.t * 1.3) * 16 * k) * dt;
+    this.aim.x = THREE.MathUtils.clamp(this.aim.x, -0.32, CAB.w / 2 - BOWL.x - 0.05);
+    this.aim.y = THREE.MathUtils.clamp(this.aim.y, -BOWL.y + 0.02, 0.9);
+    // Fuerza: al vaciarse cae más abajo
+    this.tank = Math.max(0, this.tank - dt / 8.5);
+    const press = Math.min(1, 0.45 + this.tank * 2.2);
+    const u = this.aim.x;
+    const v = this.aim.y * press + (-BOWL.y + 0.05) * (1 - press);
+    const inBowl = (u / BOWL.ru) ** 2 + (v / BOWL.rv) ** 2 < 1;
+    const onFly = Math.hypot(u - FLY.u, v - FLY.v) < 0.03;
+    this.total += dt;
+    if (inBowl) this.inside += dt;
+    if (onFly) this.onFly += dt;
+    // Dónde da: en la taza (un poco hundida), en la pared del fondo o, si cae muy bajo, en el suelo
+    const y = BOWL.y + v;
+    if (inBowl) this.hit.set(BOWL.x + u, y, BOWL.z);
+    else if (y > 0.02) this.hit.set(BOWL.x + u, y, Math.abs(u) < 0.18 && y > 0.45 && y < 1.2 ? CAB.d / 2 - 0.31 : CAB.d / 2 - 0.01);
+    else this.hit.set(BOWL.x + u, 0.005, CAB.d / 2 - 0.12);
+    // El chorro: un arco que sale de Gas, más fino cuanto menos fuerza
+    this.origin.set(BOWL.x - 0.06 + Math.sin(this.t * 2.1) * 0.004, 0.92, -0.26);
+    this.ctrl.set((this.origin.x + this.hit.x) / 2, Math.max(this.origin.y, this.hit.y) + 0.08 * press, (this.origin.z + this.hit.z) / 2);
+    const curve = new THREE.QuadraticBezierCurve3(this.origin, this.ctrl, this.hit);
+    this.stream.geometry.dispose();
+    this.stream.geometry = new THREE.TubeGeometry(curve, 18, 0.0035 + press * 0.0035, 5, false);
+    // La mira, en la pared (verde si cae dentro)
+    this.reticle.position.set(BOWL.x + this.aim.x, BOWL.y + this.aim.y, BOWL.z - 0.08);
+    this.reticleMat.color.setHex(inBowl ? 0x5fcf80 : 0xe2543a);
+    // Salpicaduras: en la taza rebotan poco; fuera caen al suelo y hacen charco
+    for (let i = 0; i < 2; i++) {
+      const d = this.dropState.length < 90 ? { p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, out: false } : this.dropState.find((x) => x.life <= 0);
+      if (!d) break;
+      if (!this.dropState.includes(d)) this.dropState.push(d);
+      d.p.copy(this.hit);
+      d.v.set((Math.random() - 0.5) * 0.6, 0.3 + Math.random() * 0.5, -0.3 - Math.random() * 0.4);
+      d.life = 0.35 + Math.random() * 0.25;
+      d.out = !inBowl;
+    }
+    let n = 0;
+    for (const d of this.dropState) {
+      if (d.life <= 0) continue;
+      d.life -= dt;
+      d.v.y -= 9 * dt;
+      d.p.addScaledVector(d.v, dt);
+      if (d.p.y < 0.004) {
+        d.life = 0;
+        if (d.out && this.puddles.length < 40 && Math.random() < 0.35) {
+          const pm = new THREE.Mesh(new THREE.CircleGeometry(0.015 + Math.random() * 0.03, 14).rotateX(-Math.PI / 2), this.puddleMat);
+          pm.position.set(d.p.x, 0.003 + this.puddles.length * 0.0001, d.p.z);
+          pm.scale.set(1.5, 1, 0.8);
+          this.cab.group.add(pm);
+          this.puddles.push(pm);
+        }
+        continue;
+      }
+      this.dummy.position.copy(d.p);
+      this.dummy.updateMatrix();
+      this.drops.setMatrixAt(n++, this.dummy.matrix);
+    }
+    this.drops.count = n;
+    this.drops.instanceMatrix.needsUpdate = true;
+    if (!inBowl && Math.random() < dt * 3) vibrate(8);
+    if (Math.random() < dt * 6) audio.knock(inBowl ? 0.05 : 0.08, inBowl ? 1200 : 700, 0.03);
+    this.fill.style.transform = `scaleX(${this.tank})`;
+    if (this.tank <= 0) this.finish();
+  }
+
+  private finish() {
+    if (this.done) return;
+    this.done = true;
+    this.stream.visible = false;
+    this.reticle.visible = false;
+    const q = this.total > 0 ? this.inside / this.total : 0;
+    const say = (q > 0.85 ? SIDE.pee.great : q > 0.6 ? SIDE.pee.ok : SIDE.pee.bad) + (this.onFly > 1.4 ? SIDE.pee.fly : '');
+    const title = this.wrap.querySelector('.pee-title');
+    if (title) title.textContent = say;
+    comicWord(q > 0.85 ? '¡PERFECTO!' : q > 0.6 ? '¡UF!' : '¡UPS!', q > 0.85 ? 'perfect' : 'hit');
+    audio.knock(0.3, 300, 0.2); // la tapa de la cabina
+    later(() => {
+      this.dispose();
+      this.onDone(q);
+    }, 1700);
+  }
+
+  dispose() {
+    this.done = true;
+    window.removeEventListener('pointermove', this.move);
+    window.removeEventListener('pointerup', this.up);
+    window.removeEventListener('pointercancel', this.up);
+    this.wrap.remove();
+    for (const o of [this.stream, this.reticle, this.drops, ...this.puddles]) {
+      o.removeFromParent();
+      o.geometry.dispose();
+    }
+    this.puddles.length = 0;
+    this.cab.group.visible = false;
+    this.camera.fov = this.fov0;
+    this.camera.updateProjectionMatrix();
   }
 }

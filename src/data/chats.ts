@@ -1584,6 +1584,453 @@ export const CHATS = {
    }
   ]
  },
+ "fitoEntradas": {
+  "date": "17 de enero de 2026",
+  "contact": "Marc",
+  "msgs": [
+   {
+    "me": false,
+    "t": "21:45",
+    "text": "Azul"
+   },
+   {
+    "me": false,
+    "t": "21:46",
+    "text": "No me puedes mandar este video y despues a Fito"
+   },
+   {
+    "me": false,
+    "t": "21:46",
+    "text": "Es que no…"
+   },
+   {
+    "me": true,
+    "t": "21:47",
+    "text": "Ahahahaha porqueeeee"
+   },
+   {
+    "me": true,
+    "t": "21:48",
+    "text": "Ojala estar en un concierto"
+   },
+   {
+    "me": true,
+    "t": "21:48",
+    "text": "Pero nadie me invita"
+   },
+   {
+    "me": true,
+    "t": "21:48",
+    "text": "🙄🙄🙄🙄🙄🙄🙄"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Míra"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Somos las 21:52"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Pilla 2 entradas para fito"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Qualquier finde"
+   },
+   {
+    "me": false,
+    "t": "21:52",
+    "text": "Ahira"
+   },
+   {
+    "me": false,
+    "t": "21:53",
+    "text": "Cualquier ciudad"
+   },
+   {
+    "me": true,
+    "t": "21:56",
+    "text": "Pilla tu"
+   },
+   {
+    "me": true,
+    "t": "21:56",
+    "text": "Te hago bizum"
+   },
+   {
+    "me": true,
+    "t": "22:00",
+    "text": "Y vengo donde sea"
+   },
+   {
+    "me": false,
+    "t": "22:13",
+    "text": "☑️"
+   },
+   {
+    "me": false,
+    "t": "22:39",
+    "text": "Azul"
+   },
+   {
+    "me": false,
+    "t": "22:39",
+    "text": "📷 Foto"
+   },
+   {
+    "me": false,
+    "t": "22:40",
+    "text": "Estoy en andorra no puedo"
+   },
+   {
+    "me": false,
+    "t": "22:40",
+    "text": "Hahahahha"
+   },
+   {
+    "me": false,
+    "t": "22:40",
+    "text": "Compra para granca porfa, sino yo mañana"
+   },
+   {
+    "me": true,
+    "t": "22:41",
+    "text": "What"
+   },
+   {
+    "me": true,
+    "t": "22:41",
+    "text": "A ver"
+   },
+   {
+    "me": true,
+    "t": "22:41",
+    "text": "Granca que es"
+   },
+   {
+    "me": false,
+    "t": "22:42",
+    "text": "Creo que solo queda en Gran Canaria  ticketmaster.es/artist/fito-fitipaldis-entradas"
+   },
+   {
+    "me": false,
+    "t": "22:42",
+    "text": "Compralo y vamos"
+   },
+   {
+    "me": false,
+    "t": "22:43",
+    "text": "Que no puedo recibir el sms que estoy en andorra"
+   },
+   {
+    "me": false,
+    "t": "22:43",
+    "text": "Y no hay roaming"
+   },
+   {
+    "me": false,
+    "t": "22:43",
+    "text": "HAHA"
+   },
+   {
+    "me": true,
+    "t": "22:48",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "22:48",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "22:48",
+    "text": "Bye"
+   },
+   {
+    "me": true,
+    "t": "22:48",
+    "text": "Me debes una grande ahhah"
+   },
+   {
+    "me": false,
+    "t": "22:49",
+    "text": "Ai como nos timen por viagogo… ahora compro los vuelo. Pasame dni hahahahha"
+   },
+   {
+    "me": true,
+    "t": "22:49",
+    "text": "Shahahahahaa"
+   },
+   {
+    "me": true,
+    "t": "22:49",
+    "text": "NIE"
+   },
+   {
+    "me": false,
+    "t": "22:49",
+    "text": "Eso"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Viagogo me asusta eh"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "Y•••••••H"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Confio"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "Porque?"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Fu timan mil es de reventa"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "No es de reventa"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "Compre billete normal"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Ticketmaster es el oficioal"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Oye"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "Ah vale"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Pero que sino tomamos el sol"
+   },
+   {
+    "me": false,
+    "t": "22:50",
+    "text": "Hhahahahah"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "Bueno yo que seestoy borracha"
+   },
+   {
+    "me": true,
+    "t": "22:50",
+    "text": "No puedo averiguar esas cosas"
+   },
+   {
+    "me": false,
+    "t": "22:51",
+    "text": "HAHAHA"
+   },
+   {
+    "me": true,
+    "t": "22:51",
+    "text": "Solo cumplo"
+   }
+  ]
+ },
+ "hastaLuego": {
+  "date": "16 de marzo de 2026",
+  "contact": "Gas",
+  "msgs": [
+   {
+    "me": false,
+    "t": "10:54",
+    "text": "Cositaaaa"
+   },
+   {
+    "me": false,
+    "t": "10:54",
+    "text": "Ha ido super no se puede estar triste!!!!"
+   },
+   {
+    "me": false,
+    "t": "11:02",
+    "text": "Jopeeee enmedio y con la maleta en los piessss"
+   },
+   {
+    "me": true,
+    "t": "11:02",
+    "text": "Ya se, ha sido topp"
+   },
+   {
+    "me": true,
+    "t": "11:02",
+    "text": "Pero no quiero no verte"
+   },
+   {
+    "me": true,
+    "t": "11:03",
+    "text": "Nooo :("
+   },
+   {
+    "me": true,
+    "t": "11:03",
+    "text": "Vaya viajecito te espera"
+   },
+   {
+    "me": true,
+    "t": "11:03",
+    "text": "Los vecinos de asiento parecen okei?"
+   },
+   {
+    "me": true,
+    "t": "11:03",
+    "text": "Ahahahaha"
+   },
+   {
+    "me": false,
+    "t": "11:05",
+    "text": "Te lo cuento en una imagen"
+   },
+   {
+    "me": false,
+    "t": "11:06",
+    "text": "📷 Foto"
+   },
+   {
+    "me": false,
+    "t": "11:06",
+    "text": "No lo harassss"
+   },
+   {
+    "me": true,
+    "t": "11:06",
+    "text": "😂😂😂😂😂"
+   },
+   {
+    "me": true,
+    "t": "11:06",
+    "text": "Y el otro tambe?"
+   },
+   {
+    "me": false,
+    "t": "11:07",
+    "text": "Me parece mal si tienes el exterior deja el reposabrazos para el del medio :((("
+   },
+   {
+    "me": false,
+    "t": "11:07",
+    "text": "El otro lo tengo"
+   },
+   {
+    "me": true,
+    "t": "11:07",
+    "text": "Yaaa I am agree"
+   },
+   {
+    "me": true,
+    "t": "11:08",
+    "text": "Bueno 1/2"
+   },
+   {
+    "me": true,
+    "t": "11:08",
+    "text": "Bene ma non benissimo"
+   },
+   {
+    "me": false,
+    "t": "11:10",
+    "text": "Se esta liando ahhahaa"
+   },
+   {
+    "me": false,
+    "t": "11:10",
+    "text": "Pq no se puede estar sentado en la salida de emergencia"
+   },
+   {
+    "me": false,
+    "t": "11:10",
+    "text": "Si no hablas español o inglesa"
+   },
+   {
+    "me": false,
+    "t": "11:10",
+    "text": "Y hay una Italiana hahahahaha q se rebela"
+   },
+   {
+    "me": false,
+    "t": "11:10",
+    "text": "Capiiito capiiito"
+   },
+   {
+    "me": true,
+    "t": "11:10",
+    "text": "Ahahahhaahhaah"
+   },
+   {
+    "me": true,
+    "t": "11:11",
+    "text": "Se cambió?"
+   },
+   {
+    "me": false,
+    "t": "11:11",
+    "text": "Con las cejas fruncidas como tu en las fotos pero ahora si esta en ello"
+   },
+   {
+    "me": true,
+    "t": "11:11",
+    "text": "Hahaahahhaah"
+   },
+   {
+    "me": true,
+    "t": "11:11",
+    "text": "Es algo comun"
+   },
+   {
+    "me": false,
+    "t": "11:16",
+    "text": "Salimossss"
+   },
+   {
+    "me": false,
+    "t": "11:16",
+    "text": "Bai baiiiiiiii avisemonos cuando lleguemos, ojala no se te haga muy larga la espera!!!!"
+   },
+   {
+    "me": false,
+    "t": "11:16",
+    "text": "Ni el vueloo"
+   },
+   {
+    "me": false,
+    "t": "11:17",
+    "text": "Taora 😘😘😘😘😘🛫🛫🛫🛫🛫"
+   }
+  ]
+ },
  "burger": {
   "date": "12 de marzo de 2026",
   "contact": "Gas",

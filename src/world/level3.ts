@@ -6,7 +6,7 @@ import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { CONCERT, SIDE } from '../data/story';
 import { FITO_SONG, SONG_OF } from '../core/songs';
-import { BeerRun, BEERS_NEED, PeeAim, GlassesHunt } from './sideGames';
+import { BeerRun, BEERS_NEED, Cabin3D, PeeAim3D } from './sideGames';
 import { MARC_LOOK, castLook, AZUL_DIARIO } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook, seatPose, seatedRootY } from '../entities/models';
@@ -42,7 +42,7 @@ import { Fito } from '../entities/fito';
 // encendidas); la luz del escenario son haces planos y pantallas; las pistas (marcador y flecha) solo salen si se
 // lleva 40 s sin avanzar (Lost); los avisos los dice alguien, en un bocadillo.
 
-type Phase = 'intro' | 'airport' | 'gateQueue' | 'arrivals' | 'beers' | 'show' | 'toWc' | 'wc' | 'film' | 'seek' | 'found' | 'rhythm' | 'ending' | 'done';
+type Phase = 'intro' | 'airport' | 'gateQueue' | 'arrivals' | 'beers' | 'show' | 'toWc' | 'wc' | 'glasses' | 'film' | 'seek' | 'found' | 'rhythm' | 'ending' | 'done';
 
 const INK = '#141018';
 const PAPER = '#fffbf0';
@@ -55,27 +55,72 @@ const AISLE_X = -8.5;
 const WC_X = 17;
 const WC_Z = [-17, -15.5, -14, -12.5, -11, -9.5];
 const FILM_SECS = 15;
-// Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona)
+// Terminal del aeropuerto, lejos del estadio (mismo mundo, otra zona): el pasillo largo de tiendas y, al fondo, la
+// sala de embarque, ancha, con seis puertas a destinos distintos (cuál es la suya lo dicen las pantallas)
 const AIR = { minX: 290, maxX: 302, minZ: -30, maxZ: 30 };
+/** Línea de los mostradores de embarque (las puertas, 3,2 m más allá: la cristalera de la pista). */
+const GZ = 43;
+/** La sala de embarque, de lado a lado, entre el final del pasillo y la cristalera de las puertas. */
+const LOUNGE = { minX: 254, maxX: 338, minZ: AIR.maxZ, maxZ: GZ + 3.2 };
+/** Las puertas de la sala (la de Azul, la 26: «Yo tengo 26D», del chat). */
+const GATES: { n: number; x: number; to: string; code: string; time: string; status: string; plane?: number }[] = [
+  { n: 22, x: 260, to: 'Tenerife Norte', code: 'IB 1843', time: '16:55', status: 'CERRADO', plane: 0x1f4fa8 },
+  { n: 23, x: 273, to: 'París-Orly', code: 'VY 8002', time: '17:05', status: 'EN HORA' },
+  { n: 24, x: 286, to: 'Lisboa', code: 'TP 1027', time: '17:10', status: 'RETRASADO', plane: 0x2f7d4b },
+  { n: 25, x: 306, to: 'Palma', code: 'UX 6075', time: '17:20', status: 'EN HORA' },
+  { n: 26, x: 319, to: 'Gran Canaria', code: 'VY 3112', time: '17:15', status: 'EMBARCANDO', plane: 0xf2c233 },
+  { n: 27, x: 332, to: 'Bilbao', code: 'IB 0451', time: '17:35', status: 'EN HORA' },
+];
 /** Segundos hasta que cierran la puerta 26 (y cada maleta que te da, dos menos). */
-const GATE_SECS = 26;
-/** Hasta dónde se anda en la terminal: a un cuerpo de las cristaleras y hasta el muro del fondo. */
-const AIR_WALK = { minX: AIR.minX + 0.32, maxX: AIR.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: AIR.maxZ };
-const GATE_X = (AIR.minX + AIR.maxX) / 2;
+const GATE_SECS = 75;
+/** Hasta dónde se anda en la terminal: el pasillo y la sala de embarque, hasta los mostradores. */
+const AIR_WALK = { minX: LOUNGE.minX + 0.32, maxX: LOUNGE.maxX - 0.32, minZ: AIR.minZ - 2.65, maxZ: GZ };
+const GATE_X = 319;
+/** La cristalera de las puertas, y el finger de la 26: sube desde la puerta hasta la del avión. */
+const GATE_WALL = GZ + 3.2;
+const FINGER_LEN = 10.5;
+const FINGER_RISE = 1.25;
+/** Altura del suelo del finger a esa z (fuera del finger, 0). */
+const fingerY = (z: number) => THREE.MathUtils.clamp((z - GATE_WALL) / FINGER_LEN, 0, 1) * FINGER_RISE;
 /** Donde se enseña la tarjeta, delante del torno de la puerta 26. */
-const GATE_SCAN = new THREE.Vector3(GATE_X, 0, AIR.maxZ + 0.9);
+const GATE_SCAN = new THREE.Vector3(GATE_X, 0, GZ + 0.9);
 /** Sitio k de la cola de embarque (por el pasillo de cintas del centro, desde el torno hacia atrás). */
-const gateSlot = (k: number): [number, number] => [GATE_X, AIR.maxZ - 0.2 - k * 0.85];
+const gateSlot = (k: number): [number, number] => [GATE_X, GZ - 0.2 - k * 0.85];
 /** La papelera de la terminal, junto a un pilar: Azul puede tirar ahí su tabaco. */
 const BIN_POS = new THREE.Vector3(290.8, 0, 8.6);
 // (entre pilar y pilar: con un pilar delante, de «PRENSA» se leía «PR SA»)
 const BURGERS: [number, number][] = [[302.6, -4.75], [289.4, 2.75], [302.6, 17.75]];
 // Llegadas del aeropuerto de Gran Canaria, esa noche (otra zona del mismo mundo, también x > 100: luz de interior)
-const ARR = { minX: 393, maxX: 407, minZ: -12, maxZ: 12 };
+// La sala de recogida de equipajes (z < ARR_SPLIT) y, pasada la aduana, el vestíbulo de llegadas: gente esperando,
+// alquiler de coches, tiendas, una cafetería en medio y la de Gas, «justo en la salida (dentro aún)»
+const ARR = { minX: 370, maxX: 432, minZ: -34, maxZ: 24 };
+const ARR_SPLIT = -14;
 const ARR_WALK = { minX: ARR.minX + 0.4, maxX: ARR.maxX - 0.4, minZ: ARR.minZ + 0.6, maxZ: ARR.maxZ - 0.7 };
 // (a 5 m de la pared del fondo: pegada a ella, la cámara no cabía detrás y se quedaba encima mirando al suelo)
-const ARR_START = new THREE.Vector3(398, 0, -7);
-const CAFE_GAS = new THREE.Vector3(404.2, 0, 3.3);
+const ARR_START = new THREE.Vector3(410, 0, -29);
+const CAFE_GAS = new THREE.Vector3(414.2, 0, 18.4);
+/** La otra cafetería, la de en medio (no es esa). */
+const CAFE_OTHER = new THREE.Vector3(381, 0, 6);
+/** Las dos cintas de equipaje (centro del óvalo). */
+const BELTS: [number, number, string][] = [[386, -24, 'Cinta 1 · Barcelona'], [414, -24, 'Cinta 2 · Madrid']];
+const BELT_LEN = 9, BELT_R = 1.5;
+/** Punto del óvalo de una cinta a una distancia u (en metros) de su recorrido. */
+function beltPoint(cx: number, cz: number, u: number, out: THREE.Vector3) {
+  const P = 2 * BELT_LEN + 2 * Math.PI * BELT_R;
+  u = ((u % P) + P) % P;
+  const h = BELT_LEN / 2;
+  if (u < BELT_LEN) return out.set(cx - h + u, 0, cz - BELT_R);
+  u -= BELT_LEN;
+  if (u < Math.PI * BELT_R) {
+    const a = -Math.PI / 2 + u / BELT_R;
+    return out.set(cx + h + Math.cos(a) * BELT_R, 0, cz + Math.sin(a) * BELT_R);
+  }
+  u -= Math.PI * BELT_R;
+  if (u < BELT_LEN) return out.set(cx + h - u, 0, cz + BELT_R);
+  u -= BELT_LEN;
+  const a = Math.PI / 2 + u / BELT_R;
+  return out.set(cx - h + Math.cos(a) * BELT_R, 0, cz + Math.sin(a) * BELT_R);
+}
 // La mesa de sonido (FOH) en medio de la pista, como en todos los conciertos de estadio
 const FOH = new THREE.Vector3(-1, 0, -12);
 // Una sola cola delante de los baños, hacia el recinto
@@ -108,7 +153,7 @@ const LOOKS: PersonLook[] = [
 for (const c of [0x5a6470, 0x4a5a6c, 0x3f4750, 0xf6f7f8, 0xdfe3e9, 0xc9ced6, 0x9a9aa6, 0x22222a, 0x3a3a45, 0xcccccd, 0xe8c66a, 0x777780, 0xc0c4cc]) setSurface(c, Surf.Metal);
 for (const c of [0xd9b26a, 0xb8905a, 0x8a5a37, 0x6b4a31, 0x7a5434]) setSurface(c, Surf.Wood);
 for (const c of [0xf4c95e, 0x2f7d4b]) setSurface(c, Surf.Glass);
-for (const c of [0xf4c430, 0xf2d24a, 0xf2c232, 0xf2c233, 0xd8c7a5, 0xe9eef5, 0xeceef1]) setSurface(c, Surf.None);
+for (const c of [0xf4c430, 0xf2d24a, 0xf2c232, 0xf2c233, 0xd8c7a5, 0xe9eef5, 0xeceef1, 0x9c4a2a, 0x2e9e5b, 0x1b2a4a, 0x1f6f8b, 0xdedbd3]) setSurface(c, Surf.None);
 setSurface(0x7d8087, Surf.Asphalt); // la pista del aeropuerto
 
 /** Alguien del público con vida propia: hace cola, entra al baño, sale, o intenta colarse. */
@@ -640,13 +685,37 @@ export class Level3 implements Level {
   private wcLights: { box: THREE.MeshBasicMaterial; lamp: THREE.SpriteMaterial }[] = [];
   private beers: BeerRun | null = null;
   private fito: Fito | null = null;
-  /** Minijuego del baño en pantalla (urinario o cabinas). */
-  private side: PeeAim | GlassesHunt | null = null;
+  /** El urinario, dentro de la cabina (en 3D: manda sobre la cámara mientras dura). */
+  private side: PeeAim3D | null = null;
+  /** La cabina por dentro (lejos de todo, bajo el estadio) y la cámara cuando se mira dentro. */
+  private cabin!: Cabin3D;
+  private cabinView: ((dt: number) => void) | null = null;
+  /** Gas el primero de la cola: los demás, un sitio más atrás. */
+  private qShift = 0;
+  /** Las gafas: cabinas ya miradas, y puertas que traquetean (averiadas u ocupadas). */
+  private glassOpened = new Set<number>();
+  private wcShake = WC_Z.map(() => 0);
   private gateT = GATE_SECS;
   private gateStage = 0;
   /** La cola de embarque de la puerta 26 y en qué punto está Azul. */
   private gateQ: GateNpc[] = [];
-  private gateStep: 'none' | 'line' | 'scan' | 'ask' | 'pass' = 'none';
+  private gateStep: 'none' | 'line' | 'scan' | 'ask' | 'pass' | 'finger' = 'none';
+  /** Barajas y llegadas (fuera de la escena cuando se está en el estadio: así no se animan para nada). */
+  private airGroup = new THREE.Group();
+  private arrGroup = new THREE.Group();
+  private glassMat = toon({ color: 0xbfe2f4, transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false });
+  private gateSeats: { x: number; z: number; face: number }[] = [];
+  /** Las hojas de cristal de la puerta del finger de la 26. */
+  private slideLeaves: { o: THREE.Object3D; x0: number; s: number }[] = [];
+  private slideK = 0;
+  /** Gente sentada en el aeropuerto (se les pone la pose cada fotograma). */
+  private seated: Person[] = [];
+  /** Maletas dando vueltas en las cintas de llegadas, y la gente de llegadas (para animarla). */
+  private belts: { o: THREE.Mesh; cx: number; cz: number; u: number }[] = [];
+  private arrPeople: Person[] = [];
+  private otherCafeSaid = -99;
+  /** Cuándo dijo Azul que una puerta no era la suya. */
+  private wrongSaid = new Map<number, number>();
   private gateNext = 0;
   private gateCircles: Circle[] = [];
   private azSt: SteerState & { walk: number } = { walk: 0 };
@@ -808,6 +877,7 @@ export class Level3 implements Level {
     this.camera.position.set(0, 5, -27);
     audio.startMusic('road');
     this.busy = true;
+    sc.add(this.airGroup, this.arrGroup);
     this.buildAirport();
     this.buildArrivals();
     this.startAirport();
@@ -818,11 +888,12 @@ export class Level3 implements Level {
     later(() => {
       if (this.phase !== 'intro') return;
       dialogue(CONCERT.airport, () =>
-        phoneChat([CHATS.somosLas, CHATS.burger], () => {
+        phoneChat([CHATS.fitoEntradas, CHATS.burger], () => {
           this.busy = false;
           this.phase = 'airport';
           this.lost.reset();
           this.updateHud();
+          later(() => bark('Azul', CONCERT.whichGate), 400);
         }),
       );
     }, 500);
@@ -933,64 +1004,42 @@ export class Level3 implements Level {
   // ---------------- Aeropuerto ----------------
 
   /**
-   * La puerta 26: cristalera con vistas a la pista y el avión esperando, finger conectado, puerta abierta
-   * al túnel, pantalla de embarque, mostradores con su personal, torno de la tarjeta, cinta para la cola y
-   * gente haciendo cola con la maleta.
+   * Una puerta de embarque de la sala: su tramo de cristalera con vistas a la pista, la puerta al finger, la pantalla
+   * con el número, el destino y cómo va, los mostradores y las filas de asientos. La 26 (`real`) además tiene su
+   * personal, el torno de la tarjeta, la cola con su cinta, la gente esperando y el finger de verdad, por dentro.
    */
-  private buildGate(m: Merger, cx: number) {
-    const sc = this.scene;
-    const Z = AIR.maxZ + 3.2;
-    const X0 = AIR.minX - 0.3, X1 = AIR.maxX + 0.3;
+  private buildGate(m: Merger, g: (typeof GATES)[number], real: boolean) {
+    const sc = this.airGroup;
+    const cx = g.x;
+    const Z = GATE_WALL;
+    const X0 = cx - 6.5, X1 = cx + 6.5;
     const DW = 1.1; // media anchura de la puerta
     // Dintel y faldón de la cristalera
     m.add(G.box, 0xd8dde3, cx, 6.1, Z, 0, 0, 0, X1 - X0, 3.4, 0.3);
     m.add(G.box, 0x4a525c, cx, 0.12, Z, 0, 0, 0, X1 - X0, 0.24, 0.3);
-    // Montantes de la cristalera
-    for (let x = X0; x <= X1 + 0.01; x += 1.5) if (Math.abs(x - cx) > DW + 0.1) m.add(G.box, 0x3f4750, x, 2.3, Z, 0, 0, 0, 0.09, 4.4, 0.16);
+    for (let x = X0; x <= X1 + 0.01; x += 1.625) if (Math.abs(x - cx) > DW + 0.1) m.add(G.box, 0x3f4750, x, 2.3, Z, 0, 0, 0, 0.09, 4.4, 0.16);
     m.add(G.box, 0x3f4750, cx, 3.0, Z, 0, 0, 0, X1 - X0, 0.08, 0.14);
     for (const s of [-1, 1]) m.add(G.box, 0x3f4750, cx + s * (DW + 0.05), 1.5, Z, 0, 0, 0, 0.14, 3, 0.2);
-    const glass = toon({ color: 0xbfe2f4, transparent: true, opacity: 0.2, roughness: 0.05, depthWrite: false });
+    const glass = this.glassMat;
     for (const [a, b] of [[X0, cx - DW], [cx + DW, X1]]) {
-      const g = new THREE.Mesh(new THREE.PlaneGeometry(b - a, 4.4), glass);
-      g.position.set((a + b) / 2, 2.3, Z + 0.02);
-      g.rotation.y = Math.PI;
-      g.userData.noCast = true;
-      sc.add(g);
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(b - a, 4.4), glass);
+      gl.position.set((a + b) / 2, 2.3, Z + 0.02);
+      gl.rotation.y = Math.PI;
+      gl.userData.noCast = true;
+      sc.add(gl);
     }
-    // La puerta abierta: se ve el túnel del finger, con luz al fondo (en tebeo: tonos planos con su tinta)
-    const tunnel = comicTex((ctx, w, h) => {
-      for (let i = 0; i < 6; i++) {
-        const k = i / 6;
-        const v = 120 + k * 120;
-        ctx.fillStyle = `rgb(${v},${v + 4},${v + 10})`;
-        ctx.fillRect(w * 0.42 * k, h * 0.42 * k, w * (1 - 0.84 * k), h * (1 - 0.84 * k));
-        ctx.strokeStyle = 'rgba(20,16,24,.55)';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(w * 0.42 * k, h * 0.42 * k, w * (1 - 0.84 * k), h * (1 - 0.84 * k));
-      }
-      ctx.fillStyle = '#fbfbff';
-      ctx.fillRect(w * 0.42, h * 0.38, w * 0.16, h * 0.24);
-      ctx.fillStyle = '#3a4250';
-      ctx.fillRect(0, h * 0.86, w, h * 0.14);
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 6;
-      ctx.strokeRect(3, 3, w - 6, h - 6);
-    }, 256, 256);
-    const hole = new THREE.Mesh(flatPlane(DW * 2, 3), new THREE.MeshBasicMaterial({ map: tunnel }));
-    hole.position.set(cx, 1.5, Z + 0.1);
-    hole.rotation.y = Math.PI;
-    sc.add(hole);
-    // Pantalla de embarque sobre la puerta (letreros de Aena: amarillo sobre oscuro)
+    // Pantalla de la puerta (letreros de Aena: amarillo sobre oscuro): número, destino, vuelo y cómo va
     const screen = comicTex((ctx, w, h) => {
       ctx.fillStyle = INK;
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#1b2433';
       ctx.fillRect(8, 8, w - 16, h - 16);
       ctx.textAlign = 'left';
-      inkText(ctx, '26', 26, h * 0.32, 78, '#ffd23f');
-      inkText(ctx, 'Gran Canaria · LPA', 150, h * 0.32, 52, PAPER, w - 170);
-      inkText(ctx, 'EMBARCANDO', 26, h * 0.74, 46, '#4ade80');
-      inkText(ctx, 'Filas 20 a 30', 410, h * 0.74, 38, '#b9c6d6');
+      inkText(ctx, String(g.n), 26, h * 0.32, 78, '#ffd23f');
+      inkText(ctx, g.to, 150, h * 0.32, 56, PAPER, w - 170);
+      const col = g.status === 'EMBARCANDO' ? '#4ade80' : g.status === 'CERRADO' ? '#f87171' : g.status === 'RETRASADO' ? '#fbbf24' : '#b9c6d6';
+      inkText(ctx, g.status, 26, h * 0.74, 46, col);
+      inkText(ctx, `${g.code} · ${g.time}`, 400, h * 0.74, 38, '#b9c6d6', w - 420);
     }, 720, 180);
     const scr = new THREE.Mesh(flatPlane(4.2, 1.05), new THREE.MeshBasicMaterial({ map: screen }));
     scr.position.set(cx, 3.72, Z - 0.21);
@@ -1000,14 +1049,57 @@ export class Level3 implements Level {
     // Mostradores de embarque a los dos lados de la puerta
     for (const s of [-1, 1]) {
       const x = cx + s * 3.4;
-      m.add(G.rbox, 0x2b3a55, x, 0.55, AIR.maxZ + 0.2, 0, 0, 0, 2.4, 1.1, 0.75);
-      m.add(G.box, 0xe9ecef, x, 1.12, AIR.maxZ + 0.2, 0, 0, 0, 2.5, 0.05, 0.85);
-      m.add(G.box, 0x14181f, x - 0.5, 1.33, AIR.maxZ + 0.32, -0.25, 0, 0, 0.46, 0.32, 0.03); // monitor
-      m.add(G.box, 0xd7263d, x, 0.62, AIR.maxZ - 0.18, 0, 0, 0, 2.3, 0.2, 0.02);
-      this.colliders.push({ minX: x - 1.3, maxX: x + 1.3, minZ: AIR.maxZ - 0.2, maxZ: AIR.maxZ + 0.6, low: true });
+      m.add(G.rbox, 0x2b3a55, x, 0.55, GZ + 0.2, 0, 0, 0, 2.4, 1.1, 0.75);
+      m.add(G.box, 0xe9ecef, x, 1.12, GZ + 0.2, 0, 0, 0, 2.5, 0.05, 0.85);
+      m.add(G.box, 0x14181f, x - 0.5, 1.33, GZ + 0.32, -0.25, 0, 0, 0.46, 0.32, 0.03); // monitor
+      m.add(G.box, 0xd7263d, x, 0.62, GZ - 0.18, 0, 0, 0, 2.3, 0.2, 0.02);
+      this.colliders.push({ minX: x - 1.3, maxX: x + 1.3, minZ: GZ - 0.2, maxZ: GZ + 0.6, low: true });
+    }
+    // Entre mostrador y mostrador, sin torno, una cinta: por ahí no se pasa
+    if (!real) {
+      m.add(G.cyl, 0x8f98a4, cx - 2.1, 0.48, GZ + 0.2, 0, 0, 0, 0.06, 0.96, 0.06);
+      m.add(G.cyl, 0x8f98a4, cx + 2.1, 0.48, GZ + 0.2, 0, 0, 0, 0.06, 0.96, 0.06);
+      m.add(G.box, 0xd7263d, cx, 0.88, GZ + 0.2, 0, 0, 0, 4.2, 0.06, 0.02);
+      this.colliders.push({ minX: cx - 2.2, maxX: cx + 2.2, minZ: GZ, maxZ: GZ + 0.4, low: true });
+    }
+    // Filas de asientos de la zona de embarque, mirando al pasillo de la puerta
+    for (const s of [-1, 1])
+      for (let k = 0; k < 2; k++) {
+        const x = cx + s * 4.7, z0 = GZ - 10 + k * 3.2;
+        m.add(G.box, 0x4a525c, x, 0.3, z0, 0, 0, 0, 0.5, 0.05, 2.4);
+        for (let j = 0; j < 4; j++) {
+          m.add(G.rbox, 0x2b3a55, x, 0.47, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.5, 0.1, 0.5);
+          m.add(G.rbox, 0x2b3a55, x + s * 0.22, 0.75, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.08, 0.5, 0.5);
+        }
+        this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z0 - 1.25, maxZ: z0 + 1.25 });
+        this.gateSeats.push({ x, z: z0 - 0.9 + ((k + s + 4) % 4) * 0.6, face: s > 0 ? -Math.PI / 2 : Math.PI / 2 });
+      }
+    // Fuera: el finger (en las demás, recogido y con su puerta cerrada) y, en algunas, el avión
+    const av = new Merger();
+    if (!real) {
+      // La puerta de la terminal, cerrada: dos hojas opacas con su ventanuco
+      for (const s of [-1, 1]) {
+        m.add(G.box, 0x8f98a4, cx + s * DW * 0.5, 1.5, Z - 0.02, 0, 0, 0, DW - 0.04, 2.96, 0.06);
+        m.add(G.box, 0x3a4250, cx + s * DW * 0.5, 2.1, Z - 0.06, 0, 0, 0, 0.4, 0.6, 0.02);
+      }
+      // Finger recogido, corto, junto a la cristalera
+      av.add(G.box, 0xdfe3e9, cx, 2.0, Z + 3.2, 0, 0, 0, 2.7, 2.8, 6);
+      av.add(G.box, 0x3a4250, cx, 2.3, Z + 3.2, 0, 0, 0, 2.74, 0.5, 4.6);
+      av.add(G.cyl, 0x8f98a4, cx, 0.3, Z + 5.4, 0, 0, 0, 0.45, 0.6, 0.45);
+      av.add(G.cyl, 0x8f98a4, cx, 1.0, Z + 5.4, 0, 0, 0, 0.25, 1.4, 0.25);
+    } else this.buildFinger(m, av, cx);
+    if (g.plane !== undefined) this.buildPlane(av, cx, g.plane);
+    const avm = av.mesh();
+    avm.userData.noCam = true;
+    sc.add(avm);
+    if (!real) return;
+
+    // ---- La 26: personal, torno, cola y gente ----
+    for (const s of [-1, 1]) {
+      const x = cx + s * 3.4;
       const staff = makePerson(castLook({ skin: s < 0 ? 0xe8b894 : 0xd9a27c, shirt: 0x1f2d4d, pants: 0x1f2d4d, hair: s < 0 ? 0x2b1d14 : 0x5a3a22, hairStyle: s < 0 ? 'short' : 'straight', male: s < 0 }, s < 0 ? 'agente_aeropuerto_h' : 'agente_aeropuerto_m'));
-      // (la de la izquierda, junto al torno: es quien pide la tarjeta; mira a la cola)
-      staff.root.position.set(s < 0 ? cx - 1.55 : x + 0.2, 0, AIR.maxZ + (s < 0 ? 1.05 : 1.0));
+      // (el de la izquierda, junto al torno: es quien pide la tarjeta; mira a la cola)
+      staff.root.position.set(s < 0 ? cx - 1.55 : x + 0.2, 0, GZ + (s < 0 ? 1.05 : 1.0));
       staff.root.rotation.y = s < 0 ? Math.PI * 0.85 : Math.PI;
       sc.add(staff.root);
       if (s < 0) this.agent = staff;
@@ -1015,10 +1107,10 @@ export class Level3 implements Level {
     // Torno de la tarjeta de embarque: dos cuerpos y sus aletas de cristal, que se recogen al pasar la tarjeta
     const flapMat = toon({ color: 0xbfe2f4, transparent: true, opacity: 0.6, roughness: 0.1 });
     for (const s of [-1, 1]) {
-      m.add(G.rbox, 0x8f98a4, cx + s * 0.86, 0.5, AIR.maxZ + 1.6, 0, 0, 0, 0.26, 1, 0.9);
-      m.add(G.box, 0x4ade80, cx + s * 0.86, 1.02, AIR.maxZ + 1.35, 0, 0, 0, 0.18, 0.02, 0.18);
+      m.add(G.rbox, 0x8f98a4, cx + s * 0.86, 0.5, GZ + 1.6, 0, 0, 0, 0.26, 1, 0.9);
+      m.add(G.box, 0x4ade80, cx + s * 0.86, 1.02, GZ + 1.35, 0, 0, 0, 0.18, 0.02, 0.18);
       const f = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.02).translate(-s * 0.35, 0, 0), flapMat);
-      f.position.set(cx + s * 0.73, 0.62, AIR.maxZ + 1.6);
+      f.position.set(cx + s * 0.73, 0.62, GZ + 1.6);
       f.userData.comicBent = true;
       f.userData.noCast = true;
       sc.add(f);
@@ -1027,16 +1119,16 @@ export class Level3 implements Level {
     // Mamparas de cristal entre el torno y los mostradores: no se pasa sin tarjeta
     for (const s of [-1, 1]) {
       const a = cx + s * 0.99, b = cx + s * 2.1;
-      const g = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(b - a), 1.1), glass);
-      g.position.set((a + b) / 2, 0.55, AIR.maxZ + 1.6);
-      g.userData.noCast = true;
-      sc.add(g);
-      m.add(G.box, 0x8f98a4, (a + b) / 2, 1.1, AIR.maxZ + 1.6, 0, 0, 0, Math.abs(b - a), 0.04, 0.05);
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(b - a), 1.1), glass);
+      gl.position.set((a + b) / 2, 0.55, GZ + 1.6);
+      gl.userData.noCast = true;
+      sc.add(gl);
+      m.add(G.box, 0x8f98a4, (a + b) / 2, 1.1, GZ + 1.6, 0, 0, 0, Math.abs(b - a), 0.04, 0.05);
     }
     // La cola: postes con cinta que hacen un pasillo en el centro, hasta el torno
     for (const s of [-1, 1])
       for (let k = 0; k < 4; k++) {
-        const z = AIR.maxZ - 8 + k * 2.1;
+        const z = GZ - 8 + k * 2.1;
         m.add(G.cyl, 0x8f98a4, cx + s * 1.45, 0.48, z, 0, 0, 0, 0.06, 0.96, 0.06);
         m.add(G.cyl, 0x8f98a4, cx + s * 1.45, 0.02, z, 0, 0, 0, 0.3, 0.04, 0.3);
         if (k < 3) m.add(G.box, 0xd7263d, cx + s * 1.45, 0.88, z + 1.05, 0, 0, 0, 0.02, 0.06, 2.1);
@@ -1059,118 +1151,257 @@ export class Level3 implements Level {
       this.gateQ.push({ p, walk: 0, state: 'line', t: 0, circle });
       this.gateCircles.push(circle);
     });
-    // Filas de asientos de la zona de embarque
-    for (const s of [-1, 1])
-      for (let k = 0; k < 2; k++) {
-        const x = cx + s * 4.7, z0 = AIR.maxZ - 10 + k * 3.2;
-        m.add(G.box, 0x4a525c, x, 0.3, z0, 0, 0, 0, 0.5, 0.05, 2.4);
-        for (let j = 0; j < 4; j++) {
-          m.add(G.rbox, 0x2b3a55, x, 0.47, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.5, 0.1, 0.5);
-          m.add(G.rbox, 0x2b3a55, x + s * 0.22, 0.75, z0 - 0.9 + j * 0.6, 0, 0, 0, 0.08, 0.5, 0.5);
-        }
-        this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z0 - 1.25, maxZ: z0 + 1.25 });
-      }
-    // Fuera: la pista, el finger y el avión
-    const av = new Merger();
-    av.add(G.box, 0x7d8087, cx, -0.02, Z + 40, 0, 0, 0, 240, 0.1, 80);
-    for (let i = -6; i < 7; i++) av.add(G.box, 0xf2d24a, cx + i * 8, 0.04, Z + 7, 0, 0, 0, 5, 0.01, 0.16);
-    const AZ = Z + 13;
-    av.add(G.capsule, 0xf6f7f8, cx + 3, 4, AZ, 0, 0, Math.PI / 2, 3.7, 15, 3.7);
-    av.add(G.box, 0xd7263d, cx + 3, 3.3, AZ - 1.82, 0, 0, 0, 24, 0.22, 0.05);
-    av.add(G.box, 0xf2c233, cx + 3, 3.05, AZ - 1.78, 0, 0, 0, 24, 0.12, 0.05);
-    for (let i = 0; i < 26; i++) av.add(G.rbox, 0x1b2430, cx + 3 - 12 + i * 0.95, 4.42, AZ - 1.8, 0, 0, 0, 0.3, 0.42, 0.06);
-    av.add(G.box, 0x9aa3ad, cx - 0.2, 3.9, AZ - 1.82, 0, 0, 0, 1.0, 2.0, 0.05); // la puerta del avión
-    av.add(G.box, 0xdfe3e9, cx + 7, 2.9, AZ - 6, 0, 0.3, 0, 7, 0.28, 9); // ala
-    av.add(G.cyl, 0xc9ced6, cx + 6, 1.7, AZ - 5.5, 0, 0, Math.PI / 2, 1.7, 3.4, 1.7); // motor
-    av.add(G.cyl, 0x2a2e36, cx + 4.3, 1.7, AZ - 5.5, 0, 0, Math.PI / 2, 1.45, 0.1, 1.45);
-    av.add(G.box, 0xd7263d, cx + 18.5, 8, AZ, 0, 0, -0.35, 4, 6, 0.3); // deriva
-    av.add(G.box, 0xf2c233, cx + 19.8, 9.6, AZ, 0, 0, -0.35, 2.4, 1.2, 0.32);
-    for (const dx of [-7, 6]) av.add(G.cyl, 0x22262c, cx + 3 + dx, 0.9, AZ, Math.PI / 2, 0, 0, 1.2, 1.5, 1.2); // ruedas
-    // Finger: de la puerta 26 a la del avión, subiendo un poco
-    av.add(G.box, 0xdfe3e9, cx, 2.35, Z + 5.4, -0.2, 0, 0, 2.7, 2.9, 11.6);
-    av.add(G.box, 0x3a4250, cx, 2.5, Z + 5.4, -0.2, 0, 0, 2.74, 0.5, 8);
-    av.add(G.cyl, 0x8f98a4, cx, 1.3, Z + 7.6, 0, 0, 0, 0.5, 2.6, 0.5);
-    const avm = av.mesh();
-    avm.userData.noCam = true;
-    sc.add(avm);
   }
 
-  /** Terminal de Barajas: pasillo largo, tiendas y la puerta del vuelo a Gran Canaria (el burger del «NUNCA más» fue el de Gas, en Barcelona). */
+  /**
+   * El finger de la 26, de verdad: la puerta de cristal de la terminal (se abre sola al acercarse alguien) y el túnel,
+   * hueco, que sube hasta la puerta del avión: suelo de moqueta, paredes con su ventana corrida, techo con luces y
+   * la cabina del final pegada al avión. Por fuera, el mismo túnel sobre su pata.
+   */
+  private buildFinger(m: Merger, av: Merger, cx: number) {
+    const sc = this.airGroup;
+    const Z = GATE_WALL;
+    const a = Math.atan2(FINGER_RISE, FINGER_LEN);
+    const L = Math.hypot(FINGER_LEN, FINGER_RISE);
+    const zm = Z + FINGER_LEN / 2, ym = FINGER_RISE / 2;
+    const W = 2.4, H = 2.6;
+    // (piezas inclinadas: el suelo empieza a ras de la terminal y acaba a la altura de la puerta del avión)
+    const fm = new Merger(false);
+    fm.add(G.box, 0x4b5868, cx, ym - 0.07, zm, -a, 0, 0, W + 0.3, 0.14, L + 0.1); // suelo (moqueta)
+    for (const s of [-1, 1]) {
+      // Pared: zócalo, ventana corrida (cristal oscuro) y franja de arriba
+      fm.add(G.box, 0xdfe3e9, cx + s * (W / 2 + 0.07), ym + 0.5, zm, -a, 0, 0, 0.14, 1.0, L);
+      fm.add(G.box, 0x2a3240, cx + s * (W / 2 + 0.07), ym + 1.45, zm, -a, 0, 0, 0.1, 0.9, L);
+      fm.add(G.box, 0xdfe3e9, cx + s * (W / 2 + 0.07), ym + 2.25, zm, -a, 0, 0, 0.14, 0.7, L);
+      // Pasamanos por dentro
+      fm.add(G.box, 0x9aa3ad, cx + s * (W / 2 - 0.05), ym + 0.95, zm, -a, 0, 0, 0.05, 0.05, L - 0.4);
+    }
+    fm.add(G.box, 0xdfe3e9, cx, ym + H + 0.07, zm, -a, 0, 0, W + 0.3, 0.14, L); // techo
+    // Fuelles del acordeón cada tramo (marcos un poco más gruesos)
+    for (let k = 0; k <= 4; k++) {
+      const z = Z + 0.3 + (k * (FINGER_LEN - 0.6)) / 4;
+      const y = fingerY(z);
+      // (marco hueco: arriba y a los lados; por dentro se ve el túnel)
+      fm.add(G.box, 0xc9ced6, cx, y + H + 0.12, z, -a, 0, 0, W + 0.42, 0.18, 0.16);
+      for (const sx of [-1, 1]) fm.add(G.box, 0xc9ced6, cx + sx * (W / 2 + 0.12), y + H / 2, z, -a, 0, 0, 0.18, H + 0.4, 0.16);
+    }
+    // Las luces del techo (no iluminan: se ven encendidas)
+    const lights = new Merger(false);
+    for (let k = 0; k < 5; k++) {
+      const z = Z + 1 + k * 2;
+      lights.add(G.box, 0xfffbe8, cx, fingerY(z) + H - 0.03, z, -a, 0, 0, 0.9, 0.03, 0.5);
+    }
+    const lm = new THREE.Mesh(lights.build(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    // La cabina del final, girada hacia el avión, y la pata con sus ruedas
+    const ze = Z + FINGER_LEN;
+    fm.add(G.box, 0xdfe3e9, cx + 0.4, FINGER_RISE + H / 2, ze + 0.9, 0, 0, 0, W + 1.2, H + 0.3, 1.8);
+    fm.add(G.box, 0x3a4250, cx + 0.4, FINGER_RISE + H / 2, ze - 0.02, 0, 0, 0, W + 1.0, H - 0.2, 0.05);
+    av.add(G.cyl, 0x8f98a4, cx, FINGER_RISE / 2 + 0.2, ze - 1.2, 0, 0, 0, 0.32, FINGER_RISE + 0.4, 0.32);
+    av.add(G.box, 0x4a525c, cx, 0.35, ze - 1.2, 0, 0, 0, 2.2, 0.3, 0.6);
+    for (const s of [-1, 1]) av.add(G.cyl, 0x22262c, cx + s * 0.9, 0.3, ze - 1.2, 0, 0, Math.PI / 2, 0.55, 0.3, 0.55);
+    const fmesh = fm.mesh();
+    for (const o of [fmesh, lm]) {
+      o.userData.comicBent = true;
+      o.userData.noCam = true;
+      sc.add(o);
+    }
+    // Lo de dentro, al fondo: la puerta del avión abierta y luz
+    const end = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.9), new THREE.MeshBasicMaterial({ color: 0xfdfbf2 }));
+    end.position.set(cx, FINGER_RISE + 0.95, ze - 0.06);
+    end.rotation.y = Math.PI;
+    sc.add(end);
+    // La puerta de la terminal: dos hojas de cristal que se apartan a los lados cuando se acerca alguien
+    const leafMat = toon({ color: 0xbfe2f4, transparent: true, opacity: 0.38, roughness: 0.05, depthWrite: false });
+    for (const s of [-1, 1]) {
+      const leaf = new THREE.Group();
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(1.08, 2.9, 0.03), leafMat);
+      pane.userData.noCast = true;
+      const frame = new Merger(false);
+      frame.add(G.box, 0x5a6470, 0, 1.44, 0, 0, 0, 0, 1.1, 0.05, 0.05);
+      frame.add(G.box, 0x5a6470, 0, -1.44, 0, 0, 0, 0, 1.1, 0.05, 0.05);
+      frame.add(G.box, 0x5a6470, s * 0.52, 0, 0, 0, 0, 0, 0.05, 2.9, 0.05);
+      frame.add(G.box, 0xc0c4cc, -s * 0.46, 0, -0.04, 0, 0, 0, 0.04, 0.5, 0.04); // tirador
+      leaf.add(pane, frame.mesh());
+      leaf.position.set(cx + s * 0.55, 1.47, Z - 0.05);
+      leaf.userData.comicBent = true;
+      leaf.userData.noCam = true;
+      sc.add(leaf);
+      this.slideLeaves.push({ o: leaf, x0: cx + s * 0.55, s });
+    }
+    void m;
+  }
+
+  /**
+   * Un avión aparcado de morro hacia la terminal (fuselaje a lo largo de z, morro hacia -z), con la puerta delantera
+   * a la izquierda, del lado del finger: fuselaje, ventanillas, cabina, alas con sus motores, cola y tren.
+   */
+  private buildPlane(av: Merger, cx: number, tail: number) {
+    const x = cx + 3.35, z0 = GATE_WALL + 8.8, y = 2.45;
+    av.add(G.capsule, 0xf6f7f8, x, y, z0 + 10.5, Math.PI / 2, 0, 0, 3.7, 19, 3.7);
+    // Ventanillas a los dos lados y la franja de color
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 22; i++) av.add(G.rbox, 0x1b2430, x + s * 1.8, y + 0.42, z0 + 4 + i * 0.75, 0, 0, 0, 0.06, 0.4, 0.28);
+      av.add(G.box, tail, x + s * 1.82, y - 0.35, z0 + 11, 0, 0, 0, 0.05, 0.22, 18);
+    }
+    // La puerta delantera (lado del finger) y las ventanas de la cabina
+    av.add(G.box, 0x9aa3ad, x - 1.84, y - 0.2, GATE_WALL + FINGER_LEN + 0.2, 0, 0, 0, 0.05, 1.9, 1.0);
+    av.add(G.box, 0x1b2430, x, y + 0.75, z0 + 1.3, -0.5, 0, 0, 2.2, 0.35, 0.6);
+    // Alas, motores, estabilizadores y deriva
+    for (const s of [-1, 1]) {
+      av.add(G.box, 0xdfe3e9, x + s * 5.2, y - 0.6, z0 + 11.5, 0, s * 0.35, 0, 8.5, 0.26, 2.8);
+      av.add(G.cyl, 0xc9ced6, x + s * 3.6, y - 1.25, z0 + 10.2, Math.PI / 2, 0, 0, 1.3, 3, 1.3);
+      av.add(G.cyl, 0x2a2e36, x + s * 3.6, y - 1.25, z0 + 8.68, Math.PI / 2, 0, 0, 1.1, 0.06, 1.1);
+      av.add(G.box, 0xdfe3e9, x + s * 2.4, y + 0.6, z0 + 19.6, 0, s * 0.3, 0, 3.6, 0.2, 1.6);
+    }
+    av.add(G.box, tail, x, y + 2.9, z0 + 19.4, -0.45, 0, 0, 0.3, 4.6, 2.6);
+    av.add(G.cyl, 0x22262c, x, 0.3, z0 + 2.5, 0, 0, Math.PI / 2, 0.6, 0.3, 0.6);
+    for (const s of [-1, 1]) av.add(G.cyl, 0x22262c, x + s * 1.4, 0.35, z0 + 12.5, 0, 0, Math.PI / 2, 0.7, 0.5, 0.7);
+  }
+
+  /**
+   * Terminal de Barajas: el pasillo largo con sus tiendas (el burger del «NUNCA más» fue el de Gas, en Barcelona) y, al
+   * fondo, la sala de embarque, ancha, con seis puertas a destinos distintos, tiendas en la pared de atrás y pantallas
+   * de salidas: cuál es la puerta de Azul no lo dice nadie, lo dicen las pantallas.
+   */
   private buildAirport() {
-    const sc = this.scene;
+    const sc = this.airGroup;
     const A = AIR;
     const cx = (A.minX + A.maxX) / 2;
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX + 2, A.maxZ - A.minZ + 6).rotateX(-Math.PI / 2), toon({ color: 0xe9ecef, roughness: 0.25, metalness: 0.05, surf: Surf.Paving }));
-    floor.position.set(cx, 0.01, (A.minZ + A.maxZ) / 2);
+    const Lg = LOUNGE;
+    const lcx = (Lg.minX + Lg.maxX) / 2;
+    const paving = toon({ color: 0xe9ecef, roughness: 0.25, metalness: 0.05, surf: Surf.Paving });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX + 2, A.maxZ - A.minZ + 3).rotateX(-Math.PI / 2), paving);
+    floor.position.set(cx, 0.01, (A.minZ + A.maxZ) / 2 - 1.5);
     floor.userData.noCast = true;
     sc.add(floor);
+    const lfloor = new THREE.Mesh(new THREE.PlaneGeometry(Lg.maxX - Lg.minX + 1, Lg.maxZ - Lg.minZ + 0.6).rotateX(-Math.PI / 2), paving);
+    lfloor.position.set(lcx, 0.011, (Lg.minZ + Lg.maxZ) / 2);
+    lfloor.userData.noCast = true;
+    sc.add(lfloor);
     const m = new Merger();
-    // Cristaleras a los dos lados, en tramos de 3 m: así se comban a mano alzada con la cubierta y no se abre una
-    // rendija arriba (de una pieza de 66 m solo se movían las esquinas)
+    // Cristaleras a los dos lados del pasillo, en tramos de 3 m: así se comban a mano alzada con la cubierta y no se
+    // abre una rendija arriba (de una pieza de 66 m solo se movían las esquinas)
     for (const x of [A.minX - 0.15, A.maxX + 0.15]) {
-      for (let z = A.minZ - 3; z < A.maxZ + 3; z += 3) {
+      for (let z = A.minZ - 3; z < A.maxZ; z += 3) {
         m.add(G.box, 0xb4d4ea, x, 3.9, z + 1.5, 0, 0, 0, 0.2, 7.8, 3.02);
         for (const y of [2.4, 4.6]) m.add(G.box, 0x5a6470, x, y, z + 1.5, 0, 0, 0, 0.26, 0.08, 3.02);
       }
-      for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 3) m.add(G.box, 0x5a6470, x, 3.9, z, 0, 0, 0, 0.3, 7.8, 0.15);
+      for (let z = A.minZ - 2; z <= A.maxZ; z += 3) m.add(G.box, 0x5a6470, x, 3.9, z, 0, 0, 0, 0.3, 7.8, 0.15);
     }
     // Lamas finas de bambú, una al lado de la otra, por debajo de la cubierta (sin sombra: si no, rayaban el suelo)
     const ceil = new Merger();
-    for (let z = A.minZ - 3; z <= A.maxZ + 3; z += 0.42) ceil.add(G.box, 0xd9b26a, cx, 6.62 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.06, 0.24);
-    for (let x = A.minX + 2.6; x < A.maxX - 2; x += 3.2) for (let z = A.minZ - 2; z <= A.maxZ + 2; z += 4) ceil.add(G.box, 0xb8905a, x, 6.72 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, 0.1, 0.1, 4.05);
+    for (let z = A.minZ - 3; z <= A.maxZ; z += 0.42) ceil.add(G.box, 0xd9b26a, cx, 6.62 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, A.maxX - A.minX + 0.6, 0.06, 0.24);
+    for (let x = A.minX + 2.6; x < A.maxX - 2; x += 3.2) for (let z = A.minZ - 2; z <= A.maxZ - 2; z += 4) ceil.add(G.box, 0xb8905a, x, 6.72 + Math.sin(z * 0.3) * 0.35, z, 0, 0, 0, 0.1, 0.1, 4.05);
+    // En la sala, las lamas van de lado a lado (a lo ancho), a la altura de la cubierta del pasillo
+    for (let z = Lg.minZ + 0.2; z <= Lg.maxZ; z += 0.42) ceil.add(G.box, 0xd9b26a, lcx, 6.9, z, 0, 0, 0, Lg.maxX - Lg.minX + 0.6, 0.06, 0.24);
+    for (let x = Lg.minX + 2; x < Lg.maxX; x += 4) ceil.add(G.box, 0xb8905a, x, 7.0, (Lg.minZ + Lg.maxZ) / 2, 0, 0, 0, 0.1, 0.1, Lg.maxZ - Lg.minZ);
     const cm = ceil.mesh();
     cm.userData.noCast = true;
     sc.add(cm);
-    // La cubierta: una sola pieza ondulada que cierra toda la terminal, con lucernarios redondos, como en la T4
+    // La cubierta: una sola pieza ondulada que cierra el pasillo, con lucernarios redondos, como en la T4; la de la sala,
+    // plana y algo más alta
+    const roofMat = toon({ color: 0xc9a468, roughness: 0.8, side: THREE.DoubleSide });
     {
-      const W = A.maxX - A.minX + 1.4, D = A.maxZ - A.minZ + 7;
+      const W = A.maxX - A.minX + 1.4, D = A.maxZ - A.minZ + 3.5;
       const roof = new THREE.PlaneGeometry(W, D, 6, 90).rotateX(Math.PI / 2);
       const rp = roof.attributes.position;
-      const z0 = (A.minZ + A.maxZ) / 2;
+      const z0 = (A.minZ + A.maxZ) / 2 - 1.75;
       for (let i = 0; i < rp.count; i++) rp.setY(i, 6.86 + Math.sin((rp.getZ(i) + z0) * 0.3) * 0.35);
       roof.computeVertexNormals();
-      const rm = new THREE.Mesh(roof, toon({ color: 0xc9a468, roughness: 0.8, side: THREE.DoubleSide }));
+      const rm = new THREE.Mesh(roof, roofMat);
       rm.position.set(cx, 0, z0);
       rm.userData.noCast = true;
       sc.add(rm);
+      const lroof = new THREE.Mesh(new THREE.PlaneGeometry(Lg.maxX - Lg.minX + 1.4, Lg.maxZ - Lg.minZ + 1).rotateX(Math.PI / 2), roofMat);
+      lroof.position.set(lcx, 7.15, (Lg.minZ + Lg.maxZ) / 2);
+      lroof.userData.noCast = true;
+      sc.add(lroof);
       // (el disco de cielo y su aro, sin doblar los dos: si no, el aro se separaba del disco)
       const skyMat = new THREE.MeshBasicMaterial({ color: 0xeaf4ff, fog: false, toneMapped: false });
       const ringMat = toon({ color: 0xf2f2ee, roughness: 0.5 });
-      for (let z = A.minZ - 1; z <= A.maxZ + 1; z += 7.5)
-        for (const x of [cx - 3, cx + 3]) {
-          const y = 6.5 + Math.sin(z * 0.3) * 0.35;
-          const sk = new THREE.Mesh(new THREE.CircleGeometry(0.72, 20).rotateX(Math.PI / 2), skyMat);
-          sk.position.set(x, y + 0.02, z);
-          sk.userData.comicBent = true;
-          sc.add(sk);
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.05, 6, 22).rotateX(Math.PI / 2), ringMat);
-          ring.position.set(x, y, z);
-          ring.userData.comicBent = true;
-          ring.userData.noCast = true;
-          sc.add(ring);
-        }
+      const skylight = (x: number, y: number, z: number) => {
+        const sk = new THREE.Mesh(new THREE.CircleGeometry(0.72, 20).rotateX(Math.PI / 2), skyMat);
+        sk.position.set(x, y + 0.02, z);
+        sk.userData.comicBent = true;
+        sc.add(sk);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.05, 6, 22).rotateX(Math.PI / 2), ringMat);
+        ring.position.set(x, y, z);
+        ring.userData.comicBent = true;
+        ring.userData.noCast = true;
+        sc.add(ring);
+      };
+      for (let z = A.minZ - 1; z <= A.maxZ - 3; z += 7.5) for (const x of [cx - 3, cx + 3]) skylight(x, 6.5 + Math.sin(z * 0.3) * 0.35, z);
+      for (let x = Lg.minX + 7; x < Lg.maxX - 4; x += 12) skylight(x, 6.82, (Lg.minZ + Lg.maxZ) / 2 - 1);
     }
     m.add(G.box, 0xd8dde3, cx, 3.9, A.minZ - 3.2, 0, 0, 0, A.maxX - A.minX + 0.6, 7.8, 0.3);
-    this.colliders.push(
-      { minX: A.minX - 0.4, maxX: A.minX - 0.02, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },
-      { minX: A.maxX + 0.02, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.maxZ + 3.4 },
-      { minX: A.minX - 0.4, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.minZ - 3.04 },
-    );
-    // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
-    this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.maxZ + 3.1, maxZ: A.maxZ + 7 });
-    this.buildGate(m, cx);
-    // Barajas T4: pilares en «Y» de acero pintado que van del amarillo al rojo a lo largo de la terminal
-    for (let z = A.minZ - 1, k = 0; z <= A.maxZ + 1; z += 7.5, k++) {
-      const col = new THREE.Color(0xf2c231).lerp(new THREE.Color(0xd7263d), k / 8).getHex();
-      setSurface(col, Surf.Metal);
-      for (const x of [A.minX + 1.2, A.maxX - 1.2]) {
-        m.add(G.cyl, col, x, 2.2, z, 0, 0, 0, 0.5, 4.4, 0.5);
-        m.add(G.cyl, col, x - 0.6, 5.4, z, 0, 0, 0.45, 0.3, 2.6, 0.3);
-        m.add(G.cyl, col, x + 0.6, 5.4, z, 0, 0, -0.45, 0.3, 2.6, 0.3);
-        this.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
+    // La sala: la pared de atrás (a los lados de la boca del pasillo) con sus tiendas, y cristaleras en los extremos
+    for (const [x0, x1] of [[Lg.minX, A.minX - 0.15], [A.maxX + 0.15, Lg.maxX]]) {
+      for (let x = x0; x < x1 - 0.01; x += 3) {
+        const xb = Math.min(x1, x + 3);
+        m.add(G.box, 0xd8dde3, (x + xb) / 2, 3.9, Lg.minZ - 0.15, 0, 0, 0, xb - x + 0.02, 7.8, 0.3);
       }
     }
-    // Bancos de espera
+    for (const x of [Lg.minX - 0.15, Lg.maxX + 0.15]) {
+      for (let z = Lg.minZ; z < Lg.maxZ - 0.01; z += 3) {
+        const zb = Math.min(Lg.maxZ, z + 3);
+        m.add(G.box, 0xb4d4ea, x, 3.9, (z + zb) / 2, 0, 0, 0, 0.2, 7.8, zb - z + 0.02);
+        for (const y of [2.4, 4.6]) m.add(G.box, 0x5a6470, x, y, (z + zb) / 2, 0, 0, 0, 0.26, 0.08, zb - z + 0.02);
+      }
+    }
+    // Entre puerta y puerta, el mismo tramo de cristalera hasta el siguiente (la de la pista, de lado a lado)
+    const covered = GATES.map((g) => [g.x - 6.5, g.x + 6.5] as const);
+    for (let x = Lg.minX; x < Lg.maxX - 0.01; x += 1.625) {
+      const xb = Math.min(Lg.maxX, x + 1.625);
+      if (covered.some(([a, b]) => x >= a - 0.01 && xb <= b + 0.01)) continue;
+      m.add(G.box, 0xd8dde3, (x + xb) / 2, 6.1, GATE_WALL, 0, 0, 0, xb - x + 0.02, 3.4, 0.3);
+      m.add(G.box, 0x4a525c, (x + xb) / 2, 0.12, GATE_WALL, 0, 0, 0, xb - x + 0.02, 0.24, 0.3);
+      m.add(G.box, 0x3f4750, x, 2.3, GATE_WALL, 0, 0, 0, 0.09, 4.4, 0.16);
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(xb - x, 4.4), this.glassMat);
+      gl.position.set((x + xb) / 2, 2.3, GATE_WALL + 0.02);
+      gl.rotation.y = Math.PI;
+      gl.userData.noCast = true;
+      sc.add(gl);
+    }
+    this.colliders.push(
+      // Pasillo: cristaleras hasta la sala y muro del fondo
+      { minX: A.minX - 0.4, maxX: A.minX - 0.02, minZ: A.minZ - 3.4, maxZ: A.maxZ },
+      { minX: A.maxX + 0.02, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.maxZ },
+      { minX: A.minX - 0.4, maxX: A.maxX + 0.4, minZ: A.minZ - 3.4, maxZ: A.minZ - 3.04 },
+      // Sala: pared de atrás a los lados del pasillo, extremos y cristalera de las puertas
+      { minX: Lg.minX - 0.4, maxX: A.minX - 0.02, minZ: Lg.minZ - 0.4, maxZ: Lg.minZ + 0.02 },
+      { minX: A.maxX + 0.02, maxX: Lg.maxX + 0.4, minZ: Lg.minZ - 0.4, maxZ: Lg.minZ + 0.02 },
+      { minX: Lg.minX - 0.4, maxX: Lg.minX - 0.02, minZ: Lg.minZ - 0.4, maxZ: Lg.maxZ + 0.4 },
+      { minX: Lg.maxX + 0.02, maxX: Lg.maxX + 0.4, minZ: Lg.minZ - 0.4, maxZ: Lg.maxZ + 0.4 },
+    );
+    // Muros del fondo como obstáculo para la cámara (si no, se sale de la terminal y no se ve nada)
+    this.colliders.push({ minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 7, maxZ: A.minZ - 3.1 }, { minX: Lg.minX - 1, maxX: Lg.maxX + 1, minZ: GATE_WALL - 0.1, maxZ: GATE_WALL + 4 });
+    for (const g of GATES) this.buildGate(m, g, g.n === 26);
+    // Fuera, la pista: asfalto de lado a lado de la sala, con sus líneas amarillas de guiado hasta cada puerta
+    {
+      const ap = new Merger();
+      ap.add(G.box, 0x7d8087, lcx, -0.03, GATE_WALL + 40, 0, 0, 0, Lg.maxX - Lg.minX + 160, 0.1, 80);
+      for (let i = -12; i < 13; i++) ap.add(G.box, 0xf2d24a, lcx + i * 8, 0.03, GATE_WALL + 7, 0, 0, 0, 5, 0.01, 0.16);
+      for (const g of GATES) ap.add(G.box, 0xf2d24a, g.x + 3.35, 0.03, GATE_WALL + 20, 0, 0, 0, 0.16, 0.01, 22);
+      const apm = ap.mesh();
+      apm.userData.noCam = true;
+      apm.userData.noCast = true;
+      sc.add(apm);
+    }
+    // Barajas T4: pilares en «Y» de acero pintado que van del amarillo al rojo a lo largo de la terminal
+    const pillar = (x: number, z: number, col: number) => {
+      setSurface(col, Surf.Metal);
+      m.add(G.cyl, col, x, 2.2, z, 0, 0, 0, 0.5, 4.4, 0.5);
+      m.add(G.cyl, col, x - 0.6, 5.4, z, 0, 0, 0.45, 0.3, 2.6, 0.3);
+      m.add(G.cyl, col, x + 0.6, 5.4, z, 0, 0, -0.45, 0.3, 2.6, 0.3);
+      this.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3 });
+    };
+    for (let z = A.minZ - 1, k = 0; z <= A.maxZ - 3; z += 7.5, k++) {
+      const col = new THREE.Color(0xf2c231).lerp(new THREE.Color(0xd7263d), k / 8).getHex();
+      for (const x of [A.minX + 1.2, A.maxX - 1.2]) pillar(x, z, col);
+    }
+    // (en la sala, una fila de pilares rojos entre las puertas, lejos de las colas)
+    for (const x of [266.5, 279.5, 296, 312.5, 325.5]) pillar(x, 34.5, 0xd7263d);
+    // Bancos de espera del pasillo
     for (const z of [-27.25, -19.75, -12.25, 10.25, 25.25]) {
       for (const x of [A.minX + 0.6, A.maxX - 0.6]) {
         m.add(G.box, 0x4a5a6c, x, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
@@ -1179,7 +1410,7 @@ export class Level3 implements Level {
         this.colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 1.5, maxZ: z + 1.5 });
       }
     }
-    // Tiendas a los dos lados; de ellas sale gente con prisa empujando maletas de ruedas
+    // Tiendas a los dos lados del pasillo; de ellas sale gente con prisa empujando maletas de ruedas
     for (const [x, z] of BURGERS) {
       const side = x > cx ? 1 : -1;
       m.add(G.box, 0xd7263d, x + side * 0.4, 1.1, z, 0, 0, 0, 2.2, 2.2, 4);
@@ -1187,11 +1418,41 @@ export class Level3 implements Level {
       m.add(G.box, 0xffffff, x - side * 0.75, 1.05, z, 0, 0, 0, 0.2, 0.1, 3.6);
       this.colliders.push({ minX: x + side * 0.4 - 1.1, maxX: x + side * 0.4 + 1.1, minZ: z - 2, maxZ: z + 2 });
     }
+    // Tiendas de la sala, en la pared de atrás: escaparate con su rótulo, mostrador y estanterías
+    const SHOPS: [number, string, number][] = [[262, 'LIBRERÍA', 0x1f6f8b], [276, 'CAFÉ', 0x7a3b1a], [310, 'DUTY FREE', 0x1b2a4a], [326, 'FARMACIA', 0x2e9e5b]];
+    for (const [x, , col] of SHOPS) {
+      m.add(G.box, col, x, 3.3, Lg.minZ + 0.25, 0, 0, 0, 7.2, 0.9, 0.3); // banda del rótulo
+      m.add(G.box, 0x3f4750, x - 3.55, 1.5, Lg.minZ + 0.25, 0, 0, 0, 0.12, 3, 0.3);
+      m.add(G.box, 0x3f4750, x + 3.55, 1.5, Lg.minZ + 0.25, 0, 0, 0, 0.12, 3, 0.3);
+      m.add(G.box, 0xe9ecef, x, 0.5, Lg.minZ + 1.4, 0, 0, 0, 2.4, 1.0, 0.7); // mostrador
+      for (let k = 0; k < 3; k++) {
+        m.add(G.box, 0x8a5a37, x - 2.4 + k * 2.4, 1.2, Lg.minZ + 0.45, 0, 0, 0, 1.8, 2.4, 0.4); // estantería
+        for (let j = 0; j < 3; j++) m.add(G.box, [0xd7263d, 0xf2c233, 0x1f5fbf, 0x2e9e5b][(k + j) % 4], x - 2.4 + k * 2.4, 0.55 + j * 0.7, Lg.minZ + 0.68, 0, 0, 0, 1.5, 0.3, 0.06);
+      }
+      this.colliders.push({ minX: x - 1.25, maxX: x + 1.25, minZ: Lg.minZ + 1.0, maxZ: Lg.minZ + 1.8, low: true }, { minX: x - 3.6, maxX: x + 3.6, minZ: Lg.minZ, maxZ: Lg.minZ + 0.7 });
+    }
     // La papelera de reciclaje, junto a un pilar
     m.add(G.cyl, 0x8f98a4, BIN_POS.x, 0.45, BIN_POS.z, 0, 0, 0, 0.5, 0.9, 0.5);
     m.add(G.cyl, 0x4a525c, BIN_POS.x, 0.92, BIN_POS.z, 0, 0, 0, 0.54, 0.06, 0.54);
     m.add(G.box, 0xf2d24a, BIN_POS.x + 0.25, 0.55, BIN_POS.z, 0, 0, 0, 0.02, 0.18, 0.2);
     this.colliders.push({ minX: BIN_POS.x - 0.27, maxX: BIN_POS.x + 0.27, minZ: BIN_POS.z - 0.27, maxZ: BIN_POS.z + 0.27, round: true });
+    // Pantallas de salidas: una a la entrada del pasillo y un tótem en medio de la sala (de cara al pasillo y a la sala)
+    const dep = this.departuresTex();
+    const board = (x: number, y: number, z: number, ry: number, w: number) => {
+      const p = new THREE.Mesh(flatPlane(w, w / 2), new THREE.MeshBasicMaterial({ map: dep }));
+      p.position.set(x, y, z);
+      p.rotation.y = ry;
+      sc.add(p);
+    };
+    // (colgada sobre el pasillo, de cara a quien llega: se ve nada más empezar)
+    board(cx, 4.4, A.minZ + 9.85, Math.PI, 4.4);
+    m.add(G.box, 0x1a1f28, cx, 4.4, A.minZ + 9.95, 0, 0, 0, 4.6, 2.4, 0.1);
+    for (const s of [-1, 1]) m.add(G.box, 0x3f4750, cx + s * 1.6, 6.0, A.minZ + 9.95, 0, 0, 0, 0.05, 1.0, 0.05);
+    m.add(G.box, 0x1a1f28, lcx, 2.75, 37.5, 0, 0, 0, 3.4, 1.9, 0.3);
+    m.add(G.box, 0x4a525c, lcx, 0.9, 37.5, 0, 0, 0, 0.4, 1.8, 0.3);
+    board(lcx, 2.75, 37.33, Math.PI, 3.2);
+    board(lcx, 2.75, 37.67, 0, 3.2);
+    this.colliders.push({ minX: lcx - 0.3, maxX: lcx + 0.3, minZ: 37.3, maxZ: 37.7 });
     sc.add(m.mesh());
     const sign = (text: string, x: number, y: number, z: number, ry: number, w: number, bg: string, fg: string) => {
       const p = new THREE.Mesh(flatPlane(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(text, bg, fg) }));
@@ -1200,7 +1461,12 @@ export class Level3 implements Level {
       sc.add(p);
     };
     BURGERS.forEach(([x, z], i) => sign(['DUTY FREE', 'CAFÉ', 'PRENSA'][i % 3], x + (x > cx ? -0.78 : 0.78), 1.75, z, x > cx ? -Math.PI / 2 : Math.PI / 2, 3.6, '#1b2a4a', PAPER));
-    sign('Salidas · Departures', cx, 4.6, A.minZ - 3.0, 0, 5, '#262b33', '#ffd23f');
+    for (const [x, name, col] of SHOPS) sign(name, x, 3.3, Lg.minZ + 0.42, 0, 3.2, '#' + col.toString(16).padStart(6, '0'), PAPER);
+    sign('Salidas · Departures', cx, 6.05, A.minZ + 9.88, Math.PI, 3.2, '#262b33', '#ffd23f');
+    // Carteles de dirección a la salida del pasillo, como en Barajas: amarillo sobre negro
+    // (mirando hacia la sala, las puertas 25 a 27 quedan a la izquierda: x mayor)
+    sign('← Puertas 25 – 27', cx + 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
+    sign('Puertas 22 – 24 →', cx - 2.8, 5.0, A.maxZ - 0.6, Math.PI, 4.6, '#141018', '#ffd23f');
     // (sin luces de punto en el techo: la luz es la del día que entra por la cubierta; las lámparas no iluminan)
     // Maletas de cabina que se escapan rodando de las tiendas por el pasillo
     const bun = new Merger()
@@ -1218,7 +1484,7 @@ export class Level3 implements Level {
       sc.add(o);
       this.burgers.push({ o, v: new THREE.Vector3(), live: false, from: new THREE.Vector3() });
     }
-    // Viajeros con prisa, de un lado a otro del pasillo (se dan la vuelta antes de la zona de embarque)
+    // Viajeros con prisa, de un lado a otro del pasillo (se dan la vuelta antes de la sala de embarque)
     for (let i = 0; i < 4; i++) {
       const p = makePerson({ ...LOOKS[i], shirt: [0x34495e, 0x8e44ad, 0x16a085, 0xc0392b][i] });
       p.body.add(new Merger().add(G.rbox, [0x222222, 0xd7263d, 0x1f5fbf, 0x777777][i], 0.45, 0.35, -0.2, 0, 0, 0, 0.35, 0.55, 0.25).mesh());
@@ -1228,78 +1494,273 @@ export class Level3 implements Level {
       this.travelers.push({ p, dir: i % 2 ? 1 : -1, x: p.root.position.x, walk: 0, c: { x: 0, z: 0, r: 0.35 } });
     }
     this.allPeople.push(...this.travelers.map((t) => t.c));
+    // Gente esperando su vuelo, sentada en las otras puertas
+    const seatLooks: PersonLook[] = [
+      { skin: 0xd9a27c, shirt: 0x6b4a8a, pants: 0x2a2a2a, hair: 0x1f1610, hairStyle: 'long' },
+      { skin: 0xf0c8a6, shirt: 0x3a6a5a, pants: 0x3b4a6b, hair: 0x9a6a3a, hairStyle: 'short', male: true },
+      { skin: 0xc98e64, shirt: 0xd8cfc0, pants: 0x222222, hair: 0x111111, hairStyle: 'bun' },
+      { skin: 0xe2b08c, shirt: 0xb4364c, pants: 0x2a2a2a, hair: 0x3a2414, hairStyle: 'short', male: true, beard: true },
+    ];
+    const seats = this.gateSeats.filter((st) => Math.abs(st.x - GATE_X) > 7);
+    seatLooks.forEach((lk, i) => {
+      const st = seats[(i * 5 + 3) % seats.length];
+      const p = makePerson(lk);
+      p.root.position.set(st.x - Math.sign(Math.sin(st.face)) * 0.05, 0, st.z);
+      p.root.position.y = seatedRootY(p, 0.52);
+      p.root.rotation.y = st.face;
+      sc.add(p.root);
+      this.seated.push(p);
+    });
+  }
+
+  /** La pantalla de salidas: hora, destino, vuelo, puerta y cómo va (las horas y los vuelos, inventados). */
+  private departuresTex() {
+    return comicTex((g, w, h) => {
+      g.fillStyle = INK;
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#1b2433';
+      g.fillRect(8, 8, w - 16, h - 16);
+      g.textAlign = 'left';
+      inkText(g, 'SALIDAS · DEPARTURES', 24, 44, 40, '#ffd23f');
+      for (const [t, x] of [['HORA', 24], ['DESTINO', 130], ['VUELO', 450], ['PUERTA', 600], ['ESTADO', 690]] as const) inkText(g, t, x, 92, 22, '#b9c6d6');
+      const rows = [...GATES].sort((a, b) => a.time.localeCompare(b.time));
+      rows.forEach((r, i) => {
+        const y = 136 + i * 52;
+        const col = r.status === 'EMBARCANDO' ? '#4ade80' : r.status === 'CERRADO' ? '#f87171' : r.status === 'RETRASADO' ? '#fbbf24' : PAPER;
+        inkText(g, r.time, 24, y, 30, PAPER);
+        inkText(g, r.to, 130, y, 30, PAPER, 300);
+        inkText(g, r.code, 450, y, 28, '#b9c6d6');
+        inkText(g, String(r.n), 610, y, 34, '#ffd23f');
+        inkText(g, r.status, 690, y, 26, col, w - 710);
+      });
+    }, 900, 450);
   }
 
   /**
-   * Llegadas del aeropuerto de Gran Canaria, esa noche: la salida de equipajes, la gente esperando, la pantalla de
-   * llegadas, la cafetería «justo en la salida (dentro aún)» donde espera Gas, y las puertas a la calle, de noche.
-   * Luz de interior: paneles planos en el techo (no iluminan: la luz es la de la sala).
+   * Llegadas del aeropuerto de Gran Canaria, esa noche. Primero la sala de recogida de equipajes, con sus dos cintas
+   * dando vueltas con maletas; por la aduana («Nada que declarar»), el vestíbulo: gente esperando a los suyos tras la
+   * barandilla, la pantalla de llegadas, los mostradores de alquiler de coches, la farmacia, la prensa, los recuerdos,
+   * una cafetería en medio (no es esa) y, al lado de las puertas de la calle, la cafetería donde espera Gas, cerrada
+   * por los lados: no se le ve hasta llegar a la salida. Luz de interior: paneles planos en el techo (no iluminan).
    */
   private buildArrivals() {
-    const sc = this.scene;
+    const sc = this.arrGroup;
     const A = ARR;
-    const cx = (A.minX + A.maxX) / 2;
     const H = 5;
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(A.maxX - A.minX, A.maxZ - A.minZ).rotateX(-Math.PI / 2), toon({ color: 0xdedbd3, roughness: 0.3, surf: Surf.Paving }));
-    floor.position.set(cx, 0.01, (A.minZ + A.maxZ) / 2);
+    floor.position.set((A.minX + A.maxX) / 2, 0.01, (A.minZ + A.maxZ) / 2);
     floor.userData.noCast = true;
     sc.add(floor);
     const m = new Merger();
     const WALL = 0xeceef1;
-    // Paredes en tramos de 3 m (se comban como las de Barajas); un hueco detrás (salida de equipajes) y otro delante
-    // (la salida a la calle)
-    for (const x of [A.minX - 0.12, A.maxX + 0.12]) for (let z = A.minZ; z < A.maxZ; z += 3) m.add(G.box, WALL, x, H / 2 + 0.15, z + 1.5, 0, 0, 0, 0.25, H + 0.3, 3.02);
-    const wallZ = (z: number, gap0: number, gap1: number) => {
-      for (let x = A.minX; x < A.maxX; x += 2) {
-        const a = x, b = Math.min(A.maxX, x + 2);
-        if (b <= gap0 || a >= gap1) m.add(G.box, WALL, (a + b) / 2, H / 2 + 0.15, z, 0, 0, 0, b - a + 0.02, H + 0.3, 0.25);
-        else m.add(G.box, WALL, (a + b) / 2, H - 0.85, z, 0, 0, 0, b - a + 0.02, 2, 0.25); // dintel sobre el hueco
+    /** Pared de (x0,z0) a (x1,z1), recta en x o en z, en tramos de 3 m (se comban como las de Barajas), con su colisión. */
+    const wall = (x0: number, z0: number, x1: number, z1: number, h = H, col = WALL, collide = true) => {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const n = Math.max(1, Math.ceil(len / 3));
+      for (let i = 0; i < n; i++) {
+        const xa = x0 + ((x1 - x0) * i) / n, xb = x0 + ((x1 - x0) * (i + 1)) / n;
+        const za = z0 + ((z1 - z0) * i) / n, zb = z0 + ((z1 - z0) * (i + 1)) / n;
+        m.add(G.box, col, (xa + xb) / 2, h / 2 + 0.01, (za + zb) / 2, 0, 0, 0, Math.abs(xb - xa) + 0.25, h, Math.abs(zb - za) + 0.25);
       }
+      if (collide) this.colliders.push({ minX: Math.min(x0, x1) - 0.14, maxX: Math.max(x0, x1) + 0.14, minZ: Math.min(z0, z1) - 0.14, maxZ: Math.max(z0, z1) + 0.14 });
     };
-    wallZ(A.minZ - 0.12, cx - 4, cx);
-    wallZ(A.maxZ + 0.12, cx - 2, cx + 2);
+    // Paredes de fuera; la de delante, con el hueco de las puertas de la calle (x 398…404)
+    wall(A.minX - 0.12, A.minZ, A.minX - 0.12, A.maxZ);
+    wall(A.maxX + 0.12, A.minZ, A.maxX + 0.12, A.maxZ);
+    wall(A.minX, A.minZ - 0.12, A.maxX, A.minZ - 0.12);
+    wall(A.minX, A.maxZ + 0.12, 398, A.maxZ + 0.12);
+    wall(404, A.maxZ + 0.12, A.maxX, A.maxZ + 0.12);
+    m.add(G.box, WALL, 401, H - 0.9, A.maxZ + 0.12, 0, 0, 0, 6.2, 1.8, 0.25); // dintel de la salida
+    // La aduana: pared entre las dos salas con el paso en medio (x 398…404) y sus puertas de cristal, abiertas
+    wall(A.minX, ARR_SPLIT, 398, ARR_SPLIT);
+    wall(404, ARR_SPLIT, A.maxX, ARR_SPLIT);
+    m.add(G.box, WALL, 401, H - 0.9, ARR_SPLIT, 0, 0, 0, 6.2, 1.8, 0.25);
+    for (const s of [-1, 1]) m.add(G.box, 0xbfe2f4, 401 + s * 2.4, 1.4, ARR_SPLIT + 0.2, 0, 0, 0, 1.2, 2.8, 0.05);
     // Techo (en piezas, para que se combe con las paredes) y paneles de luz planos colgados un poco por debajo
-    for (let x = A.minX; x < A.maxX; x += 3.5) for (let z = A.minZ; z < A.maxZ; z += 3) m.add(G.box, 0xf2f1ef, x + 1.75, H + 0.05, z + 1.5, 0, 0, 0, 3.52, 0.1, 3.02);
-    const panel = new THREE.MeshBasicMaterial({ color: 0xfff8e6 });
-    for (let x = A.minX + 2; x < A.maxX - 1; x += 3.5)
-      for (let z = A.minZ + 2; z < A.maxZ - 1; z += 4) {
-        const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.6).rotateX(Math.PI / 2), panel);
-        p.position.set(x, H - 0.2, z);
+    const roof = new Merger();
+    for (let x = A.minX; x < A.maxX; x += 3.1) for (let z = A.minZ; z < A.maxZ; z += 3.2) roof.add(G.box, 0xf2f1ef, x + 1.55, H + 0.05, z + 1.6, 0, 0, 0, 3.12, 0.1, 3.22);
+    const rm = roof.mesh();
+    rm.userData.noCast = true;
+    rm.userData.noCam = true;
+    sc.add(rm);
+    const panels = new Merger(false);
+    for (let x = A.minX + 2.5; x < A.maxX - 1; x += 4.5) for (let z = A.minZ + 2.5; z < A.maxZ - 1; z += 5) panels.add(G.box, 0xfff8e6, x, H - 0.2, z, 0, 0, 0, 1.6, 0.03, 0.7);
+    const pm = new THREE.Mesh(panels.build(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    pm.userData.noCast = true;
+    sc.add(pm);
+
+    // ---- Recogida de equipajes: las dos cintas, con maletas dando vueltas ----
+    for (const [bx, bz] of BELTS) {
+      // Base de acero, la goma negra de encima (dos rectas y dos curvas) y la isla del centro
+      m.add(G.box, 0x8f98a4, bx, 0.25, bz, 0, 0, 0, BELT_LEN, 0.5, BELT_R * 2 + 0.9);
+      for (const s of [-1, 1]) m.add(G.cyl, 0x8f98a4, bx + s * (BELT_LEN / 2), 0.25, bz, 0, 0, 0, BELT_R * 2 + 0.9, 0.5, BELT_R * 2 + 0.9);
+      m.add(G.box, 0x1c1d20, bx, 0.52, bz, 0, 0, 0, BELT_LEN, 0.04, BELT_R * 2 + 0.7);
+      for (const s of [-1, 1]) m.add(G.cyl, 0x1c1d20, bx + s * (BELT_LEN / 2), 0.52, bz, 0, 0, 0, BELT_R * 2 + 0.7, 0.04, BELT_R * 2 + 0.7);
+      m.add(G.box, 0x4a525c, bx, 0.62, bz, 0, 0, 0, BELT_LEN, 0.2, BELT_R * 2 - 0.9);
+      for (const s of [-1, 1]) m.add(G.cyl, 0x4a525c, bx + s * (BELT_LEN / 2), 0.62, bz, 0, 0, 0, BELT_R * 2 - 0.9, 0.2, BELT_R * 2 - 0.9);
+      // La boca por donde salen las maletas, con sus tiras de goma
+      m.add(G.box, 0x5a6470, bx - BELT_LEN / 2 - 1.6, 1.3, bz - BELT_R, 0, 0, 0, 1.2, 2.6, 1.4);
+      m.add(G.box, 0x1c1d20, bx - BELT_LEN / 2 - 1.0, 0.85, bz - BELT_R, 0, 0, 0, 0.04, 0.8, 1.0);
+      this.colliders.push({ minX: bx - BELT_LEN / 2 - BELT_R - 2.3, maxX: bx + BELT_LEN / 2 + BELT_R + 0.45, minZ: bz - BELT_R - 0.75, maxZ: bz + BELT_R + 0.45, low: true });
+    }
+    const caseGeo = new Merger()
+      .add(G.rbox, 0xffffff, 0, 0.2, 0, 0, 0, 0, 0.62, 0.4, 0.26)
+      .add(G.box, 0x222222, 0, 0.42, 0, 0, 0, 0, 0.2, 0.04, 0.04)
+      .build();
+    const caseCols = [0x1f5fbf, 0xd7263d, 0x222222, 0x2e9e5b, 0xf2c233, 0x7a5cff, 0x8a5a37, 0x34495e];
+    BELTS.forEach(([bx, bz], bi) => {
+      for (let i = 0; i < 7; i++) {
+        const mat = vertexMat();
+        const o = new THREE.Mesh(caseGeo, mat);
+        o.userData.comicBent = true;
+        o.scale.setScalar(0.85 + ((i * 7) % 4) * 0.08);
+        sc.add(o);
+        const col = new THREE.Color(caseCols[(i + bi * 3) % caseCols.length]);
+        const cols = o.geometry.attributes.color;
+        // (cada maleta de su color: geometría propia, para no teñir todas)
+        o.geometry = caseGeo.clone();
+        const c2 = o.geometry.attributes.color as THREE.BufferAttribute;
+        for (let k = 0; k < c2.count; k++) if (c2.getX(k) > 0.9 && c2.getY(k) > 0.9) c2.setXYZ(k, col.r, col.g, col.b);
+        void cols;
+        this.belts.push({ o, cx: bx, cz: bz, u: i * 4.1 + bi });
+      }
+    });
+    // Las pantallas de cada cinta, colgadas
+    BELTS.forEach(([bx, bz, label]) => {
+      const t = comicTex((g, w, h) => {
+        g.fillStyle = INK;
+        g.fillRect(0, 0, w, h);
+        g.fillStyle = '#1b2433';
+        g.fillRect(6, 6, w - 12, h - 12);
+        g.textAlign = 'center';
+        inkText(g, label, w / 2, h * 0.42, 44, '#ffd23f', w - 30);
+        inkText(g, label.includes('Madrid') ? 'VY 3112 · 21:15' : 'VY 3076 · 20:35', w / 2, h * 0.8, 30, PAPER);
+      }, 512, 160);
+      for (const s of [-1, 1]) {
+        const p = new THREE.Mesh(flatPlane(2.6, 0.81), new THREE.MeshBasicMaterial({ map: t }));
+        p.position.set(bx, 3.4, bz + s * 0.06);
+        p.rotation.y = s > 0 ? 0 : Math.PI;
         sc.add(p);
       }
-    // Salida de equipajes: las puertas correderas de cristal, abiertas, y la sala de recogida detrás (con su cinta)
-    for (const s of [-1, 1]) m.add(G.box, 0xbfe2f4, cx - 2 + s * 2.6, 1.4, A.minZ - 0.3, 0, 0, 0, 1.4, 2.8, 0.05);
-    const hall = new THREE.Mesh(
-      flatPlane(4, 3),
-      new THREE.MeshBasicMaterial({
-        map: comicTex((g, w, h) => {
-          g.fillStyle = '#cfd8de';
-          g.fillRect(0, 0, w, h);
-          g.fillStyle = '#4a525c';
-          g.fillRect(0, h * 0.68, w, h * 0.12);
-          g.fillStyle = '#2b3a55';
-          for (let i = 0; i < 4; i++) g.fillRect(w * (0.1 + i * 0.22), h * 0.56, w * 0.12, h * 0.12);
-          g.strokeStyle = INK;
-          g.lineWidth = 4;
-          g.strokeRect(0, h * 0.68, w, h * 0.12);
-          for (let i = 0; i < 4; i++) g.strokeRect(w * (0.1 + i * 0.22), h * 0.56, w * 0.12, h * 0.12);
-        }, 256, 192),
-      }),
-    );
-    hall.position.set(cx - 2, 1.5, A.minZ - 0.6);
-    sc.add(hall);
-    // La salida a la calle: puertas de cristal y, detrás, la noche (la parada de taxis y sus farolas, planas)
-    for (const dx of [-2, -1, 0, 1, 2]) m.add(G.box, 0x5a6470, cx + dx, 1.5, A.maxZ + 0.1, 0, 0, 0, 0.08, 3, 0.1);
-    m.add(G.box, 0x5a6470, cx, 3.02, A.maxZ + 0.1, 0, 0, 0, 4.1, 0.08, 0.1);
+      m.add(G.box, 0x1a1f28, bx, 3.4, bz, 0, 0, 0, 2.8, 0.95, 0.1);
+      m.add(G.box, 0x3f4750, bx, 4.4, bz, 0, 0, 0, 0.06, 1.1, 0.06);
+    });
+    // Carros de equipaje en fila, junto a la pared
+    for (let i = 0; i < 6; i++) {
+      const x = 395 + i * 0.5;
+      m.add(G.box, 0x9aa3ad, x, 0.4, A.minZ + 0.9, 0, 0, 0, 0.42, 0.06, 0.9);
+      m.add(G.box, 0x9aa3ad, x, 0.75, A.minZ + 0.5, 0, 0, 0, 0.42, 0.7, 0.04);
+    }
+    this.colliders.push({ minX: 394.6, maxX: 398.2, minZ: A.minZ, maxZ: A.minZ + 1.4, low: true });
+
+    // ---- Vestíbulo de llegadas ----
+    // El pasillo de salida de la aduana, con barandillas; detrás, la gente que espera
+    for (const x of [397.3, 404.7]) {
+      m.add(G.box, 0xc0c4cc, x, 0.95, -9.5, 0, 0, 0, 0.06, 0.06, 9);
+      for (let z = -14; z <= -5; z += 1.5) m.add(G.cyl, 0xc0c4cc, x, 0.48, z, 0, 0, 0, 0.06, 0.96, 0.06);
+      this.colliders.push({ minX: x - 0.08, maxX: x + 0.08, minZ: -14, maxZ: -5, low: true });
+    }
+    // Mostradores de alquiler de coches, en la pared de la izquierda («nos han dado un coche mejor»)
+    for (let i = 0; i < 3; i++) {
+      const z = -10 + i * 4.2;
+      m.add(G.rbox, [0x1f6f8b, 0xd7263d, 0x2e9e5b][i], A.minX + 1.1, 0.55, z, 0, 0, 0, 0.8, 1.1, 2.8);
+      m.add(G.box, 0xe9ecef, A.minX + 1.1, 1.12, z, 0, 0, 0, 0.95, 0.05, 2.9);
+      m.add(G.box, 0x14181f, A.minX + 1.0, 1.33, z - 0.6, 0, 0, 0, 0.03, 0.32, 0.46);
+      this.colliders.push({ minX: A.minX, maxX: A.minX + 1.6, minZ: z - 1.5, maxZ: z + 1.5, low: true });
+    }
+    // La cafetería de en medio, abierta: barra, cafetera, vitrina, taburetes y mesas
+    {
+      const [x, z] = [CAFE_OTHER.x, CAFE_OTHER.z];
+      m.add(G.box, 0x6b4a31, x + 3.2, 0.52, z, 0, 0, 0, 0.8, 1.04, 5);
+      m.add(G.box, 0xe9ecef, x + 3.15, 1.07, z, 0, 0, 0, 0.95, 0.05, 5.1);
+      m.add(G.box, 0x22222a, x + 4.2, 1.2, z - 1.2, 0, 0, 0, 0.5, 0.55, 0.7);
+      m.add(G.box, 0x9fd3e8, x + 3.2, 1.35, z + 1.4, 0, 0, 0, 0.7, 0.5, 1.4);
+      m.add(G.box, 0x6b4a31, x + 4.4, 1.5, z, 0, 0, 0, 0.4, 3, 5.5); // estantería del fondo
+      this.colliders.push({ minX: x + 2.75, maxX: x + 4.7, minZ: z - 2.6, maxZ: z + 2.6, low: true });
+      for (const [tx, tz] of [[x, z - 2], [x - 1.2, z + 1.2], [x + 0.9, z + 2.6]] as const) {
+        m.add(G.cyl, 0x22262c, tx, 0.38, tz, 0, 0, 0, 0.07, 0.76, 0.07);
+        m.add(G.cyl, 0xd9b26a, tx, 0.77, tz, 0, 0, 0, 0.8, 0.04, 0.8);
+        for (const s of [-1, 1]) {
+          m.add(G.cyl, 0x9c4a2a, tx + s * 0.65, 0.46, tz, 0, 0, 0, 0.36, 0.06, 0.36);
+          m.add(G.cyl, 0x22262c, tx + s * 0.65, 0.23, tz, 0, 0, 0, 0.05, 0.46, 0.05);
+        }
+        this.colliders.push({ minX: tx - 0.9, maxX: tx + 0.9, minZ: tz - 0.45, maxZ: tz + 0.45, round: true });
+      }
+    }
+    // Tiendas del lado derecho: farmacia y prensa (cuartos con su escaparate) y una isla de recuerdos
+    const room = (x0: number, z0: number, x1: number, z1: number, col: number) => {
+      // Tres paredes y el frente con un hueco de entrada en el centro (mirando a -x)
+      wall(x0, z0, x1, z0, 3.2, col);
+      wall(x0, z1, x1, z1, 3.2, col);
+      wall(x1, z0, x1, z1, 3.2, col);
+      const zm = (z0 + z1) / 2;
+      wall(x0, z0, x0, zm - 1, 3.2, col);
+      wall(x0, zm + 1, x0, z1, 3.2, col);
+      m.add(G.box, col, x0, 2.9, zm, 0, 0, 0, 0.25, 0.6, 2.2);
+      m.add(G.box, 0x8a5a37, x1 - 0.4, 1.1, zm, 0, 0, 0, 0.5, 2.2, z1 - z0 - 1); // estantería del fondo
+      for (let j = 0; j < 3; j++) m.add(G.box, [0xd7263d, 0x1f5fbf, 0xf2c233][j], x1 - 0.66, 0.5 + j * 0.65, zm, 0, 0, 0, 0.06, 0.3, z1 - z0 - 1.6);
+      m.add(G.box, 0xe9ecef, x0 + 1.6, 0.5, zm - 1.6, 0, 0, 0, 1.6, 1.0, 0.6);
+      this.colliders.push({ minX: x0 + 0.75, maxX: x0 + 2.45, minZ: zm - 1.95, maxZ: zm - 1.25, low: true });
+      return zm;
+    };
+    const zFar = room(421, -12, A.maxX, -4, 0x2e9e5b);
+    const zPre = room(421, -2, A.maxX, 6, 0x1b2a4a);
+    // Isla de recuerdos de Gran Canaria (estanterías bajas con camisetas, sombreros y cactus)
+    m.add(G.box, 0xd8c7a5, 412, 0.6, -2, 0, 0, 0, 3.2, 1.2, 1.6);
+    for (let i = 0; i < 6; i++) m.add(G.box, [0xf2c233, 0x1f5fbf, 0xd7263d, 0x2e9e5b, 0xffffff, 0x7a5cff][i], 411 - 0.5 + (i % 3) * 0.9, 1.3, -2.4 + Math.floor(i / 3) * 0.8, 0, 0, 0, 0.6, 0.2, 0.45);
+    this.colliders.push({ minX: 410.3, maxX: 413.7, minZ: -2.85, maxZ: -1.15 });
+    // Pilares cuadrados y macetas con palmeritas a lo largo del vestíbulo (cortan la vista de punta a punta)
+    for (const [x, z] of [[392, 2], [410, 2], [392, 12], [410, 10]] as const) {
+      m.add(G.box, 0xdedbd3, x, H / 2, z, 0, 0, 0, 0.7, H, 0.7);
+      this.colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 });
+    }
+    for (const [x, z] of [[396, 6], [406, 6], [396, 16], [406, 15]] as const) {
+      m.add(G.cyl, 0x8a5a37, x, 0.4, z, 0, 0, 0, 0.9, 0.8, 0.9);
+      m.add(G.cone, 0x2f7d4b, x, 1.4, z, 0, 0.5, 0, 1.1, 1.4, 1.1);
+      this.colliders.push({ minX: x - 0.5, maxX: x + 0.5, minZ: z - 0.5, maxZ: z + 0.5, round: true });
+    }
+    // La cafetería de Gas: junto a las puertas de la calle, cerrada por la pared del vestíbulo; se entra por el lado
+    // de la salida. Barra contra la pared de delante, cafetera, vitrina, mesas altas
+    wall(407.5, 11, 407.5, 18.2, 3.2, 0x9c4a2a);
+    wall(407.5, 11, A.maxX, 11, 3.2, 0x9c4a2a);
+    m.add(G.box, 0x7a5434, 418, 0.52, A.maxZ - 0.8, 0, 0, 0, 6, 1.04, 0.8);
+    m.add(G.box, 0xe9ecef, 418, 1.07, A.maxZ - 0.75, 0, 0, 0, 6.1, 0.05, 0.95);
+    m.add(G.box, 0x22222a, 416.4, 1.2, A.maxZ - 0.3, 0, 0, 0, 0.7, 0.55, 0.5); // cafetera
+    m.add(G.box, 0x9fd3e8, 419.8, 1.35, A.maxZ - 0.8, 0, 0, 0, 1.6, 0.5, 0.7); // vitrina de bocadillos
+    m.add(G.box, 0x7a5434, A.maxX - 0.3, 1.6, 17, 0, 0, 0, 0.4, 3.2, 10); // estantería de botellas, al fondo
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 8; i++) m.add(G.cyl, [0x2f7d4b, 0x8a5a37, 0xf4c95e][(i + j) % 3], A.maxX - 0.42, 0.8 + j * 0.7, 13 + i * 1.1, 0, 0, 0, 0.12, 0.34, 0.12);
+    this.colliders.push({ minX: 414.9, maxX: 421.1, minZ: A.maxZ - 1.3, maxZ: A.maxZ }, { minX: A.maxX - 0.6, maxX: A.maxX, minZ: 12, maxZ: 22 });
+    for (const [x, z] of [[CAFE_GAS.x + 0.75, CAFE_GAS.z + 0.2], [417, 15], [420.4, 18.6], [411, 14]] as const) {
+      m.add(G.cyl, 0x22262c, x, 0.53, z, 0, 0, 0, 0.07, 1.05, 0.07);
+      m.add(G.cyl, 0x22262c, x, 0.02, z, 0, 0, 0, 0.4, 0.04, 0.4);
+      m.add(G.cyl, 0xe9ecef, x, 1.07, z, 0, 0, 0, 0.7, 0.04, 0.7);
+      this.colliders.push({ minX: x - 0.36, maxX: x + 0.36, minZ: z - 0.36, maxZ: z + 0.36, round: true });
+    }
+    // Mostrador de información en medio del vestíbulo, y un cajero en la pared de la izquierda
+    m.add(G.rbox, 0x1f6f8b, 401, 0.55, 2.5, 0, 0, 0, 2.6, 1.1, 1.1);
+    m.add(G.box, 0xe9ecef, 401, 1.12, 2.5, 0, 0, 0, 2.7, 0.05, 1.2);
+    this.colliders.push({ minX: 399.6, maxX: 402.4, minZ: 1.85, maxZ: 3.15, low: true });
+    m.add(G.box, 0x4a525c, A.minX + 0.3, 1.0, 9, 0, 0, 0, 0.5, 2, 0.9);
+    m.add(G.box, 0x14181f, A.minX + 0.56, 1.4, 9, 0, 0, 0, 0.02, 0.3, 0.4);
+    // Bancos de espera junto a la pared izquierda, delante
+    for (const z of [14, 19]) {
+      m.add(G.box, 0x4a5a6c, A.minX + 0.6, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
+      m.add(G.box, 0x4a5a6c, A.minX + 0.35, 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
+      this.colliders.push({ minX: A.minX, maxX: A.minX + 0.95, minZ: z - 1.5, maxZ: z + 1.5 });
+    }
+    // Los aseos, en la pared de la derecha de la sala de equipajes (una puerta con su letrero)
+    m.add(G.box, 0x8f98a4, A.maxX - 0.02, 1.1, -19, 0, 0, 0, 0.06, 2.2, 1.1);
+
+    // ---- Lo pintado: la noche de la calle y la sala de equipajes por la aduana ----
     const night = new THREE.Mesh(
-      flatPlane(4, 3),
+      flatPlane(6, 3.2),
       new THREE.MeshBasicMaterial({
         map: comicTex((g, w, h) => {
           g.fillStyle = '#141a3a';
           g.fillRect(0, 0, w, h);
           g.fillStyle = '#2a2a33';
           g.fillRect(0, h * 0.72, w, h * 0.28);
-          for (const x of [w * 0.18, w * 0.82]) {
+          for (const x of [w * 0.12, w * 0.88]) {
             g.fillStyle = '#3a3a45';
             g.fillRect(x - 3, h * 0.28, 6, h * 0.44);
             g.fillStyle = '#ffe9a0';
@@ -1317,22 +1778,36 @@ export class Level3 implements Level {
           g.strokeRect(w * 0.4, h * 0.36, w * 0.2, h * 0.12);
           g.textAlign = 'center';
           inkText(g, 'TAXI', w / 2, h * 0.42, 22, '#ffd23f');
-        }, 256, 192),
+        }, 384, 192),
       }),
     );
-    night.position.set(cx, 1.5, A.maxZ + 0.2);
+    night.position.set(401, 1.6, A.maxZ + 0.3);
     night.rotation.y = Math.PI;
     sc.add(night);
+    for (const dx of [-3, -1.5, 0, 1.5, 3]) m.add(G.box, 0x5a6470, 401 + dx, 1.5, A.maxZ + 0.15, 0, 0, 0, 0.08, 3, 0.1);
     const sign = (text: string, x: number, y: number, z: number, ry: number, w: number, bg: string, fg: string) => {
       const p = new THREE.Mesh(flatPlane(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(text, bg, fg) }));
       p.position.set(x, y, z);
       p.rotation.y = ry;
       sc.add(p);
     };
-    sign('Llegadas · Arrivals', cx - 2, 3.7, A.minZ + 0.07, 0, 3.6, '#262b33', '#ffd23f');
-    sign('Salida · Exit', cx, 3.6, A.maxZ - 0.07, Math.PI, 2.6, '#1f7a46', PAPER);
-    sign('Cafetería', A.maxX - 0.07, 3.2, 3, -Math.PI / 2, 2.4, '#7a3b1a', PAPER);
-    // Pantalla de llegadas (las horas, inventadas: Gas llegó antes, de Barcelona)
+    sign('Recogida de equipajes', 401, 4.0, A.minZ + 0.1, 0, 4, '#262b33', '#ffd23f');
+    sign('Salida · Exit →', 401, 3.85, ARR_SPLIT - 0.15, Math.PI, 3, '#1f7a46', PAPER);
+    sign('Nada que declarar', 401, 3.85, ARR_SPLIT + 0.15, 0, 3, '#1f7a46', PAPER);
+    sign('Llegadas · Arrivals', 401, 3.9, -4.5, Math.PI, 3.6, '#262b33', '#ffd23f');
+    sign('Salida · Exit', 401, 3.85, A.maxZ - 0.1, Math.PI, 2.6, '#1f7a46', PAPER);
+    sign('Alquiler de coches', A.minX + 0.1, 3.0, -6, Math.PI / 2, 3.6, '#1f6f8b', PAPER);
+    sign('Café Atlántico', CAFE_OTHER.x + 4.15, 3.2, CAFE_OTHER.z, -Math.PI / 2, 3, '#1f6f8b', PAPER);
+    sign('Farmacia', 420.85, 3.6, zFar, -Math.PI / 2, 2.6, '#2e9e5b', PAPER);
+    sign('Prensa', 420.85, 3.6, zPre, -Math.PI / 2, 2.6, '#1b2a4a', PAPER);
+    sign('Recuerdos', 412, 2.2, -1.15, Math.PI, 2, '#f2c233', '#141018');
+    sign('Aseos', A.maxX - 0.1, 2.6, -19, -Math.PI / 2, 1.6, '#262b33', PAPER);
+    sign('Información · i', 401, 2.0, 1.92, Math.PI, 2.2, '#1f6f8b', PAPER);
+    sign('Cajero', A.minX + 0.08, 2.3, 9, Math.PI / 2, 1.2, '#262b33', PAPER);
+    // (el rótulo de la cafetería de Gas, sobre su entrada, de cara a la salida)
+    sign('Cafetería', 407.36, 3.6, 20.8, -Math.PI / 2, 2.4, '#7a3b1a', PAPER);
+    sign('Cafetería', 414, 3.6, 10.86, Math.PI, 2.4, '#7a3b1a', PAPER);
+    // Pantalla de llegadas, en un pilar del vestíbulo
     const board = new THREE.Mesh(
       flatPlane(2.8, 1.4),
       new THREE.MeshBasicMaterial({
@@ -1349,61 +1824,41 @@ export class Level3 implements Level {
         }, 512, 256),
       }),
     );
-    board.position.set(A.minX + 0.07, 2.8, -3);
-    board.rotation.y = Math.PI / 2;
+    board.position.set(392, 2.8, 1.62);
+    board.rotation.y = Math.PI;
     sc.add(board);
-    // La cafetería: barra, cafetera, vitrina y mesas altas
-    m.add(G.box, 0x7a5434, 405.6, 0.52, 3, 0, 0, 0, 0.8, 1.04, 6);
-    m.add(G.box, 0xe9ecef, 405.55, 1.07, 3, 0, 0, 0, 0.95, 0.05, 6.1);
-    m.add(G.box, 0x7a5434, 406.65, 0.45, 3, 0, 0, 0, 0.6, 0.9, 6);
-    m.add(G.box, 0x22222a, 406.65, 1.2, 1.6, 0, 0, 0, 0.5, 0.55, 0.7); // cafetera
-    m.add(G.box, 0xc0c4cc, 406.4, 1.05, 1.6, 0, 0, 0, 0.08, 0.06, 0.4);
-    m.add(G.box, 0x9fd3e8, 405.6, 1.35, 4.6, 0, 0, 0, 0.7, 0.5, 1.6); // vitrina de bocadillos
-    this.colliders.push({ minX: 405.15, maxX: 407, minZ: -0.05, maxZ: 6.05, low: true });
-    for (const [x, z] of [[403.4, 2.4], [402.4, 4.6], [401.6, 1.6]] as const) {
-      m.add(G.cyl, 0x22262c, x, 0.53, z, 0, 0, 0, 0.07, 1.05, 0.07);
-      m.add(G.cyl, 0x22262c, x, 0.02, z, 0, 0, 0, 0.4, 0.04, 0.4);
-      m.add(G.cyl, 0xe9ecef, x, 1.07, z, 0, 0, 0, 0.7, 0.04, 0.7);
-      this.colliders.push({ minX: x - 0.36, maxX: x + 0.36, minZ: z - 0.36, maxZ: z + 0.36, round: true });
-    }
-    // Bancos y una columna de carteles
-    for (const z of [-3, 4]) {
-      m.add(G.box, 0x4a5a6c, A.minX + 0.6, 0.45, z, 0, 0, 0, 0.6, 0.1, 3);
-      m.add(G.box, 0x4a5a6c, A.minX + 0.35, 0.75, z, 0, 0, 0, 0.1, 0.6, 3);
-      this.colliders.push({ minX: A.minX, maxX: A.minX + 0.95, minZ: z - 1.5, maxZ: z + 1.5 });
-    }
-    // Paredes para andar y para la cámara
-    this.colliders.push(
-      { minX: A.minX - 0.6, maxX: A.minX - 0.01, minZ: A.minZ - 1, maxZ: A.maxZ + 1 },
-      { minX: A.maxX + 0.01, maxX: A.maxX + 0.6, minZ: A.minZ - 1, maxZ: A.maxZ + 1 },
-      { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.minZ - 0.6, maxZ: A.minZ - 0.01 },
-      { minX: A.minX - 1, maxX: A.maxX + 1, minZ: A.maxZ + 0.01, maxZ: A.maxZ + 0.6 },
-    );
     const mm = m.mesh();
     // (paredes y techo sin sombra: la luz de la sala llega a todo el suelo)
     mm.userData.noCast = true;
     sc.add(mm);
-    // Gente esperando a los suyos, mirando a la salida de equipajes, y el camarero de la cafetería
-    const W: [PersonLook, number, number][] = [
-      [{ skin: 0xd9a27c, shirt: 0x3a6a5a, pants: 0x2a2a2a, hair: 0x1f1610, hairStyle: 'short', male: true }, 397.2, -7.4],
-      [{ skin: 0xf0c8a6, shirt: 0xb4364c, pants: 0x3b4a6b, hair: 0x6b3f22, hairStyle: 'pony' }, 400.6, -7.9],
-      [{ skin: 0xc98e64, shirt: 0xe9e2d0, pants: 0x222222, hair: 0x111111, hairStyle: 'bun' }, 395.4, -6.6],
+    // Gente: esperando a los suyos tras la barandilla, en las cintas, en el alquiler de coches y en las cafeterías
+    const W: [PersonLook, number, number, number][] = [
+      [{ skin: 0xd9a27c, shirt: 0x3a6a5a, pants: 0x2a2a2a, hair: 0x1f1610, hairStyle: 'short', male: true }, 395.8, -8.4, Math.PI * 0.62],
+      [{ skin: 0xf0c8a6, shirt: 0xb4364c, pants: 0x3b4a6b, hair: 0x6b3f22, hairStyle: 'pony' }, 406.3, -9.6, -Math.PI * 0.6],
+      [{ skin: 0xc98e64, shirt: 0xe9e2d0, pants: 0x222222, hair: 0x111111, hairStyle: 'bun' }, 395.9, -11.2, Math.PI * 0.7],
+      [{ skin: 0xe2b08c, shirt: 0x34495e, pants: 0x2a2a2a, hair: 0x3a2414, hairStyle: 'short', male: true }, 388, -21.6, Math.PI],
+      [{ skin: 0xf3d2b6, shirt: 0x5a4a78, pants: 0x3b4a6b, hair: 0x9a6a3a, hairStyle: 'long' }, 417.5, -21.7, Math.PI],
+      [{ skin: 0xd9a27c, shirt: 0x1f6f8b, pants: 0x1f2d4d, hair: 0x2b1d14, hairStyle: 'straight' }, A.minX + 0.45, -5.8, Math.PI / 2],
+      [{ skin: 0xc98e64, shirt: 0x1f6f8b, pants: 0x222222, hair: 0x1a1a1a, hairStyle: 'short', male: true }, CAFE_OTHER.x + 3.85, CAFE_OTHER.z + 0.3, -Math.PI / 2],
     ];
-    for (const [lk, x, z] of W) {
+    for (const [lk, x, z, ry] of W) {
       const p = makePerson(lk);
       p.root.position.set(x, 0, z);
-      p.root.rotation.y = Math.PI + (x - (cx - 2)) * 0.08;
+      p.root.rotation.y = ry;
       sc.add(p.root);
+      this.arrPeople.push(p);
       this.arrCircles.push({ x, z, r: 0.35 });
     }
     const worker = makePerson({ skin: 0xe2b08c, shirt: 0x7a3b1a, pants: 0x222222, hair: 0x3a2414, hairStyle: 'straight' });
-    worker.root.position.set(406.35, 0, 2.6);
-    worker.root.rotation.y = -Math.PI / 2;
+    worker.root.position.set(417.6, 0, A.maxZ - 0.35);
+    worker.root.rotation.y = Math.PI;
     sc.add(worker.root);
+    this.arrPeople.push(worker);
   }
 
   private startAirport() {
     this.phase = 'airport';
+    this.scene.add(this.airGroup, this.arrGroup);
     this.gateT = GATE_SECS;
     this.gateStage = 0;
     this.resetGate();
@@ -1549,7 +2004,17 @@ export class Level3 implements Level {
     }
     // A la cola de embarque: al llegar al final de la cola (o al pasillo de cintas), se pone en ella
     const tail = this.gateTail();
-    if (Math.hypot(pp.x - tail[0], pp.z - tail[1]) < 1.4 || (Math.abs(pp.x - GATE_X) < 2.3 && pp.z > AIR.maxZ - 2.6)) this.startGateQueue();
+    if (Math.hypot(pp.x - tail[0], pp.z - tail[1]) < 1.4 || (Math.abs(pp.x - GATE_X) < 2.3 && pp.z > GZ - 2.6)) this.startGateQueue();
+    // En otra puerta: lee la pantalla y no es la suya (lo piensa en voz alta, una vez por puerta y rato)
+    for (const g of GATES) {
+      if (g.n === 26 || Math.abs(pp.x - g.x) > 2.6 || pp.z < GZ - 3.4) continue;
+      const last = this.wrongSaid.get(g.n) ?? -99;
+      if (this.t - last > 9) {
+        this.wrongSaid.set(g.n, this.t);
+        bark('Azul', CONCERT.wrongGate(g.to));
+        this.talk(this.azul, 1.5);
+      }
+    }
   }
 
   /** El final de la cola de embarque (donde se pondría Azul ahora). */
@@ -1579,6 +2044,18 @@ export class Level3 implements Level {
     this.flapOpen = Math.max(0, this.flapOpen - dt);
     const k = THREE.MathUtils.smoothstep(this.flapOpen, 0, 0.3);
     for (const f of this.flaps) f.scale.x = 1 - 0.85 * k;
+    // La puerta de cristal del finger: se aparta cuando alguien se acerca (de la cola o Azul)
+    {
+      let near = false;
+      const dz = (o: THREE.Object3D) => o.visible && Math.abs(o.position.x - GATE_X) < 1.6 && Math.abs(o.position.z - GATE_WALL) < 2.4;
+      for (const g of this.gateQ) if (g.state === 'pass' && dz(g.p.root)) near = true;
+      if (dz(this.azul.root) && (this.gateStep === 'pass' || this.gateStep === 'finger')) near = true;
+      const was = this.slideK;
+      this.slideK = THREE.MathUtils.clamp(this.slideK + (near ? dt : -dt) * 1.6, 0, 1);
+      if (was === 0 && this.slideK > 0 && this.player.root.position.x > 100 && this.player.root.position.x < 350) audio.whoosh();
+      const e = THREE.MathUtils.smoothstep(this.slideK, 0, 1);
+      for (const l of this.slideLeaves) l.o.position.x = l.x0 + l.s * e * 1.05;
+    }
     if (this.player.root.position.x < 100 || this.player.root.position.x > 350) return;
     const line = this.gateQ.filter((g) => g.state === 'line');
     // (el torno está ocupado mientras alguien enseña la tarjeta o lo cruza; ya en la puerta, puede ir el siguiente)
@@ -1610,13 +2087,15 @@ export class Level3 implements Level {
         }
       } else if (g.state === 'pass') {
         // Por el torno, a la puerta y al finger (el túnel lo tapa)
-        if (this.stepTo(g.p, g, GATE_X, g.t === 0 ? AIR.maxZ + 2.9 : AIR.maxZ + 4.6, 1.3, dt)) {
+        // Por el torno, a la puerta (se abre sola) y finger arriba, hasta la puerta del avión
+        if (this.stepTo(g.p, g, GATE_X, g.t === 0 ? GZ + 2.9 : GATE_WALL + FINGER_LEN - 0.9, 1.3, dt)) {
           if (g.t === 0) g.t = 1;
           else {
             g.state = 'gone';
             g.p.root.visible = false;
           }
         }
+        g.p.root.position.y = fingerY(g.p.root.position.z);
       }
       g.circle.x = g.state === 'gone' ? 1e4 : g.p.root.position.x;
       g.circle.z = g.state === 'gone' ? 1e4 : g.p.root.position.z;
@@ -1642,7 +2121,11 @@ export class Level3 implements Level {
       animatePerson(az, dt, 'idle');
       faceTo(az.root, 0, dt);
     } else if (this.gateStep === 'pass') {
-      if (this.stepTo(az, this.azSt, GATE_X, AIR.maxZ + 2.9, 1.4, dt)) this.board();
+      if (this.stepTo(az, this.azSt, GATE_X, GZ + 2.9, 1.4, dt)) this.gateStep = 'finger';
+    } else if (this.gateStep === 'finger') {
+      // Cruza la puerta y entra en el finger (sube con él)
+      if (this.stepTo(az, this.azSt, GATE_X, GATE_WALL + 2.6, 1.4, dt)) this.board();
+      az.root.position.y = fingerY(az.root.position.z);
     }
   }
 
@@ -1700,8 +2183,12 @@ export class Level3 implements Level {
       this.walker = new Walker(this.azul.root.position);
     }
     this.auto = null;
+    // (Barajas ya no hace falta: fuera de la escena, que su gente no se anime para nada)
+    this.scene.add(this.arrGroup);
+    this.airGroup.removeFromParent();
     this.azul.root.visible = true;
     this.azul.root.position.copy(ARR_START);
+    this.azul.root.position.y = 0;
     this.azul.root.rotation.y = 0;
     this.azCircle.x = this.azCircle.z = 1e4;
     this.walker.yaw = this.walker.facing = 0;
@@ -1710,15 +2197,38 @@ export class Level3 implements Level {
     this.gas.root.position.copy(CAFE_GAS);
     this.gas.root.rotation.y = Math.atan2(ARR_START.x - CAFE_GAS.x, ARR_START.z - CAFE_GAS.z);
     this.camera.position.set(ARR_START.x, 2.6, ARR_START.z - 3.8);
-    this.camera.lookAt(CAFE_GAS);
+    this.camera.lookAt(ARR_START.x, 1.4, ARR_START.z + 6);
   }
 
   private stepArrivals(dt: number) {
     const pp = this.azul.root.position;
     const gp = this.gas.root.position;
-    animatePerson(this.gas, dt, 'idle');
-    faceTo(this.gas.root, Math.atan2(pp.x - gp.x, pp.z - gp.z), dt, 3);
-    if (!this.busy && Math.hypot(pp.x - gp.x, pp.z - gp.z) < 1.6) this.meetGas();
+    // Las cintas dan vueltas con sus maletas, y la gente de llegadas espera
+    for (const b of this.belts) {
+      b.u += dt * 0.7;
+      beltPoint(b.cx, b.cz, b.u, b.o.position);
+      b.o.position.y = 0.55;
+      beltPoint(b.cx, b.cz, b.u + 0.2, this.tmpV);
+      b.o.rotation.y = Math.atan2(this.tmpV.x - b.o.position.x, this.tmpV.z - b.o.position.z) + Math.PI / 2;
+    }
+    for (const p of this.arrPeople) animatePerson(p, dt, 'idle');
+    // Gas, en su mesa: mirando el móvil hasta que la ve entrar en la cafetería
+    const d = Math.hypot(pp.x - gp.x, pp.z - gp.z);
+    const sees = d < 9 && pp.x > 407 && pp.z > 11;
+    animatePerson(this.gas, dt, sees ? 'wave' : 'idle');
+    faceTo(this.gas.root, sees ? Math.atan2(pp.x - gp.x, pp.z - gp.z) : -Math.PI * 0.35, dt, 3);
+    if (!sees) {
+      this.gas.armR.rotation.x = -1.3;
+      this.gas.elbowR.rotation.x = -1.1;
+      this.gas.head.rotation.x = 0.35;
+    }
+    // En la otra cafetería: no está («justo en la salida», dijo)
+    if (!this.busy && pp.distanceTo(CAFE_OTHER) < 4.5 && this.t - this.otherCafeSaid > 14) {
+      this.otherCafeSaid = this.t;
+      bark('Azul', CONCERT.otherCafe);
+      this.talk(this.azul, 1.5);
+    }
+    if (!this.busy && d < 1.6) this.meetGas();
   }
 
   /** Se encuentran en la cafetería: abrazo, lo de «vas tarde» y, al día siguiente, el concierto. */
@@ -1833,6 +2343,8 @@ export class Level3 implements Level {
 
   /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
   private toStadium() {
+    this.airGroup.removeFromParent();
+    this.arrGroup.removeFromParent();
     this.player = this.gas;
     this.walker = new Walker(this.gas.root.position);
     this.auto = null;
@@ -2513,6 +3025,8 @@ export class Level3 implements Level {
     halo.position.set(WC_X + 0.85, 5.75, WC_Z[2] + 0.75);
     sc.add(halo);
     this.paintToilets();
+    this.cabin = new Cabin3D(new THREE.Vector3(0, -40, -60));
+    sc.add(this.cabin.group);
   }
 
   private paintToilets() {
@@ -2535,7 +3049,7 @@ export class Level3 implements Level {
   }
 
   private slot(k: number, out = this.v1) {
-    return out.set(Q_X0 - k * Q_GAP, 0, Q_Z);
+    return out.set(Q_X0 - (k + this.qShift) * Q_GAP, 0, Q_Z);
   }
 
   /** Gente para la cola de los baños y una reserva para entrar, salir y unirse al final. */
@@ -2690,6 +3204,12 @@ export class Level3 implements Level {
     for (const n of this.npcs) if (n.p.root.visible) this.wcWho.push(n.p.root.position);
     if (this.player.root.visible) this.wcWho.push(this.player.root.position);
     for (const d of this.wcDoors) d.update(dt, this.wcWho, this.camera.position);
+    // (la puerta que no se abre traquetea un momento)
+    this.wcShake.forEach((t, i) => {
+      if (t <= 0) return;
+      this.wcShake[i] = t - dt;
+      this.wcDoors[i].leaf.rotation.y += Math.sin(this.t * 70) * 0.04 * Math.min(1, t * 3);
+    });
     this.paintToilets();
   }
 
@@ -2722,34 +3242,92 @@ export class Level3 implements Level {
         dialogue(CONCERT.filmIntro, () => this.startFilm());
       }), 1500);
     } else {
-      later(() => dialogue(SIDE.pee.again, () => this.peeThen(1, () => this.afterTrip())), 1500);
+      later(() => dialogue(SIDE.pee.again, () => this.wcVisit(1, () => this.afterTrip())), 1500);
     }
   }
 
   /**
    * La segunda vez: las gafas de sol se las ha dejado en una cabina. Va directo a mirar (sin hacer cola: los de la
-   * cola protestan) y las busca puerta por puerta, en las mismas cabinas que se ven (las averiadas no se abren).
+   * cola protestan) y las busca puerta por puerta, andando por la fila de cabinas de verdad: las averiadas no se
+   * abren, en las ocupadas contestan desde dentro y en las libres se asoma (se ve la cabina por dentro, con su repisa).
    */
   private glassesTrip() {
-    this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
     this.walker.stop();
     this.trip++;
-    this.phase = 'wc';
+    this.phase = 'glasses';
+    this.glassOpened.clear();
     this.updateHud();
     bark('Un señor de Telde', CONCERT.queueComplain);
     later(() => bark('Gas', CONCERT.glassesReply), 1700);
-    later(() => {
-      const occupied = WC_Z.map((_, i) => i).filter((i) => !WC_BROKEN.includes(i) && !this.wcFree(i));
-      this.side = new GlassesHunt(
-        () => {
-          this.side = null;
-          this.afterTrip();
-        },
-        { n: WC_Z.length, broken: WC_BROKEN, occupied },
-      );
-    }, 3200);
+    later(() => bark('Gas', SIDE.glasses.title), 3600);
+  }
+
+  /** Gas intenta abrir la cabina i buscando las gafas. */
+  private tryCabin(i: number) {
+    if (WC_BROKEN.includes(i) || !this.wcFree(i)) {
+      const busyIn = !WC_BROKEN.includes(i);
+      this.wcShake[i] = 0.5;
+      audio.knock(0.4, busyIn ? 240 : 160, 0.08);
+      if (busyIn) bark('Alguien', SIDE.glasses.occupied);
+      else bark('Gas', SIDE.glasses.broken);
+      return;
+    }
+    if (this.glassOpened.has(i)) {
+      bark('Gas', SIDE.glasses.already);
+      return;
+    }
+    this.glassOpened.add(i);
+    // Nunca en la primera que se mira: en la segunda libre (o en la única que quede)
+    const others = WC_Z.map((_, k) => k).filter((k) => k !== i && !WC_BROKEN.includes(k) && this.wcFree(k) && !this.glassOpened.has(k));
+    const isIt = this.glassOpened.size >= 2 || others.length === 0;
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    this.wcRes[i] = true;
+    this.wcDoors[i].hold(4);
+    audio.knock(0.25, 420, 0.06);
+    later(() =>
+      fadeFlash(() => {
+        // Se asoma: la cabina por dentro, desde la puerta, mirando a la repisa
+        this.cabin.group.visible = true;
+        this.cabin.glasses.visible = isIt;
+        const fov0 = this.camera.fov;
+        this.cabinView = (dt) => {
+          const c = this.camera;
+          this.cabin.world(0.12, 1.62, -0.5, c.position);
+          c.lookAt(this.cabin.world(this.cabin.shelf.x, this.cabin.shelf.y - 0.05, this.cabin.shelf.z, this.tmpV));
+          c.fov += ((c.aspect < 1 ? 78 : 64) - c.fov) * Math.min(1, dt * 6);
+          c.updateProjectionMatrix();
+        };
+        later(() => {
+          if (isIt) {
+            bark('Gas', SIDE.glasses.found);
+            comicWord('¡AQUÍ!', 'perfect');
+            audio.luck();
+            vibrate([20, 30, 20]);
+          } else bark('Gas', SIDE.glasses.empty[(this.glassOpened.size - 1) % SIDE.glasses.empty.length]);
+        }, 700);
+        later(
+          () =>
+            fadeFlash(() => {
+              this.cabinView = null;
+              this.cabin.group.visible = false;
+              this.camera.fov = fov0;
+              this.camera.updateProjectionMatrix();
+              this.wcRes[i] = false;
+              if (isIt) {
+                this.phase = 'wc';
+                this.updateHud();
+                this.afterTrip();
+              } else this.busy = false;
+            }, 450),
+          2600,
+        );
+      }, 400),
+    450);
   }
 
   /** Vuelve del baño: otra canción que se ha perdido, y a buscar a Azul. */
@@ -2759,12 +3337,67 @@ export class Level3 implements Level {
     later(() => this.startSeek(), 900);
   }
 
-  /** El urinario (Gas), y luego lo que siga. */
-  private peeThen(hard: number, next: () => void) {
+  /**
+   * Al baño de verdad: cuando por fin le toca (fundido: los de delante ya han entrado), Gas va a una cabina libre,
+   * se le abre la puerta y entra; dentro, el urinario (en 3D); luego sale y la cola sigue. Después, `next`.
+   */
+  private wcVisit(hard: number, next: () => void) {
+    this.busy = true;
+    this.phase = 'wc';
+    this.input.reset();
+    this.walker.stop();
     this.hud.setAction(null);
-    this.side = new PeeAim(hard, () => {
+    this.auto = null;
+    this.updateHud();
+    fadeFlash(() => {
+      // Le toca: es el primero de la cola, y detrás va llegando gente
+      for (const n of this.queue) this.hide(n);
+      this.queue.length = 0;
+      this.qShift = 1;
+      this.gasQueued = false;
+      this.gas.root.visible = true;
+      this.gas.root.position.set(Q_X0, 0, Q_Z);
+      this.gas.root.rotation.y = this.walker.facing = Math.PI / 2;
+      // Una cabina que funcione: la libre más cercana (si no hay ninguna, la que antes vaya a quedar libre)
+      let i = this.freeToilet();
+      if (i < 0) {
+        const ok = WC_Z.map((_, k) => k).filter((k) => !WC_BROKEN.includes(k));
+        i = ok.reduce((a, b) => (this.wcBusyT[a] <= this.wcBusyT[b] ? a : b));
+        this.wcBusyT[i] = 0;
+      }
+      this.wcRes[i] = true;
+      later(() => {
+        this.auto = {
+          p: this.gas,
+          st: { walk: 0 },
+          pts: [[WC_X - 1.0, WC_Z[i]], [WC_X - 0.3, WC_Z[i]]],
+          speed: 1.3,
+          done: () => {
+            // Dentro: la puerta se cierra y la cabina queda ocupada (en rojo)
+            this.gas.root.visible = false;
+            this.wcRes[i] = false;
+            this.wcBusyT[i] = Infinity;
+            audio.knock(0.4, 160, 0.1);
+            later(() => fadeFlash(() => this.enterCabin(hard, i, next), 450), 500);
+          },
+        };
+      }, 600);
+    }, 600);
+  }
+
+  private enterCabin(hard: number, i: number, next: () => void) {
+    this.side = new PeeAim3D(this.cabin, this.camera, hard, () => {
       this.side = null;
-      next();
+      fadeFlash(() => {
+        // Sale: la puerta se abre, la cabina queda libre y él vuelve al concierto
+        this.qShift = 0;
+        this.gas.root.visible = true;
+        this.gas.root.position.set(WC_X - 0.3, 0, WC_Z[i]);
+        this.gas.root.rotation.y = this.walker.facing = -Math.PI / 2;
+        this.wcBusyT[i] = 0;
+        this.wcDoors[i].hold(1.4);
+        this.auto = { p: this.gas, st: { walk: 0 }, pts: [[WC_X - 1.8, WC_Z[i]]], speed: 1.3, done: () => next() };
+      }, 450);
     });
   }
 
@@ -2856,7 +3489,7 @@ export class Level3 implements Level {
     this.busy = true;
     this.updateHud();
     const chat = CHATS.temon;
-    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(2, 6) }, () => dialogue(SIDE.pee.first, () => this.peeThen(0, () => this.startSeek()))), 1500);
+    later(() => phoneChat({ ...chat, msgs: chat.msgs.slice(2, 6) }, () => dialogue(SIDE.pee.first, () => this.wcVisit(0, () => this.startSeek()))), 1500);
   }
 
   private filmPct() {
@@ -3055,10 +3688,10 @@ export class Level3 implements Level {
         setObj('');
         break;
       case 'airport':
-        setObj('🛫 Puerta 26');
+        setObj('🛫 Gran Canaria');
         break;
       case 'gateQueue':
-        setObj(this.gateStep === 'ask' ? '🎫' : '🛫 Puerta 26');
+        setObj(this.gateStep === 'ask' ? '🎫' : '🛫 Gran Canaria');
         break;
       case 'arrivals':
         setObj('☕');
@@ -3074,6 +3707,9 @@ export class Level3 implements Level {
         break;
       case 'wc':
         setObj('🚻');
+        break;
+      case 'glasses':
+        setObj('🕶️');
         break;
       case 'film':
         setObj('🎥');
@@ -3105,6 +3741,11 @@ export class Level3 implements Level {
         return this.beers ? (this.beers.stage === 'carry' ? this.beers.friendAt : BAR_POS) : null;
       case 'toWc':
         return this.trip === 1 ? this.v1.set(WC_X - 1.3, 0, WC_Z[2]) : this.tailSpot(this.v1);
+      case 'glasses': {
+        // La siguiente cabina libre sin mirar
+        const k = WC_Z.findIndex((_, i) => !WC_BROKEN.includes(i) && this.wcFree(i) && !this.glassOpened.has(i));
+        return k >= 0 ? this.v1.set(WC_X - 1.2, 0, WC_Z[k]) : null;
+      }
       case 'seek':
         return this.azul.root.position;
     }
@@ -3264,7 +3905,7 @@ export class Level3 implements Level {
     });
 
     // Personaje que se lleva (Azul en el aeropuerto y en llegadas, Gas en el estadio)
-    const walking = !this.busy && !this.auto && (this.phase === 'beers' || this.phase === 'toWc' || this.phase === 'airport' || this.phase === 'seek' || this.phase === 'arrivals');
+    const walking = !this.busy && !this.auto && (this.phase === 'beers' || this.phase === 'toWc' || this.phase === 'glasses' || this.phase === 'airport' || this.phase === 'seek' || this.phase === 'arrivals');
     // (andando sola por la cola de embarque o hasta la del baño: la lleva el juego, no el joystick)
     const scripted = !!this.auto || this.phase === 'gateQueue';
     this.invuln -= dt;
@@ -3284,6 +3925,7 @@ export class Level3 implements Level {
     if (this.phase === 'seek' && !this.busy) this.stepSeek(dt);
     if (this.phase === 'arrivals') this.stepArrivals(dt);
     if (this.phase === 'film') this.stepFilm(dt);
+    this.side?.update(dt);
     {
       const pp0 = this.player.root.position;
       const m = this.movers[0];
@@ -3346,6 +3988,12 @@ export class Level3 implements Level {
       else this.talkers.set(p, left - dt);
       if (p === this.agent) animatePerson(p, dt, this.talkers.has(p) ? 'talk' : 'idle');
     }
+    // La gente sentada en las puertas de embarque
+    if (this.airGroup.parent)
+      for (const p of this.seated) {
+        animatePerson(p, dt, 'idle');
+        seatPose(p);
+      }
 
     // Escenario vivo: pantallas, láseres y móviles en alto
     this.screenT -= dt;
@@ -3360,7 +4008,8 @@ export class Level3 implements Level {
         l.rotation.set(-0.5 + Math.sin(this.t * 0.9 + ph) * 0.35, Math.PI + Math.sin(this.t * 0.7 + ph * 1.3) * 0.7, 0);
       });
     }
-    this.phones.visible = ballad || this.phase === 'ending';
+    // (los puntitos de las linternas se veían como manchas blancas sobre la gente: fuera)
+    this.phones.visible = false;
     (this.phones.material as THREE.PointsMaterial).size = 0.3 + Math.sin(this.t * 2) * 0.02;
     this.phones.position.x = Math.sin(this.t * 1.2) * 0.2;
 
@@ -3393,6 +4042,14 @@ export class Level3 implements Level {
         label = SIDE.beers.give;
         action = () => this.deliverBeers();
       }
+    } else if (walking && this.phase === 'glasses') {
+      // Delante de la puerta de una cabina: abrirla
+      for (let i = 0; i < WC_Z.length; i++)
+        if (Math.abs(pp.z - WC_Z[i]) < 0.62 && pp.x > WC_X - 2.3 && pp.x < WC_X - 0.5) {
+          label = SIDE.glasses.door;
+          action = () => this.tryCabin(i);
+          break;
+        }
     } else if (walking && this.phase === 'toWc') {
       if (this.trip === 1) {
         if (Math.hypot(pp.x - (WC_X - 1.3), pp.z - WC_Z[2]) < 2.4) {
@@ -3496,7 +4153,7 @@ export class Level3 implements Level {
     audio.fanfare();
     later(() => {
       if (this.phase !== 'ending') return;
-      dialogue(CONCERT.ending, () => phoneChat([CHATS.noQuieroNoVerte, { ...CHATS.iconico, msgs: CHATS.iconico.msgs.slice(-1) }], () => {
+      dialogue(CONCERT.ending, () => phoneChat(CHATS.hastaLuego, () => {
         later(() => {
           if (this.phase !== 'ending') return;
           this.phase = 'done';
@@ -3520,7 +4177,11 @@ export class Level3 implements Level {
   }
 
   private updateCamera(dt: number) {
-    if (this.phase === 'film') return;
+    if (this.phase === 'film' || this.side) return;
+    if (this.cabinView) {
+      this.cabinView(dt);
+      return;
+    }
     if (this.phase === 'rhythm' || this.phase === 'ending') {
       const p = this.player.root.position;
       const swing = this.phase === 'ending' ? Math.sin(this.t * 0.3) * 3 : 0;
@@ -3542,6 +4203,9 @@ export class Level3 implements Level {
       this.rhythm = null;
       this.side?.dispose();
       this.side = null;
+      this.cabinView = null;
+      this.cabin.group.visible = false;
+      this.qShift = 0;
       this.busy = false;
       this.auto = null;
       this.gasQueued = false;
@@ -3591,7 +4255,7 @@ export class Level3 implements Level {
         label: '0b · Cola de embarque',
         run: () => {
           airport();
-          this.azul.root.position.set(GATE_X, 0, AIR.maxZ - 4.2);
+          this.azul.root.position.set(GATE_X, 0, GZ - 4.2);
           this.startGateQueue();
         },
       },
