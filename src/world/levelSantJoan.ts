@@ -161,7 +161,7 @@ function ringAt(s: number, out: THREE.Vector3) {
 }
 const onRing = (x: number, z: number) => Math.abs(x) < 16.4 && Math.abs(z) < 12.4 && (Math.abs(x) > 11.8 || Math.abs(z) > 8.8);
 /** Al otro lado: la entrada de Ses Voltes. */
-const CROSS_GOAL = new THREE.Vector3(17.4, 0, 0);
+const CROSS_GOAL = new THREE.Vector3(18.8, 0, 0);
 /** Las avellanes, entre la gente de la calle: en el Born, delante del Casino (fuera del corro de los caballos). */
 const NUT_BOX = { minX: -4, maxX: 11, minZ: -12.6, maxZ: -9.6 };
 const WARN = 0.8;
@@ -1241,7 +1241,8 @@ export class LevelSantJoan implements Level {
   }
 
   private target(): THREE.Vector3 | null {
-    if (this.phase === 'hunt' && this.pinOn) return this.pinPos;
+    // (buscando Correus, ni flecha ni luz: lo que toca te lo dice la gente)
+    if (this.phase === 'hunt') return null;
     if (this.phase === 'coming') return this.gas.root.position;
     if (this.phase === 'exact') return this.v2.set(0, 0, 0);
     if (this.phase === 'be' && !this.beIn) return BE;
@@ -1413,7 +1414,8 @@ export class LevelSantJoan implements Level {
     const key = `${this.phase}|${this.pinOn}|${this.misses}|${this.beIn}|${this.beTouched}|${this.nuts?.hits ?? 0}|${this.restDone}|${this.bagCount}`;
     const lostNow = this.lost.tick(key, dt, this.busy);
     const tgt = lostNow ? this.target() : null;
-    this.pinObj.visible = lostNow && this.phase === 'hunt' && this.pinOn && !this.busy;
+    // (el pin rojo flotante sobre Correus, quitado: demasiada pista. A Correus se llega preguntando a la gente)
+    this.pinObj.visible = false;
     if (this.pinObj.visible) {
       this.pinObj.position.set(this.pinPos.x, 3.4 + Math.sin(this.t * 3) * 0.2, this.pinPos.z);
       this.pinObj.rotation.y += dt * 1.5;
@@ -1813,7 +1815,7 @@ export class LevelSantJoan implements Level {
       }
     }
     // Al otro lado: hacia Es Bè
-    if (this.phase === 'cross' && !this.busy && pp.x > 16.7 && Math.abs(pp.z) < 4) this.crossDone();
+    if (this.phase === 'cross' && !this.busy && pp.x > 18.3 && Math.abs(pp.z) < 4.2) this.crossDone();
   }
 
   private crossHit() {
