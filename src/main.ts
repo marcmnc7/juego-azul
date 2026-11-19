@@ -32,7 +32,7 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -413,7 +413,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
           level.dispose();
           level = null;
         }
-        crossword(startLetter, goMap);
+        startLetter();
       } else goMap();
     };
     // Todo el final en una pantalla: estrellas, regalo, fotos y lo que viene mañana

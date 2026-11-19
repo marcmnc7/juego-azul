@@ -1,7 +1,9 @@
 import { GIFTS, Gift } from '../data/gifts';
 import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
 import { audio } from '../core/audio';
-import type { SaveData } from '../core/save';
+import { save as persist, type SaveData } from '../core/save';
+import { PUZZLES } from '../data/puzzles';
+import { runPuzzle, puzzleDate, puzzleDay } from './puzzles';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
 import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
@@ -601,6 +603,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   const states = LEVELS.map((_, i) => chapterState(i, save, opts.test));
   const allDone = LEVELS.every((l) => save.levelsDone.includes(l.id));
   const nextI = allDone ? LEVELS.length : states.findIndex((c) => !c.done);
+  const allOpen = opts.test && !faking();
   const wrap = el('div', 'mp-wrap');
   const track = el('div', 'mp-track');
   const NS = 'http://www.w3.org/2000/svg';
@@ -646,10 +649,40 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   });
   const finOpen = allDone || opts.test;
   const fin = el('button', 'mp-node final' + (finOpen ? ' open' : ' locked') + (allDone ? ' next' : ''));
-  fin.append(el('div', 'mp-tile heart', '💌'), el('div', 'mp-label', `<small>♥ · Al final</small><b>La sorpresa final</b><i>${finOpen ? 'Un crucigrama y, al resolverlo, la carta' : 'Cuando termines los nueve'}</i>`));
-  if (finOpen) fin.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
+  fin.append(el('div', 'mp-tile heart', '💌'), el('div', 'mp-label', `<small>♥ · Al final</small><b>La sorpresa final</b><i>${finOpen ? 'Tu carta' : 'Cuando termines los nueve'}</i>`));
+  // (al final, solo la carta: el crucigrama es ahora uno de los juegos de entre capítulos)
+  if (finOpen) fin.onclick = () => opts.onLetter();
   nodes.push(fin);
   track.append(fin);
+  // Los «conecta»: un punto más pequeño a medio camino entre dos capítulos, con su día; se abren ese día
+  const minis = PUZZLES.map((pz) => {
+    const open = allOpen || now() >= puzzleDate(pz).getTime();
+    const doneIt = !!save.minis?.includes(pz.id);
+    const b = el('button', 'mp-mini' + (doneIt ? ' done' : open ? ' open' : ' locked'));
+    b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Conecta'}</b><i>${puzzleDay(pz)}</i>`));
+    b.onclick = (e) => {
+      e.stopPropagation();
+      if (!open) {
+        b.classList.remove('nope');
+        void b.offsetWidth;
+        b.classList.add('nope');
+        vibrate(20);
+        return;
+      }
+      audio.unlock();
+      runPuzzle(
+        pz.id,
+        () => {
+          save.minis = [...new Set([...(save.minis ?? []), pz.id])];
+          persist(save);
+          mapScreen(save, opts, 'story');
+        },
+        () => mapScreen(save, opts, 'story'),
+      );
+    };
+    track.append(b);
+    return { b, after: pz.after };
+  });
   wrap.append(track);
   body.append(wrap);
 
@@ -695,6 +728,26 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       TH = H;
       track.style.width = `${TW}px`;
       track.style.height = '';
+    }
+    // Cada «conecta», en el punto medio del tramo entre su capítulo y el siguiente
+    {
+      const tl = tall ? Math.max(80, Math.min(130, W * 0.3)) : Math.max(64, Math.min(120, H * 0.27));
+      const hw2 = tl * 0.72, hh2 = tl * 0.56;
+      for (const mn of minis) {
+        const [x0, y0] = pts[mn.after - 1], [x1, y1] = pts[mn.after];
+        let mx: number, my: number;
+        if (tall) {
+          const sx = x0 + Math.sign(x1 - x0 || 1) * hw2, ey = y1 - hh2;
+          mx = (sx + 7 * x1) / 8;
+          my = (7 * y0 + ey) / 8;
+        } else {
+          const sx = x0 + hw2, ex = x1 - hw2;
+          mx = (sx + ex) / 2;
+          my = (y0 + y1) / 2;
+        }
+        mn.b.style.left = `${mx}px`;
+        mn.b.style.top = `${my}px`;
+      }
     }
     svg.setAttribute('width', String(TW));
     svg.setAttribute('height', String(TH));
@@ -924,7 +977,7 @@ function norm(t: string) {
 }
 
 /** Crucigrama de verdad antes de la carta: casillas cruzadas, y las del círculo forman el mensaje. */
-export function crossword(onSolved: () => void, onBack: () => void) {
+export function crossword(onSolved: () => void, onBack: () => void, doneLabel = 'Abrir la carta 💌') {
   clearScreens();
   const o = el('div', 'screen crossword-screen');
   const card = el('div', 'letter crossword');
@@ -1087,7 +1140,7 @@ export function crossword(onSolved: () => void, onBack: () => void) {
     pos = k;
     write(c.answer[k]);
   };
-  const finish = el('button', 'big-btn', 'Abrir la carta 💌');
+  const finish = el('button', 'big-btn', doneLabel);
   finish.hidden = true;
   finish.onclick = onSolved;
   const tools = el('div', 'cw-tools');

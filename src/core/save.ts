@@ -8,6 +8,8 @@ export interface SaveData {
   giftsUnlocked: string[];
   /** Recuerdos escondidos encontrados. */
   found?: string[];
+  /** Los «conecta» (juegos de entre capítulos) hechos. */
+  minis?: string[];
 }
 
 const empty = (): SaveData => ({ version: VERSION, levelsDone: [], giftsUnlocked: [] });

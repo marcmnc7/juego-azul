@@ -165,13 +165,13 @@ export const SANTJOAN = {
   spotted: '¡Azul! ¡Aquí!',
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
   /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul. */
-  toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
+  toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. Planazo: a hacer botar caballos.' }] as Line[],
   /** Cruzar la calle del Born de la mano, sin que os arrolle un caballo (inventado). */
   cross: {
     intro: [
       { who: 'Gas', text: 'Dame la mano. Que con tanta gente y tanto caballo, no te pierdo.' },
       { who: 'Margaux', text: '¿Por dónde cruzamos? No paran de dar vueltas.' },
-      { who: 'Gas', text: 'Mira bien y, cuando haya un hueco, corremos. Al otro lado, Ses Voltes.' },
+      { who: 'Gas', text: 'Mira bien y, cuando haya un hueco, corremos. Tonses, al otro lado: Ses Voltes.' },
     ] as Line[],
     hint: '🤝',
     /** Lo grita el caixer del caballo que os arrolla. */
@@ -192,7 +192,7 @@ export const SANTJOAN = {
   /** Ya de noche: al taxi de la Plaça Espanya, a paso de Gas. */
   taxiNight: [
     { who: 'Narrador', text: 'Ya es de noche. Después de todo el día de jaleo, Gas casi no puede andar.' },
-    { who: 'Gas', text: 'Ay, ay, ay… No siento el pie.' },
+    { who: 'Gas', text: 'Ay, ay, ay… No siento el pie. Esto es heavy.' },
     { who: 'Margaux', text: 'Agárrate a mí. Cogemos un taxi, está ahí, en la Plaça Espanya.' },
   ] as Line[],
   taxiHint: '🚕',
@@ -208,10 +208,10 @@ export const SANTJOAN = {
   rideTalk: [
     { who: 'Taxista', text: 'Qué, ¿mucho jaleo hoy?' },
     { who: 'Margaux', text: 'Todo el día detrás de los caballos.' },
-    { who: 'Gas', text: 'Y uno me ha pisado.' },
+    { who: 'Gas', text: 'Y uno me ha pisado. Durísimo.' },
     { who: 'Taxista', text: 'Ja, ja. Això és Sant Joan.' },
     { who: 'Margaux', text: 'Lleva así desde las diez. Cojo.' },
-    { who: 'Gas', text: 'Pero he tocado tres caballos. Tres.' },
+    { who: 'Gas', text: 'Pero he tocado tres caballos. Tres. Brutal.' },
     { who: 'Taxista', text: 'Bé, bé. Ja quasi som.' },
   ] as Line[],
   /** Al parar delante de casa: pagar (inventado). */
@@ -309,7 +309,7 @@ export const ROAD = {
     [
       { who: 'Margaux', text: 'Otra. Hola. ¿Vamos bien para San Vicente?' },
       { who: 'Vaca', text: 'Muuuuu.' },
-      { who: 'Marc', text: 'Eso es un sí. Se le ve segura.' },
+      { who: 'Marc', text: 'Eso es un sí. Brutal, se le ve segura.' },
     ],
     [
       { who: 'Margaux', text: 'Perdona, ¿Logroño?' },
@@ -363,7 +363,7 @@ export const ROAD = {
   pelletFail: [
     { who: 'Narrador', text: 'Humo. Mucho humo. Y el pollo, crudo.' },
     { who: 'Margaux', text: 'Gas… creo que así no.' },
-    { who: 'Marc', text: 'Vale. Esta noche no se cocina.' },
+    { who: 'Marc', text: 'Vale. Esta noche no se cocina. Tonses, cartas y a dormir.' },
   ] as Line[],
   campHint: { estufa: 'La estufa de pellets, la del rincón de la cabaña.' },
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
@@ -427,7 +427,7 @@ export const CONCERT = {
   arrivalsMeet: [
     { who: 'Gas', text: '¡Por fin! Ya pensaba que te quedabas en Madrid.' },
     { who: 'Margaux', text: '¡Qué va! 26D, pasillo. Ni tan mal.' },
-    { who: 'Gas', text: 'Pues vámonos, que el coche vip nos espera. Y mañana, Fito.' },
+    { who: 'Gas', text: 'Pues vámonos, que el coche vip nos espera. Y mañana, Fito. Planazo.' },
   ] as Line[],
   stadium: [
     { who: 'Narrador', text: 'Viernes 13 de marzo. Estadio de Gran Canaria. Fito está a punto de salir.' },
@@ -448,11 +448,11 @@ export const CONCERT = {
   songLost: ['Pfff. Otra canción que me pierdo.', 'Y otra… ¿Dónde está?', 'Fito ya va por la siguiente.'],
   found: [
     [
-      { who: 'Gas', text: '¡Por fin! Con tanta gente no veía nada.' },
+      { who: 'Gas', text: '¡Por fin! Flipas, con tanta gente no veía nada.' },
       { who: 'Margaux', text: 'Te he grabado el temón. Toma.' },
     ],
     [{ who: 'Gas', text: '¡Aquí estás! Te has movido…' }],
-    [{ who: 'Gas', text: 'Ahora sí. No me muevo de aquí.' }],
+    [{ who: 'Gas', text: 'Ahora sí. No me muevo de aquí, tierna.' }],
   ] as Line[][],
   /** Antes de cada vuelta al baño (la segunda, a por las gafas: ver SIDE.glasses.intro). */
   goAgain: [
@@ -553,7 +553,7 @@ export const CENA = {
   // Antes de cocinar, los ingredientes por el patio (paso nuevo, inventado: Marc, cámbialo si quieres)
   pantryAsk: [
     { who: 'Gas', text: '¿Y dónde guardáis las cosas? Yo aquí no encuentro nada.' },
-    { who: 'Margaux', text: 'Mi madre lo deja todo por ahí. Busca conmigo.' },
+    { who: 'Margaux', text: 'Mi madre lo deja todo por ahí. Busca conmigo, tierno.' },
   ] as Line[],
   /** Lo que dice ella al coger cada cosa. */
   pantry: { cesta: '🥚 Huevos y espaguetis.', queso: '🧀 El pecorino.', nevera: '🥓 Guanciale. El de verdad.' },
@@ -602,13 +602,13 @@ export const CENA = {
   alarmItems: { plates: '🍽️ ¡Platos, fuera!', pan: '🍳 ¡Sartén, fuera!', helmet: '🪖 Casco escondido.' },
   falseAlarm: [
     { who: 'Narrador', text: 'El coche pasa de largo. Era el del vecino.' },
-    { who: 'Gas', text: 'Casi me da algo.' },
-    { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
+    { who: 'Gas', text: 'Casi me da algo. Heavy.' },
+    { who: 'Margaux', text: 'Pero por si acaso, vete ya, tierno.' },
   ] as Line[],
   falseAlarmLate: [
     { who: 'Narrador', text: 'El coche pasa de largo. Era el del vecino. Menos mal, porque aún estaba todo por en medio.' },
-    { who: 'Gas', text: 'Casi me da algo.' },
-    { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
+    { who: 'Gas', text: 'Casi me da algo. Heavy.' },
+    { who: 'Margaux', text: 'Pero por si acaso, vete ya, tierno.' },
   ] as Line[],
   // Antes de irse, su casco (inventado: Marc, cámbialo por lo que dijisteis al despediros)
   /** Antes de irse, a la cancela: que le acompañe (inventado). */
@@ -636,32 +636,35 @@ export interface CrossClue {
 // Crucigrama antes de la carta: todo sale del chat o de lo que pasó. Las letras marcadas dicen TE QUIERO.
 export const CROSSWORD = {
   title: 'El crucigrama de Gas',
-  intro: 'Tú me hiciste uno con letras remarcadas y PORTUGAL escondido. Ahora me toca a mí. Las casillas con círculo esconden algo, y esta vez van en orden.',
-  hidden: 'TE QUIERO',
-  rows: 14,
-  cols: 14,
+  // Las palabras salen de nuestro chat (las que más usamos y las que solo entendemos nosotros); la cuadrícula la
+  // encaja un script (20 palabras en 15 × 15) y las casillas con círculo, en orden, dicen el mensaje
+  intro: 'Tú me hiciste uno con letras remarcadas y PORTUGAL escondido. Ahora me toca a mí: todo sale de nuestro chat. Las casillas con círculo esconden algo, y van en orden.',
+  hidden: 'ERES MI AZUL',
+  rows: 15,
+  cols: 15,
   clues: [
-    { answer: 'DESLUMBRAS', row: 8, col: 4, dir: 'A', clue: "«Muy difícil sí… ...»", mark: 7, hiddenIdx: 6 },
-    { answer: 'CARBONARA', row: 5, col: 10, dir: 'D', clue: "El 10 es la ... (sin nata)", mark: 4, hiddenIdx: 7 },
-    { answer: 'APRENDIZ', row: 5, col: 5, dir: 'D', clue: "«Novato, 8 letras.» Me lo preguntaste desde el aeropuerto", mark: 6, hiddenIdx: 4 },
-    { answer: 'ZAMBURIÑA', row: 12, col: 5, dir: 'A', clue: "«No habrá mejor ... en el mundo que la de San Vicente»", mark: 4, hiddenIdx: 3 },
-    { answer: 'CARME', row: 6, col: 9, dir: 'A', clue: "La excusa para presentarme en Ferreries", mark: -1, hiddenIdx: -1 },
-    { answer: 'MARCIAL', row: 2, col: 7, dir: 'D', clue: "Cafetería ...: el primer restaurante del camino que empezaba por M", mark: -1, hiddenIdx: -1 },
-    { answer: 'IMPERI', row: 2, col: 6, dir: 'A', clue: "Donde estabas «aún con la cola» la noche de la piscinita", mark: -1, hiddenIdx: -1 },
-    { answer: 'ATOCHA', row: 5, col: 0, dir: 'A', clue: "Donde me recogiste en coche en octubre", mark: -1, hiddenIdx: -1 },
-    { answer: 'UBI', row: 8, col: 8, dir: 'D', clue: "«Acéptame la ...»", mark: -1, hiddenIdx: -1 },
-    { answer: 'QUINTANA', row: 1, col: 1, dir: 'D', clue: "«Ya voy por dalt sa ...» (Sant Joan, a por la cami)", mark: 0, hiddenIdx: 2 },
-    { answer: 'ASES', row: 0, col: 9, dir: 'D', clue: "«Es ... son a las 11»", mark: -1, hiddenIdx: -1 },
-    { answer: 'GILDAS', row: 3, col: 0, dir: 'A', clue: "«Podemos ir probando ... para siempre»", mark: -1, hiddenIdx: -1 },
-    { answer: 'ECLIPSE', row: 0, col: 13, dir: 'D', clue: "Lo vimos desde la roca, con las gafas puestas", mark: 0, hiddenIdx: 1 },
-    { answer: 'CESPED', row: 10, col: 0, dir: 'A', clue: "«Solo el ... sabe qué pasó»", mark: 1, hiddenIdx: 5 },
-    { answer: 'MAR', row: 11, col: 13, dir: 'D', clue: "«Casi paso delante de Cala ...»", mark: -1, hiddenIdx: -1 },
-    { answer: 'FLASH', row: 1, col: 4, dir: 'D', clue: "«..., pls. Estoy. Xo no veo»", mark: -1, hiddenIdx: -1 },
-    { answer: 'FITO', row: 1, col: 11, dir: 'D', clue: "Por él volamos a Gran Canaria", mark: 2, hiddenIdx: 0 },
-    { answer: 'PINS', row: 10, col: 3, dir: 'D', clue: "«Ve hacia ...»", mark: -1, hiddenIdx: -1 },
-    { answer: 'GAS', row: 13, col: 1, dir: 'A', clue: "Lo que se nos olvidó para el camping (y mi nombre)", mark: -1, hiddenIdx: -1 },
+    { answer: 'ZAMBURIÑA', row: 7, col: 3, dir: 'A', clue: "«No habrá mejor ... en el mundo que la de San Vicente»", mark: 5, hiddenIdx: 1 },
+    { answer: 'DESLUMBRAS', row: 1, col: 6, dir: 'D', clue: "«Muy difícil sí… ...» (lo que te escribí el 25 de junio)", mark: 2, hiddenIdx: 3 },
+    { answer: 'PORTUGAL', row: 1, col: 4, dir: 'D', clue: "Lo que escondiste en tu crucigrama de diciembre", mark: 4, hiddenIdx: 8 },
+    { answer: 'PROYECTOR', row: 2, col: 2, dir: 'A', clue: "Mimos, cama y ...", mark: -1, hiddenIdx: -1 },
+    { answer: 'CARBONARA', row: 6, col: 11, dir: 'D', clue: "La del 13 de julio: guanciale, huevo, pecorino… y ni se te ocurra la nata", mark: 6, hiddenIdx: 6 },
+    { answer: 'PLANAZO', row: 14, col: 7, dir: 'A', clue: "Lo que decimos cuando algo pinta bien (36 veces)", mark: 5, hiddenIdx: 7 },
+    { answer: 'ECLIPSE', row: 10, col: 1, dir: 'A', clue: "Lo vimos desde la roca, con las gafas puestas", mark: 6, hiddenIdx: 0 },
+    { answer: 'BRUTAL', row: 4, col: 1, dir: 'A', clue: "Mi palabra favorita: está más de 150 veces en nuestro chat", mark: -1, hiddenIdx: -1 },
+    { answer: 'GILDAS', row: 6, col: 9, dir: 'D', clue: "«Podemos ir probando ... para siempre»", mark: 2, hiddenIdx: 9 },
+    { answer: 'TIERNO', row: 8, col: 1, dir: 'D', clue: "Lo que me has llamado más de cien veces", mark: 1, hiddenIdx: 5 },
+    { answer: 'CARME', row: 0, col: 10, dir: 'D', clue: "La excusa para presentarme en Ferreries", mark: 4, hiddenIdx: 2 },
+    { answer: 'BONANIT', row: 13, col: 0, dir: 'A', clue: "Así nos despedimos casi cada noche, en una sola palabra", mark: -1, hiddenIdx: -1 },
+    { answer: 'MILAN', row: 3, col: 10, dir: 'A', clue: "Allí está tu insti (y medio corazón, con el derby)", mark: -1, hiddenIdx: -1 },
+    { answer: 'MULLET', row: 0, col: 12, dir: 'D', clue: "Mi corte de pelo con «vibe surf» (según tú)", mark: 0, hiddenIdx: 4 },
+    { answer: 'AMORE', row: 10, col: 9, dir: 'A', clue: "Cómo me llamas tú, a la italiana", mark: -1, hiddenIdx: -1 },
+    { answer: 'IMPERI', row: 0, col: 2, dir: 'D', clue: "Donde estabas «aún con la cola» la noche de la piscinita", mark: -1, hiddenIdx: -1 },
+    { answer: 'TONSES', row: 1, col: 14, dir: 'D', clue: "Cómo digo yo «entonces» («... tira de setlist»)", mark: -1, hiddenIdx: -1 },
+    { answer: 'FITO', row: 0, col: 8, dir: 'D', clue: "Por él volamos a Gran Canaria", mark: -1, hiddenIdx: -1 },
+    { answer: 'VOLEY', row: 7, col: 13, dir: 'D', clue: "Mi otro deporte, además del pádel (que se me da fatal)", mark: -1, hiddenIdx: -1 },
+    { answer: 'UBI', row: 5, col: 6, dir: 'A', clue: "«Acéptame la ...»", mark: -1, hiddenIdx: -1 },
   ] as CrossClue[],
-  solved: 'Ahora sí, abre la carta.',
+  solved: '¿Lo ves? Brutal. 💙',
 };
 
 // Carta del regalo final. Marc: reescríbela con tus palabras.
@@ -696,9 +699,9 @@ export const MOTO = {
     { at: 0.32, who: 'Margaux', text: 'Ay, que eres lo mejor, te juro.' },
     { at: 0.45, who: 'Gas', text: '¿Ves? Ni tacones ni secador.' },
     // [inventadas]
-    { at: 0.535, who: 'Gas', text: 'Parc Natural de Cap de Creus. Ya casi.' },
+    { at: 0.535, who: 'Gas', text: 'Parc Natural de Cap de Creus. Ya casi. Brutal, ¿eh?' },
     { at: 0.77, who: 'Gas', text: 'Mira, allí enfrente: Cadaqués.' },
-    { at: 0.9, who: 'Margaux', text: '¿Aquello blanco es el faro?' },
+    { at: 0.9, who: 'Margaux', text: '¿Aquello blanco es el faro, amore?' },
     { at: 0.915, who: 'Gas', text: 'El de Cap de Creus. Lo más al este de la Península.' },
   ] as (Line & { at: number })[],
   wave: {
@@ -716,7 +719,7 @@ export const MOTO = {
   tunnel: {
     warn: 'Túnel. Ya sabes lo que toca dentro…',
     btn: '🏍️ ¡Brrruuum!',
-    ok: '¡JAJAJA! ¡Cómo retumba!',
+    ok: '¡JAJAJA! ¡Flipas cómo retumba!',
     miss: '¡Eh! En los túneles se hace brrruuum. Otra vez.',
   },
   /** (ella, al sacar la foto en un mirador) [inventadas] */
@@ -837,7 +840,7 @@ export const ECLIPSE = {
     { who: 'Margaux', text: 'Soy italiana y francesa. Pero mis padres tienen casa aquí, en Sa Farola.' },
     { who: 'Margaux', text: 'Vengo prácticamente todos los años.' },
     { who: 'Madre de Gas', text: '¿En Sa Farola? ¿Tan cerca, todos los años, y os conocéis en Ferreries?' },
-    { who: 'Gas', text: 'Bueno, nos vamos a las rocas, que empieza el eclipse.' },
+    { who: 'Gas', text: 'Bueno, tonses nos vamos a las rocas, que empieza el eclipse.' },
     { who: 'Narrador', text: 'Ahora sí: los cuatro padres, en un solo día.' },
   ] as Line[],
   rocks: [
@@ -1023,7 +1026,7 @@ export const SIDE = {
     start: [
       { who: 'Narrador', text: 'De vuelta, una planicie entera llena de rosas de colores.' },
       { who: 'Margaux', text: '¡Para, para, para! ¡Hazme fotos aquí!' },
-      { who: 'Gas', text: 'Tú posa, que yo disparo.' },
+      { who: 'Gas', text: 'Tú posa, que yo disparo. Va a ser épico.' },
     ] as Line[],
     hint: 'Apunta arrastrando · dispara cuando pose',
     btn: '📸 Disparar',
@@ -1032,7 +1035,7 @@ export const SIDE = {
     cut: '¡Me has cortado! Encuádrame bien.',
     poseName: { arriba: '🌹 ¡Brazos arriba!', cadera: '🌹 Mano en la cadera', beso: '🌹 Un beso', rosa: '🌹 Con una rosa', saludo: '🌹 ¡Hola!' } as Record<string, string>,
     end: [
-      { who: 'Margaux', text: 'A ver, a ver… ¡Me encantan! Mándamelas todas.' },
+      { who: 'Margaux', text: 'A ver, a ver… ¡Brutales! Mándamelas todas, amore.' },
       { who: 'Gas', text: 'Venga, que se nos hace de noche.' },
     ] as Line[],
   },
@@ -1069,7 +1072,7 @@ export const SIDE = {
     /** Cuando te da una avellana: lo dice quien lo diría (la última, inventada). */
     pelted: [
       { who: 'Margaux', text: '¡Au! 🌰' },
-      { who: 'Gas', text: '¡En toda la cabeza! 🌰' },
+      { who: 'Gas', text: '¡En toda la cabeza! Heavy 🌰' },
       { who: 'Gas', text: '¡Cuidado, que viene otra!' },
     ] as Line[],
     end: [
@@ -1092,13 +1095,13 @@ export const SIDE = {
     intro: [
       // («en las altas no te pilla»: inventado, para decir la regla de las olas en su boca)
       { who: 'Gas', text: 'El mejor sitio está en aquellas rocas. Yo ya he cruzado. Salta cuando no venga ola: en las altas no te pilla.' },
-      { who: 'Margaux', text: 'Si me mojo el vestido, te tiro al agua.' },
+      { who: 'Margaux', text: 'Si me mojo el vestido, te tiro al agua, gasss.' },
     ] as Line[],
     hint: '🪨',
     btn: '🪨 Saltar',
     /** Lo dice Gas cuando la ola la pilla (y vuelve a la última roca alta). */
     fall: ['¡La ola! Espera en las altas 💦', '¡Otra vez! Deja que pase 💦', '¿Está fría? 😂'],
-    end: [{ who: 'Gas', text: 'Seca. Lo dudaba.' }] as Line[],
+    end: [{ who: 'Gas', text: 'Seca. Lo dudaba. Brutal.' }] as Line[],
   },
   pee: {
     first: [{ who: 'Narrador', text: 'Por fin le toca a Gas. Tres cervezas después, con prisa y con una mosca pintada dentro del váter, mirándole.' }] as Line[],
