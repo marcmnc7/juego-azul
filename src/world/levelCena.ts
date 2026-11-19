@@ -43,16 +43,52 @@ import { Pantry, type PantryKey, type CoolerPick } from './pantry';
 type Phase = 'intro' | 'wait' | 'gasComing' | 'toGate' | 'toKitchen' | 'cook' | 'toTable' | 'dinner' | 'alarm' | 'seeOff' | 'gasRide' | 'tidy' | 'toBed' | 'done';
 
 export const STREET_Z = 13.5;
+/**
+ * La calle hacia el este, por donde se va Gas (lo que se ve mirando a la izquierda al salir de casa, como en la foto
+ * de Street View): recta hasta x = 34 y luego gira a la derecha, hacia la cala, y sigue entre casas.
+ */
+export const ROAD_CURVE = { x0: 34, r: 24, ang: 1.0, tail: 55 };
+/**
+ * Un punto de la calle a d metros de x = 0 hacia el este (lane: cuánto hacia el lado del mar, +z en la recta).
+ * Devuelve el ángulo de la calle en ese punto (0 en la recta; crece hacia el mar).
+ */
+export function streetAt(d: number, lane: number, out: THREE.Vector3): number {
+  const { x0, r, ang } = ROAD_CURVE;
+  if (d <= x0) {
+    out.set(d, 0, STREET_Z + lane);
+    return 0;
+  }
+  const a = Math.min(ang, (d - x0) / r);
+  const rr = r - lane;
+  out.set(x0 + Math.sin(a) * rr, 0, STREET_Z + r - Math.cos(a) * rr);
+  const t = d - x0 - r * ang;
+  if (t > 0) {
+    out.x += Math.cos(ang) * t;
+    out.z += Math.sin(ang) * t;
+  }
+  return a;
+}
+/** Puntos por la calle hacia el este (de d0 a d1, cada paso), por su carril. */
+export function streetPath(d0: number, d1: number, step: number, lane: number) {
+  const pts: THREE.Vector3[] = [];
+  const dir = Math.sign(d1 - d0) || 1;
+  for (let d = d0; dir > 0 ? d <= d1 : d >= d1; d += step * dir) {
+    const v = new THREE.Vector3();
+    streetAt(d, lane, v);
+    pts.push(v);
+  }
+  return pts;
+}
 export const GATE = new THREE.Vector3(0, 0, 10.2);
 export const DOOR = new THREE.Vector3(0, 0, 0.4);
 /** La puerta de verdad de casa de Azul: arriba, en la terraza del primer piso, al final de la escalera blanca. */
-export const UP_DOOR = new THREE.Vector3(4.3, 3.22, -1.2);
+export const UP_DOOR = new THREE.Vector3(4.3, 3.22, -2.5);
 
 // La escalera blanca de casa de Azul (la de buildAzulHouse): 10 peldaños de 30 cm pegados a la fachada, de x = 1,75
 // a 4,75 (z de 0,05 a 1,05); el rellano, hasta x = 5; y arriba, la terraza del primer piso con la puerta de casa.
 export const STAIR_Z = 0.72;
-export const STAIR_PATH: [number, number][] = [[1.75, STAIR_Z], [4.85, STAIR_Z], [4.85, 0.1], [4.6, -0.45]];
-export const TERRACE = { minX: 0.95, maxX: 4.85, minZ: -0.85, maxZ: 0.02 };
+export const STAIR_PATH: [number, number][] = [[1.75, STAIR_Z], [4.85, STAIR_Z], [4.85, 0.1], [4.55, -1.0], [4.45, -1.75]];
+export const TERRACE = { minX: 0.95, maxX: 4.85, minZ: UP_DOOR.z + 0.35, maxZ: 0.02 };
 export const TERRACE_Y = UP_DOOR.y;
 const treadTop = (k: number) => (k < 0 ? 0 : k > 9 ? 3.2 : (k + 1) * 0.3 + 0.04);
 /** La altura del suelo en la escalera (los pies, sobre la huella; el salto, al empezar cada peldaño). */
@@ -87,9 +123,9 @@ const STOVE = new THREE.Vector3(-3.1, 0, 2.3);
  * La mesa del patio: rectangular, de madera, con el lado largo pegado a la pared de la derecha. Contra la pared, un
  * banco blanco de obra; enfrente, dos sillas. Cenan uno delante del otro, en la mitad de la mesa que da a la casa.
  */
-const TABLE = new THREE.Vector3(3.87, 0, 5.2);
+const TABLE = new THREE.Vector3(3.82, 0, 7.75);
 /** A qué altura de la mesa (z) se sientan los dos: en la silla de delante de la casa y en el banco, enfrente. */
-const SEAT_Z = TABLE.z - 0.42;
+const SEAT_Z = TABLE.z - 0.48;
 const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
 /** Junto a la cancela, por dentro (donde ella le abre a Gas y se despiden). */
 const GATE_IN = new THREE.Vector3(0, 0, 9.35);
@@ -263,6 +299,8 @@ export class LevelCena implements Level {
   private helmetAt: HelmetAt = 'rider';
   /** Dentro de casa, en la nevera (la cámara se queda en la cocina de dentro hasta que sale). */
   private inFridge = false;
+  /** Por dónde va el coche del vecino (metros de calle desde casa). */
+  private neighborD = 62;
   /** A dormir: subiendo la escalera blanca (metros recorridos y el camino), hasta la puerta de arriba. */
   private bedClimb: { d: number; path: [number, number][] } | null = null;
   private bedLook = new THREE.Vector3();
@@ -643,7 +681,8 @@ export class LevelCena implements Level {
     if (this.moto.rider) this.moto.rider.root.visible = true;
     this.helmetAt = 'rider';
     this.motoDrive = new Drive(
-      [new THREE.Vector3(64, 0, 12.4), new THREE.Vector3(40, 0, 12.3), new THREE.Vector3(20, 0, 12.0), new THREE.Vector3(9.7, 0, 11.5), new THREE.Vector3(8.2, 0, 11.2), MOTO_PARK.clone()],
+      // (llega por la curva de la calle, desde el fondo, por su carril)
+      [...streetPath(84, 30, 6, -1.1), new THREE.Vector3(20, 0, 12.0), new THREE.Vector3(9.7, 0, 11.5), new THREE.Vector3(8.2, 0, 11.2), MOTO_PARK.clone()],
       8,
       { vmax: 9, brake: 3.2, stop: true },
     );
@@ -854,7 +893,7 @@ export class LevelCena implements Level {
       this.gateT = 0;
       this.setClock(T(21, 40));
       // Rodea la mesa por detrás (en línea recta la cruzaba por el medio) y espera de pie junto a su silla
-      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(TABLE.x - 0.4, 0, TABLE.z - 1.3), new THREE.Vector3(TABLE.x + 0.75, 0, TABLE.z - 1.15)];
+      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(2.6, 0, 5.9), new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.13)];
     }, 1800);
   }
 
@@ -886,7 +925,7 @@ export class LevelCena implements Level {
 
   private seatBoth() {
     // Ella en la silla; él en el banco, enfrente (el cojín está a 50 cm)
-    this.player.root.position.set(TABLE.x - 0.93, seatedRootY(this.player, 0.48), SEAT_Z);
+    this.player.root.position.set(TABLE.x - 1.0, seatedRootY(this.player, 0.48), SEAT_Z);
     this.player.root.rotation.y = Math.PI / 2;
     this.gas.root.visible = true;
     this.gas.root.position.set(TABLE.x + 0.9, seatedRootY(this.gas, 0.5), SEAT_Z);
@@ -908,7 +947,7 @@ export class LevelCena implements Level {
     this.alarmT = ALARM_SECS;
     this.tidied = 0;
     // De pie de un salto, cada uno a un lado de la mesa
-    this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
+    this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.4);
     this.player.root.position.set(TABLE.x - 1.5, 0, SEAT_Z);
     this.walker.stop();
     this.walker.facing = this.walker.yaw = Math.PI;
@@ -920,8 +959,9 @@ export class LevelCena implements Level {
     this.neighborDrive = null;
     this.neighborParkT = -1;
     this.neighbor.root.visible = true;
-    this.neighbor.root.position.set(62, 0, NEIGHBOR_Z);
-    this.neighbor.root.rotation.y = -Math.PI / 2;
+    this.neighborD = 62;
+    const na = streetAt(62, NEIGHBOR_Z - STREET_Z, this.neighbor.root.position);
+    this.neighbor.root.rotation.y = Math.atan2(-Math.cos(na), -Math.sin(na));
     for (const l of this.neighborLights) l.visible = true;
     audio.warn();
     vibrate([60, 40, 60]);
@@ -944,7 +984,7 @@ export class LevelCena implements Level {
     if (late) this.scares++;
     // El coche sigue calle abajo y aparca delante de su casa
     const c = this.neighbor.root.position;
-    this.neighborDrive = new Drive([c.clone(), new THREE.Vector3(Math.min(c.x - 6, -12), 0, NEIGHBOR_Z), new THREE.Vector3(-30, 0, 12.6), new THREE.Vector3(-36, 0, 11.75), new THREE.Vector3(-39, 0, 11.55)], 62 / ALARM_SECS, { vmax: 6, brake: 2.5, stop: true });
+    this.neighborDrive = new Drive([c.clone(), ...(this.neighborD > 10 ? streetPath(this.neighborD - 4, 4, 6, NEIGHBOR_Z - STREET_Z) : []), new THREE.Vector3(Math.min(c.x - 6, -12), 0, NEIGHBOR_Z), new THREE.Vector3(-30, 0, 12.6), new THREE.Vector3(-36, 0, 11.75), new THREE.Vector3(-39, 0, 11.55)], 62 / ALARM_SECS, { vmax: 6, brake: 2.5, stop: true });
     this.updateHud();
     dialogue(late ? CENA.falseAlarmLate : CENA.falseAlarm, () => this.startSeeOff());
   }
@@ -991,9 +1031,12 @@ export class LevelCena implements Level {
       const before = Math.ceil(this.alarmT);
       if (!this.busy) this.alarmT = Math.max(0, this.alarmT - dt);
       if (Math.ceil(this.alarmT) !== before) this.updateHud();
-      const prev = c.position.x;
-      c.position.x = 62 * (this.alarmT / ALARM_SECS);
-      v = dt > 0 ? Math.abs(prev - c.position.x) / dt : 0;
+      // Baja por la calle desde la curva, por su carril, de cara a casa
+      const prev = c.position.clone();
+      this.neighborD = 62 * (this.alarmT / ALARM_SECS);
+      const a = streetAt(this.neighborD, NEIGHBOR_Z - STREET_Z, c.position);
+      c.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+      v = dt > 0 ? prev.distanceTo(c.position) / dt : 0;
       this.neighborRig.update(dt, v, 0, 1.2);
     }
   }
@@ -1006,7 +1049,7 @@ export class LevelCena implements Level {
     this.gateT = 0;
     this.setClock(T(22, 48));
     this.gas.root.visible = true;
-    this.gasWalk = [new THREE.Vector3(TABLE.x + 0.4, 0, TABLE.z - 1.3), new THREE.Vector3(1.6, 0, 6.9), new THREE.Vector3(1.0, 0, 8.6)];
+    this.gasWalk = [new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.13), new THREE.Vector3(2.6, 0, 5.9), new THREE.Vector3(1.2, 0, 7.4), new THREE.Vector3(1.0, 0, 8.6)];
     later(() => this.phase === 'seeOff' && bark('Gas', CENA.helmetAsk), 900);
   }
 
@@ -1041,7 +1084,7 @@ export class LevelCena implements Level {
     if (this.mountT < 0.9) return;
     if (!this.motoDrive)
       this.motoDrive = new Drive(
-        [MOTO_PARK.clone(), new THREE.Vector3(5.5, 0, 11.2), new THREE.Vector3(4.6, 0, 11.55), new THREE.Vector3(3.8, 0, 12.3), new THREE.Vector3(3.6, 0, 13.6), new THREE.Vector3(4.5, 0, 14.6), new THREE.Vector3(6.4, 0, 15.0), new THREE.Vector3(22, 0, 15.0), new THREE.Vector3(45, 0, 14.9), new THREE.Vector3(95, 0, 14.8)],
+        [MOTO_PARK.clone(), new THREE.Vector3(5.5, 0, 11.2), new THREE.Vector3(4.6, 0, 11.55), new THREE.Vector3(3.8, 0, 12.3), new THREE.Vector3(3.6, 0, 13.6), new THREE.Vector3(4.5, 0, 14.6), new THREE.Vector3(6.4, 0, 15.0), ...streetPath(22, 120, 6, 1.4)],
         2.5,
         { vmax: 10, slow: [[0, 7.5, 3.2]] },
       );
@@ -1272,7 +1315,7 @@ export class LevelCena implements Level {
           this.parentCar.azul.visible = true;
           if (this.parentDriver) this.parentDriver.visible = true;
           this.parentDrive = new Drive(
-            [new THREE.Vector3(PARENT_CAR_X, 0, PARK_Z), new THREE.Vector3(-2.5, 0, 14.85), new THREE.Vector3(1.5, 0, 14.45), new THREE.Vector3(10, 0, 14.35), new THREE.Vector3(40, 0, 14.35), new THREE.Vector3(95, 0, 14.35)],
+            [new THREE.Vector3(PARENT_CAR_X, 0, PARK_Z), new THREE.Vector3(-2.5, 0, 14.85), new THREE.Vector3(1.5, 0, 14.45), new THREE.Vector3(10, 0, 14.35), ...streetPath(24, 120, 6, 0.85)],
             2.5,
             { vmax: 9 },
           );
@@ -1526,8 +1569,8 @@ export class LevelCena implements Level {
           ? // Por delante de la encimera, bajo el toldo y sin la buganvilla del porche en primer plano
             [this.v1.set(STOVE.x + 1.9, 2.35, STOVE.z + 3.5), this.v2.set(STOVE.x + 0.1, 1.05, STOVE.z - 0.6)]
           : this.phase === 'dinner'
-            ? // Entre los dos pies de la pérgola, que quedan a los lados y no delante de ellos
-              [this.v1.set(TABLE.x + 0.5, 2.15, TABLE.z + 3.7), this.v2.set(TABLE.x, 0.9, TABLE.z)]
+            ? // Desde el lado de la calle, por dentro del muro: ni el pie de la pérgola ni la buganvilla delante
+              [this.v1.set(TABLE.x - 2.6, 2.25, TABLE.z + 1.55), this.v2.set(TABLE.x + 0.15, 0.85, SEAT_Z)]
             : this.phase === 'gasComing'
               ? // Desde el jardín, calle arriba: la moto que llega y aparca más adelante
                 [this.v1.set(-1.0, 4.6, 6.2), this.v2.set(Math.max(3, Math.min(m.x, 30)), 0.8, 12.2)]
@@ -1675,7 +1718,7 @@ export class LevelCena implements Level {
           this.prep('toTable');
           this.switchGarland(false);
           this.player.root.position.set(STOVE.x + 0.4, 0, STOVE.z + 0.4);
-          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
+          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.4);
         },
       },
       { label: '7 · Cenar', run: () => { this.prep('toTable'); this.switchGarland(true); this.sitDown(); } },
@@ -1685,7 +1728,7 @@ export class LevelCena implements Level {
         run: () => {
           this.prep('seeOff');
           this.player.root.position.set(TABLE.x - 1.5, 0, SEAT_Z);
-          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
+          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.4);
           this.startSeeOff();
         },
       },
@@ -1729,13 +1772,52 @@ interface Beat {
  * Lo que hay delante de casa de Azul: un vallecito que baja de la calle a una entrada de mar muy estrecha
  * con una playa pequeñísima al fondo. Casas, solo en la otra orilla.
  */
+/**
+ * Silla de director como las de la terraza del Imperi (born.ts), pero mirando a lo largo de x: s = -1, la espalda hacia
+ * -x (mira a +x). Costados de madera con las patas en aspa, lona verde de asiento y de respaldo.
+ */
+function directorChairX(m: Merger, x: number, z: number, s: number) {
+  const WOOD = 0x8a5a34, CANVAS = 0x1f5a45;
+  const front = x - s * 0.2, back = x + s * 0.2;
+  for (const sz of [-0.25, 0.25]) {
+    m.add(G.box, WOOD, front, 0.33, z + sz, 0, 0, 0, 0.05, 0.66, 0.05); // pata delantera, hasta el brazo
+    m.add(G.box, WOOD, back, 0.47, z + sz, 0, 0, 0, 0.05, 0.94, 0.05); // pata trasera, hasta arriba del respaldo
+    m.add(G.box, WOOD, x, 0.68, z + sz, 0, 0, 0, 0.5, 0.04, 0.07); // brazo
+    m.add(G.box, WOOD, x, 0.24, z + sz, 0, 0, s * 0.62, 0.04, 0.5, 0.04); // aspa
+    m.add(G.box, WOOD, x, 0.24, z + sz, 0, 0, -s * 0.62, 0.04, 0.5, 0.04);
+  }
+  m.add(G.box, CANVAS, x, 0.46, z, 0, 0, 0, 0.4, 0.03, 0.46); // asiento
+  m.add(G.box, CANVAS, back, 0.82, z, 0, 0, 0, 0.03, 0.22, 0.5); // respaldo
+}
+
 function buildValley(sc: THREE.Scene, day: boolean) {
   const X = 380, Z = 170; // de z = 16.7 hacia allá
   const Z0 = 16.7;
   const WATER = -7;
   const ss = THREE.MathUtils.smoothstep;
   const n = (x: number, z: number) => Math.sin(x * 0.13 + z * 0.07) * 0.6 + Math.sin(x * 0.37 - z * 0.23) * 0.3 + Math.sin(x * 0.9 + z * 0.8) * 0.12;
+  // Por donde pasa la calle al girar hacia la cala, el terreno a su altura (antes bajaba al agua y la calle flotaba)
+  const RC = ROAD_CURVE;
+  const road: THREE.Vector2[] = [];
+  {
+    const v = new THREE.Vector3();
+    for (let d = RC.x0 - 8; d <= RC.x0 + RC.r * RC.ang + RC.tail + 30; d += 1.5) {
+      streetAt(d, 0, v);
+      road.push(new THREE.Vector2(v.x, v.z));
+    }
+  }
+  const roadDist = (x: number, z: number) => {
+    if (x < RC.x0 - 14) return 1e9;
+    let b = 1e9;
+    for (const p of road) b = Math.min(b, (p.x - x) ** 2 + (p.y - z) ** 2);
+    return Math.sqrt(b);
+  };
   const H = (x: number, z: number) => {
+    const base = Hv(x, z);
+    const d = roadDist(x, z);
+    return d > 16 ? base : THREE.MathUtils.lerp(-0.12, base, ss(d, 10, 16));
+  };
+  const Hv = (x: number, z: number) => {
     const bank = -9.5 * ss(z, Z0 + 1.5, Z0 + 21) + 13.5 * ss(z, Z0 + 37, Z0 + 57); // baja, el fondo del agua y sube a la otra orilla
     const up = ss(z, Z0 + 57, Z0 + 150) * 4;
     // Al este, la entrada se acaba: el fondo sube y deja la playita
@@ -1799,10 +1881,85 @@ function buildValley(sc: THREE.Scene, day: boolean) {
     }
 
   const m = new Merger();
-  // El muro de marès de la calle, y lo que crece en la ladera
-  if (day) m.add(G.box, 0xc9b48f, 53, 0.3, Z0 + 0.15, 0, 0, 0, 274, 0.6, 0.35);
-  // (de noche, en tramos de 27 m: de una pieza de 274 m no se partía y quedaba a regla, sin el «a mano alzada»)
-  else for (let i = 0; i < 10; i++) m.add(G.box, 0xc9b48f, 53 - 137 + 13.7 + i * 27.4, 0.3, Z0 + 0.15, 0, 0, 0, 27.4, 0.6, 0.35);
+  // El muro de marès de la calle: recto hasta la curva y luego siguiéndola, por el lado del mar (en tramos: de una
+  // pieza larga no se partía y quedaba a regla, sin el «a mano alzada»), con su albardilla
+  const MARES = 0xd2c19c;
+  for (let i = 0; i < 5; i++) {
+    const cx = -84 + 11.8 + i * 23.6;
+    m.add(G.box, MARES, cx, 0.32, Z0 + 0.15, 0, 0, 0, 23.6, 0.64, 0.38);
+    m.add(G.box, 0xe2d4b2, cx, 0.68, Z0 + 0.15, 0, 0, 0, 23.6, 0.08, 0.46);
+  }
+  {
+    const v = new THREE.Vector3();
+    const lane = Z0 + 0.15 - STREET_Z;
+    const L = RC.r * RC.ang + RC.tail - 6;
+    const N = 26;
+    for (let i = 0; i < N; i++) {
+      const d = RC.x0 + ((i + 0.5) / N) * L;
+      const a = streetAt(d, lane, v);
+      const seg = (L / N) * ((RC.r - lane) / RC.r) * (d < RC.x0 + RC.r * RC.ang ? 1 : RC.r / (RC.r - lane)) + 0.1;
+      m.add(G.box, MARES, v.x, 0.32, v.z, 0, -a, 0, seg, 0.64, 0.38);
+      m.add(G.box, 0xe2d4b2, v.x, 0.68, v.z, 0, -a, 0, seg, 0.08, 0.46);
+    }
+  }
+  // Detrás del muro, el matorral verde de lentisco que baja a las rocas (como en la foto), del portal a la curva
+  for (let i = 0; i < 70; i++) {
+    const x = 3 + ((i * 7.31) % 36);
+    const z = Z0 + 1.2 + ((i * 3.77) % 7.5);
+    const y = H(x, z);
+    if (y < WATER + 1) continue;
+    m.add(G.bush, i % 3 ? 0x4f7a34 : 0x3f6a2c, x, y + 0.5, z, 0, i, 0, 1.8 + (i % 4) * 0.5, 1.2 + (i % 3) * 0.4, 1.6 + (i % 3) * 0.5);
+  }
+  // Y abajo, la roca de marès gris que asoma hasta el agua
+  for (let i = 0; i < 26; i++) {
+    const x = 8 + i * 1.3 + Math.sin(i) * 1.5;
+    const z = Z0 + 7 + Math.sin(i * 1.7) * 2.5;
+    const y = H(x, z);
+    m.add(i % 2 ? G.rock : G.rock2, i % 3 ? 0x8e8a80 : 0xa39c8a, x, y + 0.1, z, 0, i, 0, 2.4 + (i % 3), 0.9 + (i % 2) * 0.5, 2 + (i % 3));
+  }
+  // Al fondo de la curva, casas de azotea blancas y beige (como las de la foto), un pino grande y los postes
+  {
+    const v = new THREE.Vector3();
+    const house = (d: number, lane: number, w: number, dpt: number, h: number, col: number, seed: number) => {
+      const a = streetAt(d, lane, v);
+      const y = H(v.x, v.z);
+      const yaw = -a;
+      m.add(G.box, col, v.x, y + h / 2 - 1.5, v.z, 0, yaw, 0, w, h + 3, dpt); // (con su zócalo, por si el suelo baja)
+      m.add(G.box, 0xf2efe8, v.x, y + h + 0.2, v.z, 0, yaw, 0, w + 0.25, 0.4, dpt + 0.25); // pretil de la azotea
+      const face = lane < 0 ? 1 : -1; // la fachada, hacia la calle
+      for (let k = 0; k < 3; k++)
+        for (const fy of h > 5 ? [1.5, 4.4] : [1.5]) {
+          const off = (k - 1) * (w / 3.2);
+          const wx = v.x + Math.cos(a) * off - Math.sin(a) * face * (dpt / 2 + 0.03);
+          const wz = v.z + Math.sin(a) * off + Math.cos(a) * face * (dpt / 2 + 0.03);
+          m.add(G.box, (seed + k) % 2 ? 0x2a3036 : 0x3b4650, wx, y + fy, wz, 0, yaw, 0, 1.1, 1.3, 0.06);
+        }
+      // Un toldo o una barandilla en la planta de arriba
+      if (h > 5) {
+        const bx = v.x - Math.sin(a) * face * (dpt / 2 + 0.6), bz = v.z + Math.cos(a) * face * (dpt / 2 + 0.6);
+        m.add(G.box, seed % 2 ? 0xe8e4da : 0xd9c9a8, bx, y + 3.2, bz, 0, yaw, 0, w * 0.8, 0.12, 1.2);
+        m.add(G.box, 0xc8ccd0, bx - Math.sin(a) * face * 0.55, y + 3.7, bz + Math.cos(a) * face * 0.55, 0, yaw, 0, w * 0.8, 0.05, 0.05);
+      }
+    };
+    house(60, -13, 11, 9, 6.6, 0xe6d6bc, 1); // beige, con toldo (la de la izquierda de la foto)
+    house(76, -12, 9, 8, 6.2, 0xf4f2ec, 2); // la blanca de ventanas oscuras
+    house(92, -11.5, 10, 9, 3.4, 0xefe9dd, 3);
+    house(70, 12, 12, 10, 6.8, 0xf6f4ee, 4); // la grande blanca de la derecha
+    house(98, 12, 9, 8, 3.4, 0xe9dcc4, 5);
+    house(116, -2, 14, 9, 6.4, 0xf2eee6, 6); // al fondo, donde se pierde la calle
+    // Pinos grandes de copa ancha
+    for (const [d, lane, hh] of [[50, -8, 9], [84, 8.5, 10], [104, -8, 8.5], [40, -7.5, 8]] as const) {
+      streetAt(d, lane, v);
+      const y = H(v.x, v.z);
+      m.add(G.cyl, 0x5a4634, v.x, y + hh / 2, v.z, 0.06, 0, 0.04, 0.5, hh, 0.5);
+      for (let j = 0; j < 6; j++) m.add(G.bush, j % 2 ? 0x2f5a2c : 0x3a6a34, v.x + Math.cos(j * 1.1) * 2.4, y + hh + Math.sin(j * 2) * 0.5, v.z + Math.sin(j * 1.1) * 2.4, 0, j, 0, 3.6, 1.6, 3.2);
+    }
+    // Postes de madera con el cable, por el lado de las casas
+    for (const d of [44, 58, 72, 86, 100]) {
+      streetAt(d, -4.2, v);
+      m.add(G.cyl, 0x6b5a46, v.x, 3.6, v.z, 0, 0, 0, 0.22, 7.2, 0.22);
+    }
+  }
   // La punta: acantilado de marès donde se acaba la tierra, y las rocas que separan el mar de fuera
   for (let i = 0; i < 26; i++) {
     const z = -48 + i * 2.95;
@@ -1813,7 +1970,7 @@ function buildValley(sc: THREE.Scene, day: boolean) {
   for (let i = 0; i < 420 && k < 110; i++) {
     const x = -170 + ((i * 37.3) % 340), z = Z0 + 2.5 + ((i * 11.7) % 110);
     const y = H(x, z);
-    if (y < WATER + 1.4 || x < -84) continue;
+    if (y < WATER + 1.4 || x < -84 || roadDist(x, z) < 6) continue;
     k++;
     if (i % 9 === 0) {
       // Pino
@@ -1888,14 +2045,28 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // madera de acebuche entre pilares blancos y un seto de adelfas tras el muro.
   const SAND = 0xd9cfbd; // losas claras del patio
   m.add(G.box, SAND, 0, -0.05, 5, 0, 0, 0, 10.4, 0.1, 10.4);
-  m.add(G.box, 0xb5b0a6, -8, -0.06, STREET_Z, 0, 0, 0, 156, 0.1, 6.4); // calle de hormigón claro, hasta el faro
+  // La calle de hormigón claro: hasta el faro por el oeste; por el este, recta y luego la curva hacia la cala
+  {
+    const RC = ROAD_CURVE;
+    m.add(G.box, 0xb5b0a6, (RC.x0 - 86) / 2, -0.06, STREET_Z, 0, 0, 0, RC.x0 + 86, 0.1, 6.4);
+    const v = new THREE.Vector3();
+    const N = 16, L = RC.r * RC.ang;
+    for (let i = 0; i < N; i++) {
+      const a = streetAt(RC.x0 + ((i + 0.5) / N) * L, 0, v);
+      m.add(G.box, 0xb5b0a6, v.x, -0.06, v.z, 0, -a, 0, L / N + 0.12, 0.1, 6.4);
+    }
+    streetAt(RC.x0 + L + RC.tail / 2, 0, v);
+    m.add(G.box, 0xb5b0a6, v.x, -0.06, v.z, 0, -RC.ang, 0, RC.tail + 0.2, 0.1, 6.4);
+  }
   m.add(G.box, 0x6f7a48, 0, -0.08, -16, 0, 0, 0, 140, 0.1, 52); // tierra y jardines entre la calle y el paseo
   // Planta baja
   m.add(G.box, WHITE, 0, 1.55, -4, 0, 0, 0, 10, 3.1, 8);
   m.add(G.box, 0xe9e4d8, 0, 3.15, -3.92, 0, 0, 0, 10.2, 0.14, 8.24); // forjado
   // Primer piso más estrecho, con el cuerpo en esquina que vuela sobre el toldo
-  m.add(G.box, WHITE, 1.4, 4.6, -4.6, 0, 0, 0, 7.2, 2.9, 6.8);
-  m.add(G.box, WHITE, -1.6, 4.65, -0.4, 0, 0, 0, 4.6, 2.6, 2.2); // cuerpo saliente
+  // (la fachada del primer piso, 1,3 m más atrás que antes: la terraza de arriba, al final de la escalera, era un
+  // pasillo de nada; ahora tiene sitio)
+  m.add(G.box, WHITE, 1.4, 4.6, -5.25, 0, 0, 0, 7.2, 2.9, 5.5);
+  m.add(G.box, WHITE, -1.6, 4.65, -0.9, 0, 0, 0, 4.6, 2.6, 3.2); // cuerpo saliente
   m.add(G.box, 0xe9e4d8, -1.6, 3.32, -0.4, 0, 0, 0, 4.7, 0.18, 2.3);
   // Ventanales con persianas enrollables beis a media altura y barandilla de acero
   for (const [x, z, w, ry] of [[-2.4, 0.72, 1.9, 0], [-0.4, 0.72, 1.6, 0], [-3.92, -0.4, 1.4, Math.PI / 2]] as [number, number, number, number][]) {
@@ -1907,19 +2078,19 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   m.add(G.box, 0xc8ccd0, -1.6, 3.95, 0.95, 0, 0, 0, 4.7, fat(0.04), fat(0.04));
   for (let k = 0; k <= 10; k++) m.add(G.box, 0xc8ccd0, -3.9 + k * 0.46, 3.85, 0.95, 0, 0, 0, fat(0.03), 0.8, fat(0.03));
   // Ventana pequeña del primer piso a la derecha (corrida a la izquierda: a su lado está la puerta de casa)
-  m.add(G.box, 0x2a3138, 2.3, 4.4, -1.18, 0, 0, 0, 1.0, 1.2, 0.05);
-  for (const sx of [-1, 1]) m.add(G.box, SHUTTER, 2.3 + sx * 0.75, 4.4, -1.15, 0, 0, 0, 0.5, 1.25, 0.05);
+  m.add(G.box, 0x2a3138, 2.3, 4.4, UP_DOOR.z + 0.02, 0, 0, 0, 1.0, 1.2, 0.05);
+  for (const sx of [-1, 1]) m.add(G.box, SHUTTER, 2.3 + sx * 0.75, 4.4, UP_DOOR.z + 0.05, 0, 0, 0, 0.5, 1.25, 0.05);
   // La entrada de verdad de la casa: arriba, al final de la escalera blanca, por la terraza del primer piso.
   // Marco oscuro, umbral de piedra y, delante, la barandilla de la terraza (abierta donde llega la escalera)
   for (const [x, y, w, h] of [[UP_DOOR.x - 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x + 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x, 5.45, 1.1, 0.12]] as const)
-    m.add(G.box, 0x3a3226, x, y, -1.17, 0, 0, 0, w, h, 0.08);
-  m.add(G.box, 0xd9cfbd, UP_DOOR.x, 3.25, -1.0, 0, 0, 0, 1.2, 0.06, 0.4);
+    m.add(G.box, 0x3a3226, x, y, UP_DOOR.z + 0.03, 0, 0, 0, w, h, 0.08);
+  m.add(G.box, 0xd9cfbd, UP_DOOR.x, 3.25, UP_DOOR.z + 0.2, 0, 0, 0, 1.2, 0.06, 0.4);
   for (let k = 0; k <= 9; k++) m.add(G.box, 0xc8ccd0, 0.8 + k * 0.42, 3.72, 0.16, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
   m.add(G.box, 0xc8ccd0, 2.69, 4.2, 0.16, 0, 0, 0, 3.82, fat(0.05), fat(0.05));
   m.add(G.box, 0xc8ccd0, 2.69, 3.6, 0.16, 0, 0, 0, 3.82, fat(0.035), fat(0.035));
   // (y por el lado de la casa de al lado, del rellano a la fachada)
-  for (let k = 0; k <= 5; k++) m.add(G.box, 0xc8ccd0, 5.04, 3.72, -1.15 + k * 0.42, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
-  m.add(G.box, 0xc8ccd0, 5.04, 4.2, -0.1, 0, 0, 0, fat(0.05), fat(0.05), 2.15);
+  for (let k = 0; k <= 8; k++) m.add(G.box, 0xc8ccd0, 5.04, 3.72, UP_DOOR.z + 0.05 + k * 0.42, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
+  m.add(G.box, 0xc8ccd0, 5.04, 4.2, (UP_DOOR.z + 0.05 + 0.95) / 2, 0, 0, 0, fat(0.05), fat(0.05), 0.95 - UP_DOOR.z - 0.05);
   // Azotea: pretil, barandilla tubular y la antena
   m.add(G.box, WHITE, 0.9, 6.2, -3.6, 0, 0, 0, 8.4, 0.3, 8.6);
   for (let k = 0; k <= 14; k++) m.add(G.box, 0xc8ccd0, -3.3 + k * 0.6, 6.75, 0.62, 0, 0, 0, fat(0.04), 0.8, fat(0.04));
@@ -2098,25 +2269,20 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     sc.add(s);
     steam.push(s);
   }
-  // Mesa de madera rectangular (0,9 × 1,7 m), con el lado largo a lo largo de la pared de la derecha; contra la
-  // pared, un banco blanco de obra con su cojín de lona, y enfrente, dos sillas de madera
+  // Mesa de madera rectangular (1 × 2 m), con el lado largo a lo largo de la pared de la derecha y hacia la calle
+  // (entre los dos postes de la pérgola); contra la pared, un banco blanco de obra con su cojín, y enfrente, dos
+  // sillas de director como las de la terraza del Imperi
   const WOOD = 0x9a7048, WOOD_D = 0x6e5234;
-  tm.add(G.box, WOOD, TABLE.x, 0.755, TABLE.z, 0, 0, 0, 0.9, 0.05, 1.7);
-  tm.add(G.box, WOOD_D, TABLE.x, 0.71, TABLE.z, 0, 0, 0, 0.8, 0.06, 1.6); // faldón
-  for (const [dx, dz] of [[-0.38, -0.76], [0.38, -0.76], [-0.38, 0.76], [0.38, 0.76]]) tm.add(G.box, WOOD_D, TABLE.x + dx, 0.36, TABLE.z + dz, 0, 0, 0, fat(0.06), 0.72, fat(0.06));
+  tm.add(G.box, WOOD, TABLE.x, 0.755, TABLE.z, 0, 0, 0, 1.0, 0.05, 2.0);
+  tm.add(G.box, WOOD_D, TABLE.x, 0.71, TABLE.z, 0, 0, 0, 0.9, 0.06, 1.9); // faldón
+  for (const [dx, dz] of [[-0.43, -0.9], [0.43, -0.9], [-0.43, 0.9], [0.43, 0.9]]) tm.add(G.box, WOOD_D, TABLE.x + dx, 0.36, TABLE.z + dz, 0, 0, 0, fat(0.07), 0.72, fat(0.07));
   // El banco, pegado a la pared (de obra, encalado, como el muro), y su cojín
   const BX = 4.82;
-  tm.add(G.box, WHITE, BX, 0.21, TABLE.z, 0, 0, 0, 0.44, 0.42, 1.9);
-  tm.add(G.box, 0xefe9dd, BX - 0.02, 0.435, TABLE.z, 0, 0, 0, 0.48, 0.05, 1.94);
-  tm.add(G.rbox, 0x2f6b8a, BX, 0.48, TABLE.z, 0, 0, 0, 0.4, 0.05, 1.8);
-  // Dos sillas en el otro lado, de cara a la pared (asiento a 48 cm, respaldo hacia fuera)
-  const cx = TABLE.x - 0.93;
-  for (const cz of [TABLE.z - 0.42, TABLE.z + 0.42]) {
-    tm.add(G.box, 0x8a6a44, cx, 0.46, cz, 0, 0, 0, 0.44, 0.04, 0.42);
-    for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) tm.add(G.box, WOOD_D, cx + dx, 0.23, cz + dz, 0, 0, 0, fat(0.035), 0.46, fat(0.035));
-    for (const dz of [-0.18, 0.18]) tm.add(G.box, WOOD_D, cx - 0.2, 0.72, cz + dz, 0, 0, 0, fat(0.035), 0.55, fat(0.035));
-    tm.add(G.box, 0x8a6a44, cx - 0.2, 0.88, cz, 0, 0, 0, 0.035, 0.2, 0.4);
-  }
+  tm.add(G.box, WHITE, BX, 0.21, TABLE.z, 0, 0, 0, 0.44, 0.42, 2.25);
+  tm.add(G.box, 0xefe9dd, BX - 0.02, 0.435, TABLE.z, 0, 0, 0, 0.48, 0.05, 2.29);
+  tm.add(G.rbox, 0x2f6b8a, BX, 0.48, TABLE.z, 0, 0, 0, 0.4, 0.05, 2.15);
+  // Las dos sillas de director, en el otro lado, de cara a la pared
+  for (const cz of [TABLE.z - 0.48, TABLE.z + 0.48]) directorChairX(tm, TABLE.x - 1.0, cz, -1);
   // Los platos de siempre (de noche, aparte y apoyados en la mesa: antes flotaban un centímetro)
   let tablePlates: THREE.Mesh | null = null;
   if (day) for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.25, 0.795, SEAT_Z, 0, 0, 0, 0.3, 0.03, 0.3); // platos
@@ -2127,7 +2293,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     tablePlates.userData.comicBent = true;
     sc.add(tablePlates);
   }
-  colliders.push({ minX: TABLE.x - 1.2, maxX: 5.06, minZ: TABLE.z - 0.95, maxZ: TABLE.z + 0.95 });
+  colliders.push({ minX: TABLE.x - 1.3, maxX: 5.06, minZ: TABLE.z - 1.15, maxZ: TABLE.z + 1.15 });
   for (const [x, z] of [[-4.6, 9.6], [4.6, 9.6], [4.6, 0.8]] as [number, number][]) m.add(G.cyl, 0x8a6a44, x, 1.4, z, 0, 0, 0, 0.1, 2.8, 0.1);
   const bulbs = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   let garland: THREE.Points | null = null;
