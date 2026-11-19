@@ -166,15 +166,16 @@ export const SANTJOAN = {
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
   /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul. */
   toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
-  /** Cruzar la calle del Born de la mano, sin que os pille un coche (inventado). */
+  /** Cruzar la calle del Born de la mano, sin que os arrolle un caballo (inventado). */
   cross: {
     intro: [
-      { who: 'Gas', text: 'Dame la mano. Que con tanta gente y estos coches, no te pierdo.' },
-      { who: 'Margaux', text: '¿Coches? ¿Hoy?' },
-      { who: 'Gas', text: 'Los que dan vueltas al Born buscando aparcar. Mira bien antes de cruzar.' },
+      { who: 'Gas', text: 'Dame la mano. Que con tanta gente y tanto caballo, no te pierdo.' },
+      { who: 'Margaux', text: '¿Por dónde cruzamos? No paran de dar vueltas.' },
+      { who: 'Gas', text: 'Mira bien y, cuando haya un hueco, corremos. Al otro lado, Ses Voltes.' },
     ] as Line[],
     hint: '🤝',
-    hit: ['¡Cuidado! Que nos lleva…', '¡Eh! ¡Atrás, atrás!', 'Ese no frenaba. Otra vez, con calma.'],
+    /** Lo grita el caixer del caballo que os arrolla. */
+    hit: ['Alerta! Fora des mig!', 'Compte, al·lots!', 'Ep! Que no s\'atura!'],
     ok: 'Vivos. Y de la mano 😌',
   },
   beHint: '🐑 Es Bè',

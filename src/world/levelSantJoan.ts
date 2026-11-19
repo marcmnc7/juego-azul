@@ -28,7 +28,6 @@ import { makeTaxi, TaxiRide, taxiFree, taxiSeat, taxiSide, type Taxi } from './c
 import { limpPose } from '../entities/limp';
 import { LimpPair } from '../entities/limpPair';
 import { HandPair } from '../entities/handPair';
-import { makeCar } from '../entities/models';
 import { NutThrow, NUTS_NEED } from './sideGames';
 import { SIDE } from '../data/story';
 import { rigPost } from '../entities/rig';
@@ -128,8 +127,8 @@ const HORSE_R = 7.6;
 type Folk = { x: number; z: number; ry: number; ph: number; pi: number; walk?: { ax: 'x' | 'z'; a0: number; a1: number; dir: 1 | -1 }; turnT?: number };
 const FOLK_SPEED = 0.85;
 /**
- * La calzada que rodea la explanada del Born (entre la explanada y la acera): por ella dan la vuelta los coches cuando
- * hay que cruzar. Centro del carril: x = ±14,1 y z = ±10,6, con las esquinas redondeadas.
+ * La calzada que rodea la explanada del Born (entre la explanada y la acera): por ella dan la vuelta los caballos
+ * cuando hay que cruzar. Centro del carril: x = ±14,1 y z = ±10,6, con las esquinas redondeadas.
  */
 const RING = { a: 14.1, b: 10.6, r: 2.2 };
 const RING_LEN = 2 * (2 * (RING.a - RING.r)) + 2 * (2 * (RING.b - RING.r)) + 2 * Math.PI * RING.r;
@@ -332,7 +331,7 @@ export class LevelSantJoan implements Level {
   private folkInfo = new Map<Folk, { name: string; hint: boolean; talk: number; times: number }>();
   private folkNext = 0;
   /** Cruzar la calle de la mano: los coches que dan la vuelta al Born y la pareja. */
-  private cross: { cars: { root: THREE.Group; s: number; v: number; rig: CarRig; body: THREE.Object3D }[]; hands: HandPair; hitT: number } | null = null;
+  private cross: { cars: { d: Donkey; s: number; v: number; walk: number }[]; hands: HandPair; hitT: number } | null = null;
   /** Con quién se está hablando (se para mientras tanto). */
   private talkTo: Folk | null = null;
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
@@ -902,7 +901,7 @@ export class LevelSantJoan implements Level {
       if (r < HORSE_R + 2.2 || r > 15.5) continue;
       // Pasillos entre la gente: hacia Ses Voltes, Correus, el Ajuntament y los palacios
       if (AISLES.some(([ax, az]) => segDist(x, z, ax, az) < 1.5)) continue;
-      // (la calzada, libre: por ella pasan los coches)
+      // (la calzada, libre: por ella pasan los caballos)
       if (onRing(x, z)) continue;
       // (donde se tiran las avellanes, la gente que juega: nadie quieto en medio)
       if (x > NUT_BOX.minX - 1 && x < NUT_BOX.maxX + 1 && z > NUT_BOX.minZ - 1 && z < NUT_BOX.maxZ + 1) continue;
@@ -1754,20 +1753,20 @@ export class LevelSantJoan implements Level {
 
   /** A Sa Plaça d'es Bè, los dos juntos y andando: por Ses Voltes y la Plaça Espanya. */
   /**
-   * Antes de Es Bè: cruzar la calle del Born hasta Ses Voltes, de la mano de Gas, sin que os pille un coche. Los
-   * coches dan la vuelta a la explanada por su calzada (nadie aparece ni desaparece de golpe); si uno os pilla, a
-   * empezar desde la explanada.
+   * Antes de Es Bè: cruzar la calle del Born hasta Ses Voltes, de la mano de Gas, sin que os arrolle un caballo. Los
+   * caballos, con sus caixers, dan la vuelta a la explanada por la calzada al trote (nadie aparece ni desaparece de
+   * golpe); si uno os arrolla, a empezar desde la explanada.
    */
   private startCross() {
     this.phase = 'cross';
     this.gas.root.visible = true;
     const cars: NonNullable<typeof this.cross>['cars'] = [];
-    const cols = [0xd7263d, 0xf2f2f2, 0x2a3a5a, 0xe8b23a];
-    for (let i = 0; i < 4; i++) {
-      const c = makeCar(cols[i], { luggage: false, joy: false, empty: true });
-      c.root.userData.comicBent = true;
-      this.scene.add(c.root);
-      cars.push({ root: c.root as THREE.Group, s: (i / 4) * RING_LEN + Math.random() * 6, v: 6.5 + i * 0.9, rig: new CarRig(c), body: c.body });
+    for (let i = 0; i < 5; i++) {
+      const d = makeHorse();
+      d.root.userData.comicBent = true;
+      markAccessories(d.root);
+      this.scene.add(d.root);
+      cars.push({ d, s: (i / 5) * RING_LEN + Math.random() * 4, v: 3.4 + (i % 3) * 0.55, walk: Math.random() * 6 });
     }
     const hands = new HandPair(this.player, this.gas);
     hands.start(this.walker.facing);
@@ -1788,20 +1787,26 @@ export class LevelSantJoan implements Level {
     const pp = this.player.root.position, g = this.gas.root.position;
     cr.hitT -= dt;
     for (const c of cr.cars) {
-      // Frenan un poco si tienen a alguien justo delante (pero no paran: hay que mirar antes de cruzar)
-      const prev = c.root.position.clone();
+      // Al trote, sin parar: hay que mirar antes de cruzar
+      const r = c.d.root;
       c.s += c.v * dt;
-      const h = ringAt(c.s, c.root.position);
-      c.root.rotation.y = h;
-      c.root.position.y = bornHeight(c.root.position.x, c.root.position.z);
-      c.rig.update(dt, dt > 0 ? prev.distanceTo(c.root.position) / dt : 0, 0, 1.2);
+      const h = ringAt(c.s, r.position);
+      r.rotation.y = h;
+      r.position.y = bornHeight(r.position.x, r.position.z);
+      // Las patas, al paso de la velocidad (como los del corro): no patinan
+      c.walk += c.v * dt * 4.4;
+      const w = Math.sin(c.walk) * 0.55;
+      c.d.legs[0].rotation.x = c.d.legs[3].rotation.x = w;
+      c.d.legs[1].rotation.x = c.d.legs[2].rotation.x = -w;
+      c.d.pivot.rotation.x = Math.sin(c.walk * 2) * 0.025;
+      c.d.head.rotation.x = Math.sin(c.walk * 2 + 0.6) * 0.08;
       if (this.phase !== 'cross' || this.busy || cr.hitT > 0) continue;
-      // ¿Os pilla? (en el sistema del coche: 1 m a cada lado y 2,3 m delante y detrás)
+      // ¿Os arrolla? (en el sistema del caballo: medio metro a cada lado y 1,4 m delante y detrás)
       const sin = Math.sin(h), cos = Math.cos(h);
       for (const q of [pp, g]) {
-        const dx = q.x - c.root.position.x, dz = q.z - c.root.position.z;
+        const dx = q.x - r.position.x, dz = q.z - r.position.z;
         const fwd = dx * sin + dz * cos, side = dx * cos - dz * sin;
-        if (Math.abs(fwd) < 2.4 && Math.abs(side) < 1.15) {
+        if (Math.abs(fwd) < 1.5 && Math.abs(side) < 0.75) {
           this.crossHit();
           break;
         }
@@ -1820,7 +1825,7 @@ export class LevelSantJoan implements Level {
     this.walker.shake(0.35);
     audio.hit();
     vibrate([40, 30, 60]);
-    bark('Gas', SANTJOAN.cross.hit[Math.floor(Math.random() * SANTJOAN.cross.hit.length)]);
+    bark('Un caixer', SANTJOAN.cross.hit[Math.floor(Math.random() * SANTJOAN.cross.hit.length)]);
     later(() => {
       if (this.phase !== 'cross') return;
       fadeFlash(() => {
@@ -1841,7 +1846,7 @@ export class LevelSantJoan implements Level {
     audio.luck();
     bark('Gas', SANTJOAN.cross.ok);
     later(() => {
-      for (const c of cr.cars) c.root.removeFromParent();
+      for (const c of cr.cars) c.d.root.removeFromParent();
       cr.hands.stop();
       this.cross = null;
       this.startBe();
@@ -2400,6 +2405,21 @@ export class LevelSantJoan implements Level {
     }
     if (who === 'Taxista') return this.plazaTaxi?.root.visible ? taxiSeat(this.plazaTaxi, who) : null;
     const pp = this.player.root.position;
+    if (who === 'Un caixer' && this.cross) {
+      // Cruzando: el caixer del caballo de la calzada más cercano
+      let best: Donkey | null = null, bd = 1e9;
+      for (const c of this.cross.cars) {
+        const d = c.d.root.position.distanceTo(pp);
+        if (d < bd) {
+          bd = d;
+          best = c.d;
+        }
+      }
+      if (best) {
+        best.pivot.updateWorldMatrix(true, false);
+        return best.pivot.localToWorld(this.v3.set(0, 2.85, 0.7));
+      }
+    }
     if (who === 'Un caixer') {
       let s = this.talker && this.talker.d.root.visible ? this.talker : null;
       if (!s) {
@@ -2463,7 +2483,7 @@ export class LevelSantJoan implements Level {
     this.nuts?.dispose();
     this.nuts = null;
     if (this.cross) {
-      for (const c of this.cross.cars) c.root.removeFromParent();
+      for (const c of this.cross.cars) c.d.root.removeFromParent();
       this.cross.hands.stop();
       this.cross = null;
     }

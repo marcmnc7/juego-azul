@@ -2138,3 +2138,7 @@ html, body { background: #000; }
 /* (nombres largos, como «Una de Ciutadella»: en una línea, sin montarse en el texto del bocadillo) */
 .comic-mode .dialogue .who { white-space: nowrap; }
 .comic-mode .dialogue.speech { padding-top: 16px; }
+/* (el que toca va ampliado ×1,12: su rótulo, más abajo, que la fecha no quede pegada al borde de la baldosa) */
+.mp-node.next .mp-label { margin-top: calc(var(--tile) * .12 + 4px); }
+.mp-node .mp-label { margin-top: 4px; }
+.mp-node.next .mp-label { margin-top: calc(var(--tile) * .12 + 6px); }
