@@ -2049,3 +2049,5 @@ html, body { background: #000; }
 .mp-node .hm-count span { font-size: 10px; margin-right: 4px; }
 .mp-tile.heart { display: grid; place-items: center; font-size: calc(var(--tile) * .5); background: linear-gradient(135deg, #f7d6dc, #e9a7b6); }
 .mp-node.final.locked .mp-tile.heart { filter: grayscale(.6) brightness(.6); }
+.ap-version { text-align: center; opacity: .6; margin-top: 4px; }
+.mp-node.updating .mp-label i { color: var(--warm); }

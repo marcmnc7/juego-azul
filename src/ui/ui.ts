@@ -9,6 +9,8 @@ import { KEEPSAKES, keepsakesFor, QUIZ, TEASERS, type Keepsake } from '../data/e
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
+import { hasChapter, onlineHas, latestInfo, check, onUpdateChange, tryApply } from '../core/updater';
+import { BUILD, READY } from '../core/release';
 import { GATE, openDay, now, faking, daysUntil, longDate, left, MONTHS } from '../core/calendar';
 import cover1 from '../assets/covers/c1.jpg';
 import cover2 from '../assets/covers/c2.jpg';
@@ -618,9 +620,16 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   svg.append(pathOff, pathOn);
   track.append(svg);
   const nodes: HTMLElement[] = [];
+  // Un capítulo que ya toca pero que esta versión no trae: primero se actualiza (core/updater.ts)
+  const allOpen = opts.test && !faking();
+  const gated = (id: number) => !allOpen && !hasChapter(id);
+  const gateText = (id: number) =>
+    onlineHas(id) ? 'Actualizando…' : latestInfo() ? 'Casi listo: vuelve en un rato' : navigator.onLine ? 'Buscando novedades…' : 'Conéctate a internet para abrirlo';
+  const gatedSubs: [number, HTMLElement][] = [];
   states.forEach((c, i) => {
     const show = c.unlocked || c.done;
     const isNext = i === nextI;
+    const gate = show && !c.done && gated(c.lv.id);
     const n = el('button', 'mp-node' + (c.done ? ' done' : show ? ' open' : ' locked') + (isNext ? ' next' : ''));
     const tile = el('div', 'mp-tile');
     const im = el('img') as HTMLImageElement;
@@ -632,7 +641,13 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior';
     const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
     n.append(tile, lab);
-    if (isNext && show) {
+    if (gate) {
+      n.classList.add('updating');
+      const it = lab.querySelector('i')!;
+      it.textContent = gateText(c.lv.id);
+      gatedSubs.push([c.lv.id, it]);
+    }
+    if (isNext && show && !gate) {
       const go = el('span', 'mp-go', 'Jugar');
       go.onclick = (e) => {
         e.stopPropagation();
@@ -641,6 +656,11 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       n.append(go);
     } else if (isNext && c.early) n.append(liveCountdown(c.day));
     n.onclick = () => {
+      if (gate) {
+        void check();
+        toast(gateText(c.lv.id));
+        return;
+      }
       if (!show) {
         n.classList.remove('nope');
         void n.offsetWidth;
@@ -701,6 +721,13 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   };
   requestAnimationFrame(layout);
   window.addEventListener('resize', layout);
+  // Al día: si hay una versión nueva descargada se aplica aquí (en el mapa); si un capítulo espera, se busca ya
+  if (gatedSubs.length) void check();
+  const off = onUpdateChange(() => {
+    if (!wrap.isConnected) return void off();
+    for (const [id, it] of gatedSubs) it.textContent = gateText(id);
+  });
+  tryApply();
 }
 
 /**
@@ -860,6 +887,10 @@ function settingsSheet(opts: MapOptions) {
       };
       b.append(reset, el('p', 'ap-note', 'Modo prueba: cinco toques en «De Gas» en la portada para quitarlo.'));
     }
+    // La versión que tiene (para saber, si algo no cuadra, si está al día)
+    const when = /^\d+$/.test(BUILD) ? new Date(Number(BUILD)) : null;
+    const stamp = when ? `${when.getDate()} ${MONTHS[when.getMonth()].slice(0, 3)}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : BUILD;
+    b.append(el('p', 'ap-note ap-version', `Versión del ${stamp} · capítulos 1 a ${READY}`));
   });
 }
 

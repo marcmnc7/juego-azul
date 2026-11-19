@@ -4,6 +4,7 @@ import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
 import { lastBounds, edgePush, edgePushAt } from './core/walker';
+import { initUpdater } from './core/updater';
 import { dust } from './core/dust';
 import { beacon } from './core/beacon';
 import { physLists } from './core/phys';
@@ -696,9 +697,14 @@ const topLevel = (() => {
   }
 })();
 const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
-if ('serviceWorker' in navigator && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && topLevel && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[pwa]', e));
-}
+// Sin conexión y al día: el service worker y las actualizaciones (core/updater.ts). Se aplican solo fuera de los
+// capítulos (en la portada o el mapa), con el progreso a salvo.
+initUpdater({
+  // (en local, solo con ?sw: para probar las actualizaciones con la compilación)
+  enabled: topLevel && ((!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && location.protocol === 'https:') || new URLSearchParams(location.search).has('sw')),
+  safe: () => !level && !document.querySelector('.chapter-card, .phone-overlay, .dialogue, .wn-screen, .crossword-screen'),
+  toast: (m) => toast(m),
+});
 // En el navegador del móvil no se juega: hay que abrirlo desde la pantalla de inicio (pantalla completa, sin
 // barras, sin conexión). Dentro del artifact, en el ordenador y en modo prueba sí se puede
 const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));

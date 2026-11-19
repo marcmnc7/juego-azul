@@ -1,12 +1,27 @@
-// Para Margaux sin conexión: la primera vez se guarda el juego entero (el HTML y los archivos de assets/:
-// modelos, música, fotos) y después se abre desde el móvil al momento. Cada versión publicada cambia VERSION
-// y se descarga una vez. La lista de assets la rellena la compilación (vite.config.ts).
+// Para Azul sin conexión: la primera vez se guarda el juego entero (el HTML y los archivos de assets/: modelos,
+// música, fotos) y después se abre desde el móvil al momento. Cada versión publicada cambia VERSION y se descarga
+// una vez. La lista de assets la rellena la compilación (vite.config.ts).
+//
+// Actualizar sin romper nada: una versión nueva se descarga entera en segundo plano y ESPERA. No se pone en marcha
+// hasta que el juego se lo pide (mensaje «skip»), y el juego solo lo pide en la portada o en el mapa, nunca a mitad
+// de capítulo (si no, la partida en curso pediría archivos de la versión vieja que ya no estarían). El progreso no
+// vive aquí: va en el localStorage del juego y esto no lo toca.
 const VERSION = '__VERSION__';
 const CACHE = 'margaux-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', '__ASSETS__'].filter((f) => f !== '__ASSETS__');
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => c.addAll(FILES))
+      // La primera vez (no hay ninguna versión funcionando) se pone en marcha directamente
+      .then(() => (self.registration.active ? undefined : self.skipWaiting())),
+  );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -18,6 +33,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  // version.json, siempre a internet: es lo que dice si hay algo más nuevo
+  if (new URL(req.url).pathname.endsWith('/version.json')) return;
   e.respondWith(
     caches.open(CACHE).then(async (c) => {
       const hit = (await c.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? await c.match('./index.html') : null);
