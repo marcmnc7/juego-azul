@@ -14,15 +14,15 @@ export interface LevelInfo {
 }
 
 export const LEVELS: LevelInfo[] = [
-  { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏', how: 'Pasea por la fiesta y habla con la gente. Lleva las pomadas sin que te las tiren y, cuando un burro se pare, acarícialo.' },
-  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 26 de agosto de 2025', emoji: '🌙', how: 'Despídete de tus amigos y cruzad el jardín de sus padres sin hacer ruido: que no se encienda ninguna luz. Luego, piscina y estrellas.' },
-  { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗', how: 'De Madrid a Logroño en coche: esquiva lo que venga, para en el primer restaurante que empiece por M, saluda a las vacas y que no se queme ninguna zamburiña.' },
-  { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸', how: 'En Barajas, encuentra tu puerta mirando las pantallas: nadie te la dirá. En el estadio eres Gas: cervezas, colas del baño, buscar a Azul a oscuras y el ritmo de Fito.' },
-  { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️', how: 'Vas de paquete: échate con Gas en las curvas, saluda a las motos, aguanta la tramontana y haz fotos en cada mirador.' },
-  { id: 6, name: 'Sant Joan', place: 'Ciutadella, junio de 2026', emoji: '🐎', how: 'Busca a Gas por Ciutadella con las ubicaciones que te manda, toca caballos entre la gente y llévatelo a casa a la pata coja.' },
-  { id: 7, name: 'Cena a escondidas', place: 'Sa Farola, 13 de julio de 2026', emoji: '🍝', how: 'Vigila a que tus padres se vayan, ábrele la cancela a Gas y cocinad juntos sin que os pillen.' },
-  { id: 8, name: 'El eclipse', place: 'Ciutadella, 12 de agosto de 2026', emoji: '🌘', how: 'Un día entero con Gas: tus padres, el paseo con Joy y Eric, la cocina y, al final, el eclipse desde las rocas.' },
-  { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙', how: 'Otra vez el jaleo, pero ahora con Gas: sigue sus ubicaciones, pomadas a dos manos y a Sa Font, donde empezó todo.' },
+  { id: 1, name: 'Jaleo d’ases', place: 'Ferreries, 25 de agosto de 2025', emoji: '🫏', how: 'Ferreries está de fiesta. Pasea, habla con la gente y déjate llevar por el jaleo.' },
+  { id: 2, name: 'La piscinita', place: 'Sa Caleta, 26 de agosto de 2025', emoji: '🌙', how: 'Una noche de verano que no quiere acabarse. Esta vez, sin hacer ruido.' },
+  { id: 3, name: 'La ruta de las zamburiñas', place: 'Madrid → Marcial → el camping → San Vicente → Logroño', emoji: '🚗', how: 'Un fin de semana en coche hacia el norte. La carretera tiene sus propias reglas.' },
+  { id: 4, name: 'Fito bajo las estrellas', place: 'Estadio de Gran Canaria, marzo de 2026', emoji: '🎸', how: 'Gran Canaria y Fito. Antes, un aeropuerto donde nadie te va a decir por dónde ir.' },
+  { id: 5, name: 'MotoTrip4life', place: 'Costa Brava, del 30 de abril al 4 de mayo de 2026', emoji: '🏍️', how: 'De paquete por la Costa Brava. Agárrate fuerte y disfruta del camino.' },
+  { id: 6, name: 'Sant Joan', place: 'Ciutadella, junio de 2026', emoji: '🐎', how: 'Sant Joan en Ciutadella: caballos, mucha gente y un Gas al que encontrar.' },
+  { id: 7, name: 'Cena a escondidas', place: 'Sa Farola, 13 de julio de 2026', emoji: '🍝', how: 'Tus padres salen a cenar. Lo demás, ya lo sabes.' },
+  { id: 8, name: 'El eclipse', place: 'Ciutadella, 12 de agosto de 2026', emoji: '🌘', how: 'Un día largo, de los que se recuerdan. No te olvides de mirar al cielo.' },
+  { id: 9, name: 'Un año después', place: 'Ferreries, 25 de agosto de 2026', emoji: '💙', how: 'Un año después, otra vez Ferreries. Como la primera vez, pero no igual.' },
 ];
 
 // Capítulo 1. Els de Ferreries parlen en menorquí; ella, en castellà, i entre ells dos, en castellà.

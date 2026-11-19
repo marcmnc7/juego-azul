@@ -7,12 +7,11 @@
 // - Plan B: si version.json dice que hay algo más nuevo y el navegador no consigue descargarlo (caché atascada, un
 //   service worker que no arranca…), se borra la copia guardada del juego y se recarga de internet. El progreso,
 //   que va en localStorage, no se toca (y antes se copia aparte, por si acaso).
-import { BUILD, READY } from './release';
+import { BUILD } from './release';
 import { backupSave } from './save';
 
 export interface Latest {
   version: string;
-  ready: number;
 }
 
 type Listener = () => void;
@@ -28,10 +27,6 @@ let announce: (msg: string) => void = () => {};
 
 /** Lo último que se sabe de internet (null si aún no se ha mirado o no hay conexión). */
 export const latestInfo = () => latest;
-/** ¿Esta versión trae ya el capítulo n? */
-export const hasChapter = (n: number) => n <= READY;
-/** ¿Hay en internet una versión que sí lo trae? */
-export const onlineHas = (n: number) => !!latest && latest.ready >= n;
 export const updateReady = () => ready;
 export const onUpdateChange = (fn: Listener) => (listeners.add(fn), () => listeners.delete(fn));
 const emit = () => listeners.forEach((f) => f());

@@ -9,8 +9,8 @@ import { KEEPSAKES, keepsakesFor, QUIZ, TEASERS, type Keepsake } from '../data/e
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
-import { hasChapter, onlineHas, latestInfo, check, onUpdateChange, tryApply } from '../core/updater';
-import { BUILD, READY } from '../core/release';
+import { tryApply } from '../core/updater';
+import { BUILD } from '../core/release';
 import { GATE, openDay, now, faking, daysUntil, longDate, left, MONTHS } from '../core/calendar';
 import cover1 from '../assets/covers/c1.jpg';
 import cover2 from '../assets/covers/c2.jpg';
@@ -68,30 +68,23 @@ function testTaps(target: HTMLElement) {
  * barras y sin conexión). Con el modo prueba se puede seguir en el navegador.
  */
 export function installGate(ios: boolean) {
-  clearScreens();
-  const s = el('div', 'screen install-gate');
-  const eyebrow = el('div', 'eyebrow', 'De Gas, para ti');
-  testTaps(eyebrow);
+  // (con la misma portada que la cuenta atrás y la de Empezar: antes era una pantalla del estilo antiguo)
+  const { s, slot } = cover('ig-screen');
   const steps = ios
     ? [
         ['1', 'Toca <b>Compartir</b> <span class="ig-icon">⎋</span> abajo en Safari'],
         ['2', 'Elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span>'],
-        ['3', 'Ábrelo desde el icono del <b>osito</b> 🐻'],
+        ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
       ]
     : [
         ['1', 'Abre el menú <b>⋮</b> del navegador'],
         ['2', 'Elige <b>Añadir a pantalla de inicio</b> o <b>Instalar</b>'],
-        ['3', 'Ábrelo desde el icono del <b>osito</b> 🐻'],
+        ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
       ];
   const list = el('div', 'ig-steps');
   for (const [n, t] of steps) list.append(el('div', 'ig-step', `<span class="ig-n">${n}</span><span>${t}</span>`));
-  s.append(
-    eyebrow,
-    el('h1', 'display', 'Para<br><em>Azul</em>'),
-    el('p', 'lead', 'Este juego se abre desde la pantalla de inicio: así va a pantalla completa y sin barras.'),
-    list,
-    el('p', 'fine', 'Solo hay que hacerlo una vez.'),
-  );
+  slot.append(list);
+  s.append(el('p', 'hm-fine', 'Se abre desde la pantalla de inicio. Solo hay que hacerlo una vez.'));
   root.append(s);
 }
 
@@ -620,16 +613,9 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   svg.append(pathOff, pathOn);
   track.append(svg);
   const nodes: HTMLElement[] = [];
-  // Un capítulo que ya toca pero que esta versión no trae: primero se actualiza (core/updater.ts)
-  const allOpen = opts.test && !faking();
-  const gated = (id: number) => !allOpen && !hasChapter(id);
-  const gateText = (id: number) =>
-    onlineHas(id) ? 'Actualizando…' : latestInfo() ? 'Casi listo: vuelve en un rato' : navigator.onLine ? 'Buscando novedades…' : 'Conéctate a internet para abrirlo';
-  const gatedSubs: [number, HTMLElement][] = [];
   states.forEach((c, i) => {
     const show = c.unlocked || c.done;
     const isNext = i === nextI;
-    const gate = show && !c.done && gated(c.lv.id);
     const n = el('button', 'mp-node' + (c.done ? ' done' : show ? ' open' : ' locked') + (isNext ? ' next' : ''));
     const tile = el('div', 'mp-tile');
     const im = el('img') as HTMLImageElement;
@@ -641,13 +627,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior';
     const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
     n.append(tile, lab);
-    if (gate) {
-      n.classList.add('updating');
-      const it = lab.querySelector('i')!;
-      it.textContent = gateText(c.lv.id);
-      gatedSubs.push([c.lv.id, it]);
-    }
-    if (isNext && show && !gate) {
+    if (isNext && show) {
       const go = el('span', 'mp-go', 'Jugar');
       go.onclick = (e) => {
         e.stopPropagation();
@@ -656,11 +636,6 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       n.append(go);
     } else if (isNext && c.early) n.append(liveCountdown(c.day));
     n.onclick = () => {
-      if (gate) {
-        void check();
-        toast(gateText(c.lv.id));
-        return;
-      }
       if (!show) {
         n.classList.remove('nope');
         void n.offsetWidth;
@@ -682,51 +657,76 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   wrap.append(track);
   body.append(wrap);
 
-  // Dónde va cada parada: en fila, subiendo y bajando, y el camino de puntos por sus centros
+  // Dónde va cada parada. Con el móvil en vertical, el camino baja haciendo eses (de arriba abajo, deslizando hacia
+  // abajo); en horizontal, va de lado subiendo y bajando. El camino de puntos pasa por sus centros.
   const WAVE = [0.62, 0.3, 0.58, 0.26, 0.6, 0.32, 0.56, 0.28, 0.6, 0.38];
+  const SWAY = [0.3, 0.7, 0.32, 0.68, 0.3, 0.7, 0.34, 0.66, 0.3, 0.5];
   const layout = () => {
     if (!wrap.isConnected) return void window.removeEventListener('resize', layout);
-    const H = wrap.clientHeight;
-    const tileH = Math.max(64, Math.min(120, H * 0.27));
-    const gap = tileH * 1.95;
-    const pad = Math.max(90, window.innerWidth * 0.18);
-    track.style.setProperty('--tile', `${tileH}px`);
+    const W = wrap.clientWidth, H = wrap.clientHeight;
+    const tall = H > W * 1.05;
+    wrap.classList.toggle('tall', tall);
     const pts: [number, number][] = [];
-    nodes.forEach((n, i) => {
-      const x = pad + i * gap;
-      const y = 20 + (H - 40 - tileH * 1.9) * WAVE[i] + tileH / 2;
-      n.style.left = `${x}px`;
-      n.style.top = `${y}px`;
-      pts.push([x, y]);
-    });
-    const W = pad * 2 + (nodes.length - 1) * gap;
-    track.style.width = `${W}px`;
-    svg.setAttribute('width', String(W));
-    svg.setAttribute('height', String(H));
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    let TW: number, TH: number;
+    if (tall) {
+      const tileH = Math.max(80, Math.min(130, W * 0.3));
+      const gap = tileH * 2.25;
+      const pad = tileH * 0.9 + 10;
+      track.style.setProperty('--tile', `${tileH}px`);
+      nodes.forEach((n, i) => {
+        const x = W * SWAY[i], y = pad + i * gap;
+        n.style.left = `${x}px`;
+        n.style.top = `${y}px`;
+        pts.push([x, y]);
+      });
+      TW = W;
+      TH = pad * 2 + (nodes.length - 1) * gap + tileH;
+      track.style.width = '';
+      track.style.height = `${TH}px`;
+    } else {
+      const tileH = Math.max(64, Math.min(120, H * 0.27));
+      const gap = tileH * 1.95;
+      const pad = Math.max(90, W * 0.18);
+      track.style.setProperty('--tile', `${tileH}px`);
+      nodes.forEach((n, i) => {
+        const x = pad + i * gap;
+        const y = 20 + (H - 40 - tileH * 1.9) * WAVE[i] + tileH / 2;
+        n.style.left = `${x}px`;
+        n.style.top = `${y}px`;
+        pts.push([x, y]);
+      });
+      TW = pad * 2 + (nodes.length - 1) * gap;
+      TH = H;
+      track.style.width = `${TW}px`;
+      track.style.height = '';
+    }
+    svg.setAttribute('width', String(TW));
+    svg.setAttribute('height', String(TH));
+    svg.setAttribute('viewBox', `0 0 ${TW} ${TH}`);
     const seg = (from: number, to: number) => {
       let d = `M ${pts[from][0]} ${pts[from][1]}`;
       for (let i = from + 1; i <= to; i++) {
         const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
-        const mx = (x0 + x1) / 2;
-        d += ` C ${mx} ${y0}, ${mx} ${y1}, ${x1} ${y1}`;
+        if (tall) {
+          const my = (y0 + y1) / 2;
+          d += ` C ${x0} ${my}, ${x1} ${my}, ${x1} ${y1}`;
+        } else {
+          const mx = (x0 + x1) / 2;
+          d += ` C ${mx} ${y0}, ${mx} ${y1}, ${x1} ${y1}`;
+        }
       }
       return d;
     };
     const lit = Math.min(nodes.length - 1, Math.max(0, nextI));
     pathOff.setAttribute('d', seg(0, nodes.length - 1));
     pathOn.setAttribute('d', lit > 0 ? seg(0, lit) : '');
-    const focus = pts[Math.min(nodes.length - 1, Math.max(0, nextI))];
-    wrap.scrollLeft = Math.max(0, focus[0] - window.innerWidth / 2);
+    const focus = pts[lit];
+    if (tall) wrap.scrollTop = Math.max(0, focus[1] - H * 0.45);
+    else wrap.scrollLeft = Math.max(0, focus[0] - W / 2);
   };
   requestAnimationFrame(layout);
   window.addEventListener('resize', layout);
-  // Al día: si hay una versión nueva descargada se aplica aquí (en el mapa); si un capítulo espera, se busca ya
-  if (gatedSubs.length) void check();
-  const off = onUpdateChange(() => {
-    if (!wrap.isConnected) return void off();
-    for (const [id, it] of gatedSubs) it.textContent = gateText(id);
-  });
+  // Al día: si hay una versión nueva descargada, se aplica aquí (en el mapa)
   tryApply();
 }
 
@@ -753,7 +753,7 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
   const body = el('main', 'cp-body');
   // Cómo se juega (una frase, la de cada capítulo) y, debajo, lo que se lleva. La frase va arriba: abajo quedaba
   // tapada por el botón de Jugar en el móvil apaisado
-  if (!doneIt) body.append(el('div', 'cp-kicker', 'Cómo se juega'), el('p', 'cp-how', lv.how));
+  if (!doneIt) body.append(el('div', 'cp-kicker', 'De qué va'), el('p', 'cp-how', lv.how));
   body.append(el('div', 'cp-kicker', doneIt ? 'Lo que te llevaste' : 'Lo que te llevas'));
   const list = el('div', 'cp-list');
   const item = (icon: string, title: string, sub: string, cls = '') => {
@@ -890,7 +890,7 @@ function settingsSheet(opts: MapOptions) {
     // La versión que tiene (para saber, si algo no cuadra, si está al día)
     const when = /^\d+$/.test(BUILD) ? new Date(Number(BUILD)) : null;
     const stamp = when ? `${when.getDate()} ${MONTHS[when.getMonth()].slice(0, 3)}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : BUILD;
-    b.append(el('p', 'ap-note ap-version', `Versión del ${stamp} · capítulos 1 a ${READY}`));
+    b.append(el('p', 'ap-note ap-version', `Versión del ${stamp}`));
   });
 }
 
