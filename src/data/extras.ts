@@ -132,6 +132,8 @@ export const QUIZ: Record<string, string[]> = {
   'Quizas me escondes muy bien': ['Quizás les dio igual', 'Quizás no miran'],
   'Si, y por eso imposible de olvidar 🤍': ['Alguna, sí', 'Eso me lo enseñaste tú'],
   // 7
+  'Bueno dejame hablar con mis padres entender la dinamica': ['Ven ya y punto', 'Mis padres no salen nunca'],
+  'Carbonara muy pesada': ['Carbonara, obvio', 'Pizza congelada y ya'],
   'Nooo': ['Vale, ven', 'Trae vino'],
   'Que dices': ['Buena idea', 'Tengo chorizo'],
   'Que hace mi padre top': ['Se ha olvidado la cartera', 'Mi madre no encuentra las llaves'],

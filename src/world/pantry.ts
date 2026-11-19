@@ -1,6 +1,7 @@
 // Capítulo 7: antes de cocinar hay que reunir los ingredientes por el patio (paso nuevo, [inventado]).
 // Tres sitios: la cesta del taburete junto a la cocina (huevos y espaguetis), el pecorino en su tabla sobre la mesa
-// del jardín y la nevera de playa de la esquina, donde hay que elegir entre guanciale, bacon y nata (el chiste del chat).
+// del jardín y la nevera de dentro de casa (se entra por la puerta de abajo), donde hay que elegir entre guanciale,
+// bacon y nata (el chiste del chat).
 import * as THREE from 'three';
 import { G, Merger } from '../entities/models';
 import { toon } from '../core/gfx';
@@ -17,6 +18,9 @@ interface Spot {
 }
 
 const uiRoot = () => document.getElementById('ui')!;
+/** La cocina de dentro (decorado apartado bajo el mundo) y, fuera, delante de la puerta de abajo, donde se entra. */
+const ROOM = new THREE.Vector3(0, -40, -4);
+const FRIDGE_DOOR = new THREE.Vector3(0, 0, 1.0);
 
 export class Pantry {
   readonly spots: Spot[] = [];
@@ -85,24 +89,40 @@ export class Pantry {
     sc.add(cheese);
     this.spots.push({ key: 'queso', at: new THREE.Vector3(table.x - 0.25, 0, table.z + 0.18), obj: cheese, done: false, k: 1 });
 
-    // La nevera de playa, bajo la pérgola, detrás de la mesa: caja azul, tapa blanca con asa; dentro, tres paquetes
+    // La nevera, dentro de casa: se entra por la puerta de abajo (la del porche) a la cocina de dentro. La cocina es un
+    // decorado propio, apartado bajo el suelo del mundo (ROOM): al entrar, la cámara se va allí. Nevera blanca alta
+    // contra la pared, con su puerta que se abre; dentro, la luz y los tres paquetes en el estante del medio.
+    const room = new THREE.Group();
+    const rm = new Merger(false);
+    rm.add(G.box, 0xcfc3ad, 0, -0.05, 0, 0, 0, 0, 4.2, 0.1, 3.6); // suelo de baldosa
+    rm.add(G.box, 0xf3eee4, 0, 1.4, -1.8, 0, 0, 0, 4.2, 2.8, 0.1); // pared del fondo
+    for (const sx of [-2.1, 2.1]) rm.add(G.box, 0xefe9de, sx, 1.4, 0, 0, 0, 0, 0.1, 2.8, 3.6);
+    rm.add(G.box, 0xf6f2ea, 0, 2.82, 0, 0, 0, 0, 4.2, 0.08, 3.6); // techo
+    rm.add(G.box, 0x8a6a44, 1.25, 0.45, -1.45, 0, 0, 0, 1.4, 0.9, 0.6); // encimera
+    rm.add(G.box, 0x6b5238, 1.25, 0.92, -1.45, 0, 0, 0, 1.45, 0.05, 0.62);
+    rm.add(G.box, 0x2f6b3a, -1.4, 1.6, -1.74, 0, 0, 0, 0.6, 0.45, 0.02); // un cuadro
+    // La nevera, hueca (la boca hacia la habitación, en z = -1,07): fondo, laterales, techo, suelo y estantes
+    const FW = 0xf4f4f2;
+    rm.add(G.box, FW, 0, 0.9, -1.66, 0, 0, 0, 0.72, 1.8, 0.04); // fondo
+    for (const sx of [-0.34, 0.34]) rm.add(G.box, FW, sx, 0.9, -1.37, 0, 0, 0, 0.04, 1.8, 0.62);
+    rm.add(G.box, FW, 0, 1.78, -1.37, 0, 0, 0, 0.72, 0.04, 0.62);
+    rm.add(G.box, FW, 0, 0.06, -1.37, 0, 0, 0, 0.72, 0.12, 0.62);
+    for (const y of [0.5, 0.92, 1.34]) rm.add(G.box, 0xd8e2ea, 0, y, -1.38, 0, 0, 0, 0.62, 0.015, 0.54);
+    room.add(rm.mesh());
+    // La luz de dentro, al fondo
+    const fridgeLight = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.6), new THREE.MeshBasicMaterial({ color: 0xeaf6ff }));
+    fridgeLight.position.set(0, 0.95, -1.635);
+    room.add(fridgeLight);
+    // La puerta de la nevera (bisagra a la izquierda): se abre hacia fuera
+    const dm = new Merger(false);
+    dm.add(G.rbox, 0xf7f7f5, 0.36, 0, 0, 0, 0, 0, 0.72, 1.78, 0.06);
+    dm.add(G.box, 0xb8bcc0, 0.64, 0.25, 0.045, 0, 0, 0, 0.03, 0.5, 0.03); // tirador
+    this.lid.add(dm.mesh());
+    this.lid.position.set(-0.36, 0.9, -1.04);
+    room.add(this.lid);
     const cooler = new THREE.Group();
-    const cm = new Merger(false);
-    cm.add(G.rbox, 0x2f78c4, 0, 0.21, 0, 0, 0, 0, 0.62, 0.42, 0.4);
-    cm.add(G.box, 0xf4f4f2, 0, 0.36, 0.201, 0, 0, 0, 0.5, 0.05, 0.004); // franja blanca
-    cm.add(G.box, 0x1e1e22, -0.33, 0.3, 0, 0, 0, 0, 0.04, 0.08, 0.12); // bisagras del asa
-    cm.add(G.box, 0x1e1e22, 0.33, 0.3, 0, 0, 0, 0, 0.04, 0.08, 0.12);
-    cooler.add(cm.mesh());
-    // El interior, claro: se ve al levantar la tapa
-    const liner = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.004, 0.32), toon({ color: 0xdfe7ee }));
-    liner.position.y = 0.423;
-    cooler.add(liner);
-    const lm = new Merger(false);
-    lm.add(G.rbox, 0xf4f4f2, 0, 0.03, 0.2, 0, 0, 0, 0.64, 0.06, 0.42);
-    lm.add(G.box, 0x2f78c4, 0, 0.07, 0.2, 0, 0, 0, 0.34, 0.03, 0.09);
-    this.lid.add(lm.mesh());
-    this.lid.position.set(0, 0.42, -0.2); // bisagra atrás
-    cooler.add(this.lid);
+    cooler.add(room);
+    cooler.position.copy(ROOM);
     const packDefs: [CoolerPick, number, number, string][] = [
       ['guanciale', 0xe9b9a6, -0.19, 'Guanciale'],
       ['bacon', 0xd9726a, 0, 'Bacon'],
@@ -124,7 +144,7 @@ export class Pantry {
         p.add(G.box, 0xf6efe6, 0.01, 0.09, 0, 0, 0.2, 0, 0.11, 0.008, 0.03);
       }
       const obj = p.mesh();
-      obj.position.set(x, 0.39, 0.03);
+      obj.position.set(x * 1.25, 0.93, -1.36);
       obj.visible = false;
       cooler.add(obj);
       const btn = document.createElement('button');
@@ -136,15 +156,10 @@ export class Pantry {
       uiRoot().append(btn);
       this.packs.push({ key, obj, btn });
     }
-    const cx = 4.4, cz = 3.6;
-    cooler.position.set(cx, 0, cz);
-    cooler.rotation.y = -1.26; // la boca, hacia el patio
     sc.add(cooler);
-    this.spots.push({ key: 'nevera', at: new THREE.Vector3(cx, 0, cz), obj: cooler, done: false, k: 1 });
-    this.cooler = cooler;
+    // (en el patio, el sitio es la puerta de abajo: ahí se entra)
+    this.spots.push({ key: 'nevera', at: FRIDGE_DOOR.clone(), obj: cooler, done: false, k: 1 });
   }
-
-  private cooler: THREE.Group;
 
   get count() {
     return this.spots.filter((s) => s.done).length;
@@ -159,7 +174,7 @@ export class Pantry {
       s.obj.visible = !done || s.key === 'nevera';
       s.obj.scale.setScalar(1);
     }
-    this.lid.rotation.x = 0;
+    this.lid.rotation.y = 0;
     this.open = 0;
   }
 
@@ -224,25 +239,23 @@ export class Pantry {
     return this.opening;
   }
 
-  /** Para la cámara al elegir: por encima del hombro de Azul, que está delante de la nevera, mirando dentro. */
+  /** Para la cámara al elegir: dentro, delante de la nevera abierta, mirando los tres paquetes. */
   coolerCam(pos: THREE.Vector3, look: THREE.Vector3) {
-    const c = this.cooler.position, a = this.cooler.rotation.y;
-    pos.set(c.x + Math.sin(a) * 0.95 + Math.cos(a) * 0.7, 1.55, c.z + Math.cos(a) * 0.95 - Math.sin(a) * 0.7);
-    look.set(c.x - Math.cos(a) * 0.05, 0.36, c.z + Math.sin(a) * 0.05);
+    pos.copy(ROOM).add(this.v.set(0.12, 1.32, -0.3));
+    look.copy(ROOM).add(this.v.set(0, 0.9, -1.38));
   }
 
-  /** Dónde se pone Azul para abrirla, y hacia dónde mira (yaw). */
+  /** Dónde se pone Azul para entrar (delante de la puerta de abajo), y hacia dónde mira (yaw). */
   coolerStand(out: THREE.Vector3) {
-    const c = this.cooler.position, a = this.cooler.rotation.y;
-    out.set(c.x + Math.sin(a) * 0.62 - Math.cos(a) * 0.5, 0, c.z + Math.cos(a) * 0.62 + Math.sin(a) * 0.5);
-    return a + Math.PI - 0.6;
+    out.copy(FRIDGE_DOOR);
+    return Math.PI;
   }
 
   update(dt: number, camera: THREE.Camera) {
     // La tapa se abre o se cierra
     const goal = this.opening ? 1 : 0;
     this.open += (goal - this.open) * Math.min(1, dt * 7);
-    this.lid.rotation.x = -this.open * 1.9;
+    this.lid.rotation.y = -this.open * 1.75;
     if (!this.opening && this.open < 0.05) for (const p of this.packs) p.obj.visible = false;
     // Lo recogido encoge de un salto y desaparece (la nevera se queda)
     for (const s of this.spots) {

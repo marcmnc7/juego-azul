@@ -21,7 +21,6 @@ import { Particles } from '../entities/fx';
 import { buildSaFarola, COAST_Z } from './saFarola';
 import { buildSurroundings } from './surround';
 import { hud, dialogue, bark, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
-import { radar } from '../ui/minis';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
@@ -48,8 +47,49 @@ export const GATE = new THREE.Vector3(0, 0, 10.2);
 export const DOOR = new THREE.Vector3(0, 0, 0.4);
 /** La puerta de verdad de casa de Azul: arriba, en la terraza del primer piso, al final de la escalera blanca. */
 export const UP_DOOR = new THREE.Vector3(4.3, 3.22, -1.2);
+
+// La escalera blanca de casa de Azul (la de buildAzulHouse): 10 peldaños de 30 cm pegados a la fachada, de x = 1,75
+// a 4,75 (z de 0,05 a 1,05); el rellano, hasta x = 5; y arriba, la terraza del primer piso con la puerta de casa.
+export const STAIR_Z = 0.72;
+export const STAIR_PATH: [number, number][] = [[1.75, STAIR_Z], [4.85, STAIR_Z], [4.85, 0.1], [4.6, -0.45]];
+export const TERRACE = { minX: 0.95, maxX: 4.85, minZ: -0.85, maxZ: 0.02 };
+export const TERRACE_Y = UP_DOOR.y;
+const treadTop = (k: number) => (k < 0 ? 0 : k > 9 ? 3.2 : (k + 1) * 0.3 + 0.04);
+/** La altura del suelo en la escalera (los pies, sobre la huella; el salto, al empezar cada peldaño). */
+export function stairY(x: number, z: number) {
+  if (z < 0.17) return x > 0.8 ? TERRACE_Y : 0;
+  if (x < 1.75) return 0;
+  if (x >= 4.7) return THREE.MathUtils.lerp(3.04, 3.2, THREE.MathUtils.smoothstep(x, 4.7, 4.8));
+  const u = (x - 1.75) / 0.3, k = Math.floor(u);
+  return THREE.MathUtils.lerp(treadTop(k - 1), treadTop(k), THREE.MathUtils.smoothstep(u - k, 0, 0.28));
+}
+export const pathLen = (path: [number, number][]) => path.slice(1).reduce((a, [x, z], i) => a + Math.hypot(x - path[i][0], z - path[i][1]), 0);
+/** Un punto de un camino (el de la escalera), a `d` metros del principio; devuelve hacia dónde mira. */
+export function stairAt(path: [number, number][], d: number, out: THREE.Vector3) {
+  let rest = Math.max(0, d);
+  for (let i = 1; i < path.length; i++) {
+    const [ax, az] = path[i - 1], [bx, bz] = path[i];
+    const L = Math.hypot(bx - ax, bz - az) || 1e-6;
+    if (rest <= L || i === path.length - 1) {
+      const k = Math.min(1, rest / L);
+      out.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
+      out.y = stairY(out.x, out.z);
+      return Math.atan2(bx - ax, bz - az);
+    }
+    rest -= L;
+  }
+  return 0;
+}
+
+
 const STOVE = new THREE.Vector3(-3.1, 0, 2.3);
-const TABLE = new THREE.Vector3(2.6, 0, 5.2);
+/**
+ * La mesa del patio: rectangular, de madera, con el lado largo pegado a la pared de la derecha. Contra la pared, un
+ * banco blanco de obra; enfrente, dos sillas. Cenan uno delante del otro, en la mitad de la mesa que da a la casa.
+ */
+const TABLE = new THREE.Vector3(3.87, 0, 5.2);
+/** A qué altura de la mesa (z) se sientan los dos: en la silla de delante de la casa y en el banco, enfrente. */
+const SEAT_Z = TABLE.z - 0.42;
 const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
 /** Junto a la cancela, por dentro (donde ella le abre a Gas y se despiden). */
 const GATE_IN = new THREE.Vector3(0, 0, 9.35);
@@ -60,10 +100,12 @@ const SWITCH_AT = new THREE.Vector3(-1.4, 0, 0.75);
 const PARENT_CAR_X = -4.5;
 /** Aparcado en el lado del valle, mirando al pueblo (+x), con sitio para que la madre abra su puerta. */
 const PARK_Z = 14.95;
-/** Gas aparca «más adelante» (como ella le pidió a las 20:58), junto al muro del vecino: no delante de casa. */
-const MOTO_PARK = new THREE.Vector3(13.4, 0, 11.15);
+/** Gas aparca un poco más adelante (como ella le pidió a las 20:58), pero cerca: a unos pasos de la cancela. */
+const MOTO_PARK = new THREE.Vector3(6.6, 0, 11.15);
 /** Por dónde se baja y se sube (el lado izquierdo de la moto, que mira a -x). */
-const MOTO_SIDE = new THREE.Vector3(13.5, 0, 11.8);
+const MOTO_SIDE = new THREE.Vector3(6.7, 0, 11.8);
+/** El casco, encima del asiento de la moto aparcada (en el sistema de la moto). */
+const HELMET_ON_SEAT = new THREE.Vector3(0, 1.0, -0.32);
 /** Donde deja el casco al entrar: en el suelo, junto al escúter. */
 const HELMET_SPOT = new THREE.Vector3(-1.95, 0, 7.75);
 /** Donde lo esconde ella con el susto: entre el contenedor y el muro. */
@@ -174,7 +216,7 @@ class Drive {
   }
 }
 
-type HelmetAt = 'rider' | 'gas' | 'ground' | 'hidden' | 'azul';
+type HelmetAt = 'rider' | 'gas' | 'ground' | 'hidden' | 'azul' | 'moto';
 
 export class LevelCena implements Level {
   private scene = new THREE.Scene();
@@ -219,6 +261,11 @@ export class LevelCena implements Level {
   private steam: THREE.Sprite[];
   private helmet: THREE.Group;
   private helmetAt: HelmetAt = 'rider';
+  /** Dentro de casa, en la nevera (la cámara se queda en la cocina de dentro hasta que sale). */
+  private inFridge = false;
+  /** A dormir: subiendo la escalera blanca (metros recorridos y el camino), hasta la puerta de arriba. */
+  private bedClimb: { d: number; path: [number, number][] } | null = null;
+  private bedLook = new THREE.Vector3();
   private helmetBox: Box2 = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, low: true, round: true };
   private phone: THREE.Mesh;
   private dinnerPlates: THREE.Mesh;
@@ -294,7 +341,7 @@ export class LevelCena implements Level {
 
     const place = buildAzulHouse(sc, this.colliders);
     this.place = place;
-    this.doors = [place.gate, place.door];
+    this.doors = [place.gate, place.door, place.upDoor];
     this.pan = place.pan;
     this.pantry = new Pantry(sc, STOVE, TABLE);
     for (let i = 0; i < 11; i++) {
@@ -319,18 +366,19 @@ export class LevelCena implements Level {
       const mat = (o as THREE.Mesh).material as THREE.ShaderMaterial | undefined;
       if (mat?.isShaderMaterial && mat.uniforms?.uNight) this.seas.push(mat);
     });
-    this.decor = new TableDecor(sc, TABLE, 0.795);
+    this.decor = new TableDecor(sc, TABLE, 0.78);
     this.decor.show(this.photo);
     // Los platos de la cena, con la carbonara (salen al sentarse; con el susto, fuera)
     {
       const plates = new Merger(false);
-      for (const dx of [-0.34, 0.34]) {
+      // (dentro de la mesa, de 90 cm: los cubiertos ya no asoman por el borde)
+      for (const dx of [-0.25, 0.25]) {
         plates.add(new THREE.CylinderGeometry(0.13, 0.1, 0.02, 20), 0xfbf7ee, dx, 0.01, 0);
         plates.add(new THREE.CylinderGeometry(0.09, 0.09, 0.016, 16), 0xe8c978, dx, 0.024, 0);
-        plates.add(G.box, 0xc8ccd0, dx + (dx < 0 ? -0.17 : 0.17), 0.003, 0.02, 0, 0, 0, 0.02, 0.006, 0.17);
+        plates.add(G.box, 0xc8ccd0, dx, 0.003, 0.2, 0, 0, 0, 0.02, 0.006, 0.17);
       }
       this.dinnerPlates = plates.mesh();
-      this.dinnerPlates.position.set(TABLE.x, 0.795, TABLE.z);
+      this.dinnerPlates.position.set(TABLE.x, 0.78, SEAT_Z);
       this.dinnerPlates.userData.comicBent = true;
       this.dinnerPlates.visible = false;
       sc.add(this.dinnerPlates);
@@ -350,7 +398,7 @@ export class LevelCena implements Level {
     // El móvil en la mano mientras vigila y le escribe a Gas
     this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.14, 0.01), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xdfe8ff, emissiveIntensity: 0.6 }));
     this.phone.rotation.x = -Math.PI / 2;
-    // (el radar y los chats del principio, también en el móvil)
+    // (los chats del principio, también en el móvil)
     this.phone.visible = true;
     this.player.handR.add(this.phone);
 
@@ -405,9 +453,14 @@ export class LevelCena implements Level {
     this.camera.lookAt(this.camLook);
     later(() => {
       if (this.phase !== 'intro') return;
-      // 9 de julio: antes de la cena, Azul sigue el vuelo de Gas en el radar
-      dialogue(CENA.radarIntro, () =>
-        radar(() => dialogue(CENA.intro, () => phoneChat([CHATS.cenaMenu, CHATS.cenaEspera], () => this.phase === 'intro' && this.startWait()))),
+      // Todo el 13 de julio (antes, el radar del vuelo del día 9: demasiado lejos): por la tarde el plan, a las 19:43
+      // el menú y, al caer el sol, la espera
+      dialogue(CENA.dayIntro, () =>
+        phoneChat(CHATS.cenaPlan, () =>
+          dialogue(CENA.menuIntro, () =>
+            phoneChat(CHATS.cenaMenu, () => dialogue(CENA.intro, () => phoneChat(CHATS.cenaEspera, () => this.phase === 'intro' && this.startWait()))),
+          ),
+        ),
       );
     }, 2300);
     audio.startMusic('night');
@@ -590,7 +643,7 @@ export class LevelCena implements Level {
     if (this.moto.rider) this.moto.rider.root.visible = true;
     this.helmetAt = 'rider';
     this.motoDrive = new Drive(
-      [new THREE.Vector3(64, 0, 12.4), new THREE.Vector3(40, 0, 12.3), new THREE.Vector3(24, 0, 12.0), new THREE.Vector3(16.5, 0, 11.5), new THREE.Vector3(15.0, 0, 11.2), MOTO_PARK.clone()],
+      [new THREE.Vector3(64, 0, 12.4), new THREE.Vector3(40, 0, 12.3), new THREE.Vector3(20, 0, 12.0), new THREE.Vector3(9.7, 0, 11.5), new THREE.Vector3(8.2, 0, 11.2), MOTO_PARK.clone()],
       8,
       { vmax: 9, brake: 3.2, stop: true },
     );
@@ -606,8 +659,9 @@ export class LevelCena implements Level {
     this.gas.root.visible = true;
     this.gas.root.position.copy(MOTO_SIDE);
     this.gas.root.rotation.y = -Math.PI / 2;
-    this.helmetAt = 'gas';
-    this.gasWalk = [new THREE.Vector3(11.5, 0, 11.75), new THREE.Vector3(2.2, 0, 11.6), GATE_OUT.clone()];
+    // (el casco se queda encima de la moto: va a la cancela con las manos libres)
+    this.setHelmet('moto');
+    this.gasWalk = [new THREE.Vector3(4.9, 0, 11.75), new THREE.Vector3(2.2, 0, 11.6), GATE_OUT.clone()];
     this.gasAtGate = false;
     this.letIn = false;
     this.gateT = 0;
@@ -656,7 +710,7 @@ export class LevelCena implements Level {
     later(() => this.phase === 'toKitchen' && bark('Gas', CENA.pantryDone), 1400);
   }
 
-  /** La nevera de playa: se abre y se elige (el guanciale; el bacon y la nata, no). */
+  /** La nevera de dentro: entra por la puerta de abajo, la abre y elige (el guanciale; el bacon y la nata, no). */
   private openCooler() {
     this.busy = true;
     this.walker.stop();
@@ -664,26 +718,45 @@ export class LevelCena implements Level {
     this.player.root.rotation.y = yaw;
     this.walker.facing = yaw;
     this.hud.setAction(null);
-    audio.pop();
-    this.pantry.openCooler((p: CoolerPick) => {
-      if (p === 'guanciale') {
-        this.pantry.closeCooler();
-        this.pantry.take('nevera');
-        audio.pickup();
-        vibrate(20);
-        bark('Margaux', CENA.pantry.nevera);
-        this.pantryT = 0;
-        later(() => {
-          this.busy = false;
-          this.gotAll();
-        }, 600);
-      } else {
-        audio.boo();
-        vibrate([30, 30]);
-        this.pantry.shake(p);
-        bark('Margaux', p === 'bacon' ? CENA.pantryBacon : CENA.pantryNata);
-      }
-    });
+    this.place.door.hold(2.5);
+    later(() => {
+      fadeFlash(() => {
+        // Dentro: Azul ya no se ve en el patio; la cámara, en la cocina, delante de la nevera
+        this.player.root.visible = false;
+        this.inFridge = true;
+        this.pantry.coolerCam(this.v1, this.v2);
+        this.camera.position.copy(this.v1);
+        this.camLook.copy(this.v2);
+        audio.pop();
+        this.pantry.openCooler((p: CoolerPick) => {
+          if (p === 'guanciale') {
+            this.pantry.closeCooler();
+            this.pantry.take('nevera');
+            audio.pickup();
+            vibrate(20);
+            bark('Margaux', CENA.pantry.nevera);
+            this.pantryT = 0;
+            later(() => {
+              this.place.door.hold(2);
+              fadeFlash(() => {
+                // Sale por la misma puerta, al porche
+                this.player.root.visible = true;
+                this.inFridge = false;
+                this.player.root.position.set(0.2, 0, 1.25);
+                this.walker.facing = this.walker.yaw = 0;
+                this.busy = false;
+                this.gotAll();
+              }, 250);
+            }, 700);
+          } else {
+            audio.boo();
+            vibrate([30, 30]);
+            this.pantry.shake(p);
+            bark('Margaux', p === 'bacon' ? CENA.pantryBacon : CENA.pantryNata);
+          }
+        });
+      }, 250);
+    }, 450);
   }
 
   private startCook() {
@@ -781,7 +854,7 @@ export class LevelCena implements Level {
       this.gateT = 0;
       this.setClock(T(21, 40));
       // Rodea la mesa por detrás (en línea recta la cruzaba por el medio) y espera de pie junto a su silla
-      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(TABLE.x + 1.65, 0, 3.9), new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.2)];
+      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(TABLE.x - 0.4, 0, TABLE.z - 1.3), new THREE.Vector3(TABLE.x + 0.75, 0, TABLE.z - 1.15)];
     }, 1800);
   }
 
@@ -812,10 +885,11 @@ export class LevelCena implements Level {
   }
 
   private seatBoth() {
-    this.player.root.position.set(TABLE.x - 0.95, seatedRootY(this.player, 0.48), TABLE.z);
+    // Ella en la silla; él en el banco, enfrente (el cojín está a 50 cm)
+    this.player.root.position.set(TABLE.x - 0.93, seatedRootY(this.player, 0.48), SEAT_Z);
     this.player.root.rotation.y = Math.PI / 2;
     this.gas.root.visible = true;
-    this.gas.root.position.set(TABLE.x + 0.95, seatedRootY(this.gas, 0.48), TABLE.z);
+    this.gas.root.position.set(TABLE.x + 0.9, seatedRootY(this.gas, 0.5), SEAT_Z);
     this.gas.root.rotation.y = -Math.PI / 2;
     this.gasWalk = [];
     // La cena servida; las cosas de la mesa, apartadas para los platos (luego habrá que dejarlas como en la foto)
@@ -834,14 +908,13 @@ export class LevelCena implements Level {
     this.alarmT = ALARM_SECS;
     this.tidied = 0;
     // De pie de un salto, cada uno a un lado de la mesa
-    this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
-    this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
+    this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
+    this.player.root.position.set(TABLE.x - 1.5, 0, SEAT_Z);
     this.walker.stop();
     this.walker.facing = this.walker.yaw = Math.PI;
     this.alarmItems = [
       { key: 'plates', at: TABLE.clone(), done: false },
       { key: 'pan', at: STOVE.clone(), done: false },
-      { key: 'helmet', at: HELMET_SPOT.clone(), done: false },
     ];
     // El coche que llega por la calle, muy despacio, con los faros encendidos
     this.neighborDrive = null;
@@ -867,7 +940,7 @@ export class LevelCena implements Level {
     this.hud.setAction(null);
     this.hud.setArrow(null);
     beacon.at(null);
-    const late = this.tidied < 3;
+    const late = this.tidied < this.alarmItems.length;
     if (late) this.scares++;
     // El coche sigue calle abajo y aparca delante de su casa
     const c = this.neighbor.root.position;
@@ -897,7 +970,7 @@ export class LevelCena implements Level {
         this.updateHud();
       }
     }
-    if (this.tidied >= 3 || this.alarmT <= 0) this.endAlarm();
+    if (this.tidied >= this.alarmItems.length || this.alarmT <= 0) this.endAlarm();
   }
 
   /** El coche del vecino: con el susto avanza con la cuenta atrás (llega a la cancela al acabarse); luego sigue y aparca. */
@@ -925,7 +998,7 @@ export class LevelCena implements Level {
     }
   }
 
-  /** Antes de irse, su casco: ella sabe dónde está (en el suelo o donde lo escondió). */
+  /** Se va: ella le acompaña a la cancela para despedirse (el casco le espera encima de la moto). */
   private startSeeOff() {
     this.phase = 'seeOff';
     this.busy = false;
@@ -933,13 +1006,12 @@ export class LevelCena implements Level {
     this.gateT = 0;
     this.setClock(T(22, 48));
     this.gas.root.visible = true;
-    this.gasWalk = [new THREE.Vector3(TABLE.x + 1.6, 0, TABLE.z + 1.4), new THREE.Vector3(1.0, 0, 8.6)];
-    later(() => this.phase === 'seeOff' && this.helmetAt !== 'azul' && bark('Gas', CENA.helmetAsk), 900);
+    this.gasWalk = [new THREE.Vector3(TABLE.x + 0.4, 0, TABLE.z - 1.3), new THREE.Vector3(1.6, 0, 6.9), new THREE.Vector3(1.0, 0, 8.6)];
+    later(() => this.phase === 'seeOff' && bark('Gas', CENA.helmetAsk), 900);
   }
 
-  /** Le da el casco: él sale, se lo pone en la moto y se va. */
+  /** Se despiden en la cancela: él sale, coge el casco de encima de la moto, se lo pone y se va. */
   private giveHelmet() {
-    this.setHelmet('gas');
     this.phase = 'gasRide';
     this.busy = true;
     this.hud.setAction(null);
@@ -949,7 +1021,7 @@ export class LevelCena implements Level {
     audio.pop();
     this.setClock(T(22, 50));
     this.place.gate.hold(3);
-    this.gasWalk = [new THREE.Vector3(0.3, 0, 9.4), GATE_OUT.clone(), new THREE.Vector3(2.2, 0, 11.6), new THREE.Vector3(11.5, 0, 11.75), MOTO_SIDE.clone()];
+    this.gasWalk = [new THREE.Vector3(0.3, 0, 9.4), GATE_OUT.clone(), new THREE.Vector3(2.2, 0, 11.6), new THREE.Vector3(4.9, 0, 11.75), MOTO_SIDE.clone()];
     this.mountT = -1;
   }
 
@@ -969,7 +1041,7 @@ export class LevelCena implements Level {
     if (this.mountT < 0.9) return;
     if (!this.motoDrive)
       this.motoDrive = new Drive(
-        [MOTO_PARK.clone(), new THREE.Vector3(12.3, 0, 11.2), new THREE.Vector3(11.4, 0, 11.55), new THREE.Vector3(10.6, 0, 12.3), new THREE.Vector3(10.4, 0, 13.6), new THREE.Vector3(11.3, 0, 14.6), new THREE.Vector3(13.2, 0, 15.0), new THREE.Vector3(22, 0, 15.0), new THREE.Vector3(45, 0, 14.9), new THREE.Vector3(95, 0, 14.8)],
+        [MOTO_PARK.clone(), new THREE.Vector3(5.5, 0, 11.2), new THREE.Vector3(4.6, 0, 11.55), new THREE.Vector3(3.8, 0, 12.3), new THREE.Vector3(3.6, 0, 13.6), new THREE.Vector3(4.5, 0, 14.6), new THREE.Vector3(6.4, 0, 15.0), new THREE.Vector3(22, 0, 15.0), new THREE.Vector3(45, 0, 14.9), new THREE.Vector3(95, 0, 14.8)],
         2.5,
         { vmax: 10, slow: [[0, 7.5, 3.2]] },
       );
@@ -1021,6 +1093,27 @@ export class LevelCena implements Level {
     this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
     this.walker.yaw = this.walker.facing = Math.PI;
     this.setClock(T(23, 30));
+  }
+
+  /** Sube la escalera a su paso, cruza la terraza hasta la puerta, que se abre, y entra. */
+  private stepBedClimb(dt: number) {
+    const c = this.bedClimb!;
+    const pp = this.player.root.position;
+    const len = pathLen(c.path);
+    c.d = Math.min(len, c.d + dt * 1.25);
+    const yaw = stairAt(c.path, c.d, pp);
+    const r = this.player.root;
+    r.rotation.y += Math.atan2(Math.sin(yaw - r.rotation.y), Math.cos(yaw - r.rotation.y)) * Math.min(1, dt * 8);
+    animatePerson(this.player, dt, c.d < len ? 'walk' : 'idle', 0.45);
+    if (c.d >= len - 1.2) this.place.upDoor.hold(2);
+    if (c.d >= len && this.phase === 'toBed') {
+      this.phase = 'done';
+      fadeFlash(() => {
+        this.bedClimb = null;
+        this.player.root.position.y = 0;
+        this.ending();
+      }, 500);
+    }
   }
 
   private ending() {
@@ -1076,8 +1169,13 @@ export class LevelCena implements Level {
   private placeCarried() {
     const h = this.helmet;
     const at = this.helmetAt;
-    h.visible = at !== 'rider' && (at !== 'gas' || this.gas.root.visible) && (at !== 'azul' || this.player.root.visible);
-    if (at === 'ground' || at === 'hidden') {
+    h.visible = at !== 'rider' && (at !== 'gas' || this.gas.root.visible) && (at !== 'azul' || this.player.root.visible) && (at !== 'moto' || this.moto.root.visible);
+    if (at === 'moto') {
+      // Encima del asiento, de lado, como se deja un casco en la moto
+      this.moto.root.updateWorldMatrix(true, false);
+      this.moto.root.localToWorld(h.position.copy(HELMET_ON_SEAT));
+      h.rotation.set(0, this.moto.root.rotation.y + 1.2, this.moto.root.rotation.z);
+    } else if (at === 'ground' || at === 'hidden') {
       h.position.copy(at === 'ground' ? HELMET_SPOT : HIDE_SPOT).setY(HELMET_Y);
       h.rotation.set(0, at === 'ground' ? 0.8 : 2.1, 0);
     } else if (at === 'gas' || at === 'azul') {
@@ -1221,14 +1319,14 @@ export class LevelCena implements Level {
         return this.garlandOn ? TABLE : SWITCH_AT;
       case 'alarm': {
         const pp = this.player.root.position;
-        const left = this.alarmItems.filter((i) => !i.done).map((i) => (i.key === 'helmet' ? this.helmetPos(new THREE.Vector3()) : i.at));
+        const left = this.alarmItems.filter((i) => !i.done).map((i) => i.at);
         left.sort((a, b) => pp.distanceTo(a) - pp.distanceTo(b));
         return left[0] ?? null;
       }
       case 'seeOff':
-        return this.helmetAt === 'azul' ? this.gas.root.position : this.helmetPos(this.v2);
+        return this.gas.root.position;
       case 'toBed':
-        return DOOR;
+        return this.v2.set(1.6, 0, 0.9);
       default:
         return null;
     }
@@ -1292,7 +1390,8 @@ export class LevelCena implements Level {
       // Le mira irse desde la cancela
       const m = this.moto.root.visible ? this.moto.root.position : this.gas.root.position;
       this.faceIdle(this.player, m.x, m.z, dt);
-    } else if (this.phase !== 'dinner' && this.player.root.visible) animatePerson(this.player, dt, 'idle');
+    } else if (this.bedClimb) this.stepBedClimb(dt);
+    else if (this.phase !== 'dinner' && this.player.root.visible) animatePerson(this.player, dt, 'idle');
 
     // Vapor de la olla y la sartén: sube, crece y se deshace
     this.steam.forEach((s, i) => {
@@ -1340,17 +1439,20 @@ export class LevelCena implements Level {
         bark('Gas', CENA.lightsHint);
       }
     }
-    if (free && this.phase === 'seeOff' && this.helmetAt !== 'azul' && !this.gasWalk.length) {
+    if (free && this.phase === 'seeOff' && !this.gasWalk.length) {
       this.gateT += dt;
       if (this.gateT > 15 && !this.nagged) {
         this.nagged = true;
         bark('Gas', CENA.helmetNag);
       }
     }
-    if (free && this.phase === 'toBed' && Math.hypot(pp.x - DOOR.x, pp.z - DOOR.z) < 0.75) {
+    // A dormir: en casa de Azul se entra por arriba. Al pie de la escalera, sube sola hasta la puerta
+    if (free && this.phase === 'toBed' && !this.bedClimb && pp.x > 1.2 && pp.x < 2.2 && pp.z < 1.5) {
       this.busy = true;
       this.walker.stop();
-      fadeFlash(() => this.phase === 'toBed' && this.ending(), 500);
+      this.hud.setAction(null);
+      this.bedClimb = { d: 0, path: [[pp.x, pp.z], ...STAIR_PATH] };
+      this.bedLook.set(pp.x + 0.6, 0.9, 0.7);
     }
 
     // Acción contextual
@@ -1361,7 +1463,7 @@ export class LevelCena implements Level {
       action = () => this.sayCome();
     } else if (free && this.phase === 'toKitchen' && this.gathering && this.pantry.count < 3 && this.pantry.near(pp)) {
       const s = this.pantry.near(pp)!;
-      label = s.key === 'cesta' ? '🧺 Coger' : s.key === 'queso' ? '🧀 Coger' : '🧊 Abrir';
+      label = s.key === 'cesta' ? '🧺 Coger' : s.key === 'queso' ? '🧀 Coger' : '🚪 Entrar';
       action = () => (s.key === 'nevera' ? this.openCooler() : this.takeIngredient(s.key));
     } else if (free && this.phase === 'toKitchen' && this.pantry.count === 3 && pp.distanceTo(STOVE) < 1.6) {
       label = '🍳 Cocinar';
@@ -1375,14 +1477,8 @@ export class LevelCena implements Level {
     } else if (free && this.phase === 'toTable' && this.garlandOn && pp.distanceTo(TABLE) < 2.1) {
       label = '🍝 Cenar';
       action = () => this.sitDown();
-    } else if (free && this.phase === 'seeOff' && this.helmetAt !== 'azul' && pp.distanceTo(this.helmetPos(this.v2)) < 1.4) {
-      label = '🪖 Coger';
-      action = () => {
-        this.setHelmet('azul');
-        audio.pop();
-      };
-    } else if (free && this.phase === 'seeOff' && this.helmetAt === 'azul' && !this.gasWalk.length && pp.distanceTo(this.gas.root.position) < 1.7) {
-      label = '🪖 Dárselo';
+    } else if (free && this.phase === 'seeOff' && !this.gasWalk.length && pp.distanceTo(this.gas.root.position) < 1.7) {
+      label = '👋 Adiós';
       action = () => this.giveHelmet();
     }
     this.hud.setAction(label, !!label && this.phase !== 'wait');
@@ -1407,8 +1503,14 @@ export class LevelCena implements Level {
 
     // Cámara
     // Dentro del patio, por debajo del toldo y de la buganvilla: a más altura la cámara se metía entre las flores
-    if (this.pantry.coolerOpen) {
-      // Abriendo la nevera: de cerca, desde delante, los tres paquetes con su nombre
+    if (this.bedClimb) {
+      // Subiendo: desde atrás y por encima del porche (la buganvilla no tapa)
+      const k = 1 - Math.exp(-dt * 3);
+      this.camera.position.lerp(this.v1.set(pp.x - 1.5, pp.y + 3.4, 2.0), k);
+      this.bedLook.lerp(this.v2.set(pp.x + 0.6, pp.y + 0.9, 0.7), k);
+      this.camera.lookAt(this.bedLook);
+    } else if (this.pantry.coolerOpen || this.inFridge) {
+      // Dentro, en la nevera: de cerca, desde delante, los tres paquetes con su nombre
       this.pantry.coolerCam(this.v1, this.v2);
       this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
       this.camLook.lerp(this.v2, Math.min(1, dt * 3.5));
@@ -1514,9 +1616,12 @@ export class LevelCena implements Level {
     this.gateT = 0;
     this.nagged = false;
     // Las cosas
-    this.setHelmet(!after('toGate') ? (phase === 'toGate' ? 'gas' : 'rider') : 'ground');
+    this.setHelmet(!after('gasComing') ? 'rider' : after('gasRide') ? 'rider' : 'moto');
     this.pan.visible = true;
     this.pantry.reset(after('toKitchen'));
+    this.inFridge = false;
+    this.bedClimb = null;
+    this.player.root.position.y = 0;
     this.gathering = after('toKitchen');
     this.pantryT = 0;
     this.steam.forEach((s) => (s.visible = false));
@@ -1570,18 +1675,17 @@ export class LevelCena implements Level {
           this.prep('toTable');
           this.switchGarland(false);
           this.player.root.position.set(STOVE.x + 0.4, 0, STOVE.z + 0.4);
-          this.gas.root.position.set(TABLE.x + 1.6, 0, TABLE.z + 1.2);
+          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
         },
       },
       { label: '7 · Cenar', run: () => { this.prep('toTable'); this.switchGarland(true); this.sitDown(); } },
       { label: '8 · Los faros (el susto)', run: () => { this.prep('dinner'); this.seatBoth(); this.startAlarm(); } },
       {
-        label: '9 · El casco de Gas',
+        label: '9 · Despedirse',
         run: () => {
           this.prep('seeOff');
-          this.setHelmet('hidden');
-          this.player.root.position.set(TABLE.x - 1.5, 0, TABLE.z);
-          this.gas.root.position.set(TABLE.x + 1.5, 0, TABLE.z);
+          this.player.root.position.set(TABLE.x - 1.5, 0, SEAT_Z);
+          this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.25);
           this.startSeeOff();
         },
       },
@@ -1591,7 +1695,6 @@ export class LevelCena implements Level {
           this.prep('seeOff');
           this.player.root.position.copy(GATE_IN);
           this.gas.root.position.set(1.0, 0, 8.6);
-          this.setHelmet('azul');
           this.giveHelmet();
         },
       },
@@ -1995,30 +2098,36 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     sc.add(s);
     steam.push(s);
   }
-  // Mesa de la terraza con mantel, dos sillas y guirnalda de luces
-  tm.add(G.cyl, 0xf4efe2, TABLE.x, 0.76, TABLE.z, 0, 0, 0, 1.3, 0.05, 1.3);
-  tm.add(G.cyl, 0x5aa9e6, TABLE.x, 0.79, TABLE.z, 0, 0, 0, 1.0, 0.01, 1.0);
-  tm.add(G.cyl, 0x777777, TABLE.x, 0.38, TABLE.z, 0, 0, 0, 0.08, 0.76, 0.08);
-  // Dos sillas de madera de verdad (asiento a 48 cm, patas y respaldo hacia fuera): antes eran bloques
-  // macizos de 90 cm y se sentaban encima, a la altura de la mesa
-  for (const sx of [-1, 1]) {
-    const cx = TABLE.x + sx * 0.95;
-    tm.add(G.box, 0x8a6a44, cx, 0.46, TABLE.z, 0, 0, 0, 0.44, 0.04, 0.42);
-    for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) tm.add(G.box, 0x6e5234, cx + dx, 0.23, TABLE.z + dz, 0, 0, 0, fat(0.035), 0.46, fat(0.035));
-    for (const dz of [-0.18, 0.18]) tm.add(G.box, 0x6e5234, cx + sx * 0.2, 0.72, TABLE.z + dz, 0, 0, 0, fat(0.035), 0.55, fat(0.035));
-    tm.add(G.box, 0x8a6a44, cx + sx * 0.2, 0.88, TABLE.z, 0, 0, 0, 0.035, 0.2, 0.4);
+  // Mesa de madera rectangular (0,9 × 1,7 m), con el lado largo a lo largo de la pared de la derecha; contra la
+  // pared, un banco blanco de obra con su cojín de lona, y enfrente, dos sillas de madera
+  const WOOD = 0x9a7048, WOOD_D = 0x6e5234;
+  tm.add(G.box, WOOD, TABLE.x, 0.755, TABLE.z, 0, 0, 0, 0.9, 0.05, 1.7);
+  tm.add(G.box, WOOD_D, TABLE.x, 0.71, TABLE.z, 0, 0, 0, 0.8, 0.06, 1.6); // faldón
+  for (const [dx, dz] of [[-0.38, -0.76], [0.38, -0.76], [-0.38, 0.76], [0.38, 0.76]]) tm.add(G.box, WOOD_D, TABLE.x + dx, 0.36, TABLE.z + dz, 0, 0, 0, fat(0.06), 0.72, fat(0.06));
+  // El banco, pegado a la pared (de obra, encalado, como el muro), y su cojín
+  const BX = 4.82;
+  tm.add(G.box, WHITE, BX, 0.21, TABLE.z, 0, 0, 0, 0.44, 0.42, 1.9);
+  tm.add(G.box, 0xefe9dd, BX - 0.02, 0.435, TABLE.z, 0, 0, 0, 0.48, 0.05, 1.94);
+  tm.add(G.rbox, 0x2f6b8a, BX, 0.48, TABLE.z, 0, 0, 0, 0.4, 0.05, 1.8);
+  // Dos sillas en el otro lado, de cara a la pared (asiento a 48 cm, respaldo hacia fuera)
+  const cx = TABLE.x - 0.93;
+  for (const cz of [TABLE.z - 0.42, TABLE.z + 0.42]) {
+    tm.add(G.box, 0x8a6a44, cx, 0.46, cz, 0, 0, 0, 0.44, 0.04, 0.42);
+    for (const [dx, dz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) tm.add(G.box, WOOD_D, cx + dx, 0.23, cz + dz, 0, 0, 0, fat(0.035), 0.46, fat(0.035));
+    for (const dz of [-0.18, 0.18]) tm.add(G.box, WOOD_D, cx - 0.2, 0.72, cz + dz, 0, 0, 0, fat(0.035), 0.55, fat(0.035));
+    tm.add(G.box, 0x8a6a44, cx - 0.2, 0.88, cz, 0, 0, 0, 0.035, 0.2, 0.4);
   }
-  // Los platos de siempre (de noche, aparte y apoyados en el mantel: antes flotaban un centímetro)
+  // Los platos de siempre (de noche, aparte y apoyados en la mesa: antes flotaban un centímetro)
   let tablePlates: THREE.Mesh | null = null;
-  if (day) for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.3, 0.82, TABLE.z, 0, 0, 0, 0.32, 0.03, 0.32); // platos
+  if (day) for (const sx of [-1, 1]) m.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.25, 0.795, SEAT_Z, 0, 0, 0, 0.3, 0.03, 0.3); // platos
   else {
     const pl = new Merger();
-    for (const sx of [-1, 1]) pl.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.3, 0.81, TABLE.z, 0, 0, 0, 0.32, 0.03, 0.32);
+    for (const sx of [-1, 1]) pl.add(G.cyl, 0xf4efe2, TABLE.x + sx * 0.25, 0.795, SEAT_Z, 0, 0, 0, 0.3, 0.03, 0.3);
     tablePlates = pl.mesh();
     tablePlates.userData.comicBent = true;
     sc.add(tablePlates);
   }
-  colliders.push({ minX: TABLE.x - 1.3, maxX: TABLE.x + 1.3, minZ: TABLE.z - 0.7, maxZ: TABLE.z + 0.7 });
+  colliders.push({ minX: TABLE.x - 1.2, maxX: 5.06, minZ: TABLE.z - 0.95, maxZ: TABLE.z + 0.95 });
   for (const [x, z] of [[-4.6, 9.6], [4.6, 9.6], [4.6, 0.8]] as [number, number][]) m.add(G.cyl, 0x8a6a44, x, 1.4, z, 0, 0, 0, 0.1, 2.8, 0.1);
   const bulbs = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffd27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   let garland: THREE.Points | null = null;

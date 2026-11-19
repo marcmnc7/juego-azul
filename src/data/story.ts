@@ -533,7 +533,9 @@ export const NIGHT = {
 // Capítulo 7: la cena a escondidas en casa de los padres de Azul, 13 de julio de 2026.
 // Los chats van tal cual en src/data/chats.ts (cenaMenu, cenaEspera, cenaPronto, cenaVen, teQuiero, jazzbah).
 export const CENA = {
-  radarIntro: [{ who: 'Narrador', text: '9 de julio. Gas vuela a Menorca y tú le sigues en el radar, de Barcelona a Mahón.' }] as Line[],
+  /** El día, desde la tarde: el plan con Gas (a qué hora bajan tus padres) y luego qué se cocina. */
+  dayIntro: [{ who: 'Narrador', text: '13 de julio de 2026. Esta noche tus padres bajan a cenar fuera. Y tú tienes un plan.' }] as Line[],
+  menuIntro: [{ who: 'Narrador', text: '19:43. Falta lo más importante: qué se cocina.' }] as Line[],
   intro: [{ who: 'Narrador', text: 'Sa Farola, 13 de julio de 2026. Tus padres salen a cenar. Gas espera en un lugar estratégico, con la moto.' }] as Line[],
   /** Lo que le vas escribiendo mientras tus padres no acaban de irse (mensajes tuyos de esa noche). */
   waitEvents: ['Aun estan', 'Sale mi padre ahora', 'Que hace mi padre top', 'Tio'],
@@ -558,7 +560,7 @@ export const CENA = {
   pantryBacon: 'Bacon no. Esto es una carbonara.',
   pantryNata: 'Nata… ni de broma.',
   /** Gas, si tardas: una pista por cada cosa que falta. */
-  pantryHints: { cesta: '¿Los huevos no estarán en la cesta de la cocina?', queso: 'El queso lo he visto en la mesa del jardín, ¿no?', nevera: 'La carne estará en la nevera de playa, la de detrás de la mesa.' },
+  pantryHints: { cesta: '¿Los huevos no estarán en la cesta de la cocina?', queso: 'El queso lo he visto en la mesa del jardín, ¿no?', nevera: 'La carne estará en la nevera de abajo. Entra por la puerta del porche.' },
   pantryDone: 'Ya está todo. Al fuego.',
   /** Lo que dice Gas mientras cocinas (los dice él, en su bocadillo). */
   steps: {
@@ -595,7 +597,7 @@ export const CENA = {
     { who: 'Margaux', text: '¡Son mis padres! ¡Recoge, recoge!' },
   ] as Line[],
   // Gas, nada más levantarse (inventado; antes era un aviso de texto)
-  alarmHint: '¡Los platos, la sartén… y mi casco!',
+  alarmHint: '¡Los platos y la sartén, rápido!',
   /** Lo que dice ella al quitar cada cosa de en medio. */
   alarmItems: { plates: '🍽️ ¡Platos, fuera!', pan: '🍳 ¡Sartén, fuera!', helmet: '🪖 Casco escondido.' },
   falseAlarm: [
@@ -609,9 +611,10 @@ export const CENA = {
     { who: 'Margaux', text: 'Pero por si acaso, vete ya.' },
   ] as Line[],
   // Antes de irse, su casco (inventado: Marc, cámbialo por lo que dijisteis al despediros)
-  helmetAsk: '¿Y mi casco?',
-  helmetNag: 'Sin casco no me voy, eh.',
-  bye: 'Toma. Corre, que no vuelvan.',
+  /** Antes de irse, a la cancela: que le acompañe (inventado). */
+  helmetAsk: '¿Me acompañas a la cancela?',
+  helmetNag: '¿No me vas a decir adiós?',
+  bye: 'Corre, que no vuelvan. 🤍',
   /** Al irse en la moto, antes de dejar la mesa como estaba. */
   gone: [{ who: 'Narrador', text: '22:50. Gas se va en la moto justo a tiempo.' }] as Line[],
   leave: [{ who: 'Narrador', text: 'Tú subes a la cama. Tus padres siguen sin volver.' }] as Line[],

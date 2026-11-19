@@ -19,7 +19,7 @@ import { Particles } from '../entities/fx';
 import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
-import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF } from './levelCena';
+import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF, STAIR_PATH, TERRACE, TERRACE_Y, stairY, stairAt, pathLen } from './levelCena';
 import type { Door } from './door';
 import { CHATS } from '../data/chats';
 import { canvasTex, mergedPlanes } from './deco';
@@ -39,39 +39,6 @@ import { BORN, BORN_RISE, CORREUS, bornHeight, buildBorn } from './born';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
 import { beacon } from '../core/beacon';
 
-
-// La escalera blanca de casa de Azul (la de buildAzulHouse): 10 peldaños de 30 cm pegados a la fachada, de x = 1,75
-// a 4,75 (z de 0,05 a 1,05); el rellano, hasta x = 5; y arriba, la terraza del primer piso con la puerta de casa.
-const STAIR_Z = 0.72;
-const STAIR_PATH: [number, number][] = [[1.75, STAIR_Z], [4.85, STAIR_Z], [4.85, 0.1], [4.6, -0.45]];
-const TERRACE = { minX: 0.95, maxX: 4.85, minZ: -0.85, maxZ: 0.02 };
-const TERRACE_Y = UP_DOOR.y;
-const treadTop = (k: number) => (k < 0 ? 0 : k > 9 ? 3.2 : (k + 1) * 0.3 + 0.04);
-/** La altura del suelo en la escalera (los pies, sobre la huella; el salto, al empezar cada peldaño). */
-function stairY(x: number, z: number) {
-  if (z < 0.17) return x > 0.8 ? TERRACE_Y : 0;
-  if (x < 1.75) return 0;
-  if (x >= 4.7) return THREE.MathUtils.lerp(3.04, 3.2, THREE.MathUtils.smoothstep(x, 4.7, 4.8));
-  const u = (x - 1.75) / 0.3, k = Math.floor(u);
-  return THREE.MathUtils.lerp(treadTop(k - 1), treadTop(k), THREE.MathUtils.smoothstep(u - k, 0, 0.28));
-}
-const pathLen = (path: [number, number][]) => path.slice(1).reduce((a, [x, z], i) => a + Math.hypot(x - path[i][0], z - path[i][1]), 0);
-/** Un punto de un camino (el de la escalera), a `d` metros del principio; devuelve hacia dónde mira. */
-function stairAt(path: [number, number][], d: number, out: THREE.Vector3) {
-  let rest = Math.max(0, d);
-  for (let i = 1; i < path.length; i++) {
-    const [ax, az] = path[i - 1], [bx, bz] = path[i];
-    const L = Math.hypot(bx - ax, bz - az) || 1e-6;
-    if (rest <= L || i === path.length - 1) {
-      const k = Math.min(1, rest / L);
-      out.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
-      out.y = stairY(out.x, out.z);
-      return Math.atan2(bx - ax, bz - az);
-    }
-    rest -= L;
-  }
-  return 0;
-}
 
 // Capítulo 6 · Sant Joan en Ciutadella, 23 de junio de 2026. «Dime exacto».
 // Por la tarde, al acabar la bandera, Azul va desde la Plaça Espanya hacia el Born por Ses Voltes,
