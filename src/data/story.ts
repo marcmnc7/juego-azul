@@ -166,6 +166,17 @@ export const SANTJOAN = {
   meet: [{ who: 'Narrador', text: 'Con la foto, Gas te encuentra enseguida.' }] as Line[],
   /** Juntos a Sa Plaça d’es Bè a hacer botar caballos, y a dormir a casa de Azul. */
   toBe: [{ who: 'Gas', text: 'Venga, a Sa Plaça d’es Bè. A hacer botar caballos.' }] as Line[],
+  /** Cruzar la calle del Born de la mano, sin que os pille un coche (inventado). */
+  cross: {
+    intro: [
+      { who: 'Gas', text: 'Dame la mano. Que con tanta gente y estos coches, no te pierdo.' },
+      { who: 'Margaux', text: '¿Coches? ¿Hoy?' },
+      { who: 'Gas', text: 'Los que dan vueltas al Born buscando aparcar. Mira bien antes de cruzar.' },
+    ] as Line[],
+    hint: '🤝',
+    hit: ['¡Cuidado! Que nos lleva…', '¡Eh! ¡Atrás, atrás!', 'Ese no frenaba. Otra vez, con calma.'],
+    ok: 'Vivos. Y de la mano 😌',
+  },
   beHint: '🐑 Es Bè',
   beGo: '🐎',
   beCount: (n: number, of: number) => `🐎 ${n}/${of}`,
@@ -231,6 +242,45 @@ export const SANTJOAN = {
     /** El caixer, cuando su caballo te aparta (inventado; era un aviso «¡Buu! Un caballo te ha pillado»). */
     hit: 'Alerta, al·lota!',
   },
+};
+
+/**
+ * Sant Joan: la gente del Born, de Ses Voltes y de Es Bè (todo inventado). Hablan de la fiesta, en menorquín o en
+ * castellano; una de cada dos sabe lo que te toca y te lo dice a su manera (SANTJOAN_HINTS, por fase).
+ * who '*': la persona con la que hablas.
+ */
+export const SANTJOAN_CHATTER: Line[][] = [
+  [{ who: '*', text: 'Has vist es caragol des Born? Quina bogeria, cada any més gent.' }],
+  [
+    { who: '*', text: 'Primera vegada per Sant Joan?' },
+    { who: 'Margaux', text: 'Primera vez de verdad, sí.' },
+    { who: '*', text: 'Idò alerta amb els cavalls, que aquí no s\'aturen per ningú.' },
+  ],
+  [{ who: '*', text: 'Jo vinc cada any des de Barcelona. Això no ho canvio per res.' }],
+  [{ who: '*', text: 'Una pomada ben fresca i a esperar que botin els cavalls. Això és Sant Joan.' }],
+  [
+    { who: '*', text: '¿Tienes avellanas? Toma, que me sobran.' },
+    { who: 'Margaux', text: 'Gracias… creo.' },
+  ],
+  [{ who: '*', text: 'Mon pare diu que abans no hi havia tanta gent. Ho diu cada any.' }],
+  [{ who: '*', text: 'He perdut els meus amics fa una hora. Amb tanta gent, impossible.' }],
+  [{ who: '*', text: 'Mira-la, la del cavall blanc! Diuen que és el primer any que surt.' }],
+  [{ who: '*', text: 'Uf, quina calor. I encara queda tota la nit.' }],
+  [
+    { who: '*', text: '¿De dónde eres?' },
+    { who: 'Margaux', text: 'De Madrid. Bueno, de aquí ya un poco.' },
+    { who: '*', text: 'Això és el que passa amb Menorca: ja no te\'n vas.' },
+  ],
+];
+export const SANTJOAN_BYE = ['Bon Sant Joan!', 'Ens veim per aquí!', '¡Pásalo bien!', 'Alerta amb els cavalls!', 'Adéu, guapa!'];
+/** Lo que te dicen si saben lo que toca (por fase del capítulo). */
+export const SANTJOAN_HINTS: Record<string, string[]> = {
+  hunt: ['Correus? A l\'altra banda des Born, l\'edifici groc.', 'Per arribar al Born des de la Plaça Espanya, tot recte per Ses Voltes.', 'Si un cavall s\'aixeca davant teu, toca-li el pit: du sort.'],
+  exact: ['¿Te están buscando y no te encuentran? Mándale una foto de algo que se vea desde lejos.', 'Aquí el que no es perd mai és l\'obelisc. Tothom el coneix.'],
+  coming: ['Espera aquí, que amb tanta gent costa trobar-se.'],
+  nuts: ['Les avellanes es tornen! Tira-les a qui te les tira, quan s\'aturin.', 'Fixa\'t en la diana: quan brilla, és el moment.'],
+  be: ['A Sa Plaça d\'es Bè? Per Ses Voltes, tot recte fins al final.', 'A Es Bè els cavalls boten en rotllana. Acosta\'t quan s\'aixequin.'],
+  taxi: ['Taxis? A la Plaça Espanya, sempre n\'hi ha un parell.', 'Uf, el teu amic coixeja… Un taxi, que a peu no hi arribau.'],
 };
 
 export const ROAD = {
@@ -1003,12 +1053,12 @@ export const SIDE = {
   },
   nuts: {
     intro: [
-      { who: 'Una de Ciutadella', text: 'Avellanes! Qui en vol? Els del balcó del Casino no paren de tirar-ne.' },
+      { who: 'Una de Ciutadella', text: 'Avellanes! Qui en vol? Aquí al Born tothom en tira, i qui no en torna, no surt.' },
       { who: 'Gas', text: 'Toma la bolsa. Devuélveselas, que si no no nos dejan salir de aquí.' },
     ] as Line[],
     hint: '🌰',
     btn: '🌰 Tirar',
-    /** Lo dice Gas (inventado: era un aviso «Acércate más al balcón»). */
+    /** Lo dice Gas (inventado: era un aviso «Acércate más»). */
     far: 'Desde ahí no llegas',
     /** Lo dice Gas (era un aviso que decía qué hacer). */
     miss: '¡Uy! Se ha movido',

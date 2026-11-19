@@ -2620,6 +2620,167 @@ export const CHATS = {
    }
   ]
  },
+ "santJoanDia": {
+  "date": "23 de junio de 2026",
+  "contact": "Gas",
+  "msgs": [
+   {
+    "me": false,
+    "t": "12:07",
+    "text": "Aceptame la UBI"
+   },
+   {
+    "me": true,
+    "t": "12:11",
+    "text": "HAHAHAH"
+   },
+   {
+    "me": true,
+    "t": "12:11",
+    "text": "Voy"
+   },
+   {
+    "me": false,
+    "t": "12:12",
+    "text": "Pendeja"
+   },
+   {
+    "me": true,
+    "t": "12:12",
+    "text": "Tuuuu maldito"
+   },
+   {
+    "me": false,
+    "t": "12:55",
+    "text": "No llegas"
+   },
+   {
+    "me": true,
+    "t": "12:59",
+    "text": "Es a las dooos"
+   },
+   {
+    "me": true,
+    "t": "13:00",
+    "text": "Ya estamos por el pueblo"
+   },
+   {
+    "me": false,
+    "t": "14:14",
+    "text": "Oye"
+   },
+   {
+    "me": false,
+    "t": "14:14",
+    "text": "Ya yienes el movil o que"
+   },
+   {
+    "me": false,
+    "t": "14:15",
+    "text": "Habeis pasado por casa carme ya?"
+   },
+   {
+    "me": true,
+    "t": "14:15",
+    "text": "Si"
+   },
+   {
+    "me": true,
+    "t": "14:15",
+    "text": "Tengo"
+   },
+   {
+    "me": true,
+    "t": "14:15",
+    "text": "Estoy en pl espanya"
+   },
+   {
+    "me": false,
+    "t": "14:15",
+    "text": "No te he visto"
+   },
+   {
+    "me": false,
+    "t": "14:16",
+    "text": "Vuelvo"
+   },
+   {
+    "me": true,
+    "t": "14:16",
+    "text": "Donde esta"
+   },
+   {
+    "me": true,
+    "t": "14:17",
+    "text": "En la tele"
+   },
+   {
+    "me": true,
+    "t": "15:44",
+    "text": "A que h es la bandera"
+   },
+   {
+    "me": false,
+    "t": "15:45",
+    "text": "~17h"
+   },
+   {
+    "me": true,
+    "t": "15:47",
+    "text": "Oka"
+   },
+   {
+    "me": true,
+    "t": "16:00",
+    "text": "📷 Foto"
+   },
+   {
+    "me": true,
+    "t": "16:00",
+    "text": "Lloro"
+   },
+   {
+    "me": false,
+    "t": "16:16",
+    "text": "Esta felissss"
+   },
+   {
+    "me": true,
+    "t": "16:36",
+    "text": "Sssiii"
+   },
+   {
+    "me": false,
+    "t": "17:17",
+    "text": "Finito bandera ya eh"
+   },
+   {
+    "me": false,
+    "t": "17:17",
+    "text": "Ve pa borne haha"
+   },
+   {
+    "me": true,
+    "t": "17:18",
+    "text": "Siii"
+   },
+   {
+    "me": true,
+    "t": "17:18",
+    "text": "Voy"
+   },
+   {
+    "me": true,
+    "t": "17:18",
+    "text": "Estaba"
+   },
+   {
+    "me": true,
+    "t": "17:18",
+    "text": "Vamos correos"
+   }
+  ]
+ },
  "ubi": {
   "date": "23 de junio de 2026",
   "contact": "Gas",

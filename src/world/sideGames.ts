@@ -1264,7 +1264,9 @@ const BAL: PersonLook[] = [
 ];
 
 export class NutThrow {
-  private folk: { p: Person; x: number; goal: number; stop: number; fire: number; hit: number; warn: number; mark: THREE.Sprite }[] = [];
+  private folk: { p: Person; x: number; goal: number; goalZ: number; stop: number; fire: number; hit: number; warn: number; mark: THREE.Sprite }[] = [];
+  /** En la calle (Sant Joan): la gente anda por una zona del suelo, no por un balcón. */
+  private street: { box: { minX: number; maxX: number; minZ: number; maxZ: number }; ground: (x: number, z: number) => number } | null = null;
   private nuts: { m: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; onLand: () => void; h: number }[] = [];
   private pool: THREE.Mesh[] = [];
   private rings: { m: THREE.Mesh; t: number; dur: number }[] = [];
@@ -1280,10 +1282,14 @@ export class NutThrow {
   pelted = 0;
   finished = false;
 
-  /** opts.rail: false si el balcón ya tiene su barandilla (el del Casino en Sant Joan, ver born.ts casinoRail). */
-  constructor(private sc: THREE.Scene, private player: Person, private walker: Walker, private fx: Particles, private x0: number, private x1: number, wallZ: number, private onChange: () => void, private onDone: () => void, opts: { rail?: boolean } = {}) {
+  /**
+   * opts.rail: false si el balcón ya tiene su barandilla. opts.street: en vez de un balcón, gente de la calle que
+   * anda por esa zona del suelo (Sant Joan: las avellanes se tiran entre la gente, por el Born).
+   */
+  constructor(private sc: THREE.Scene, private player: Person, private walker: Walker, private fx: Particles, private x0: number, private x1: number, wallZ: number, private onChange: () => void, private onDone: () => void, opts: { rail?: boolean; street?: { box: { minX: number; maxX: number; minZ: number; maxZ: number }; ground: (x: number, z: number) => number } } = {}) {
     this.z = wallZ + 0.84;
-    if (opts.rail !== false) {
+    this.street = opts.street ?? null;
+    if (opts.rail !== false && !this.street) {
       const m = new Merger();
       const rz = wallZ + 1.08;
       const IRON = 0x1e1e1e;
@@ -1298,14 +1304,20 @@ export class NutThrow {
       const p = makePerson(l, 1.12);
       const x = x0 + ((i + 0.5) / BAL.length) * (x1 - x0);
       p.root.position.set(x, this.y, this.z);
+      if (this.street) {
+        const b = this.street.box;
+        const zx = b.minZ + ((i % 2) + 0.5) * ((b.maxZ - b.minZ) / 2);
+        p.root.position.set(b.minX + ((i + 0.5) / BAL.length) * (b.maxX - b.minX), 0, zx);
+        p.root.position.y = this.street.ground(p.root.position.x, zx);
+      }
       sc.add(p.root);
       // Una diana encima de cada uno: brilla cuando está parado, que es cuando hay que tirar
       const mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: targetTexture(), transparent: true, depthTest: false, fog: false }));
       mark.scale.setScalar(0.85);
-      mark.position.set(x, this.y + 2.55, this.z);
+      mark.position.set(p.root.position.x, p.root.position.y + 2.55, p.root.position.z);
       mark.userData.noCast = true;
       sc.add(mark);
-      this.folk.push({ p, x, goal: x, stop: 0.8 + i * 0.5, fire: 1.8 + i * 1.3, hit: 0, warn: 0, mark });
+      this.folk.push({ p, x, goal: p.root.position.x, goalZ: p.root.position.z, stop: 0.8 + i * 0.5, fire: 1.8 + i * 1.3, hit: 0, warn: 0, mark });
     });
   }
 
@@ -1359,11 +1371,11 @@ export class NutThrow {
     this.walker.facing = Math.atan2(tq.x - pp.x, tq.z - pp.z);
     audio.whoosh();
     const from = pp.clone().setY(1.65);
-    const to = tq.clone().setY(this.y + 1.2);
+    const to = tq.clone().setY(tq.y + 1.2);
     const who = t;
     this.spawn(from, to, 0.62, 1.2, () => {
       // A donde estaba cuando la lanzaste: si se ha movido, falla
-      const miss = Math.abs(who.p.root.position.x - to.x);
+      const miss = Math.hypot(who.p.root.position.x - to.x, who.p.root.position.z - to.z);
       if (miss > 0.62) {
         audio.knock(0.25, 1200, 0.05);
         bark('Gas', SIDE.nuts.miss);
@@ -1412,8 +1424,8 @@ export class NutThrow {
     for (const f of this.folk) {
       const r = f.p.root;
       f.hit -= dt;
-      r.rotation.y = 0;
-      f.mark.position.x = r.position.x;
+      if (!this.street) r.rotation.y = 0;
+      f.mark.position.set(r.position.x, r.position.y + 2.55, r.position.z);
       const ready = !this.finished && f.hit <= 0 && f.warn <= 0 && f.stop > 0;
       const mm = f.mark.material as THREE.SpriteMaterial;
       mm.opacity += ((ready ? 1 : 0.22) - mm.opacity) * Math.min(1, dt * 10);
@@ -1441,7 +1453,7 @@ export class NutThrow {
           this.sc.add(m);
           const dur = 0.85;
           this.rings.push({ m, t: 0, dur });
-          this.spawn(r.position.clone().setY(this.y + 1.5), land.clone().setY(1), dur, 0.9, () => {
+          this.spawn(r.position.clone().setY(r.position.y + 1.5), land.clone().setY(1), dur, this.street ? 1.6 : 0.9, () => {
             this.fx.burst(land.clone().setY(0.2), '🌰', 3, 1.2, 0.5);
             audio.knock(0.25, 1500, 0.04);
             if (Math.hypot(pp.x - land.x, pp.z - land.z) < 1) {
@@ -1466,6 +1478,24 @@ export class NutThrow {
       f.stop -= dt;
       if (f.stop > 0) {
         animatePerson(f.p, dt, 'talk');
+        continue;
+      }
+      if (this.street) {
+        // En la calle: andan de un sitio a otro de la zona, entre la gente, y se paran
+        const b = this.street.box;
+        const dx = f.goal - r.position.x, dz = f.goalZ - r.position.z, d = Math.hypot(dx, dz);
+        if (d < 0.08) {
+          f.stop = 0.9 + Math.random() * 1.2;
+          f.goal = b.minX + Math.random() * (b.maxX - b.minX);
+          f.goalZ = b.minZ + Math.random() * (b.maxZ - b.minZ);
+          continue;
+        }
+        const st = Math.min(d, 1.3 * dt);
+        r.position.x += (dx / d) * st;
+        r.position.z += (dz / d) * st;
+        r.position.y = this.street.ground(r.position.x, r.position.z);
+        r.rotation.y = Math.atan2(dx, dz);
+        animatePerson(f.p, dt, 'walk', 0.55);
         continue;
       }
       if (Math.abs(f.goal - r.position.x) < 0.05) {

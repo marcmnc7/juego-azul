@@ -627,14 +627,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior';
     const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
     n.append(tile, lab);
-    if (isNext && show) {
-      const go = el('span', 'mp-go', 'Jugar');
-      go.onclick = (e) => {
-        e.stopPropagation();
-        opts.onPlay(c.lv.id);
-      };
-      n.append(go);
-    } else if (isNext && c.early) n.append(liveCountdown(c.day));
+    if (isNext && c.early) n.append(liveCountdown(c.day));
     n.onclick = () => {
       if (!show) {
         n.classList.remove('nope');
@@ -643,7 +636,10 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
         vibrate(20);
         return;
       }
-      chapterSheet(c.lv.id, save, opts);
+      // La baldosa es el botón: el que toca (o cualquiera aún sin hacer) empieza al tocarla; uno ya hecho abre su
+      // ficha (su vale, sus fotos y «Volver a jugar»)
+      if (c.done) chapterSheet(c.lv.id, save, opts);
+      else opts.onPlay(c.lv.id);
     };
     nodes.push(n);
     track.append(n);
@@ -703,19 +699,24 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     svg.setAttribute('width', String(TW));
     svg.setAttribute('height', String(TH));
     svg.setAttribute('viewBox', `0 0 ${TW} ${TH}`);
+    // Cada tramo sale del lado de una baldosa y llega a la siguiente por arriba (en vertical) o por su lado (en
+    // horizontal): así no pasa nunca por encima del rótulo, que va debajo de la baldosa
+    const tile = parseFloat(track.style.getPropertyValue('--tile')) || 100;
+    const hw = tile * 0.72, hh = tile * 0.56;
     const seg = (from: number, to: number) => {
-      let d = `M ${pts[from][0]} ${pts[from][1]}`;
+      let d = '';
       for (let i = from + 1; i <= to; i++) {
         const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
         if (tall) {
-          const my = (y0 + y1) / 2;
-          d += ` C ${x0} ${my}, ${x1} ${my}, ${x1} ${y1}`;
+          const sx = x0 + Math.sign(x1 - x0 || 1) * hw, ey = y1 - hh;
+          d += ` M ${sx} ${y0} C ${x1} ${y0}, ${x1} ${y0}, ${x1} ${ey}`;
         } else {
-          const mx = (x0 + x1) / 2;
-          d += ` C ${mx} ${y0}, ${mx} ${y1}, ${x1} ${y1}`;
+          const sx = x0 + hw, ex = x1 - hw;
+          const mx = (sx + ex) / 2;
+          d += ` M ${sx} ${y0} C ${mx} ${y0}, ${mx} ${y1}, ${ex} ${y1}`;
         }
       }
-      return d;
+      return d.trim();
     };
     const lit = Math.min(nodes.length - 1, Math.max(0, nextI));
     pathOff.setAttribute('d', seg(0, nodes.length - 1));
@@ -1244,6 +1245,8 @@ export function toast(text: string) {
  * detrás, y se va. Solo en los capítulos de cómic.
  */
 export function comicWord(text: string, kind: string) {
+  // (los globos de onomatopeya con puntas, quitados de todos los niveles: Marc dice que solo molestan)
+  if (!SHOW_POW) return;
   root.querySelectorAll('.pow').forEach((n) => n.remove());
   const w = el('div', `pow pow-${kind}`);
   w.append(el('span', '', text));
@@ -1285,6 +1288,8 @@ export function shownName(who: string) {
   if (/^(Gas|Marc)$/.test(who)) return early ? 'Marc' : 'Gas';
   return who;
 }
+
+const SHOW_POW = false;
 
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
 export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {

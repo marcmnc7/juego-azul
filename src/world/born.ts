@@ -208,7 +208,8 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   const kerb = 0.3; // el bordillo de la explanada sobresale 15 cm, más un palmo
   zebra(T.maxZ + kerb, BORN.maxZ - SIDEWALK - 0.12, 0, false); // hacia Correus
   zebra(T.minX - kerb, BORN.minX + SIDEWALK + 0.12, IMPERI.z, true); // hacia el Imperi
-  if (opts.voltes) zebra(T.maxX + kerb, BORN.maxX + 3.2, 0, true); // hacia Ses Voltes
+  // (hasta el bordillo de la acera, como los otros dos: antes seguía 3 m más y se pintaba encima de las baldosas)
+  if (opts.voltes) zebra(T.maxX + kerb, BORN.maxX - SIDEWALK - 0.12, 0, true); // hacia Ses Voltes
   const lm = new THREE.Mesh(lines.build(), paintMat());
   lm.userData.noCast = true;
   g.add(lm);

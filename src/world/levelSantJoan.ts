@@ -11,9 +11,10 @@ import { setSurface, Surf } from '../core/surfaces';
 import { dust } from '../core/dust';
 import { Lost } from '../core/lost';
 import { TownHD } from './hd/townHD';
-import { SANTJOAN } from '../data/story';
+import { SANTJOAN, SANTJOAN_CHATTER, SANTJOAN_BYE, SANTJOAN_HINTS, type Line } from '../data/story';
 import { AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, streetLamp, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
+import type { Behave } from '../entities/crowdRig';
 import { Particles } from '../entities/fx';
 import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
@@ -26,6 +27,8 @@ import type { Box2 } from './ferreries';
 import { makeTaxi, TaxiRide, taxiFree, taxiSeat, taxiSide, type Taxi } from './camiFarola';
 import { limpPose } from '../entities/limp';
 import { LimpPair } from '../entities/limpPair';
+import { HandPair } from '../entities/handPair';
+import { makeCar } from '../entities/models';
 import { NutThrow, NUTS_NEED } from './sideGames';
 import { SIDE } from '../data/story';
 import { rigPost } from '../entities/rig';
@@ -86,7 +89,7 @@ function stairAt(path: [number, number][], d: number, out: THREE.Vector3) {
 // - Sin pistas: la flecha, la columna y el pin de ubicación solo salen a los 40 s sin avanzar (Lost).
 // - Los avisos de texto, en boca de quien los diría (bark); los aciertos y golpes, onomatopeyas (comicWord).
 
-type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'nuts' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
+type Phase = 'intro' | 'hunt' | 'exact' | 'coming' | 'meet' | 'nuts' | 'cross' | 'be' | 'taxi' | 'ride' | 'home' | 'ending' | 'done';
 
 // Plano (metros): el Born en el origen; hacia el este, el Carrer Major des Born con la Catedral, Ses Voltes
 // y, al final, la Plaça Nova y la Plaça Espanya
@@ -121,6 +124,47 @@ function segDist(x: number, z: number, ax: number, az: number) {
   return Math.hypot(x - ax * t, z - az * t);
 }
 const HORSE_R = 7.6;
+/** Una persona de la gente: de pie (gesticulando, con el móvil, bebiendo) o paseando por su tramo. */
+type Folk = { x: number; z: number; ry: number; ph: number; pi: number; walk?: { ax: 'x' | 'z'; a0: number; a1: number; dir: 1 | -1 }; turnT?: number };
+const FOLK_SPEED = 0.85;
+/**
+ * La calzada que rodea la explanada del Born (entre la explanada y la acera): por ella dan la vuelta los coches cuando
+ * hay que cruzar. Centro del carril: x = ±14,1 y z = ±10,6, con las esquinas redondeadas.
+ */
+const RING = { a: 14.1, b: 10.6, r: 2.2 };
+const RING_LEN = 2 * (2 * (RING.a - RING.r)) + 2 * (2 * (RING.b - RING.r)) + 2 * Math.PI * RING.r;
+/** Un punto de la vuelta (s en metros) y hacia dónde mira el coche. */
+function ringAt(s: number, out: THREE.Vector3) {
+  const { a, b, r } = RING;
+  const ly = 2 * (b - r), lx = 2 * (a - r), q = (Math.PI * r) / 2;
+  let d = ((s % RING_LEN) + RING_LEN) % RING_LEN;
+  const arc = (cx: number, cz: number, a0: number) => {
+    const t = a0 + (d / q) * (Math.PI / 2);
+    out.set(cx + Math.cos(t) * r, 0, cz + Math.sin(t) * r);
+    return Math.atan2(-Math.sin(t), Math.cos(t));
+  };
+  // Este (hacia +z), esquina, sur (hacia -x), esquina, oeste (hacia -z), esquina, norte (hacia +x), esquina
+  if (d < ly) return out.set(a, 0, -b + r + d), 0;
+  d -= ly;
+  if (d < q) return arc(a - r, b - r, 0);
+  d -= q;
+  if (d < lx) return out.set(a - r - d, 0, b), -Math.PI / 2;
+  d -= lx;
+  if (d < q) return arc(-a + r, b - r, Math.PI / 2);
+  d -= q;
+  if (d < ly) return out.set(-a, 0, b - r - d), Math.PI;
+  d -= ly;
+  if (d < q) return arc(-a + r, -b + r, Math.PI);
+  d -= q;
+  if (d < lx) return out.set(-a + r + d, 0, -b), Math.PI / 2;
+  d -= lx;
+  return arc(a - r, -b + r, (3 * Math.PI) / 2);
+}
+const onRing = (x: number, z: number) => Math.abs(x) < 16.4 && Math.abs(z) < 12.4 && (Math.abs(x) > 11.8 || Math.abs(z) > 8.8);
+/** Al otro lado: la entrada de Ses Voltes. */
+const CROSS_GOAL = new THREE.Vector3(17.4, 0, 0);
+/** Las avellanes, entre la gente de la calle: en el Born, delante del Casino (fuera del corro de los caballos). */
+const NUT_BOX = { minX: -4, maxX: 11, minZ: -12.6, maxZ: -9.6 };
 const WARN = 0.8;
 const REAR = 1.8;
 const TOUCH_R = 3.2;
@@ -283,7 +327,14 @@ export class LevelSantJoan implements Level {
   private people: Circle[] = [];
   private pose = newCrowdPose();
   private cheer = 0.35;
-  private crowds: { people: CrowdLike; female: boolean; base: { x: number; z: number; ry: number; ph: number }[] }[] = [];
+  private crowds: { people: CrowdLike; female: boolean; base: Folk[] }[] = [];
+  /** Con quién se ha hablado ya (nombre, si sabe lo que toca y qué charla le toca). */
+  private folkInfo = new Map<Folk, { name: string; hint: boolean; talk: number; times: number }>();
+  private folkNext = 0;
+  /** Cruzar la calle de la mano: los coches que dan la vuelta al Born y la pareja. */
+  private cross: { cars: { root: THREE.Group; s: number; v: number; rig: CarRig; body: THREE.Object3D }[]; hands: HandPair; hitT: number } | null = null;
+  /** Con quién se está hablando (se para mientras tanto). */
+  private talkTo: Folk | null = null;
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
   private bagCount = 0;
   private luck = 0;
@@ -411,22 +462,14 @@ export class LevelSantJoan implements Level {
     audio.startMusic('jaleo');
     later(() => {
       if (this.phase !== 'intro') return;
-      const ex = CHATS.dimeExacto;
-      dialogue(SANTJOAN.night, () =>
-        phoneChat(CHATS.laVispera, () =>
-          dialogue(SANTJOAN.morning, () =>
-            phoneChat([CHATS.ubi, CHATS.noTeHeVisto], () =>
-              dialogue(SANTJOAN.bandera, () =>
-                phoneChat({ ...ex, msgs: ex.msgs.slice(0, 6) }, () => {
-                  if (this.phase !== 'intro') return;
-                  this.busy = false;
-                  this.phase = 'hunt';
-                  this.setPin(0);
-                }),
-              ),
-            ),
-          ),
-        ),
+      // Un solo chat, seguido: la tarde del 23, de «Aceptame la UBI» a «Vamos correos» (antes eran cuatro trozos)
+      phoneChat(CHATS.santJoanDia, () =>
+        dialogue(SANTJOAN.bandera, () => {
+          if (this.phase !== 'intro') return;
+          this.busy = false;
+          this.phase = 'hunt';
+          this.setPin(0);
+        }),
       );
     }, 900);
   }
@@ -859,6 +902,10 @@ export class LevelSantJoan implements Level {
       if (r < HORSE_R + 2.2 || r > 15.5) continue;
       // Pasillos entre la gente: hacia Ses Voltes, Correus, el Ajuntament y los palacios
       if (AISLES.some(([ax, az]) => segDist(x, z, ax, az) < 1.5)) continue;
+      // (la calzada, libre: por ella pasan los coches)
+      if (onRing(x, z)) continue;
+      // (donde se tiran las avellanes, la gente que juega: nadie quieto en medio)
+      if (x > NUT_BOX.minX - 1 && x < NUT_BOX.maxX + 1 && z > NUT_BOX.minZ - 1 && z < NUT_BOX.maxZ + 1) continue;
       if (ok(x, z)) pts.push({ x, z });
     }
     for (let i = 0; i < 4000 && pts.length < 215; i++) {
@@ -876,14 +923,133 @@ export class LevelSantJoan implements Level {
       if (x < BE.x - 8 && Math.abs(z - BE.z) < 2) continue; // por donde se entra
       if (ok(x, z)) pts.push({ x, z });
     }
+    // Como en Ferreries: unos pasean por su tramo (el más largo libre a su alrededor), otros beben, miran el móvil o
+    // charlan. Antes estaban todos quietos en su sitio
+    const inBorn = (x: number, z: number) => Math.abs(x) < BORN.maxX - 1 && Math.abs(z) < BORN.maxZ - 1 && Math.hypot(x, z) > HORSE_R + 2.2 && !onRing(x, z);
+    const inVoltes = (x: number, z: number) => x > 32 && x < 70 && Math.abs(z) > 1.8 && Math.abs(z) < 4.2;
+    const walkable = (x: number, z: number, born: boolean) => clear(x, z) && (born ? inBorn(x, z) : inVoltes(x, z)) && !(x > NUT_BOX.minX - 1 && x < NUT_BOX.maxX + 1 && z > NUT_BOX.minZ - 1 && z < NUT_BOX.maxZ + 1);
+    const folk: (Folk & { behave: Behave })[] = pts.map((p, pi) => {
+      const f: Folk & { behave: Behave } = { ...p, pi, ry: p.x >= BE_BOX.minX ? Math.atan2(BE.x - p.x, BE.z - p.z) : p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6, behave: 'idle' };
+      const born = p.x < 20, voltes = p.x > 32 && p.x < 70;
+      const k = Math.random();
+      if ((born || voltes) && k < 0.42) {
+        const ax: 'x' | 'z' = voltes ? 'x' : Math.abs(p.x) > Math.abs(p.z) ? 'z' : 'x';
+        const base = ax === 'x' ? p.x : p.z;
+        const at = (v: number) => (ax === 'x' ? walkable(v, p.z, born) : walkable(p.x, v, born));
+        let a0 = base, a1 = base;
+        while (a0 > base - 8 && at(a0 - 0.4)) a0 -= 0.4;
+        while (a1 < base + 8 && at(a1 + 0.4)) a1 += 0.4;
+        if (a1 - a0 > 3) {
+          f.walk = { ax, a0, a1, dir: Math.random() < 0.5 ? 1 : -1 };
+          f.behave = 'walk';
+          return f;
+        }
+      }
+      f.behave = k < 0.62 ? 'drink' : k < 0.8 ? 'phone' : 'idle';
+      return f;
+    });
     LOOKS.forEach((lk, li) => {
-      const mine = pts.filter((_, i) => i % LOOKS.length === li);
-      const people = makeCrowd(lk, mine.length);
+      const mine = folk.filter((_, i) => i % LOOKS.length === li);
+      const people = makeCrowd(lk, mine.length, false, mine.map((f) => f.behave));
       this.scene.add(people.group);
-      // Miran hacia el centro del Born (o hacia la calle)
-      this.crowds.push({ people, female: !lk.male, base: mine.map((p) => ({ ...p, ry: p.x >= BE_BOX.minX ? Math.atan2(BE.x - p.x, BE.z - p.z) : p.x < 20 ? Math.atan2(-p.x, -p.z) : Math.random() * 6, ph: Math.random() * 6 })) });
+      this.crowds.push({ people, female: !lk.male, base: mine });
     });
     this.people = pts.map((p) => ({ x: p.x, z: p.z, r: 0.33 }));
+  }
+
+  /**
+   * La gente, cada fotograma: los que pasean avanzan por su tramo y dan media vuelta al final o si tienen a alguien
+   * delante (a Azul y a Gas también); los demás, de pie, gesticulando. Su círculo de choque va con ellos.
+   */
+  private updateFolk(dt: number) {
+    const pp = this.player.root.position, g = this.gas.root.position;
+    for (const c of this.crowds) {
+      c.base.forEach((b, i) => {
+        if (b.walk && b !== this.talkTo) {
+          const w = b.walk;
+          const cur = w.ax === 'x' ? b.x : b.z;
+          let nx = cur + w.dir * FOLK_SPEED * dt;
+          const px = w.ax === 'x' ? nx : b.x, pz = w.ax === 'x' ? b.z : nx;
+          const ahead = (o: { x: number; z: number }) => {
+            const ox = o.x - b.x, oz = o.z - b.z;
+            const a = (w.ax === 'x' ? ox : oz) * w.dir, side = Math.abs(w.ax === 'x' ? oz : ox);
+            return a > 0.05 && a < 0.95 && side < 0.6;
+          };
+          let blocked = ahead(pp) || ahead(g);
+          if (!blocked) for (const o of this.people) if (o !== this.people[b.pi] && Math.hypot(o.x - px, o.z - pz) < 0.62 && ahead(o)) { blocked = true; break; }
+          b.turnT = Math.max(0, (b.turnT ?? 0) - dt);
+          if (blocked) {
+            nx = cur;
+            if (b.turnT <= 0) {
+              w.dir = (-w.dir) as 1 | -1;
+              b.turnT = 1.3;
+            }
+          }
+          if (nx > w.a1 || nx < w.a0) {
+            w.dir = (-w.dir) as 1 | -1;
+            nx = THREE.MathUtils.clamp(nx, w.a0, w.a1);
+          }
+          if (w.ax === 'x') b.x = nx;
+          else b.z = nx;
+          const want = w.ax === 'x' ? (w.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : w.dir > 0 ? 0 : Math.PI;
+          b.ry += Math.atan2(Math.sin(want - b.ry), Math.cos(want - b.ry)) * Math.min(1, dt * 5);
+          const pc = this.people[b.pi];
+          if (pc) {
+            pc.x = b.x;
+            pc.z = b.z;
+          }
+          this.pose.sway = this.pose.twist = this.pose.shift = 0;
+        } else crowdPose(this.pose, this.t, b.ph, this.cheer);
+        this.tmpQ.setFromAxisAngle(this.up, b.ry);
+        c.people.set(i, b.x, b.z, this.tmpQ, this.pose, bornHeight(b.x, b.z));
+      });
+      c.people.commit();
+    }
+  }
+
+  /** La persona de la gente más cercana (a menos de 1,6 m), si hay. */
+  private nearestFolk(pp: THREE.Vector3) {
+    let best: { b: Folk; female: boolean } | null = null;
+    let bd = 1.6;
+    for (const c of this.crowds)
+      for (const b of c.base) {
+        const d = Math.hypot(b.x - pp.x, b.z - pp.z);
+        if (d < bd) {
+          bd = d;
+          best = { b, female: c.female };
+        }
+      }
+    return best;
+  }
+
+  /**
+   * Hablar con alguien de la gente: se para, se gira hacia ella y dice algo. Uno de cada dos sabe lo que toca y te
+   * lo cuenta a su manera (lo que tiene que ir descubriendo, poco a poco); los demás hablan de la fiesta.
+   */
+  private chatWith(w: { b: Folk; female: boolean }) {
+    const pp = this.player.root.position;
+    w.b.ry = Math.atan2(pp.x - w.b.x, pp.z - w.b.z);
+    let who = this.folkInfo.get(w.b);
+    if (!who) {
+      const names = w.female ? ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia', 'Cati'] : ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel', 'Jaume'];
+      who = { name: names[Math.floor(Math.random() * names.length)], hint: this.folkInfo.size % 2 === 0, talk: this.folkNext++ % SANTJOAN_CHATTER.length, times: 0 };
+      this.folkInfo.set(w.b, who);
+    }
+    const pool = SANTJOAN_HINTS[this.phase];
+    let lines: Line[];
+    if (who.hint && pool) lines = [{ who: who.name, text: pool[who.times % pool.length] }];
+    else if (who.times > 0) lines = [{ who: who.name, text: SANTJOAN_BYE[(who.talk + who.times) % SANTJOAN_BYE.length] }];
+    else lines = SANTJOAN_CHATTER[who.talk].map((l) => ({ who: l.who === '*' ? who!.name : l.who, text: l.text }));
+    who.times++;
+    this.talkTo = w.b;
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.hud.setAction(null);
+    dialogue(lines, () => {
+      this.busy = false;
+      this.talkTo = null;
+    });
   }
 
   /** Caballos negros con sus caixers dando vueltas al obelisco. */
@@ -933,7 +1099,7 @@ export class LevelSantJoan implements Level {
     vibrate(20);
     this.pinPos.copy(PINS[0]);
     this.pinOn = true;
-    this.map.style.display = 'block';
+    this.map.style.display = 'none'; // (el minimapa, quitado: Marc no lo quiere en este capítulo)
     this.updateHud();
   }
 
@@ -1063,6 +1229,7 @@ export class LevelSantJoan implements Level {
     h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span>` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
     // Objetivos mínimos: un emoji o dos palabras, sin decir qué hacer
     if (this.phase === 'nuts') h.setObjective(SIDE.nuts.hint);
+    else if (this.phase === 'cross') h.setObjective(SANTJOAN.cross.hint);
     else if (this.phase === 'be') h.setObjective(this.beIn ? SANTJOAN.beGo : SANTJOAN.beHint);
     else if (this.phase === 'taxi') h.setObjective(SANTJOAN.taxiHint);
     else if (this.phase === 'ride') h.setObjective('');
@@ -1084,6 +1251,7 @@ export class LevelSantJoan implements Level {
       return near.dist > 13 ? near.at : null;
     }
     if (this.phase === 'taxi') return TAXI_DOOR;
+    if (this.phase === 'cross') return CROSS_GOAL;
     return null;
   }
 
@@ -1105,14 +1273,8 @@ export class LevelSantJoan implements Level {
     // Gente de pie gesticulando; levantan los brazos cuando un caballo se pone de manos
     const rearing = !this.night && this.horses.some((h) => h.rearT > 0);
     this.cheer += ((this.phase === 'ending' ? 1 : rearing ? 0.85 : 0.35) - this.cheer) * Math.min(1, dt * 3);
-    for (const c of this.crowds) {
-      c.base.forEach((b, i) => {
-        crowdPose(this.pose, this.t, b.ph, this.cheer);
-        this.tmpQ.setFromAxisAngle(this.up, b.ry);
-        c.people.set(i, b.x, b.z, this.tmpQ, this.pose, bornHeight(b.x, b.z));
-      });
-      c.people.commit();
-    }
+    this.updateFolk(dt);
+    if (this.cross) this.updateCross(dt);
     // Al entrar en Ses Voltes, el caballo que tiene delante se desboca: lo grita su caixer
     if (!this.chargeDone && this.phase === 'hunt' && !this.busy && pp.x < 66 && pp.x > 34) {
       const front = this.horses.filter((h) => h.street && h.angle < pp.x - 16 && h.rearT <= 0 && h.warnT <= 0).sort((a, b) => b.angle - a.angle)[0];
@@ -1132,7 +1294,7 @@ export class LevelSantJoan implements Level {
     const rearNear = this.phase === 'taxi' || this.night ? null : this.updateHorses(dt);
 
     // Azul
-    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'nuts' || this.phase === 'be' || this.phase === 'taxi');
+    const walking = !this.busy && (this.phase === 'hunt' || this.phase === 'exact' || this.phase === 'coming' || this.phase === 'nuts' || this.phase === 'cross' || this.phase === 'be' || this.phase === 'taxi');
     this.walker.turn(this.input.consumeCam());
     this.walker.canJump = walking && this.phase !== 'taxi';
     // (con Gas colgado del hombro no se corre)
@@ -1170,6 +1332,9 @@ export class LevelSantJoan implements Level {
           steerTo(this.gas.root, this.gasSteer, pp.x - ((pp.x - g.x) / d) * 1.2, pp.z - ((pp.z - g.z) / d) * 1.2, 2.2, dt, this.people, 3.5, 0.32, undefined, this.colliders);
           animatePerson(this.gas, dt, 'walk');
         } else this.meet();
+      } else if (this.phase === 'cross' && this.cross) {
+        const moving = this.cross.hands.step(dt, this.walker.facing, this.colliders);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.7 : 0);
       } else if (this.phase === 'nuts') {
         const moving = this.gasTrail.step(this.gas.root, pp, 1.7, 4.2, dt, this.colliders, 0.26);
         animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
@@ -1233,6 +1398,14 @@ export class LevelSantJoan implements Level {
     } else if (!this.busy && this.phase === 'exact') {
       label = '📷 Foto exacta';
       action = () => this.takePhoto();
+    }
+    // Con cualquiera de la gente: una charla (y, a veces, lo que toca)
+    if (!label && walking && !pushing && !resting) {
+      const who = this.nearestFolk(pp);
+      if (who) {
+        label = '💬 Hablar';
+        action = () => this.chatWith(who);
+      }
     }
     this.hud.setAction(label, !!label && (this.phase !== 'exact' || this.obeliskInShot()));
     if (this.input.consumeAction() && action) action();
@@ -1564,8 +1737,8 @@ export class LevelSantJoan implements Level {
       this.nuts?.dispose();
       this.nuts = null;
       this.pushNothing();
-      dialogue(SANTJOAN.toBe, () => this.startBe());
-    }, { rail: false });
+      dialogue(SANTJOAN.toBe, () => this.startCross());
+    }, { street: { box: NUT_BOX, ground: bornHeight } });
     this.updateHud();
     dialogue(SIDE.nuts.intro, () => (this.busy = false));
   }
@@ -1580,6 +1753,101 @@ export class LevelSantJoan implements Level {
   }
 
   /** A Sa Plaça d'es Bè, los dos juntos y andando: por Ses Voltes y la Plaça Espanya. */
+  /**
+   * Antes de Es Bè: cruzar la calle del Born hasta Ses Voltes, de la mano de Gas, sin que os pille un coche. Los
+   * coches dan la vuelta a la explanada por su calzada (nadie aparece ni desaparece de golpe); si uno os pilla, a
+   * empezar desde la explanada.
+   */
+  private startCross() {
+    this.phase = 'cross';
+    this.gas.root.visible = true;
+    const cars: NonNullable<typeof this.cross>['cars'] = [];
+    const cols = [0xd7263d, 0xf2f2f2, 0x2a3a5a, 0xe8b23a];
+    for (let i = 0; i < 4; i++) {
+      const c = makeCar(cols[i], { luggage: false, joy: false, empty: true });
+      c.root.userData.comicBent = true;
+      this.scene.add(c.root);
+      cars.push({ root: c.root as THREE.Group, s: (i / 4) * RING_LEN + Math.random() * 6, v: 6.5 + i * 0.9, rig: new CarRig(c), body: c.body });
+    }
+    const hands = new HandPair(this.player, this.gas);
+    hands.start(this.walker.facing);
+    this.cross = { cars, hands, hitT: 0 };
+    this.updateCross(0);
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.updateHud();
+    dialogue(SANTJOAN.cross.intro, () => {
+      this.busy = false;
+      this.lost.reset();
+    });
+  }
+
+  private updateCross(dt: number) {
+    const cr = this.cross!;
+    const pp = this.player.root.position, g = this.gas.root.position;
+    cr.hitT -= dt;
+    for (const c of cr.cars) {
+      // Frenan un poco si tienen a alguien justo delante (pero no paran: hay que mirar antes de cruzar)
+      const prev = c.root.position.clone();
+      c.s += c.v * dt;
+      const h = ringAt(c.s, c.root.position);
+      c.root.rotation.y = h;
+      c.root.position.y = bornHeight(c.root.position.x, c.root.position.z);
+      c.rig.update(dt, dt > 0 ? prev.distanceTo(c.root.position) / dt : 0, 0, 1.2);
+      if (this.phase !== 'cross' || this.busy || cr.hitT > 0) continue;
+      // ¿Os pilla? (en el sistema del coche: 1 m a cada lado y 2,3 m delante y detrás)
+      const sin = Math.sin(h), cos = Math.cos(h);
+      for (const q of [pp, g]) {
+        const dx = q.x - c.root.position.x, dz = q.z - c.root.position.z;
+        const fwd = dx * sin + dz * cos, side = dx * cos - dz * sin;
+        if (Math.abs(fwd) < 2.4 && Math.abs(side) < 1.15) {
+          this.crossHit();
+          break;
+        }
+      }
+    }
+    // Al otro lado: hacia Es Bè
+    if (this.phase === 'cross' && !this.busy && pp.x > 16.7 && Math.abs(pp.z) < 4) this.crossDone();
+  }
+
+  private crossHit() {
+    const cr = this.cross!;
+    cr.hitT = 2.5;
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    this.walker.shake(0.35);
+    audio.hit();
+    vibrate([40, 30, 60]);
+    bark('Gas', SANTJOAN.cross.hit[Math.floor(Math.random() * SANTJOAN.cross.hit.length)]);
+    later(() => {
+      if (this.phase !== 'cross') return;
+      fadeFlash(() => {
+        // De vuelta a la explanada, al borde, delante del paso
+        this.player.root.position.set(10.6, 0, 1.2);
+        this.walker.yaw = this.walker.facing = Math.PI / 2;
+        cr.hands.snap(Math.PI / 2);
+        this.busy = false;
+      }, 250);
+    }, 700);
+  }
+
+  private crossDone() {
+    const cr = this.cross!;
+    this.busy = true;
+    this.input.reset();
+    this.walker.stop();
+    audio.luck();
+    bark('Gas', SANTJOAN.cross.ok);
+    later(() => {
+      for (const c of cr.cars) c.root.removeFromParent();
+      cr.hands.stop();
+      this.cross = null;
+      this.startBe();
+    }, 1400);
+  }
+
   private startBe() {
     this.phase = 'be';
     this.map.style.display = 'none';
@@ -2149,6 +2417,8 @@ export class LevelSantJoan implements Level {
       s.d.pivot.updateWorldMatrix(true, false);
       return s.d.pivot.localToWorld(this.v3.set(0, 2.85, 0.7));
     }
+    // Con quien se está hablando de la gente: su cabeza
+    if (this.talkTo && !['Margaux', 'Azul', 'Gas', 'Marc'].includes(who)) return this.v3.set(this.talkTo.x, bornHeight(this.talkTo.x, this.talkTo.z) + 2.0, this.talkTo.z);
     if (who === 'Una de Ciutadella') {
       let bd = 16, bx = 0, bz = 0;
       for (const c of this.crowds) {
@@ -2192,6 +2462,11 @@ export class LevelSantJoan implements Level {
     }
     this.nuts?.dispose();
     this.nuts = null;
+    if (this.cross) {
+      for (const c of this.cross.cars) c.root.removeFromParent();
+      this.cross.hands.stop();
+      this.cross = null;
+    }
     this.pair?.stop();
     this.pair = null;
     this.endPush();
@@ -2245,10 +2520,11 @@ export class LevelSantJoan implements Level {
       { label: '1 · Plaça Espanya', run: () => { hunt(); tp(START.x, START.z, -Math.PI / 2); } },
       { label: '2 · Ses Voltes (caballo desbocado)', run: () => { hunt(); tp(40, 0, -Math.PI / 2); } },
       { label: '2b · Correus (llegar a la ubicación)', run: () => { hunt(); tp(6, 9.5, 0); } },
-      { label: '3 · Foto exacta', run: () => { this.resetTo(false); this.phase = 'exact'; this.map.style.display = 'block'; this.updateHud(); tp(5, -9.5, Math.PI); } },
-      { label: '3b · Gas viene (después de la foto)', run: () => { this.resetTo(false); tp(5, -9.5, Math.PI); this.map.style.display = 'block'; this.sendLocation(); } },
+      { label: '3 · Foto exacta', run: () => { this.resetTo(false); this.phase = 'exact'; this.updateHud(); tp(5, -9.5, Math.PI); } },
+      { label: '3b · Gas viene (después de la foto)', run: () => { this.resetTo(false); tp(5, -9.5, Math.PI); this.sendLocation(); } },
       { label: '4 · Se encuentran', run: () => { this.resetTo(false); tp(1, 4.5); gasAt(2, 5.5); this.meet(); } },
-      { label: '4b · Avellanes del Casino', run: () => { this.resetTo(false); tp(4, -9, Math.PI); gasAt(5, -8); this.startNuts(); } },
+      { label: '4b · Avellanes', run: () => { this.resetTo(false); tp(4, -9, Math.PI); gasAt(5, -8); this.startNuts(); } },
+      { label: '4c · Cruzar la calle (de la mano)', run: () => { this.resetTo(false); tp(10.6, 1.2, Math.PI / 2); gasAt(10.6, 0.6); this.startCross(); } },
       { label: '5 · Sa Plaça d’es Bè', run: () => { this.resetTo(false); tp(88, 0, Math.PI / 2); gasAt(86.5, 0.8); this.startBe(); } },
       { label: '5b · Al taxi, de noche', run: () => { this.resetTo(false); tp(100, 0, -Math.PI / 2); gasAt(100.5, 0.4); this.startTaxi(); } },
       { label: '5c · Al taxi: la parada de Gas', run: () => { this.resetTo(false); tp(100, 0, -Math.PI / 2); gasAt(100.5, 0.4); this.startTaxi(); later(() => { this.taxiFrom = 99; }, 900); } },
