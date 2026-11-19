@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
-import { lastBounds, edgePush, edgePushAt, walkerActiveAt } from './core/walker';
+import { lastBounds, edgePush, edgePushAt } from './core/walker';
 import { dust } from './core/dust';
 import { beacon } from './core/beacon';
 import { physLists } from './core/phys';
@@ -31,7 +31,7 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, Tutorial, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, crossword, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -157,11 +157,6 @@ stage.onStart = (sc) => {
 let data = load();
 
 let level: Level | null = null;
-/** Capítulo en marcha (0 = ninguno). */
-let levelN = 0;
-/** Primeros pasos: en el capítulo 1, la primera vez, en cuanto se puede andar. */
-let tutorial: Tutorial | null = null;
-let tutoPending = Tutorial.pending();
 let levelAt = 0;
 let closeDebug: (() => void) | null = null;
 /** Comentarios al andar y recuerdos escondidos del capítulo en marcha. */
@@ -245,12 +240,6 @@ const mapOpts = {
   onPlay: (n: number) => startLevel(n),
   onLetter: () => startLetter(),
   onReset: () => {
-    try {
-      localStorage.removeItem(Tutorial.KEY);
-    } catch {
-      /* nada */
-    }
-    tutoPending = true;
     data = { version: data.version, levelsDone: [], giftsUnlocked: [] };
     save(data);
     mapScreen(data, mapOpts);
@@ -260,9 +249,6 @@ const mapOpts = {
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo y panel de prueba. */
 function leaveLevel() {
   pauseState.on = false;
-  tutorial?.dispose();
-  tutorial = null;
-  levelN = 0;
   stage.end();
   audio.stopTrack();
   // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
@@ -352,8 +338,8 @@ function startLevel(n: number) {
   clearScreens();
   tryFullscreen();
   audio.bed(BEDS[n] ?? 'none');
+  setCastChapter(n);
   const card = chapterCard(n);
-  levelN = n;
   pauseState.on = false;
   pauseState.title = `Capítulo ${n} · ${LEVELS[n - 1].name}`;
   pauseState.n = n;
@@ -610,12 +596,6 @@ function frame() {
     const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
     juice.apply(camera, dt, cine * 0.1);
-    // Primeros pasos: en cuanto se controla a Azul por primera vez en el capítulo 1
-    if (tutoPending && !tutorial && levelN === 1 && !frozen && !talking && performance.now() - walkerActiveAt < 300) {
-      tutoPending = false;
-      tutorial = new Tutorial(input.usage);
-    }
-    tutorial?.update(talking || filming || frozen);
     // Empujando contra el final del mapa, donde no se ve nada que lo impida: mejor decirlo
     if (!talking && edgePush > 0.45 && performance.now() - edgePushAt < 200 && performance.now() > edgeHintAt) {
       edgeHintAt = performance.now() + 9000;

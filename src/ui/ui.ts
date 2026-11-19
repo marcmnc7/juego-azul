@@ -93,14 +93,41 @@ export function installGate(ios: boolean) {
   root.append(s);
 }
 
+/**
+ * La portada, la misma antes y después del día de entrada (antes eran dos pantallas que no se parecían): cielo de
+ * noche con estrellas y lucecitas que caen, «De Gas», «Para Azul» y, debajo, la cuenta atrás o el botón de Empezar,
+ * en el mismo sitio y del mismo ancho, y una línea pequeña.
+ */
+function cover(cls: string) {
+  clearScreens();
+  const s = el('div', 'screen hm-title ' + cls);
+  const sky = el('div', 'cd-sky');
+  for (let i = 0; i < 46; i++) {
+    const st = el('i', 'cd-star');
+    st.style.left = `${Math.random() * 100}%`;
+    st.style.top = `${Math.random() * 70}%`;
+    st.style.animationDelay = `${Math.random() * 4}s`;
+    st.style.setProperty('--sz', `${1 + Math.random() * 2.2}px`);
+    sky.append(st);
+  }
+  for (let i = 0; i < 18; i++) {
+    const f = el('i', 'cd-fall');
+    f.style.left = `${Math.random() * 100}%`;
+    f.style.animationDelay = `${-Math.random() * 12}s`;
+    f.style.animationDuration = `${9 + Math.random() * 8}s`;
+    sky.append(f);
+  }
+  const eyebrow = el('div', 'hm-eyebrow', 'De Gas');
+  testTaps(eyebrow);
+  const slot = el('div', 'hm-slot');
+  s.append(sky, el('div', 'hm-glow'), eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), slot);
+  return { s, slot };
+}
+
 /** Portada. Si se le pasa la carga, el botón espera (con porcentaje) a que todo esté listo, para que luego cada capítulo abra al momento. */
 export function titleScreen(onStart: () => void, loading?: { done: Promise<unknown>; progress: () => number }, _save?: SaveData) {
   void _save;
-  clearScreens();
-  const s = el('div', 'screen hm-title');
-  const eyebrow = el('div', 'hm-eyebrow', 'De Gas, para ti');
-  testTaps(eyebrow);
-  s.append(el('div', 'hm-glow'), eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), el('p', 'hm-lead', 'Nueve capítulos de nuestra historia. Cada uno esconde un regalo de verdad.'));
+  const { s, slot } = cover('');
   const b = el('button', 'hm-btn', 'Empezar') as HTMLButtonElement;
   b.onclick = () => {
     audio.unlock();
@@ -124,38 +151,17 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
       b.innerHTML = 'Empezar';
     });
   }
-  s.append(b, el('p', 'hm-fine', 'Mejor con el sonido activado'));
+  slot.append(b);
+  s.append(el('p', 'hm-fine', 'Mejor con el sonido activado'));
   root.append(s);
 }
 
 /** ¿Todavía es pronto para entrar? (antes del 26 de noviembre solo se ve la cuenta atrás) */
 export const beforeGate = () => now() < GATE.getTime();
 
-/**
- * Cuenta atrás hasta el día en que se puede entrar: el cielo de noche, unas lucecitas que caen y los números grandes.
- * Cuando llega a cero, sigue sola.
- */
+/** Cuenta atrás hasta el día en que se puede entrar, en la misma portada. Cuando llega a cero, sigue sola. */
 export function countdownScreen(onOpen: () => void) {
-  clearScreens();
-  const s = el('div', 'screen cd-screen');
-  const sky = el('div', 'cd-sky');
-  for (let i = 0; i < 46; i++) {
-    const st = el('i', 'cd-star');
-    st.style.left = `${Math.random() * 100}%`;
-    st.style.top = `${Math.random() * 70}%`;
-    st.style.animationDelay = `${Math.random() * 4}s`;
-    st.style.setProperty('--sz', `${1 + Math.random() * 2.2}px`);
-    sky.append(st);
-  }
-  for (let i = 0; i < 18; i++) {
-    const f = el('i', 'cd-fall');
-    f.style.left = `${Math.random() * 100}%`;
-    f.style.animationDelay = `${-Math.random() * 12}s`;
-    f.style.animationDuration = `${9 + Math.random() * 8}s`;
-    sky.append(f);
-  }
-  const eyebrow = el('div', 'hm-eyebrow', 'De Gas, para ti');
-  testTaps(eyebrow);
+  const { s, slot } = cover('cd-screen');
   const units: [string, string][] = [['d', 'días'], ['h', 'horas'], ['m', 'min'], ['s', 'seg']];
   const clock = el('div', 'cd-clock');
   const cells: Record<string, HTMLElement> = {};
@@ -165,7 +171,8 @@ export function countdownScreen(onOpen: () => void) {
     c.append(cells[k], el('span', '', label));
     clock.append(c);
   }
-  s.append(sky, eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), el('p', 'cd-lead', 'Algo se está preparando.<br>Todavía no se puede abrir…'), clock, el('p', 'cd-date', `Se abre el ${longDate(GATE)}`), el('p', 'hm-fine', 'Paciencia. Merecerá la pena.'));
+  slot.append(clock);
+  s.append(el('p', 'hm-fine', 'Paciencia. Merecerá la pena.'));
   const pad = (n: number) => String(n).padStart(2, '0');
   const tick = () => {
     if (!s.isConnected) return;
@@ -192,15 +199,14 @@ export interface MapOptions {
 type Tab = 'story' | 'album';
 let lastTab: Tab = 'story';
 
-/** Hoja que sube desde abajo (detalles, ajustes): se cierra tocando fuera, con ✕ o deslizando hacia abajo. */
+/** Modal en el centro (ajustes, cómo se juega): se cierra tocando fuera o con ✕. */
 function sheet(build: (body: HTMLElement, close: () => void) => void, cls = '') {
   const back = el('div', 'ap-sheet-back');
   const sh = el('div', 'ap-sheet ' + cls);
-  const grab = el('div', 'ap-grab');
   const x = el('button', 'ap-x', '✕');
   x.setAttribute('aria-label', 'Cerrar');
   const body = el('div', 'ap-sheet-body');
-  sh.append(grab, x, body);
+  sh.append(x, body);
   back.append(sh);
   root.append(back);
   requestAnimationFrame(() => back.classList.add('on'));
@@ -213,16 +219,6 @@ function sheet(build: (body: HTMLElement, close: () => void) => void, cls = '') 
   };
   back.onclick = (e) => e.target === back && close();
   x.onclick = close;
-  // Deslizar hacia abajo desde el asa
-  let y0: number | null = null;
-  grab.onpointerdown = (e) => {
-    y0 = e.clientY;
-    grab.setPointerCapture(e.pointerId);
-  };
-  grab.onpointerup = (e) => {
-    if (y0 !== null && e.clientY - y0 > 50) close();
-    y0 = null;
-  };
   build(body, close);
   return close;
 }
@@ -305,24 +301,67 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     const stub = el('div', 'wn-stub');
     stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(n).padStart(2, '0')}`));
     const main = el('div', 'wn-tmain');
-    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    // El título, letra a letra (cada palabra junta, para que no se parta al cambiar de línea)
+    const T0 = 3.0, STEP = 0.05;
+    let k = 0;
+    const title = el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''));
+    gift.title.split(' ').forEach((w, wi) => {
+      if (wi) title.append(document.createTextNode(' '));
+      const ws = el('span', 'wn-w');
+      for (const ch of w) {
+        const c = el('span', 'wn-ch', ch);
+        c.style.setProperty('--d', `${(T0 + k++ * STEP).toFixed(2)}s`);
+        ws.append(c);
+      }
+      title.append(ws);
+    });
+    const after = T0 + k * STEP + 0.3;
+    const desc = el('p', 'wn-tdesc', gift.description);
+    const redeem = el('div', 'wn-tredeem', gift.howToRedeem);
+    desc.style.setProperty('--d', `${after.toFixed(2)}s`);
+    redeem.style.setProperty('--d', `${(after + 0.9).toFixed(2)}s`);
+    main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), title, desc, redeem);
     ticket.append(stub, main);
+    const revealAt = (after + 1.6) * 1000;
     const saved = el('p', 'wn-hint wn-saved', 'Queda guardado en la ficha del capítulo');
     b.append(kick, env, hint, ticket, saved);
+    // Se descubre despacio: el sobre se abre, el vale sube muy borroso y se va enfocando, y el título sale letra a
+    // letra; luego lo demás y, al final, la fiesta. Tocar el botón a medias lo enseña entero de golpe.
+    let revealed = false;
+    let party = 0;
+    const finish = () => {
+      if (revealed) return;
+      revealed = true;
+      clearTimeout(party);
+      b.classList.add('revealed');
+      audio.cheer(0.35);
+      cssConfetti(o, 90);
+      vibrate([20, 30, 50]);
+      refresh();
+    };
     const open = () => {
       if (giftOpen) return;
       giftOpen = true;
       b.classList.add('open');
       audio.pop();
       vibrate([30, 40, 60]);
-      setTimeout(() => {
-        audio.cheer(0.35);
-        cssConfetti(o, 80);
-      }, 450);
+      setTimeout(() => audio.chime(1), 2400);
+      party = window.setTimeout(finish, revealAt);
       refresh();
     };
     env.onclick = open;
-    beats.push({ el: b, label: () => (giftOpen ? 'Seguir' : 'Abrir el sobre'), next: () => (giftOpen ? true : (open(), false)) });
+    beats.push({
+      el: b,
+      label: () => (!giftOpen ? 'Abrir el sobre' : revealed ? 'Seguir' : 'Verlo ya'),
+      next: () => {
+        if (!giftOpen) return open(), false;
+        if (!revealed) {
+          b.classList.add('fast');
+          return finish(), false;
+        }
+        return true;
+      },
+    });
   }
 
   // 3 · Lo nuevo del álbum
@@ -556,84 +595,112 @@ function liveCountdown(d: Date) {
   return box;
 }
 
+/**
+ * El menú de los capítulos, como un mapa: cada capítulo es una parada (su portada en una baldosa, la fecha y el
+ * nombre) y un camino de puntos las une, subiendo y bajando, de la primera a la sorpresa final. Lo hecho, en color y
+ * con el camino encendido; lo que toca, más grande, latiendo y con su botón; lo cerrado, con la portada y el nombre
+ * borrosos y el candado. Se desliza de lado y arranca centrado en el que toca.
+ */
 function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
+  body.classList.add('mp-body');
   const states = LEVELS.map((_, i) => chapterState(i, save, opts.test));
   const allDone = LEVELS.every((l) => save.levelsDone.includes(l.id));
-  const nextI = states.findIndex((c) => !c.done);
-  const hero = el('section', 'hm-hero');
-  if (nextI < 0 || allDone) {
-    hero.classList.add('final');
-    const img = el('img', 'hm-hero-img') as HTMLImageElement;
-    img.src = COVERS[8];
-    hero.append(img, el('div', 'hm-hero-shade'));
-    const t = el('div', 'hm-hero-txt');
-    t.append(el('div', 'hm-chip', 'Has llegado al final'), el('h2', 'hm-hero-title', 'La sorpresa final'), el('p', 'hm-hero-place', 'Un crucigrama y, al resolverlo, la carta.'));
-    const b = el('button', 'hm-btn', 'Abrir');
-    b.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
-    t.append(b);
-    hero.append(t);
-  } else {
-    const c = states[nextI];
-    const img = el('img', 'hm-hero-img' + (c.unlocked ? '' : ' locked')) as HTMLImageElement;
-    img.src = COVERS[nextI];
-    img.alt = '';
-    hero.append(img, el('div', 'hm-hero-shade'));
-    const t = el('div', 'hm-hero-txt');
-    const when = c.unlocked ? 'Listo para jugar' : c.early ? `Se abre el ${longDate(c.day)}` : 'Termina el anterior';
-    t.append(el('div', 'hm-chip', `Capítulo ${c.lv.id} · ${when}`));
-    if (c.unlocked) {
-      t.append(el('h2', 'hm-hero-title', c.lv.name), el('p', 'hm-hero-place', c.lv.place));
-      const b = el('button', 'hm-btn', 'Jugar');
-      b.onclick = () => opts.onPlay(c.lv.id);
-      t.append(b);
-    } else {
-      hero.classList.add('locked');
-      t.append(el('h2', 'hm-hero-title', TEASERS[c.lv.id] ? `«${TEASERS[c.lv.id]}»` : `Capítulo ${c.lv.id}`));
-      if (c.early) t.append(liveCountdown(c.day));
-    }
-    hero.append(t);
-  }
-  body.append(hero);
-  body.append(el('h3', 'hm-section', 'Tu calendario'));
-  const list = el('div', 'hm-list');
+  const nextI = allDone ? LEVELS.length : states.findIndex((c) => !c.done);
+  const wrap = el('div', 'mp-wrap');
+  const track = el('div', 'mp-track');
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.classList.add('mp-path');
+  const pathOn = document.createElementNS(NS, 'path');
+  const pathOff = document.createElementNS(NS, 'path');
+  pathOn.classList.add('on');
+  pathOff.classList.add('off');
+  svg.append(pathOff, pathOn);
+  track.append(svg);
+  const nodes: HTMLElement[] = [];
   states.forEach((c, i) => {
-    const kp = keepsakesFor(c.lv.id);
-    const found = kp.filter((k) => save.found?.includes(k.id)).length;
     const show = c.unlocked || c.done;
-    const row = el('button', 'hm-row' + (c.done ? ' done' : c.unlocked ? ' open' : ' locked') + (i === nextI ? ' next' : '') + (i === LEVELS.length - 1 ? ' xmas' : '') + (i === 0 ? ' bday' : ''));
-    const th = el('div', 'hm-thumb');
+    const isNext = i === nextI;
+    const n = el('button', 'mp-node' + (c.done ? ' done' : show ? ' open' : ' locked') + (isNext ? ' next' : ''));
+    const tile = el('div', 'mp-tile');
     const im = el('img') as HTMLImageElement;
     im.src = COVERS[i];
     im.alt = '';
     im.loading = 'lazy';
-    th.append(im);
-    if (!show) th.append(el('span', 'hm-lock', '🔒'));
-    if (c.done) th.append(el('span', 'hm-ok', '✓'));
-    const date = el('div', 'hm-date', `<b>${c.day.getDate()}</b><small>${MONTHS[c.day.getMonth()].slice(0, 3)}</small>`);
-    const txt = el('div', 'hm-row-txt');
-    const tag = i === 0 ? ' <i class="hm-tag">🎂 tu cumple</i>' : i === LEVELS.length - 1 ? ' <i class="hm-tag">🎄 Navidad</i>' : '';
-    txt.append(el('div', 'hm-row-name', (show ? c.lv.name : `Capítulo ${c.lv.id}`) + tag), el('div', 'hm-row-sub', c.done ? `Completado${kp.length ? ` · ${found}/${kp.length} recuerdos escondidos` : ''}` : c.unlocked ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior'));
-    row.append(date, th, txt);
-    row.onclick = () => {
+    tile.append(im, el('span', 'mp-badge', c.done ? '✓' : show ? c.lv.emoji : '🔒'));
+    const tag = i === 0 ? '🎂 ' : i === LEVELS.length - 1 ? '🎄 ' : '';
+    const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior';
+    const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
+    n.append(tile, lab);
+    if (isNext && show) {
+      const go = el('span', 'mp-go', 'Jugar');
+      go.onclick = (e) => {
+        e.stopPropagation();
+        opts.onPlay(c.lv.id);
+      };
+      n.append(go);
+    } else if (isNext && c.early) n.append(liveCountdown(c.day));
+    n.onclick = () => {
       if (!show) {
-        row.classList.remove('nope');
-        void row.offsetWidth;
-        row.classList.add('nope');
+        n.classList.remove('nope');
+        void n.offsetWidth;
+        n.classList.add('nope');
         vibrate(20);
         return;
       }
       chapterSheet(c.lv.id, save, opts);
     };
-    list.append(row);
+    nodes.push(n);
+    track.append(n);
   });
-  const fin = el('button', 'hm-row final' + (allDone || opts.test ? ' open' : ' locked'));
-  fin.append(el('div', 'hm-date', '<b>♥</b>'), el('div', 'hm-thumb heart', '💌'));
-  const ft = el('div', 'hm-row-txt');
-  ft.append(el('div', 'hm-row-name', 'La sorpresa final'), el('div', 'hm-row-sub', allDone || opts.test ? 'Lista para abrir' : 'Cuando termines los nueve'));
-  fin.append(ft);
-  if (allDone || opts.test) fin.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
-  list.append(fin);
-  body.append(list);
+  const finOpen = allDone || opts.test;
+  const fin = el('button', 'mp-node final' + (finOpen ? ' open' : ' locked') + (allDone ? ' next' : ''));
+  fin.append(el('div', 'mp-tile heart', '💌'), el('div', 'mp-label', `<small>♥ · Al final</small><b>La sorpresa final</b><i>${finOpen ? 'Un crucigrama y, al resolverlo, la carta' : 'Cuando termines los nueve'}</i>`));
+  if (finOpen) fin.onclick = () => crossword(opts.onLetter, () => mapScreen(save, opts, 'story'));
+  nodes.push(fin);
+  track.append(fin);
+  wrap.append(track);
+  body.append(wrap);
+
+  // Dónde va cada parada: en fila, subiendo y bajando, y el camino de puntos por sus centros
+  const WAVE = [0.62, 0.3, 0.58, 0.26, 0.6, 0.32, 0.56, 0.28, 0.6, 0.38];
+  const layout = () => {
+    if (!wrap.isConnected) return void window.removeEventListener('resize', layout);
+    const H = wrap.clientHeight;
+    const tileH = Math.max(64, Math.min(120, H * 0.27));
+    const gap = tileH * 1.95;
+    const pad = Math.max(90, window.innerWidth * 0.18);
+    track.style.setProperty('--tile', `${tileH}px`);
+    const pts: [number, number][] = [];
+    nodes.forEach((n, i) => {
+      const x = pad + i * gap;
+      const y = 20 + (H - 40 - tileH * 1.9) * WAVE[i] + tileH / 2;
+      n.style.left = `${x}px`;
+      n.style.top = `${y}px`;
+      pts.push([x, y]);
+    });
+    const W = pad * 2 + (nodes.length - 1) * gap;
+    track.style.width = `${W}px`;
+    svg.setAttribute('width', String(W));
+    svg.setAttribute('height', String(H));
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const seg = (from: number, to: number) => {
+      let d = `M ${pts[from][0]} ${pts[from][1]}`;
+      for (let i = from + 1; i <= to; i++) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+        const mx = (x0 + x1) / 2;
+        d += ` C ${mx} ${y0}, ${mx} ${y1}, ${x1} ${y1}`;
+      }
+      return d;
+    };
+    const lit = Math.min(nodes.length - 1, Math.max(0, nextI));
+    pathOff.setAttribute('d', seg(0, nodes.length - 1));
+    pathOn.setAttribute('d', lit > 0 ? seg(0, lit) : '');
+    const focus = pts[Math.min(nodes.length - 1, Math.max(0, nextI))];
+    wrap.scrollLeft = Math.max(0, focus[0] - window.innerWidth / 2);
+  };
+  requestAnimationFrame(layout);
+  window.addEventListener('resize', layout);
 }
 
 /**
@@ -791,7 +858,7 @@ function settingsSheet(opts: MapOptions) {
         close();
         opts.onReset();
       };
-      b.append(reset, el('p', 'ap-note', 'Modo prueba: cinco toques en «De Gas, para ti» en la portada para quitarlo.'));
+      b.append(reset, el('p', 'ap-note', 'Modo prueba: cinco toques en «De Gas» en la portada para quitarlo.'));
     }
   });
 }
@@ -1172,6 +1239,22 @@ export function comicWord(text: string, kind: string) {
 
 let barkEnd = 0;
 let barkRaf = 0;
+let castChapter = 1;
+/** El capítulo que se juega: decide cómo se llaman los dos en pantalla. */
+export function setCastChapter(n: number) {
+  castChapter = n;
+}
+/**
+ * Hasta el capítulo de las zamburiñas (el 3) son Marc y Margaux; a partir del 4, Gas y Azul. Los textos usan uno u
+ * otro nombre según dónde se escribieron: lo que se ve lo decide esto.
+ */
+export function shownName(who: string) {
+  const early = castChapter <= 3;
+  if (/^(Azul|Margaux)$/.test(who)) return early ? 'Margaux' : 'Azul';
+  if (/^(Gas|Marc)$/.test(who)) return early ? 'Marc' : 'Gas';
+  return who;
+}
+
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
 export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
   // (los mensajes de móvil sueltos, el bocadillo verde con 📱, no salen en ningún nivel: los chats van en el móvil)
@@ -1186,7 +1269,7 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
   const wa = text.startsWith('(WhatsApp) ');
   const body = wa ? text.slice(11) : text;
   const t = el('div', 'bark ' + whoClass(who) + (wa ? ' wa' : ''));
-  t.append(el('b', '', wa ? `📱 ${who}` : who), el('span', '', body));
+  t.append(el('b', '', wa ? `📱 ${shownName(who)}` : shownName(who)), el('span', '', body));
   root.append(t);
   barkEnd = performance.now() + 2100 + Math.min(2400, body.length * 55);
   const place = () => {
@@ -1324,7 +1407,7 @@ export function dialogue(lines: Line[], onDone: () => void) {
     const ln = lines[i];
     const wa = ln.text.startsWith(WA);
     box.className = `dialogue ${whoClass(ln.who)}` + (wa ? ' wa' : '');
-    who.textContent = wa ? `📱 ${ln.who}` : ln.who;
+    who.textContent = wa ? `📱 ${shownName(ln.who)}` : shownName(ln.who);
     const full = body(ln);
     shown = 0;
     text.textContent = '';
@@ -1553,7 +1636,7 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   const frags = Array.isArray(input) ? input : [input];
   const o = el('div', 'phone-overlay');
   const ph = el('div', 'phone');
-  const contact = frags[0].contact;
+  const contact = shownName(frags[0].contact);
   ph.append(
     el('div', 'phone-bar', `<span class="pb-back">‹</span><span class="pb-avatar">${contact[0]}</span><span class="pb-name"><b>${contact}</b><small>en línea</small></span><span class="pb-icons">📹 📞</span>`),
   );
