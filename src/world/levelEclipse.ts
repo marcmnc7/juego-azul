@@ -10,12 +10,12 @@ import { Sky, Sun, toon, vibrate, applyShadows, makeSea } from '../core/gfx';
 import { comicFlash, comicMood, LOOK_LIGHT } from '../core/comic';
 import { comicBulbTexture, comicStarTexture } from '../core/comicTiles';
 import { Lost } from '../core/lost';
-import { ECLIPSE } from '../data/story';
+import { ECLIPSE, FAIL } from '../data/story';
 import { AZUL_DIARIO, GAS_DIARIO, castLook } from '../data/characters';
 import { POT_CORE, G, Merger, makePerson, makeCar, makeDog, animatePerson, seatedRootY, woodChair, CarRig, type Person, type PersonLook, type Dog } from '../entities/models';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
+import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord, failCard } from '../ui/ui';
 import { princesaGame, type LoveLetterStage } from '../ui/minis';
 import { cardCanvas } from '../ui/cards';
 import { buildAzulHouse, STREET_Z, DOOR, DAD_LOOK, MOM_LOOK } from './levelCena';
@@ -1913,7 +1913,7 @@ export class LevelEclipse implements Level {
         if (Math.abs(this.carSpeed) > 0.6 && this.bumpT <= 0) {
           this.bumps++;
           this.bumpT = 0.8;
-          this.clockMin = Math.max(4, this.clockMin - 2);
+          this.clockMin = Math.max(0, this.clockMin - 2);
           comicWord('¡CLONC!', 'hit');
           bark('Margaux', ECLIPSE.parkBump);
           audio.hit();
@@ -2050,8 +2050,17 @@ export class LevelEclipse implements Level {
     // El reloj del eclipse no se para (ni mientras buscas sitio)
     if ((this.phase === 'toCar' || this.phase === 'park') && !this.busy) {
       const before = Math.ceil(this.clockMin);
-      this.clockMin = Math.max(4, this.clockMin - dt / 2.4);
+      this.clockMin = Math.max(0, this.clockMin - dt / 2.4);
       if (Math.ceil(this.clockMin) !== before) this.updateHud();
+      if (this.clockMin <= 0) {
+        // Se ha pasado el eclipse buscando sitio: otra vez a aparcar
+        this.busy = true;
+        this.walker.stop();
+        failCard(FAIL.eclipse.title, FAIL.eclipse.text, () => {
+          this.busy = false;
+          this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
+        });
+      }
       if (this.clockMin <= 10 && !this.clockSaid) {
         this.clockSaid = true;
         bark('Gas', ECLIPSE.clockLow);

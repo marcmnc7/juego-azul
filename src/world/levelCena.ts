@@ -9,7 +9,7 @@ import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicBulbTexture } from '../core/comicTiles';
 import { LOOK_LIGHT } from '../core/comic';
 import { Lost } from '../core/lost';
-import { CENA, SIDE } from '../data/story';
+import { CENA, SIDE, FAIL } from '../data/story';
 import { makeHelmet } from '../entities/helmet';
 import { rigPost } from '../entities/rig';
 import { TableMemory, TableDecor, tableLayout, shuffledLayout } from './sideGames';
@@ -20,7 +20,7 @@ import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
 import { buildSaFarola, COAST_Z } from './saFarola';
 import { buildSurroundings } from './surround';
-import { hud, dialogue, bark, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later } from '../ui/ui';
+import { hud, dialogue, bark, timingGauge, phoneChat, fadeFlash, Hud, DebugItem, later, failCard } from '../ui/ui';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
@@ -981,7 +981,14 @@ export class LevelCena implements Level {
     this.hud.setArrow(null);
     beacon.at(null);
     const late = this.tidied < this.alarmItems.length;
-    if (late) this.scares++;
+    if (late) {
+      // No ha dado tiempo: si llegan a ser tus padres, os pillan. Otra vez
+      this.scares++;
+      failCard(FAIL.alarm.title, FAIL.alarm.text, () => {
+        this.debug().find((d) => d.label.startsWith('8 ·'))?.run();
+      });
+      return;
+    }
     // El coche sigue calle abajo y aparca delante de su casa
     const c = this.neighbor.root.position;
     this.neighborDrive = new Drive([c.clone(), ...(this.neighborD > 10 ? streetPath(this.neighborD - 4, 4, 6, NEIGHBOR_Z - STREET_Z) : []), new THREE.Vector3(Math.min(c.x - 6, -12), 0, NEIGHBOR_Z), new THREE.Vector3(-30, 0, 12.6), new THREE.Vector3(-36, 0, 11.75), new THREE.Vector3(-39, 0, 11.55)], 62 / ALARM_SECS, { vmax: 6, brake: 2.5, stop: true });

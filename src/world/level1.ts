@@ -1,5 +1,5 @@
 import { WaterFight } from './sideGames';
-import { SIDE, type Line } from '../data/story';
+import { SIDE, FAIL, type Line } from '../data/story';
 import * as THREE from 'three';
 import { camWorld } from '../core/camWorld';
 import { steerTo, type SteerState } from '../core/steer';
@@ -14,7 +14,7 @@ import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type 
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM, castLook } from '../data/characters';
-import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
+import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord, failCard } from '../ui/ui';
 import { embrace, hugFor, twoBone, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
@@ -547,7 +547,7 @@ export class Level1 implements Level {
     switch (this.stage) {
       case 'water':
         h.setObjective(SIDE.water.hint);
-        h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span>`);
+        h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span><span class="chip">💧 ${this.water?.soaked ?? 0}/${FAIL.soakMax}</span>`);
         break;
       case 'intro':
         h.setObjective('');
@@ -727,11 +727,12 @@ export class Level1 implements Level {
           bark('Margaux', this.T.hints.dropped);
           this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 5);
           this.updateHud();
-        } else if (this.stage === 'returnTofol' && this.spilled < 2) {
-          // Le queda siempre al menos una: se derrama, pero no hay que volver a empezar
-          bark('Margaux', FERRERIES.hints.spilled[this.spilled]);
+        } else if (this.stage === 'returnTofol' && this.spilled < 3) {
+          // Si se derraman las tres, vuelta a empezar el camino (con otras tres)
           this.spilled++;
           this.fx.burst(this.v1.copy(pp).setY(1.4), '🍋', 7);
+          if (this.spilled < 3) bark('Margaux', FERRERIES.hints.spilled[this.spilled - 1]);
+          else this.fail(FAIL.pomadas, '3 ·');
           this.updateHud();
         } else if (this.hits === 1) {
           bark('Margaux', this.V.bumped);
@@ -753,6 +754,21 @@ export class Level1 implements Level {
       }
     }
     return best;
+  }
+
+  /** Una prueba que no ha salido: tarjeta y, al darle a «Otra vez», esa parte desde su principio (la fase de prueba). */
+  private failing = false;
+  private fail(f: { title: string; text: string }, phase: string) {
+    if (this.failing) return;
+    this.failing = true;
+    this.busy = true;
+    this.walker.stop();
+    this.input.reset();
+    later(() => failCard(f.title, f.text, () => {
+      this.failing = false;
+      this.busy = false;
+      this.debug().find((d) => d.label.startsWith(phase))?.run();
+    }), 500);
   }
 
   /** Charla con alguien del público: se gira hacia ella y dice algo (a veces, lo que toca hacer). */
@@ -829,6 +845,14 @@ export class Level1 implements Level {
   private touchDonkey(s: DonkeyState) {
     const k = Math.sin(Math.min(1, 1 - s.rearT / REAR) * Math.PI);
     const perfect = k > 0.85;
+    // A destiempo no cuenta: el ase se aparta y hay que esperar a que se vuelva a poner de manos
+    if (k < 0.45) {
+      audio.knock(0.3, 220, 0.1);
+      bark('Margaux', FAIL.lateAse);
+      s.rearT = 0;
+      this.invuln = Math.max(this.invuln, 0.8);
+      return;
+    }
     s.touched = true;
     s.ring.visible = false;
     this.luckCount++;
@@ -1236,6 +1260,9 @@ export class Level1 implements Level {
     }
     this.hud.setAction(label, pulse);
     if (this.input.consumeAction() && this.pendingAction) this.pendingAction();
+
+    // Las pistolas: si te empapan seis veces, los críos ganan y vuelta a empezar
+    if (this.stage === 'water' && this.water && this.water.soaked >= FAIL.soakMax) this.fail(FAIL.water, '0 ·');
 
     // Capítulo 9: hay que encontrarle por lo que dice el chat (y preguntando). Solo si se pierde, Gas reenvía la
     // ubicación y un 📍 sale un rato sobre el sitio (nada de flecha)

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { ROAD } from '../data/story';
+import { ROAD, FAIL } from '../data/story';
 import { G, Merger, makeCar, makeScallop, vertexMat, mergedMat, grassTufts, woodChair, CarRig, makePerson, animatePerson, type Person } from '../entities/models';
 import { ROOF_GEO } from './ferreries';
 import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, applyShadows, makeSea, paintMat } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord } from '../ui/ui';
+import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
@@ -257,7 +257,10 @@ export class Level2 implements Level {
   private steerT = -9;
   private combo = 0;
   private hits = 0;
+  /** Choques desde el último punto bueno: al tercero, vuelta atrás. */
+  private hitsSinceCp = 0;
   private burnt = 0;
+  private burntRun = 0;
   private nearMisses = 0;
   private driveTime = 0;
   private shakeT = 0;
@@ -1175,7 +1178,9 @@ export class Level2 implements Level {
           vibrate(120);
           this.fx.burst(at, '💥', 4, 1.6);
           comicWord(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)], 'hit');
-          if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'l'), 500);
+          this.hitsSinceCp++;
+          if (this.hitsSinceCp >= 3 && !this.rewinding) this.rewind(FAIL.crashes);
+          else if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'l'), 500);
         }
         this.updateHud();
       } else if (drive && th.kind === 'obstacle' && !th.passed && th.z < this.carZ - 2.5) {
@@ -1395,6 +1400,7 @@ export class Level2 implements Level {
         for (const e of EATERIES) if (e.z > cp) this.eateryTried.delete(e.name);
         this.dropCow();
         this.reset(cp);
+        this.hitsSinceCp = 0;
         this.speed = 0;
         this.lane = 1;
         this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
@@ -1407,7 +1413,7 @@ export class Level2 implements Level {
   }
 
   private stopForCow() {
-    this.checkpoint = COW_Z[this.cowIdx] ?? this.carZ;
+    this.checkpoint = COW_Z[this.cowIdx] ?? this.carZ; this.hitsSinceCp = 0;
     this.cowFrom = this.phase;
     this.phase = 'cow';
     this.lane = 1;
@@ -1534,7 +1540,7 @@ export class Level2 implements Level {
                         this.busy = false;
                         this.speed = 0;
                         this.phase = 'drive1';
-                        this.checkpoint = this.carZ;
+                        this.checkpoint = this.carZ; this.hitsSinceCp = 0;
                         this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
                         this.nextSpawn = this.carZ + 60;
                         this.updateHud();
@@ -1845,7 +1851,7 @@ export class Level2 implements Level {
       dialogue(ROAD.gasNone, () => {
         this.busy = false;
         this.gasDone = true;
-        this.checkpoint = GAS_Z + 8;
+        this.checkpoint = GAS_Z + 8; this.hitsSinceCp = 0;
         this.phase = 'drive1';
         this.nextSpawn = this.carZ + 60;
         this.updateHud();
@@ -1915,7 +1921,7 @@ export class Level2 implements Level {
 
   private stopMarcial() {
     this.marcialDone = true;
-    this.checkpoint = MARCIAL_Z + 8;
+    this.checkpoint = MARCIAL_Z + 8; this.hitsSinceCp = 0;
     this.phase = 'marcial';
     this.hud.setAction(null);
     this.showLaneButtons(false);
@@ -1971,7 +1977,18 @@ export class Level2 implements Level {
       if (s.p > 1.35) {
         audio.boo();
         this.burnt++;
+        this.burntRun++;
         comicWord(ROAD.zamb.burnt, 'hit');
+        if (this.burntRun >= FAIL.burntMax && this.phase === 'grill') {
+          this.phase = 'zambDone';
+          this.busy = true;
+          later(() => failCard(FAIL.grill.title, FAIL.grill.text, () => {
+            this.busy = false;
+            this.burntRun = 0;
+            window.removeEventListener('pointerdown', this.onTap);
+            this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
+          }), 600);
+        }
         s.p = 0;
         s.wait = 0.8;
       }

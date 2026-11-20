@@ -1136,3 +1136,27 @@ export const SIDE = {
     found: '🕶️ ¡Mis gafas! En la repisa, donde las dejé.',
   },
 };
+
+/** Pruebas que no han salido (la tarjeta de «Otra vez»): qué ha pasado, en una línea. */
+export const FAIL = {
+  soakMax: 6,
+  water: { title: 'Empapada', text: 'Los críos te han ganado. Que no te den tanto: muévete cuando te apunten.' },
+  pomadas: { title: 'Sin pomadas', text: 'Se han caído las tres. Otra vez desde la barra, y cuidado con los ases.' },
+  lateAse: 'Uy, a destiempo… Cuando se ponga de manos.',
+  marco: { title: '¡Pillada!', text: 'Tres veces te ha cogido. Contesta «Polo» a tiempo y no chapotees cuando esté cerca.' },
+  crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
+  burntMax: 4,
+  grill: { title: 'Carbón', text: 'Cuatro zamburiñas quemadas. Dales la vuelta cuando brillen, ni antes ni después.' },
+  boardSecs: 180,
+  plane: { title: 'Puerta cerrada', text: 'El avión se ha ido sin ti. Mira bien las pantallas: ahí pone cuál es tu puerta.' },
+  rhythmMin: 0.5,
+  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas. Con la mitad, Fito te lo perdona: otra vez.` },
+  pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
+  windSecs: 3,
+  wind: { title: '¡Al suelo!', text: 'La tramontana se ha llevado la moto. Échate hacia donde sopla la racha, siempre en contra.' },
+  peltMax: 6,
+  nuts: { title: 'Coscorrón', text: 'Te han dado seis veces. Cuando veas el círculo en el suelo, apártate.' },
+  alarm: { title: 'Os han pillado', text: 'Si llegan a ser tus padres… Platos y sartén fuera de la vista antes de que el coche llegue a la puerta.' },
+  eclipse: { title: 'Te lo has perdido', text: 'El eclipse no espera. Aparca sin darle a nada: cada golpe son dos minutos.' },
+  starsReset: 'Uy, se ha borrado. Desde la primera, que es un corazón 😉',
+};

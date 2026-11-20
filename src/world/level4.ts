@@ -5,7 +5,7 @@ import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicStarTexture, comicBulbTexture } from '../core/comicTiles';
-import { NIGHT, type Line } from '../data/story';
+import { NIGHT, FAIL, type Line } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { POT_CORE, woodChair, CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
@@ -17,7 +17,7 @@ import { Particles } from '../entities/fx';
 import { PoolWater } from '../core/poolWater';
 import { Trail } from '../core/follow';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, phoneChat, Hud, DebugItem, later, bark, comicWord } from '../ui/ui';
+import { hud, dialogue, fadeFlash, phoneChat, Hud, DebugItem, later, bark, comicWord, failCard } from '../ui/ui';
 import { embrace, type Embrace } from '../entities/embrace';
 import { ROOF_GEO, type Box2 } from './ferreries';
 import { canvasTex } from './deco';
@@ -222,6 +222,8 @@ export class Level4 implements Level {
   private starLine!: THREE.Mesh;
   private nextStar = 0;
   private misses = 0;
+  /** Fallos seguidos en la estrella que toca: a los dos parpadea; a los cuatro, el dibujo se borra. */
+  private missRun = 0;
   private shooting: { s: THREE.Sprite; v: THREE.Vector3; life: number }[] = [];
   private starCamPos = new THREE.Vector3();
   private starCamLook = new THREE.Vector3();
@@ -1769,6 +1771,17 @@ export class Level4 implements Level {
       bark('Gas', MP.caught());
       audio.splash();
       vibrate(40);
+      if (mp.caught >= 3) {
+        // Tres veces pillada: Marco Polo otra vez
+        this.mp = null;
+        this.busy = true;
+        this.walker.stop();
+        later(() => failCard(FAIL.marco.title, FAIL.marco.text, () => {
+          this.busy = false;
+          this.debug().find((d) => d.label.startsWith('M ·'))?.run();
+        }), 700);
+        return;
+      }
       this.pool.disturb((p.x + g.x) / 2, (p.z + g.z) / 2, 0.6, 0.5);
     }
   }
@@ -2113,7 +2126,18 @@ export class Level4 implements Level {
     const sx = ((v.x + 1) / 2) * window.innerWidth;
     const sy = ((1 - v.y) / 2) * window.innerHeight;
     if (Math.hypot(sx - x, sy - y) < Math.max(44, window.innerWidth * 0.05)) this.hitStar();
-    else this.misses++;
+    else {
+      this.misses++;
+      this.missRun++;
+      audio.knock(0.2, 260, 0.08);
+      if (this.missRun >= 4 && this.nextStar > 0) {
+        // El corazón se borra: otra vez desde la primera
+        this.missRun = 0;
+        this.nextStar = 0;
+        this.starLine.geometry.setDrawRange(0, 0);
+        bark('Gas', FAIL.starsReset);
+      }
+    }
   }
 
   /** Para el modo prueba: unir la siguiente estrella. */
@@ -2121,6 +2145,7 @@ export class Level4 implements Level {
     if (this.phase !== 'stars') return;
     audio.chime(this.nextStar);
     vibrate(15);
+    this.missRun = 0;
     this.nextStar++;
     // (6 vértices por tramo: con n estrellas unidas, n - 1 tramos; al cerrar, todos)
     this.starLine.geometry.setDrawRange(0, Math.max(0, this.nextStar - 1) * 6);
@@ -2159,7 +2184,8 @@ export class Level4 implements Level {
     this.camera.lookAt(this.v1);
     const done = this.phase !== 'stars';
     this.starSprites.forEach((s, i) => {
-      const next = i === this.nextStar && !done;
+      // (la que toca solo se marca si se ha equivocado dos veces seguidas: el dibujo hay que verlo; la primera, siempre)
+      const next = i === this.nextStar && !done && (this.nextStar === 0 || this.missRun >= 2);
       const lit = i < this.nextStar || done;
       const base = lit ? 6.5 : next ? 5 + Math.abs(Math.sin(this.t * 5)) * 4 : 4;
       s.scale.setScalar(base + (done ? Math.sin(this.t * 3 + i) * 1.2 : 0));

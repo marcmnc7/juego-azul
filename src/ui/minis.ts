@@ -1,8 +1,8 @@
 import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { CHATS } from '../data/chats';
-import { MINIS } from '../data/story';
-import { phoneChat, toast, missionCard, bark } from './ui';
+import { MINIS, FAIL } from '../data/story';
+import { phoneChat, toast, missionCard, bark, failCard } from './ui';
 import { cardUrl } from './cards';
 import { beachMission } from '../world/missions/beach';
 import { parkMission } from '../world/missions/park';
@@ -87,6 +87,13 @@ export function packBag(items: PackItem[], onDone: (extras: number) => void) {
         void b.offsetWidth;
         b.classList.add('nope');
         bark('Gas', MINIS.pack.nope);
+        if (extras >= 3) {
+          // Tres cosas que no tocaban: se vacía la mochila y otra vez
+          setTimeout(() => {
+            o.remove();
+            failCard(FAIL.pack.title, FAIL.pack.text, () => packBag(items, onDone));
+          }, 500);
+        }
       }
     };
     grid.append(b);
@@ -249,7 +256,8 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       const won = myTokens >= TOKENS;
       const lost = gasTokens >= TOKENS;
       // Si Gas gana la partida entera, revancha; a la segunda se rinde: ya empieza el eclipse
-      const concede = lost && lostMatches >= 1;
+      // (antes Gas se rendía a la segunda; ahora hay que ganarle: revancha hasta que ganes)
+      const concede = false;
       say(won ? `${why} ${T.match}` : concede ? `${why} ${T.concede}` : lost ? `${why} ${T.matchGas}` : why);
       stage?.end(iWin || concede);
       const b = el('button', 'big-btn', won || concede ? T.winBtn : lost ? T.again : T.next);

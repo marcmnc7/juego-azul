@@ -6,7 +6,7 @@ import { Sky, Sun, toon, vibrate, makeSea, paintMat } from '../core/gfx';
 import { comicFlash } from '../core/comic';
 import { setSurface, Surf } from '../core/surfaces';
 import { Lost } from '../core/lost';
-import { MOTO } from '../data/story';
+import { MOTO, FAIL } from '../data/story';
 import { MARGAUX_LOOK, MARC_LOOK, castLook } from '../data/characters';
 import { G, Merger, makeMoto, makeCar, makePerson, type Person, type PersonLook } from '../entities/models';
 import { canvasTex } from './deco';
@@ -17,7 +17,7 @@ import { twoBone } from '../entities/embrace';
 import { makeHelmet } from '../entities/helmet';
 import { CHATS } from '../data/chats';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord, viewfinder } from '../ui/ui';
+import { hud, dialogue, phoneChat, fadeFlash, Hud, DebugItem, later, bark, comicWord, viewfinder, failCard } from '../ui/ui';
 import { packBag } from '../ui/minis';
 import { disposeScene, type Level, type LevelDone } from './level';
 
@@ -177,6 +177,9 @@ export class LevelMoto implements Level {
   private good = 0;
   private total = 0;
   private wobbleT = 0;
+  /** Segundos seguidos sin echarse contra el viento: a los que marca FAIL, la moto se va al suelo. */
+  private badWind = 0;
+  private failing = false;
   private photos = 0;
   private photoTaken = PHOTO_AT.map(() => false);
   /** Los apartaderos de ida: Gas para en cada uno; cuando ella dice «¡Vámonos!», se sale. bayStop: en cuál está parado. */
@@ -1199,6 +1202,17 @@ export class LevelMoto implements Level {
         this.windEl.style.opacity = this.windT < 0.5 ? '0.45' : '1';
       }
       this.total += dt;
+      this.badWind = against ? Math.max(0, this.badWind - dt * 2) : this.badWind + dt;
+      if (this.badWind > FAIL.windSecs && !this.failing) {
+        this.failing = true;
+        audio.hit();
+        vibrate(200);
+        failCard(FAIL.wind.title, FAIL.wind.text, () => {
+          this.failing = false;
+          this.badWind = 0;
+          this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
+        });
+      }
       if (against) this.good += dt;
       else if (this.wobbleT <= 0) {
         this.wobbleT = 1.2;

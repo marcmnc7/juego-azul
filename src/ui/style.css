@@ -2227,3 +2227,9 @@ html, body { background: #000; }
 .pz-emoji { text-align: center; font-size: clamp(40px, 13vw, 58px); letter-spacing: 4px; padding: 10px 0; }
 .pz-hang { gap: 4px 14px; }
 .pz-hw { display: inline-flex; gap: 4px; white-space: nowrap; }
+.fail-card { text-align: center; max-width: 360px; }
+.fail-card .ap-sheet-body, .fail-card { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.fail-card h2 { padding-right: 0 !important; margin: 0; font-family: var(--display); font-size: 26px; }
+.fail-card .hm-btn { margin-top: 6px; min-width: 200px; }
+.chip.warn { background: #e2547a !important; color: #fff !important; animation: chipWarn .8s ease-in-out infinite alternate; }
+@keyframes chipWarn { to { transform: scale(1.08); } }

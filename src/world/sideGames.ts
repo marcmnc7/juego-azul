@@ -301,6 +301,7 @@ export class WaterFight {
             run: () => {
               if (Math.hypot(pp.x - land.x, pp.z - land.z) > 1) return;
               this.soaked++;
+              this.onChange();
               // Con el agua en la cara, un segundo sin poder disparar
               this.cool = Math.max(this.cool, 1.0);
               this.walker.shake(0.22);
@@ -1458,6 +1459,7 @@ export class NutThrow {
             audio.knock(0.25, 1500, 0.04);
             if (Math.hypot(pp.x - land.x, pp.z - land.z) < 1) {
               this.pelted++;
+              this.onChange();
               audio.hit();
               this.walker.shake(0.2);
               vibrate(35);

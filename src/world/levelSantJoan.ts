@@ -11,12 +11,12 @@ import { setSurface, Surf } from '../core/surfaces';
 import { dust } from '../core/dust';
 import { Lost } from '../core/lost';
 import { TownHD } from './hd/townHD';
-import { SANTJOAN, SANTJOAN_CHATTER, SANTJOAN_BYE, SANTJOAN_HINTS, type Line } from '../data/story';
+import { SANTJOAN, SANTJOAN_CHATTER, SANTJOAN_BYE, SANTJOAN_HINTS, FAIL, type Line } from '../data/story';
 import { AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, streetLamp, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import type { Behave } from '../entities/crowdRig';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue } from '../ui/ui';
+import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue, failCard } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
 import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF, STAIR_PATH, TERRACE, TERRACE_Y, stairY, stairAt, pathLen } from './levelCena';
@@ -1192,7 +1192,7 @@ export class LevelSantJoan implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span>` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
+    h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span><span class="chip">🤕 ${this.nuts?.pelted ?? 0}/${FAIL.peltMax}</span>` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : `<span class="chip">🌰 ${this.bagCount}</span><span class="chip">🐎 ${this.luck}</span>`);
     // Objetivos mínimos: un emoji o dos palabras, sin decir qué hacer
     if (this.phase === 'nuts') h.setObjective(SIDE.nuts.hint);
     else if (this.phase === 'cross') h.setObjective(SANTJOAN.cross.hint);
@@ -1326,6 +1326,15 @@ export class LevelSantJoan implements Level {
       else animatePerson(this.gas, dt, 'talk');
     }
 
+    if (this.nuts && this.nuts.pelted >= FAIL.peltMax && !this.busy) {
+      // Demasiadas avellanas en la cabeza: otra vez
+      this.busy = true;
+      this.walker.stop();
+      failCard(FAIL.nuts.title, FAIL.nuts.text, () => {
+        this.busy = false;
+        this.debug().find((d) => d.label.startsWith('4b ·'))?.run();
+      });
+    }
     if (this.nuts) {
       this.nuts.update(dt, this.busy);
       this.nuts?.pose(dt);

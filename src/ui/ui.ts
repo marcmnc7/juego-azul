@@ -2236,3 +2236,28 @@ export class Tutorial {
     this.wrap.remove();
   }
 }
+
+/**
+ * Fallo de una prueba: el capítulo se para y sale una tarjeta con lo que ha pasado y un solo botón, «Otra vez»,
+ * que vuelve a empezar esa parte (no el capítulo). Sin ✕: para seguir hay que hacerlo bien.
+ */
+export function failCard(title: string, text: string, retry: () => void) {
+  if (root.querySelector('.fail-back')) return;
+  closeDialogue();
+  root.querySelectorAll('.bark').forEach((n) => n.remove());
+  pauseState.on = true;
+  audio.knock(0.5, 140, 0.25);
+  const back = el('div', 'ap-sheet-back fail-back');
+  const sh = el('div', 'ap-sheet fail-card');
+  const b = el('button', 'hm-btn pc-go', 'Otra vez');
+  sh.append(el('div', 'ap-sheet-emoji', '😵'), el('h2', '', title), el('p', 'ap-sheet-place', text), b);
+  back.append(sh);
+  root.append(back);
+  requestAnimationFrame(() => back.classList.add('on'));
+  b.onclick = () => {
+    back.classList.remove('on');
+    setTimeout(() => back.remove(), 260);
+    pauseState.on = false;
+    fadeFlash(retry, 250);
+  };
+}

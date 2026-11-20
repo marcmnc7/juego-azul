@@ -4,7 +4,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
-import { CONCERT, SIDE } from '../data/story';
+import { CONCERT, SIDE, FAIL } from '../data/story';
 import { FITO_SONG, SONG_OF } from '../core/songs';
 import { BeerRun, BEERS_NEED, Cabin3D, PeeAim3D } from './sideGames';
 import { MARC_LOOK, castLook, AZUL_DIARIO } from '../data/characters';
@@ -15,7 +15,7 @@ import { LOOK_LIGHT } from '../core/comic';
 import { comicBulbTexture, comicStarTexture } from '../core/comicTiles';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord } from '../ui/ui';
+import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard } from '../ui/ui';
 import { hugFor, twoBone } from '../entities/embrace';
 import { boneAnchor, rigPost } from '../entities/rig';
 import { CHATS } from '../data/chats';
@@ -782,6 +782,9 @@ export class Level3 implements Level {
   private doorSaid = -1;
   private wcShake = WC_Z.map(() => 0);
   private gateStage = 0;
+  /** Lo que queda para que cierre el embarque (s): si llega a cero sin estar en la cola, se ha perdido el avión. */
+  private boardLeft = 0;
+  private failing = false;
   /** La cola de embarque de la puerta 26 y en qué punto está Azul. */
   private gateQ: GateNpc[] = [];
   private gateStep: 'none' | 'line' | 'scan' | 'ask' | 'pass' | 'finger' = 'none';
@@ -2216,6 +2219,8 @@ export class Level3 implements Level {
     this.phase = 'airport';
     this.scene.add(this.airGroup, this.arrGroup);
     this.gateStage = 0;
+    this.boardLeft = FAIL.boardSecs;
+    this.failing = false;
     this.resetGate();
     if (this.player !== this.azul) {
       this.player = this.azul;
@@ -4190,6 +4195,10 @@ export class Level3 implements Level {
     if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
+    if (this.phase === 'airport') {
+      const b = Math.max(0, Math.ceil(this.boardLeft));
+      chips += `<span class="chip${b <= 30 ? ' warn' : ''}">🛫 ${Math.floor(b / 60)}:${String(b % 60).padStart(2, '0')}</span>`;
+    }
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
@@ -4418,7 +4427,19 @@ export class Level3 implements Level {
     // (Gas en la cola del baño también: anda con la cola, no con el joystick)
     const scripted = !!this.auto || this.phase === 'gateQueue' || this.gasTurn !== null || (!!this.gasNpc && this.queue.includes(this.gasNpc));
     this.invuln -= dt;
-    if (this.phase === 'airport' && !this.busy) this.stepAirport(dt);
+    if (this.phase === 'airport' && !this.busy) {
+      this.stepAirport(dt);
+      this.boardLeft -= dt;
+      if (this.boardLeft <= 0 && !this.failing) {
+        this.failing = true;
+        this.busy = true;
+        this.walker.stop();
+        failCard(FAIL.plane.title, FAIL.plane.text, () => {
+          this.busy = false;
+          this.debug().find((d) => d.label.startsWith('0 ·'))?.run();
+        });
+      }
+    }
     if (this.airGroup.parent && this.player.root.position.x > 100 && this.player.root.position.x < 350) this.stepAirPeople(dt);
     // Grabando, arrastrar apunta el móvil (lo lee stepFilm)
     if (this.phase !== 'film') this.walker.turn(this.input.consumeCam());
@@ -4669,6 +4690,17 @@ export class Level3 implements Level {
 
   private finishRhythm() {
     const r = this.rhythm!;
+    // Con menos de la mitad de las notas no hay concierto que valga: otra vez
+    if (r.total && r.hits / r.total < FAIL.rhythmMin) {
+      r.dispose();
+      this.rhythm = null;
+      this.busy = true;
+      failCard(FAIL.rhythm.title, FAIL.rhythm.text(r.hits, r.total), () => {
+        this.busy = false;
+        this.debug().find((d) => d.label.startsWith('8 ·'))?.run();
+      });
+      return;
+    }
     this.result = { hits: r.hits, total: r.total, perfects: r.perfects, maxCombo: r.maxCombo };
     bark('Gas', CONCERT.rhythmDone(r.hits, r.total));
     comicWord('¡BRAVO!', 'fanfare');
