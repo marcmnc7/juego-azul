@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MOBILE } from './gfx';
 import { comicBulbTexture, comicHaloTexture, comicTile } from './comicTiles';
 import { glowOn, surfaceShader } from './comicSurfaces';
 
@@ -689,7 +690,7 @@ function makePass(renderer: THREE.WebGLRenderer): Pass {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: THREE.HalfFloatType,
     // con mucha densidad de píxeles (el móvil) el dentado no se nota y el antialias cuesta mucha memoria
-    samples: renderer.getPixelRatio() >= 2 ? 0 : 4,
+    samples: MOBILE || renderer.getPixelRatio() >= 2 ? 0 : 4,
     depthTexture: new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType),
   });
   const mat = new THREE.ShaderMaterial({

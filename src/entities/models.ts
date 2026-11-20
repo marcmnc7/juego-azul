@@ -47,7 +47,7 @@ export function mergedMat(g: THREE.BufferGeometry): THREE.Material | THREE.Mater
  * ras de suelo no se toca: el doblado allí no mueve nada.
  */
 /** Hasta cuántos trozos por lado se parte un triángulo (en el móvil, menos: con 12 no cabía en la memoria del iPhone). */
-const SUBDIV_CAP = MOBILE ? 6 : 12;
+const SUBDIV_CAP = MOBILE ? 4 : 12;
 
 function subdivide(g: THREE.BufferGeometry, max: number) {
   const P = g.attributes.position.array as ArrayLike<number>;

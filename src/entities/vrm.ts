@@ -62,7 +62,7 @@ export async function loadVRM(url: string): Promise<LoadedVRM> {
   // En el móvil, texturas más pequeñas antes de subirlas a la GPU: cada VRoid trae ~23 de hasta 2048 px (unos 48 MB
   // por personaje) y con los doce del capítulo 1 el iPhone cerraba la pestaña al montar el escenario
   shareTextures(vrm.scene);
-  if (LOWTEX) shrinkTextures(vrm.scene, /\/(azul|gas)_[^/]*$/.test(url.split('?')[0].replace(/-[\w-]+\.vrm$/, '')) ? 1024 : 512);
+  if (LOWTEX) shrinkTextures(vrm.scene, /\/(azul|gas)_[^/]*$/.test(url.split('?')[0].replace(/-[\w-]+\.vrm$/, '')) ? 768 : 512);
   VRMUtils.removeUnnecessaryVertices(vrm.scene);
   VRMUtils.combineSkeletons(vrm.scene);
   // rig.ts mueve los huesos de verdad; el VRM no debe sobrescribirlos con su esqueleto normalizado
