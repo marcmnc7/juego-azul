@@ -1573,7 +1573,7 @@ export class LevelCena implements Level {
               [this.v1.set(TABLE.x - 2.6, 2.25, TABLE.z + 1.55), this.v2.set(TABLE.x + 0.15, 0.85, SEAT_Z)]
             : this.phase === 'gasComing'
               ? // Desde el jardín, calle arriba: la moto que llega y aparca más adelante
-                [this.v1.set(-1.0, 4.6, 6.2), this.v2.set(Math.max(3, Math.min(m.x, 30)), 0.8, 12.2)]
+                [this.v1.set(-3, 5.5, 9.6), this.v2.set(Math.max(3, Math.min(m.x, 30)), 0.8, 12.2)]
               : this.phase === 'gasRide'
                 ? // Desde la cancela, Gas que sale, se monta y se va
                   [this.v1.set(-0.8, 3.0, 7.6), this.motoState === 'parked' && this.gas.root.visible ? this.v2.copy(this.gas.root.position).setY(1.0) : this.v2.set(Math.max(2, Math.min(m.x, 30)), 0.9, m.z)]

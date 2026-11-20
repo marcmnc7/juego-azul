@@ -1100,16 +1100,21 @@ export class Level1 implements Level {
       }
     } else animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
     if (this.together && !this.marcTo && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'toFont')) {
-      // Gas la sigue a un paso
+      // Gas va a su lado (a la izquierda y un poco por detrás), no en fila: detrás de ella la tapaba en cámara
       const mp = this.marc.root.position;
-      const dx = pp.x - mp.x, dz = pp.z - mp.z, d = Math.hypot(dx, dz);
-      if (d > 1.5) {
-        const step = Math.min(d - 1.5, dt * 5.2);
+      const ry = this.player.root.rotation.y;
+      const tx = pp.x + Math.cos(ry) * 0.85 - Math.sin(ry) * 0.35, tz = pp.z - Math.sin(ry) * 0.85 - Math.cos(ry) * 0.35;
+      const dx = tx - mp.x, dz = tz - mp.z, d = Math.hypot(dx, dz);
+      const moving = d > 0.25;
+      if (moving) {
+        const step = Math.min(d, dt * (d > 2 ? 6 : 4.2));
         mp.x += (dx / d) * step;
         mp.z += (dz / d) * step;
       }
-      this.marc.root.rotation.y = Math.atan2(dx, dz);
-      animatePerson(this.marc, dt, d > 1.55 ? 'walk' : 'idle', d > 1.55 ? 0.9 : 0);
+      const want = moving && d > 0.6 ? Math.atan2(dx, dz) : ry;
+      const r = this.marc.root.rotation;
+      r.y += Math.atan2(Math.sin(want - r.y), Math.cos(want - r.y)) * Math.min(1, dt * 8);
+      animatePerson(this.marc, dt, moving ? 'walk' : 'idle', moving ? 0.9 : 0);
       if (this.marcBox) Object.assign(this.marcBox, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
     }
     if (this.stage === 'kissing') this.updateKiss(dt);
