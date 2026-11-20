@@ -138,7 +138,6 @@ const FLASH_SPOT = new THREE.Vector3(AISLE_X, 0, 4);
 // Dónde está Azul cada vez que Gas vuelve del baño (en el pasillo, entre el público)
 const AZUL_SPOTS = [FLASH_SPOT, new THREE.Vector3(-6, 0, 18), new THREE.Vector3(-10, 0, 13.5)];
 const TRIPS = AZUL_SPOTS.length;
-const SONG_SECS = 36;
 /** Luz principal: en Barajas, el día que entra por la cubierta (alto, para que las cristaleras no llenen el suelo
  * de sombra); en el estadio, desde la torre de sonido, detrás del público (ilumina a la banda de frente). */
 const DAY_SUN = new THREE.Vector3(0.25, 1, -0.3);
@@ -835,7 +834,6 @@ export class Level3 implements Level {
   private movingAvoid: Circle[] = [];
   private azCircle!: Circle;
   private trip = 0;
-  private songT = 0;
   private missed = 0;
   private seekT = 0;
   private flashT = 1;
@@ -4049,7 +4047,6 @@ export class Level3 implements Level {
     this.walker.yaw = this.walker.facing = -0.75;
     this.placeAzul(AZUL_SPOTS[(this.trip - 1) % TRIPS]);
     this.phase = 'seek';
-    this.songT = 0;
     this.seekT = 0;
     this.flashT = 1.2;
     this.setDark(true);
@@ -4075,14 +4072,7 @@ export class Level3 implements Level {
     const ap = this.azul.root.position;
     const pp = this.player.root.position;
     this.seekT += dt;
-    this.songT += dt;
-    if (this.songT > SONG_SECS) {
-      this.songT = 0;
-      this.missed++;
-      bark('Gas', CONCERT.songLost[Math.min(this.missed - 1, CONCERT.songLost.length - 1)]);
-      audio.cheer(0.25);
-      this.updateHud();
-    }
+    // (sin reloj: que la busque con calma; las canciones perdidas son solo las de los viajes al baño)
     // Doble flash de Azul: más a menudo cuanto más tarda (ella también le busca)
     this.flashT -= dt;
     if (this.flashT <= 0) {
@@ -4187,7 +4177,6 @@ export class Level3 implements Level {
     let chips = '';
     if (this.trip > 0 || this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
     if (this.missed > 0) chips += `<span class="chip">🎵 se pierde ${this.missed}</span>`;
-    if (this.phase === 'seek') chips += `<span class="chip">⏱️ ${Math.max(0, Math.ceil(SONG_SECS - this.songT))}s</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
