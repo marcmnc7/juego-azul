@@ -2055,7 +2055,8 @@ export class LevelEclipse implements Level {
       if (this.clockMin <= 0) {
         // Se ha pasado el eclipse buscando sitio: otra vez a aparcar
         this.busy = true;
-        this.walker.stop();
+        this.walker?.stop();
+        this.carSpeed = 0;
         failCard(FAIL.eclipse.title, FAIL.eclipse.text, () => {
           this.busy = false;
           this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
