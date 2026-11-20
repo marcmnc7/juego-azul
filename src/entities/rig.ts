@@ -26,7 +26,7 @@ import tplGasUrl from '../assets/crowd/vroid/gas_diario.glb';
 import tplKidUrl from '../assets/crowd/vroid/nino_3.glb';
 import tplKidGirlUrl from '../assets/crowd/vroid/nino_2.glb';
 import type { VRM } from '@pixiv/three-vrm';
-import { loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
+import { LOWTEX, shrinkTextures, loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
 
 // Personajes de la prueba de concepto: modelos glTF con esqueleto (rig de Mixamo) y animaciones de
 // captura de movimiento (Mixamo), con el mismo retargeting en espacio mundo de la prueba.
@@ -372,6 +372,8 @@ export function preloadRig() {
     TEMPLATES.forEach((t, i) => {
       const g = tpls[i];
       if (!g) return;
+      // (en el móvil, su atlas de 2048 a 1024: la gente se ve de lejos y son doce plantillas siempre cargadas)
+      if (LOWTEX) shrinkTextures(g.scene, 1024);
       const body = g.scene.getObjectByName('Body') as THREE.SkinnedMesh | undefined;
       const c = body?.userData.crowd as { skin: number[]; lum: Record<string, number> } | undefined;
       if (!body || !c) return;

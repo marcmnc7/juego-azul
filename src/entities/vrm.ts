@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm';
 import { bytes } from '../core/assets';
+import { MOBILE } from '../core/gfx';
+/** Texturas reducidas: en el móvil (o con ?lowtex, para verlo en el ordenador). */
+export const LOWTEX = MOBILE || (typeof location !== 'undefined' && location.search.includes('lowtex'));
 
 // Personajes hechos en VRoid Studio (VRM 1.0): estilo anime con sombreado MToon, expresiones y pelo con física.
 //
@@ -56,6 +59,9 @@ export async function loadVRM(url: string): Promise<LoadedVRM> {
   }
   const vrm = gltf.userData.vrm as VRM;
   if (!vrm) throw new Error('no es un VRM: ' + url);
+  // En el móvil, texturas más pequeñas antes de subirlas a la GPU: cada VRoid trae ~23 de hasta 2048 px (unos 48 MB
+  // por personaje) y con los doce del capítulo 1 el iPhone cerraba la pestaña al montar el escenario
+  if (LOWTEX) shrinkTextures(vrm.scene, /\/(azul|gas)_[^/]*$/.test(url.split('?')[0].replace(/-[\w-]+\.vrm$/, '')) ? 1024 : 512);
   VRMUtils.removeUnnecessaryVertices(vrm.scene);
   VRMUtils.combineSkeletons(vrm.scene);
   // rig.ts mueve los huesos de verdad; el VRM no debe sobrescribirlos con su esqueleto normalizado
@@ -78,6 +84,37 @@ export async function loadVRM(url: string): Promise<LoadedVRM> {
   gltf.scene = vrm.scene;
   gltf.animations = [];
   return { gltf, vrm };
+}
+
+/** Reduce a `max` px (lado mayor) las texturas de un modelo que aún no se han subido a la GPU. */
+export function shrinkTextures(root: THREE.Object3D, max: number) {
+  const done = new Set<THREE.Texture>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      for (const v of Object.values(mat)) {
+        const t = v as THREE.Texture | null;
+        if (!t?.isTexture || done.has(t)) continue;
+        done.add(t);
+        const img = t.image as (HTMLImageElement | HTMLCanvasElement) & { naturalWidth?: number; naturalHeight?: number };
+        const w = img?.naturalWidth || img?.width || 0, h = img?.naturalHeight || img?.height || 0;
+        if (!w || !h || Math.max(w, h) <= max) continue;
+        const k = max / Math.max(w, h);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * k));
+        c.height = Math.max(1, Math.round(h * k));
+        const g = c.getContext('2d');
+        if (!g) continue;
+        g.drawImage(img, 0, 0, c.width, c.height);
+        // (fuera la imagen grande: que el navegador suelte su copia descodificada)
+        if ((img as HTMLImageElement).src?.startsWith('blob:')) URL.revokeObjectURL((img as HTMLImageElement).src);
+        (img as HTMLImageElement).src = '';
+        t.image = c;
+        t.needsUpdate = true;
+      }
+    }
+  });
 }
 
 /** Las mallas del propio VRM (no lo que le han colgado los niveles: un vaso en la mano, un casco…). */
