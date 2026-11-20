@@ -254,6 +254,8 @@ export class Level1 implements Level {
   private bocata: THREE.Object3D | null = null;
   /** El 📍 de la última ubicación (capítulo 9). */
   private pin: THREE.Sprite;
+  /** Segundos que queda a la vista la ubicación reenviada (solo sale si se ha perdido). */
+  private pinOn = 0;
   /** Pistas (flecha, marcador, columna) solo a los 40 s sin avanzar. */
   private lost = new Lost();
 
@@ -301,7 +303,7 @@ export class Level1 implements Level {
     this.scene.add(this.tofol.root);
 
     // En Sant Joan, Gas lleva la camiseta azul de Azul
-    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: 0x5aa9e6 } : V.findFirst ? castLook(MARC_LOOK, 'gas_diario') : castLook({ ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }, 'gas_ferreries')); // aquel día, con la del Barça
+    this.marc = makePerson(V.horses ? { ...MARC_LOOK, shirt: 0x5aa9e6 } : castLook({ ...MARC_LOOK, shirt: 0x1d4f9c, stripes: [0x0a3d8f, 0xa50044], shorts: true }, 'gas_ferreries')); // aquel día, con la del Barça
     this.gasMovesLeft = this.T.gasMoves?.length ?? 0;
     // En el bar: Carme (rubia, pelo corto) bailando; Marc, un poco más allá, bailando fatal
     this.carme = makePerson(castLook({ skin: 0xf3d2b6, hair: 0xf3dc8f, hairStyle: 'short', eyes: 0x3a6ea8, ...MONO }, 'carme'));
@@ -772,8 +774,10 @@ export class Level1 implements Level {
       collect: ['Dicen que si acaricias a un ase justo cuando se para, da suerte todo el año.', 'Las pomadas las ponen en las barras de los bares. Hay tres bares por aquí.', 'Cuidado con los burros, que cuando se encabritan empujan. Espera a que se paren.'],
       returnTofol: [`${g} estaba esperando sus pomadas, ¿no?`],
       findMarc: this.V.findFirst
-        ? // (un año después no lleva la del Barça, y le busca por sus ubicaciones)
-          ['¿Buscas a alguien? Mira el móvil, que con tanta gente aquí no se encuentra nadie.', 'Si te ha mandado la ubicación, ve a ver. Aunque aquí todo el mundo se mueve…']
+        ? // (le busca por sus ubicaciones; la del Barça, como siempre, ayuda a que la gente se acuerde)
+          this.gasStep === 0
+            ? ['¿Uno con la del Barça? Hace nada estaba delante del Sa Penya, en la otra punta de la calle mayor.', '¿El de la ubicación? Eso es la calle mayor, hacia el final, donde el Sa Penya.']
+            : ['El de la del Barça se ha ido a por un bocata. Con patatas, eh.', 'Lo he visto con un bocata en la mano, al lado del Sa Font.']
         : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
       toFont: ['¿A Sa Font? Al fondo de la plaza, al lado de la iglesia.'],
     };
@@ -1228,9 +1232,11 @@ export class Level1 implements Level {
     this.hud.setAction(label, pulse);
     if (this.input.consumeAction() && this.pendingAction) this.pendingAction();
 
-    // Capítulo 9: la pista es la ubicación que manda Gas, un 📍 sobre el sitio (nada de flecha)
+    // Capítulo 9: hay que encontrarle por lo que dice el chat (y preguntando). Solo si se pierde, Gas reenvía la
+    // ubicación y un 📍 sale un rato sobre el sitio (nada de flecha)
     const searching = !!F && this.stage === 'findMarc' && this.gasStep < 2;
-    this.pin.visible = searching && !this.busy;
+    this.pinOn = Math.max(0, this.pinOn - dt);
+    this.pin.visible = searching && !this.busy && this.pinOn > 0;
     if (searching) {
       const at = this.gasStep === 0 ? F!.first : this.marc.root.position;
       this.pin.position.set(at.x, 3.4 + Math.abs(Math.sin(this.t * 2.2)) * 0.35, at.z);
@@ -1246,6 +1252,7 @@ export class Level1 implements Level {
       // (perdida buscándole: Gas le vuelve a mandar la ubicación)
       bark('Gas', F!.lines.again);
       audio.pop();
+      this.pinOn = 15;
       this.lost.reset();
     } else if (lostNow) tgt = this.target();
     this.marker.visible = !!tgt && !this.busy;

@@ -638,31 +638,31 @@ export const CROSSWORD = {
   title: 'El crucigrama de Gas',
   // Las palabras salen de nuestro chat (las que más usamos y las que solo entendemos nosotros); la cuadrícula la
   // encaja un script (20 palabras en 15 × 15) y las casillas con círculo, en orden, dicen el mensaje
-  intro: 'Tú me hiciste uno con letras remarcadas y PORTUGAL escondido. Ahora me toca a mí: todo sale de nuestro chat. Las casillas con círculo esconden algo, y van en orden.',
+  intro: 'Tú me hiciste uno con letras remarcadas y PORTUGAL escondido. Ahora me toca a mí, con cosas de nuestro chat que no salen en ningún capítulo. Las casillas con círculo esconden algo, y van en orden.',
   hidden: 'ERES MI AZUL',
   rows: 15,
   cols: 15,
   clues: [
-    { answer: 'ZAMBURIÑA', row: 7, col: 3, dir: 'A', clue: "«No habrá mejor ... en el mundo que la de San Vicente»", mark: 5, hiddenIdx: 1 },
-    { answer: 'DESLUMBRAS', row: 1, col: 6, dir: 'D', clue: "«Muy difícil sí… ...» (lo que te escribí el 25 de junio)", mark: 2, hiddenIdx: 3 },
-    { answer: 'PORTUGAL', row: 1, col: 4, dir: 'D', clue: "Lo que escondiste en tu crucigrama de diciembre", mark: 4, hiddenIdx: 8 },
-    { answer: 'PROYECTOR', row: 2, col: 2, dir: 'A', clue: "Mimos, cama y ...", mark: -1, hiddenIdx: -1 },
-    { answer: 'CARBONARA', row: 6, col: 11, dir: 'D', clue: "La del 13 de julio: guanciale, huevo, pecorino… y ni se te ocurra la nata", mark: 6, hiddenIdx: 6 },
-    { answer: 'PLANAZO', row: 14, col: 7, dir: 'A', clue: "Lo que decimos cuando algo pinta bien (36 veces)", mark: 5, hiddenIdx: 7 },
-    { answer: 'ECLIPSE', row: 10, col: 1, dir: 'A', clue: "Lo vimos desde la roca, con las gafas puestas", mark: 6, hiddenIdx: 0 },
-    { answer: 'BRUTAL', row: 4, col: 1, dir: 'A', clue: "Mi palabra favorita: está más de 150 veces en nuestro chat", mark: -1, hiddenIdx: -1 },
-    { answer: 'GILDAS', row: 6, col: 9, dir: 'D', clue: "«Podemos ir probando ... para siempre»", mark: 2, hiddenIdx: 9 },
-    { answer: 'TIERNO', row: 8, col: 1, dir: 'D', clue: "Lo que me has llamado más de cien veces", mark: 1, hiddenIdx: 5 },
-    { answer: 'CARME', row: 0, col: 10, dir: 'D', clue: "La excusa para presentarme en Ferreries", mark: 4, hiddenIdx: 2 },
-    { answer: 'BONANIT', row: 13, col: 0, dir: 'A', clue: "Así nos despedimos casi cada noche, en una sola palabra", mark: -1, hiddenIdx: -1 },
-    { answer: 'MILAN', row: 3, col: 10, dir: 'A', clue: "Allí está tu insti (y medio corazón, con el derby)", mark: -1, hiddenIdx: -1 },
-    { answer: 'MULLET', row: 0, col: 12, dir: 'D', clue: "Mi corte de pelo con «vibe surf» (según tú)", mark: 0, hiddenIdx: 4 },
-    { answer: 'AMORE', row: 10, col: 9, dir: 'A', clue: "Cómo me llamas tú, a la italiana", mark: -1, hiddenIdx: -1 },
-    { answer: 'IMPERI', row: 0, col: 2, dir: 'D', clue: "Donde estabas «aún con la cola» la noche de la piscinita", mark: -1, hiddenIdx: -1 },
-    { answer: 'TONSES', row: 1, col: 14, dir: 'D', clue: "Cómo digo yo «entonces» («... tira de setlist»)", mark: -1, hiddenIdx: -1 },
-    { answer: 'FITO', row: 0, col: 8, dir: 'D', clue: "Por él volamos a Gran Canaria", mark: -1, hiddenIdx: -1 },
-    { answer: 'VOLEY', row: 7, col: 13, dir: 'D', clue: "Mi otro deporte, además del pádel (que se me da fatal)", mark: -1, hiddenIdx: -1 },
-    { answer: 'UBI', row: 5, col: 6, dir: 'A', clue: "«Acéptame la ...»", mark: -1, hiddenIdx: -1 },
+    { answer: 'TORTILLA', row: 7, col: 3, dir: 'A', clue: "De sobrassada y queso: «de las mejores que he probado en mi vida»", mark: 5, hiddenIdx: 9 },
+    { answer: 'GUAPISSIMA', row: 3, col: 7, dir: 'D', clue: "«Bona nit ..., muchas ganas de dormir contigo»", mark: 5, hiddenIdx: 3 },
+    { answer: 'SUDADERA', row: 4, col: 10, dir: 'D', clue: "«Por mucho que quieras la ..., no quiero dates incómodos»", mark: 5, hiddenIdx: 0 },
+    { answer: 'PROYECTOR', row: 6, col: 5, dir: 'D', clue: "«La que sea con mimos y con ese ...»", mark: 8, hiddenIdx: 1 },
+    { answer: 'VOLEY', row: 9, col: 1, dir: 'A', clue: "«Te quiero ver jugar a ...: me da curiosidad»", mark: 3, hiddenIdx: 2 },
+    { answer: 'BRUTAL', row: 4, col: 3, dir: 'D', clue: "Mi palabra favorita: más de 150 veces en el chat", mark: 4, hiddenIdx: 6 },
+    { answer: 'BOYERO', row: 13, col: 0, dir: 'A', clue: "«Mi ... 🫠🐶 Felices los 4»", mark: -1, hiddenIdx: -1 },
+    { answer: 'ARROZ', row: 10, col: 9, dir: 'A', clue: "«El ... más potente que me he comido en mi vida»", mark: 4, hiddenIdx: 7 },
+    { answer: 'TONSES', row: 9, col: 12, dir: 'D', clue: "Cómo digo yo «entonces»", mark: -1, hiddenIdx: -1 },
+    { answer: 'MULLET', row: 5, col: 9, dir: 'A', clue: "«Un poco da vibe surf, o al menos chill»", mark: 0, hiddenIdx: 4 },
+    { answer: 'CARTA', row: 2, col: 14, dir: 'D', clue: "«Estoy feliz de que te haya gustado recibir la ... y las fotos»", mark: -1, hiddenIdx: -1 },
+    { answer: 'SURF', row: 5, col: 1, dir: 'A', clue: "«El plan de los 5 días es easy: ..., playa…»", mark: 1, hiddenIdx: 8 },
+    { answer: 'PADEL', row: 1, col: 12, dir: 'D', clue: "«No hablemos del ..., ¿vale? Sigue siendo un desastre»", mark: -1, hiddenIdx: -1 },
+    { answer: 'DOGFY', row: 3, col: 5, dir: 'A', clue: "Donde trabajo de Software Manager", mark: -1, hiddenIdx: -1 },
+    { answer: 'MONO', row: 0, col: 6, dir: 'D', clue: "«Tengo un ... especial de moto»", mark: -1, hiddenIdx: -1 },
+    { answer: 'OJOS', row: 11, col: 1, dir: 'D', clue: "«Need esos ...» (la primera tarde, a las 19:48)", mark: -1, hiddenIdx: -1 },
+    { answer: 'JOY', row: 11, col: 0, dir: 'A', clue: "«3 abrazos pa ti, de mi parte y de la de ...»", mark: -1, hiddenIdx: -1 },
+    { answer: 'SETLIST', row: 14, col: 7, dir: 'A', clue: "«Estoy escuchando en repeat la ...»", mark: 4, hiddenIdx: 5 },
+    { answer: 'MILAN', row: 0, col: 6, dir: 'A', clue: "«Mañana es derby day: ...-Inter»", mark: -1, hiddenIdx: -1 },
+    { answer: 'OPORTO', row: 1, col: 1, dir: 'A', clue: "«¿Y por qué tantas ganas de ir a ...?» (el plan B de octubre)", mark: -1, hiddenIdx: -1 },
   ] as CrossClue[],
   solved: '¿Lo ves? Brutal. 💙',
 };
@@ -861,12 +861,12 @@ export const ECLIPSE = {
   stats: (rounds: number, parkTries: number) => [['Rondas de Love Letter', `${rounds}`], ['Intentos aparcando', `${parkTries}`]] as [string, string][],
 };
 
-// Capítulo 9: un año después, otra vez Ferreries. Como en el 1, el pueblo habla en menorquín y ella y Gas, en castellano. Chats: tarde, veintidos, asesOnce, bocata, fecha.
+// Capítulo 9: un año después, otra vez Ferreries. Como en el 1, el pueblo habla en menorquín y ella y Gas, en castellano. Chats: bocata (esa tarde) y fecha.
 export const ANIVERSARIO = {
   ...FERRERIES,
   intro: [
     { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2026, Sant Bartomeu. Un año justo.' },
-    { who: 'Narrador', text: 'Esta vez ya le conoces. La semana ha ido así:' },
+    { who: 'Narrador', text: 'Esta vez ya le conoces. Y está por el pueblo, en algún sitio.' },
   ] as Line[],
   tofolQuest: [
     { who: 'Tòfol', text: 'Tu altra vegada! I aquest any acompanyada.' },

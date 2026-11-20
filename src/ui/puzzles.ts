@@ -172,7 +172,7 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
         audio.chime(found.size % 8);
         vibrate(20);
         status();
-        if (found.size === words.length) setTimeout(() => end('Todas. Planazo de palabras, ¿eh? 😌'), 700);
+        if (found.size === words.length) setTimeout(() => end('Todas. Bonanit, amore 😌'), 700);
         return;
       }
     }

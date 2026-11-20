@@ -8,7 +8,7 @@ import { Level1, FERRERIES_VARIANT, type JaleoVariant } from './level1';
 import type { LevelDone } from './level';
 
 // Capítulo 9 · Un año después (25 de agosto de 2026). El mismo jaleo de Ferreries que el capítulo 1,
-// pero ahora Gas está en el pueblo y va mandando ubicaciones. Antes, los chats reales de esa semana;
+// pero ahora Gas está en el pueblo y va mandando ubicaciones. Antes, el chat real de esa misma tarde;
 // al final, «Tenemos fecha nosotros?».
 //
 // La búsqueda va con el chat real de esa tarde («bocata», de las 15:54 a las 16:51), por trozos: el «Dmd estass»
@@ -25,7 +25,7 @@ const VARIANT: JaleoVariant = {
     ...FERRERIES_VARIANT.hud,
     find: '📍 Gas',
   },
-  introChats: [CHATS.tarde, CHATS.veintidos, CHATS.asesOnce, part(CHATS.bocata, 0, 4)],
+  introChats: [part(CHATS.bocata, 0, 4)],
   findFirst: {
     // La primera ubicación (16:03): delante del bar Sa Penya, al otro extremo de la calle mayor
     first: new THREE.Vector3(30, 0, 0.2),
