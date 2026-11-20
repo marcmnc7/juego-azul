@@ -2146,17 +2146,17 @@ html, body { background: #000; }
 /* =====================================================================================================
    Los «conecta»: paradas pequeñas a medio camino entre capítulos, y sus juegos (papel crema sobre la noche).
    ===================================================================================================== */
-.mp-mini { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; background: none; color: var(--cream); z-index: 1; }
+.mp-mini { position: absolute; transform: translate(-50%, -15px); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0; background: none; color: var(--cream); z-index: 1; }
 .mp-mini-dot {
-  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 800 18px/1 var(--font);
-  background: #fbf5e6; color: #3a2408; box-shadow: 0 0 0 3px var(--warm), 0 8px 18px -8px rgba(0, 0, 0, .7);
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 800 14px/1 var(--font);
+  background: #fbf5e6; color: #3a2408; box-shadow: 0 0 0 2px var(--warm), 0 6px 14px -6px rgba(0, 0, 0, .7);
 }
 .mp-mini.open .mp-mini-dot { animation: mpPulse 2.4s ease-in-out infinite; }
 .mp-mini.done .mp-mini-dot { background: #6fcf8e; color: #10301c; box-shadow: 0 0 0 3px rgba(255, 255, 255, .7); }
-.mp-mini.locked .mp-mini-dot { background: rgba(255, 255, 255, .12); color: var(--cream); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3); font-size: 15px; }
+.mp-mini.locked .mp-mini-dot { background: rgba(255, 255, 255, .12); color: var(--cream); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .3); font-size: 12px; }
 .mp-mini-lab { display: flex; flex-direction: column; align-items: center; gap: 1px; text-shadow: 0 2px 8px rgba(8, 14, 28, .95); }
-.mp-mini-lab b { font: 700 12px/1.1 var(--font); white-space: nowrap; }
-.mp-mini-lab i { font: 800 10px/1 var(--font); font-style: normal; letter-spacing: .1em; text-transform: uppercase; color: var(--warm); }
+.mp-mini-lab b { font: 700 10px/1.1 var(--font); white-space: nowrap; }
+.mp-mini-lab i { font: 800 9px/1 var(--font); font-style: normal; letter-spacing: .1em; text-transform: uppercase; color: var(--warm); }
 .mp-mini.locked .mp-mini-lab b { opacity: .6; }
 .mp-mini.nope { animation: mpNope .35s ease; }
 
@@ -2233,3 +2233,6 @@ html, body { background: #000; }
 .fail-card .hm-btn { margin-top: 6px; min-width: 200px; }
 .chip.warn { background: #e2547a !important; color: #fff !important; animation: chipWarn .8s ease-in-out infinite alternate; }
 @keyframes chipWarn { to { transform: scale(1.08); } }
+.mp-mini.side-r .mp-mini-lab, .mp-mini.side-l .mp-mini-lab { position: absolute; top: 15px; transform: translateY(-50%); }
+.mp-mini.side-r .mp-mini-lab { left: 40px; align-items: flex-start; }
+.mp-mini.side-l .mp-mini-lab { right: 40px; align-items: flex-end; }

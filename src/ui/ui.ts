@@ -714,7 +714,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       track.style.height = `${TH}px`;
     } else {
       const tileH = Math.max(64, Math.min(120, H * 0.27));
-      const gap = tileH * 1.95;
+      const gap = tileH * 2.4;
       const pad = Math.max(90, W * 0.18);
       track.style.setProperty('--tile', `${tileH}px`);
       nodes.forEach((n, i) => {
@@ -729,24 +729,42 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       track.style.width = `${TW}px`;
       track.style.height = '';
     }
-    // Cada «conecta», en el punto medio del tramo entre su capítulo y el siguiente
+    // Cada «conecta», a mitad de camino (por longitud, no por el parámetro de la curva: en vertical el tramo es casi
+    // todo bajada y el punto medio de la curva caía pegado a la baldosa de salida)
     {
       const tl = tall ? Math.max(80, Math.min(130, W * 0.3)) : Math.max(64, Math.min(120, H * 0.27));
       const hw2 = tl * 0.72, hh2 = tl * 0.56;
       for (const mn of minis) {
         const [x0, y0] = pts[mn.after - 1], [x1, y1] = pts[mn.after];
-        let mx: number, my: number;
-        if (tall) {
-          const sx = x0 + Math.sign(x1 - x0 || 1) * hw2, ey = y1 - hh2;
-          mx = (sx + 7 * x1) / 8;
-          my = (7 * y0 + ey) / 8;
-        } else {
-          const sx = x0 + hw2, ex = x1 - hw2;
-          mx = (sx + ex) / 2;
-          my = (y0 + y1) / 2;
+        // Los mismos cuatro puntos de control que el tramo dibujado (ver seg, más abajo)
+        const P = tall
+          ? [[x0 + Math.sign(x1 - x0 || 1) * hw2, y0], [x1, y0], [x1, y0], [x1, y1 - hh2]]
+          : (() => {
+              const sx = x0 + hw2, ex = x1 - hw2, m = (sx + ex) / 2;
+              return [[sx, y0], [m, y0], [m, y1], [ex, y1]];
+            })();
+        const at = (t: number) => {
+          const u = 1 - t;
+          const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+          return [a * P[0][0] + b * P[1][0] + c * P[2][0] + d * P[3][0], a * P[0][1] + b * P[1][1] + c * P[2][1] + d * P[3][1]];
+        };
+        const N = 48;
+        const pt = [at(0)];
+        const len = [0];
+        for (let k = 1; k <= N; k++) {
+          const q = at(k / N);
+          len.push(len[k - 1] + Math.hypot(q[0] - pt[k - 1][0], q[1] - pt[k - 1][1]));
+          pt.push(q);
         }
-        mn.b.style.left = `${mx}px`;
-        mn.b.style.top = `${my}px`;
+        const half = len[N] / 2;
+        let k = 1;
+        while (k < N && len[k] < half) k++;
+        const f = (half - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
+        // (en vertical, el rótulo al lado libre del punto: debajo le pasaba la línea que baja)
+        mn.b.classList.toggle('side-r', tall && x1 >= x0);
+        mn.b.classList.toggle('side-l', tall && x1 < x0);
+        mn.b.style.left = `${pt[k - 1][0] + (pt[k][0] - pt[k - 1][0]) * f}px`;
+        mn.b.style.top = `${pt[k - 1][1] + (pt[k][1] - pt[k - 1][1]) * f}px`;
       }
     }
     svg.setAttribute('width', String(TW));
