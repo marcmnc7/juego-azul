@@ -61,6 +61,7 @@ export async function loadVRM(url: string): Promise<LoadedVRM> {
   if (!vrm) throw new Error('no es un VRM: ' + url);
   // En el móvil, texturas más pequeñas antes de subirlas a la GPU: cada VRoid trae ~23 de hasta 2048 px (unos 48 MB
   // por personaje) y con los doce del capítulo 1 el iPhone cerraba la pestaña al montar el escenario
+  shareTextures(vrm.scene);
   if (LOWTEX) shrinkTextures(vrm.scene, /\/(azul|gas)_[^/]*$/.test(url.split('?')[0].replace(/-[\w-]+\.vrm$/, '')) ? 1024 : 512);
   VRMUtils.removeUnnecessaryVertices(vrm.scene);
   VRMUtils.combineSkeletons(vrm.scene);
@@ -83,7 +84,37 @@ export async function loadVRM(url: string): Promise<LoadedVRM> {
   });
   gltf.scene = vrm.scene;
   gltf.animations = [];
+  // (el parser guarda el archivo entero y sus cachés: nadie lo usa después, y en las copias era otro archivo entero
+  // por persona; vrm.meta y lo demás ya están fuera)
+  (gltf as unknown as { parser: unknown }).parser = null;
+  vrm.scene.userData.gltfExtensions = undefined;
   return { gltf, vrm };
+}
+
+/**
+ * Una sola textura por imagen: el MToon de VRoid trae la de sombra (shadeMultiplyTexture) como otro objeto con la
+ * misma imagen que la de color, y así se subía dos veces a la GPU (y al reducirla, la segunda se quedaba vacía).
+ */
+function shareTextures(root: THREE.Object3D) {
+  const byImage = new Map<unknown, THREE.Texture>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      const uni = (mat as THREE.ShaderMaterial).uniforms;
+      if (!uni) continue;
+      for (const u of Object.values(uni) as { value?: unknown }[]) {
+        const t = u?.value as THREE.Texture | undefined;
+        if (!t?.isTexture || !t.image) continue;
+        const first = byImage.get(t.image);
+        if (!first) byImage.set(t.image, t);
+        else if (first !== t && first.colorSpace === t.colorSpace && first.flipY === t.flipY && first.wrapS === t.wrapS && first.wrapT === t.wrapT) {
+          u.value = first;
+          t.dispose();
+        }
+      }
+    }
+  });
 }
 
 /** Reduce a `max` px (lado mayor) las texturas de un modelo que aún no se han subido a la GPU. */
