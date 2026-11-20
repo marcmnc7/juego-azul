@@ -1147,8 +1147,6 @@ export const FAIL = {
   crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
   burntMax: 4,
   grill: { title: 'Carbón', text: 'Cuatro zamburiñas quemadas. Dales la vuelta cuando brillen, ni antes ni después.' },
-  boardSecs: 180,
-  plane: { title: 'Puerta cerrada', text: 'El avión se ha ido sin ti. Mira bien las pantallas: ahí pone cuál es tu puerta.' },
   rhythmMin: 0.5,
   rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas. Con la mitad, Fito te lo perdona: otra vez.` },
   pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
