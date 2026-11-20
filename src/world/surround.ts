@@ -53,7 +53,9 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
   const H = o.half;
   const cell = o.cell ?? 13;
   const y0 = o.groundY ?? 0;
-  const m = new Merger();
+  // (sin partir las piezas para el trazo a mano alzada: aquí son cientos de casas lejanas y se iban a 10 millones de
+  // vértices, que en el iPhone no caben)
+  const m = new Merger(true, false);
   const free = (x0: number, x1: number, z0: number, z1: number) =>
     !o.keepOut.some((k) => x1 > k.minX - 1 && x0 < k.maxX + 1 && z1 > k.minZ - 1 && z0 < k.maxZ + 1);
   const seaSide = (x: number, z: number) =>
@@ -142,7 +144,7 @@ export function buildSurroundings(sc: THREE.Scene, o: SurroundOpts) {
               const lit = !!o.night && r() < 0.3;
               const wx = onX ? px + a : px + s * half;
               const wz = onX ? pz + s * half : pz + a;
-              menorcaWindow(m, wx, y0 + wy, wz, 1.0, 1.2, { axis: onX ? 'z' : 'x', s }, { lit, shutter: sh, closed: !lit && r() < 0.35 });
+              menorcaWindow(m, wx, y0 + wy, wz, 1.0, 1.2, { axis: onX ? 'z' : 'x', s }, { lit, shutter: sh, closed: !lit && r() < 0.35, simple: true });
               if (lit) lights.push(wx + (onX ? 0 : s * 0.1), y0 + wy, wz + (onX ? s * 0.1 : 0));
             }
         };

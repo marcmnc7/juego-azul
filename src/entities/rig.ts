@@ -26,6 +26,7 @@ import tplGasUrl from '../assets/crowd/vroid/gas_diario.glb';
 import tplKidUrl from '../assets/crowd/vroid/nino_3.glb';
 import tplKidGirlUrl from '../assets/crowd/vroid/nino_2.glb';
 import type { VRM } from '@pixiv/three-vrm';
+import { crumb } from '../core/trail';
 import { LOWTEX, shrinkTextures, loadVRM, copyVRM, disposeVRM, forgetVRM, resetVRM, tickVRM, newFace, type LoadedVRM, type VRMFace } from './vrm';
 
 // Personajes de la prueba de concepto: modelos glTF con esqueleto (rig de Mixamo) y animaciones de
@@ -372,8 +373,8 @@ export function preloadRig() {
     TEMPLATES.forEach((t, i) => {
       const g = tpls[i];
       if (!g) return;
-      // (en el móvil, su atlas de 2048 a 1024: la gente se ve de lejos y son doce plantillas siempre cargadas)
-      if (LOWTEX) shrinkTextures(g.scene, 1024);
+      // (en el móvil, su atlas de 2048 a 512: la gente se ve de lejos y son doce plantillas siempre cargadas)
+      if (LOWTEX) shrinkTextures(g.scene, 512);
       const body = g.scene.getObjectByName('Body') as THREE.SkinnedMesh | undefined;
       const c = body?.userData.crowd as { skin: number[]; lum: Record<string, number> } | undefined;
       if (!body || !c) return;
@@ -626,11 +627,14 @@ export async function ensureVRMs(need: [url: string, count: number, height: numb
       let pool = vrmPool.get(url);
       if (!pool) {
         const v = await loadVRM(url);
+        crumb(`vrm ${url.split('/').pop()?.split('-')[0]}`);
         pool = [v];
         vrmPool.set(url, pool);
         data[`vrm:${url}`] = prepareKind(v.gltf, P.anims, P.aBind, P.dance, height, P.extras);
       }
       while (pool.length < count) pool.push(await copyVRM(url, pool[0]));
+      // (los bytes del archivo ya no hacen falta: 6,8 MB por personaje; si otro capítulo pide más copias, se vuelven a leer)
+      forgetVRM(url);
     } catch (e) {
       console.warn('[rig] VRM no cargado', url, e);
     }

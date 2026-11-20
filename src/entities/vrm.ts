@@ -93,7 +93,9 @@ export function shrinkTextures(root: THREE.Object3D, max: number) {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
-      for (const v of Object.values(mat)) {
+      // (las del MToon de VRoid van en los uniforms del shader, no en las propiedades del material)
+      const uni = (mat as THREE.ShaderMaterial).uniforms ?? {};
+      for (const v of [...Object.values(mat), ...Object.values(uni).map((u) => (u as { value?: unknown })?.value)]) {
         const t = v as THREE.Texture | null;
         if (!t?.isTexture || done.has(t)) continue;
         done.add(t);
@@ -127,7 +129,10 @@ const meshesOf = (o: THREE.Object3D) => {
 };
 const materialsOf = (m: THREE.Mesh) => (Array.isArray(m.material) ? m.material : [m.material]);
 function disposeMaterial(mat: THREE.Material) {
-  for (const v of Object.values(mat)) if ((v as THREE.Texture | null)?.isTexture) (v as THREE.Texture).dispose();
+  // (también las de los uniforms: el MToon guarda ahí sus texturas y antes se quedaban en la GPU al cambiar de capítulo)
+  const uni = (mat as THREE.ShaderMaterial).uniforms ?? {};
+  for (const v of [...Object.values(mat), ...Object.values(uni).map((u) => (u as { value?: unknown })?.value)])
+    if ((v as THREE.Texture | null)?.isTexture) (v as THREE.Texture).dispose();
   mat.dispose();
 }
 

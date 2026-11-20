@@ -40,7 +40,7 @@ export function menorcaWindow(
   w: number,
   h: number,
   face: Face,
-  o: { lit?: boolean; shutter?: number; closed?: boolean; frame?: number } = {},
+  o: { lit?: boolean; shutter?: number; closed?: boolean; frame?: number; simple?: boolean } = {},
 ) {
   const nx = face.axis === 'x' ? face.s : 0;
   const nz = face.axis === 'z' ? face.s : 0;
@@ -52,6 +52,12 @@ export function menorcaWindow(
   const frame = o.frame ?? MARES;
   const shutter = o.shutter ?? LOUVRE_GREEN;
   box(frame, 0, 0, 0.04, w + 0.36, h + 0.36, 0.08);
+  // Las de las casas del fondo, solo marco y cristal (o la persiana cerrada): de lejos se ven igual y son 5.000
+  // ventanas; con las seis piezas, el decorado de Ferreries pasaba de 4 millones de vértices y el iPhone se cerraba
+  if (o.simple) {
+    box(o.closed && !o.lit ? shutter : o.lit ? LIT : PANE, 0, 0, 0.09, w, h, 0.04);
+    return;
+  }
   box(o.lit ? LIT : PANE, 0, 0, 0.09, w, h, 0.04);
   // alféizar
   box(frame, 0, -h / 2 - 0.2, 0.12, w + 0.56, 0.1, 0.26);

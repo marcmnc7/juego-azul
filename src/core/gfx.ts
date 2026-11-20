@@ -8,7 +8,7 @@ import type { Surf } from './surfaces';
 /** Móvil o tableta: menos sombras y mapas de sombra más pequeños. */
 export const MOBILE =
   typeof navigator !== 'undefined' &&
-  (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900));
+  (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900) || location.search.includes('mobile'));
 
 export const quality = {
   /** Sombras de verdad (si el móvil no llega se quitan y quedan las "manchas" bajo cada cosa). */

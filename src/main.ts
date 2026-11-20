@@ -1,3 +1,5 @@
+import { crumb, startTrail } from './core/trail';
+startTrail();
 import { audio, type Bed } from './core/audio';
 import * as THREE from 'three';
 import { camWorld } from './core/camWorld';
@@ -346,6 +348,7 @@ function startLevel(n: number) {
   pauseState.n = n;
   void buildLevel(n, card).catch((e) => {
     console.warn('[juego] montar capítulo', e);
+    crumb(`montar: error ${e instanceof Error ? e.message : String(e)}`);
     loadingLevel = false;
     card.done();
   });
@@ -368,6 +371,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   const epochAt = ++buildEpoch;
   const stale = () => epochAt !== buildEpoch;
   // Personajes glTF y texturas (suele estar desde la portada)
+  crumb(`cap ${n}: empieza`);
   card.progress(0.08, 'Cargando personajes');
   if (!hdAssets) await rigLoading;
   if (stale()) return;
@@ -378,15 +382,18 @@ async function buildLevel(n: number, card: ChapterLoading) {
     await ensureVRMs(cast);
     if (stale()) return;
     // La multitud de VRoid de este capítulo (si tiene)
+    crumb(`cap ${n}: personajes cargados`);
     card.progress(0.14, 'Preparando a la gente');
     await ensureCrowd(n);
     if (stale()) return;
   }
   // La canción se descodifica mientras tanto: así suena desde el primer segundo
+  crumb(`cap ${n}: gente lista`);
   card.progress(0.2, 'Preparando la canción');
   const song = SONG_OF[n] ? audio.preloadTrack(SONG_OF[n]) : Promise.resolve();
   await Promise.race([song, pause(5000)]);
   if (stale()) return;
+  crumb(`cap ${n}: montando el escenario`);
   card.progress(0.38, 'Montando el escenario');
   await pause(40);
   const done = (result?: LevelResult) => {
@@ -425,6 +432,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   setLook(n);
   const t0 = performance.now();
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
+  crumb(`cap ${n}: escenario construido`);
   level = me;
   quizScore.right = quizScore.total = 0;
   extras = new ChapterExtras(n, data, () => save(data));
@@ -434,6 +442,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   console.info(`[juego] capítulo ${n} montado en ${Math.round(performance.now() - t0)} ms`);
   if (TEST) closeDebug = debugPanel(me.debug());
   if (stats) (window as unknown as { game: Level }).game = me;
+  crumb(`cap ${n}: cómic y sombras`);
   card.progress(0.72, 'Preparando luces y sombras');
   await pause(30);
   if (level !== me) return;
@@ -445,12 +454,14 @@ async function buildLevel(n: number, card: ChapterLoading) {
     console.warn('[gfx] compilar', e);
   }
   // Unos fotogramas detrás del rótulo: suben las texturas, se hacen las sombras y se compila la pasada de tinta
+  crumb(`cap ${n}: shaders compilados`);
   card.progress(0.86, 'Últimos retoques');
   await settle(MOBILE ? 7000 : 4000);
   if (level !== me) return;
   loadingLevel = false;
   levelAt = performance.now();
   if (SONG_OF[n]) audio.playTrack(SONG_OF[n]);
+  crumb(`cap ${n}: listo`);
   card.done();
 }
 let buildEpoch = 0;

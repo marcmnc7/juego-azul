@@ -2236,3 +2236,6 @@ html, body { background: #000; }
 .mp-mini.side-r .mp-mini-lab, .mp-mini.side-l .mp-mini-lab { position: absolute; top: 15px; transform: translateY(-50%); }
 .mp-mini.side-r .mp-mini-lab { left: 40px; align-items: flex-start; }
 .mp-mini.side-l .mp-mini-lab { right: 40px; align-items: flex-end; }
+.ap-trail { font-size: 11px; color: var(--ink-2); }
+.ap-trail summary { cursor: pointer; font-weight: 700; }
+.ap-trail pre { white-space: pre-wrap; font: 10px/1.35 ui-monospace, Menlo, monospace; max-height: 40vh; overflow: auto; background: rgba(0,0,0,.05); padding: 6px; border-radius: 8px; }

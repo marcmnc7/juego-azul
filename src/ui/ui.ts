@@ -13,6 +13,7 @@ import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
 import { tryApply } from '../core/updater';
 import { BUILD } from '../core/release';
+import { previousTrail } from '../core/trail';
 import { GATE, openDay, now, faking, daysUntil, longDate, left, MONTHS } from '../core/calendar';
 import cover1 from '../assets/covers/c1.jpg';
 import cover2 from '../assets/covers/c2.jpg';
@@ -963,6 +964,13 @@ function settingsSheet(opts: MapOptions) {
     const when = /^\d+$/.test(BUILD) ? new Date(Number(BUILD)) : null;
     const stamp = when ? `${when.getDate()} ${MONTHS[when.getMonth()].slice(0, 3)}, ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}` : BUILD;
     b.append(el('p', 'ap-note ap-version', `Versión del ${stamp}`));
+    // Si la vez anterior se cerró a medias, hasta dónde llegó (para saber dónde falla en el móvil)
+    const prev = previousTrail();
+    if (prev.length) {
+      const d = el('details', 'ap-trail');
+      d.append(el('summary', '', 'Último arranque'), el('pre', '', prev.join('\n')));
+      b.append(d);
+    }
   });
 }
 

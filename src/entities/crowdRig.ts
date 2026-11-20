@@ -10,7 +10,8 @@ import type { CrowdPose, PersonLook } from './models';
 // cada fotograma de cada animación, y luego cientos de personas se dibujan instanciadas (unas pocas
 // llamadas de dibujo) leyendo su fotograma en el shader. Así el móvil aguanta la plaza llena.
 
-const FPS = 15;
+// (en el móvil, 10: el shader interpola entre fotogramas y no se nota, y la multitud ocupa un tercio menos)
+const FPS = MOBILE ? 10 : 15;
 const H = THREE.DataUtils.toHalfFloat;
 const W = 2048; // ancho de las texturas de animación
 // (drink y phone: de pie bebiendo del vaso o mirando el móvil; se hornean sobre el idle con el brazo puesto a mano)
@@ -249,6 +250,12 @@ function bake(key: string, lod: THREE.Object3D, K: KindData) {
     t.minFilter = t.magFilter = THREE.NearestFilter;
     t.generateMipmaps = false;
     t.needsUpdate = true;
+    // En el móvil (memoria compartida con la GPU), una vez subida, fuera la copia de JavaScript: contaba doble
+    if (MOBILE)
+      t.onUpdate = () => {
+        (t.image as { data: Uint16Array | null }).data = null;
+        t.onUpdate = null;
+      };
     return t;
   };
   datas.forEach((d) => {

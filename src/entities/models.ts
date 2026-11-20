@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { airOf } from '../core/air';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeHelmet } from './helmet';
-import { toon } from '../core/gfx';
+import { toon, MOBILE } from '../core/gfx';
 import { makeRigPerson, rigReady, rigSnapshot, type Rig } from './rig';
 import { VroidCrowd, vroidTemplates, type Behave } from './crowdRig';
 import { makeDonkeyHD, donkeyReady } from './donkeyHD';
@@ -46,38 +46,63 @@ export function mergedMat(g: THREE.BufferGeometry): THREE.Material | THREE.Mater
  * cómic pueda doblar la pieza a mano alzada como las de builder.ts (ver handDrawn en core/comic.ts). Lo que está a
  * ras de suelo no se toca: el doblado allí no mueve nada.
  */
+/** Hasta cuántos trozos por lado se parte un triángulo (en el móvil, menos: con 12 no cabía en la memoria del iPhone). */
+const SUBDIV_CAP = MOBILE ? 6 : 12;
+
 function subdivide(g: THREE.BufferGeometry, max: number) {
   const P = g.attributes.position.array as ArrayLike<number>;
   const N = g.attributes.normal?.array as ArrayLike<number> | undefined;
-  const op: number[] = [], on: number[] = [];
+  const tris = Math.floor(P.length / 9);
+  // Primero, en cuántos trozos va cada triángulo (y cuántos salen en total); luego se rellenan arrays fijos
+  // (antes con listas de números que crecían: al montar Ferreries se comían cientos de MB)
+  const ns = new Uint8Array(tris);
+  let total = 0;
   let split = false;
-  const v = (arr: ArrayLike<number>, t: number, k: number) => [arr[t + k * 3], arr[t + k * 3 + 1], arr[t + k * 3 + 2]];
-  for (let t = 0; t + 8 < P.length; t += 9) {
-    const a = v(P, t, 0), b = v(P, t, 1), c = v(P, t, 2);
-    const na = N ? v(N, t, 0) : [0, 1, 0], nb = N ? v(N, t, 1) : [0, 1, 0], nc = N ? v(N, t, 2) : [0, 1, 0];
-    const len = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]), Math.hypot(c[0] - b[0], c[1] - b[1], c[2] - b[2]), Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2]));
-    const n = Math.max(a[1], b[1], c[1]) <= 0.05 ? 1 : Math.min(12, Math.ceil(len / max));
-    if (n <= 1) {
-      op.push(...a, ...b, ...c);
-      on.push(...na, ...nb, ...nc);
-      continue;
+  for (let t = 0; t < tris; t++) {
+    const o = t * 9;
+    const dab = Math.hypot(P[o + 3] - P[o], P[o + 4] - P[o + 1], P[o + 5] - P[o + 2]);
+    const dbc = Math.hypot(P[o + 6] - P[o + 3], P[o + 7] - P[o + 4], P[o + 8] - P[o + 5]);
+    const dca = Math.hypot(P[o] - P[o + 6], P[o + 1] - P[o + 7], P[o + 2] - P[o + 8]);
+    const len = Math.max(dab, dbc, dca);
+    const n = Math.max(P[o + 1], P[o + 4], P[o + 7]) <= 0.05 ? 1 : Math.max(1, Math.min(SUBDIV_CAP, Math.ceil(len / max)));
+    ns[t] = n;
+    total += n * n;
+    if (n > 1) split = true;
+  }
+  if (!split) return g;
+  const op = new Float32Array(total * 9);
+  const on = new Float32Array(total * 9);
+  let w = 0;
+  const put = (src: ArrayLike<number> | undefined, dst: Float32Array, o: number, n: number, i: number, j: number, def: number) => {
+    for (let k = 0; k < 3; k++) {
+      const a = src ? src[o + k] : def === k ? 1 : 0;
+      const b = src ? src[o + 3 + k] : def === k ? 1 : 0;
+      const c = src ? src[o + 6 + k] : def === k ? 1 : 0;
+      dst[w + k] = a + ((b - a) * i) / n + ((c - a) * j) / n;
     }
-    split = true;
-    const at = (x: number[], y: number[], z: number[], i: number, j: number) => [0, 1, 2].map((k) => x[k] + ((y[k] - x[k]) * i) / n + ((z[k] - x[k]) * j) / n);
-    const tri = (i0: number, j0: number, i1: number, j1: number, i2: number, j2: number) => {
-      op.push(...at(a, b, c, i0, j0), ...at(a, b, c, i1, j1), ...at(a, b, c, i2, j2));
-      on.push(...at(na, nb, nc, i0, j0), ...at(na, nb, nc, i1, j1), ...at(na, nb, nc, i2, j2));
+  };
+  for (let t = 0; t < tris; t++) {
+    const o = t * 9, n = ns[t];
+    const vert = (i: number, j: number) => {
+      put(P, op, o, n, i, j, -1);
+      put(N, on, o, n, i, j, 1);
+      w += 3;
     };
     for (let i = 0; i < n; i++)
       for (let j = 0; j < n - i; j++) {
-        tri(i, j, i + 1, j, i, j + 1);
-        if (i + j < n - 1) tri(i + 1, j, i + 1, j + 1, i, j + 1);
+        vert(i, j);
+        vert(i + 1, j);
+        vert(i, j + 1);
+        if (i + j < n - 1) {
+          vert(i + 1, j);
+          vert(i + 1, j + 1);
+          vert(i, j + 1);
+        }
       }
   }
-  if (!split) return g;
   const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(op, 3));
-  out.setAttribute('normal', new THREE.Float32BufferAttribute(on, 3));
+  out.setAttribute('position', new THREE.BufferAttribute(w === op.length ? op : op.slice(0, w), 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(w === on.length ? on : on.slice(0, w), 3));
   g.dispose();
   return out;
 }
@@ -95,7 +120,8 @@ export class Merger {
   private thin: number[] = [];
 
   /** textured: el decorado lleva texturas de superficie según su color; los personajes y vehículos no. */
-  constructor(private textured = true) {}
+  /** subdiv: partir las piezas grandes para que se comben a mano alzada (no hace falta en lo lejano: ver surround). */
+  constructor(private textured = true, private subdiv = true) {}
 
   add(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
     let g = (geo.index ? geo.toNonIndexed() : geo.clone()) as THREE.BufferGeometry;
@@ -105,7 +131,7 @@ export class Merger {
     g.applyMatrix4(this.m);
     // Las piezas grandes del decorado (paredes, tejados, muros), partidas para que se comben a mano alzada; lo
     // enorme (lomas, terreno) no: no se notaría y dispararía los triángulos
-    if (this.textured) {
+    if (this.textured && this.subdiv) {
       g.computeBoundingBox();
       g.boundingBox!.getSize(this.v);
       const big = Math.max(this.v.x, this.v.y, this.v.z);
