@@ -261,15 +261,20 @@ const headTop = (p: PersonLike, out: THREE.Vector3) => {
  * globo se queda en el borde, del lado de quien habla, en vez de irse a la caja de abajo (que es del narrador).
  */
 function toScreen(p: THREE.Vector3) {
-  _v.copy(p).project(camera);
-  let x = _v.x, y = _v.y;
-  const behind = _v.z > 1;
-  if (behind) {
-    x = -x;
-    y = -y;
+  const W = window.innerWidth, H = window.innerHeight;
+  // En el espacio de la cámara: si está delante (de verdad, no rozando el plano de la cámara), se proyecta; si está
+  // a su lado o detrás, el globo va al borde de la pantalla por el que queda (antes se daba la vuelta al punto y
+  // el globo salía en la esquina contraria: arriba a la derecha de alguien que estaba abajo a la izquierda)
+  _v.copy(p).applyMatrix4(camera.matrixWorldInverse);
+  if (_v.z < -0.6) {
+    _v.copy(p).project(camera);
+    const off = Math.abs(_v.x) > 0.95 || Math.abs(_v.y) > 1.0;
+    return { x: (_v.x * 0.5 + 0.5) * W, y: (-_v.y * 0.5 + 0.5) * H, off };
   }
-  const off = behind || Math.abs(x) > 0.95 || Math.abs(y) > 1.0;
-  return { x: (x * 0.5 + 0.5) * window.innerWidth, y: (-y * 0.5 + 0.5) * window.innerHeight, off };
+  const len = Math.hypot(_v.x, _v.y) || 1;
+  const dx = _v.x / len, dy = _v.y / len;
+  // (lejos, en esa dirección: la interfaz lo deja pegado al borde)
+  return { x: W / 2 + dx * W, y: H / 2 - dy * H, off: true };
 }
 setSpeakerResolver((who) => {
   // En una misión manda su escena (con su gente) y lo que diga ella; si no, el capítulo

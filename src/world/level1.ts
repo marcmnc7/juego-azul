@@ -101,6 +101,8 @@ interface DonkeyState {
   nextRear: number;
   touched: boolean;
   walkPhase: number;
+  /** Lo que lleva esperando a que se aparte el que tiene delante (s). */
+  waitT?: number;
   alert: THREE.Sprite;
   ring: THREE.Mesh;
 }
@@ -224,6 +226,8 @@ export class Level1 implements Level {
   private hits = 0;
   /** La gente con la que ya has hablado: su nombre, si sabe lo que toca y qué te ha contado. */
   private folk = new Map<object, { name: string; hint: boolean; talk: number; times: number }>();
+  /** Con quién de la fiesta está hablando (su globo sale de su cabeza: ver speakerPoint). */
+  private talkTo: { x: number; z: number } | null = null;
   private folkNext = 0;
   private playTime = 0;
   private invuln = 0;
@@ -673,7 +677,25 @@ export class Level1 implements Level {
       } else {
         const wild = this.stampede && this.stage === 'returnTofol';
         const spd = s.mode === 'circle' ? (wild ? 0.95 : 0.36) : wild ? 5 : 1.75; // al paso, pero a paso de burro de verdad (1,8 m/s)
-        if (s.mode === 'circle') {
+        // Ningún ase atraviesa a otro: si tiene uno delante, pegado, espera (y si es en la calle y se eterniza, da
+        // media vuelta)
+        const hx = Math.sin(r.rotation.y), hz = Math.cos(r.rotation.y);
+        const blocked = this.donkeys.some((o) => {
+          if (o === s) return false;
+          const op = o.d.root.position;
+          const dx = op.x - r.position.x, dz = op.z - r.position.z;
+          return dx * dx + dz * dz < 2.3 * 2.3 && dx * hx + dz * hz > 0.3;
+        });
+        s.waitT = blocked ? (s.waitT ?? 0) + dt : 0;
+        if (blocked && s.mode === 'street' && s.waitT > 1.2) {
+          s.dir *= -1;
+          s.waitT = 0;
+          r.rotation.y = (s.dir * Math.PI) / 2;
+        }
+        if (blocked) {
+          // (quieto, sin mover las patas)
+          for (const l of s.d.legs) l.rotation.x *= 0.85;
+        } else if (s.mode === 'circle') {
           s.angle += dt * spd;
           const c = this.world.plazaCenter;
           r.position.set(c.x + Math.cos(s.angle) * 5.2, 0, c.z + Math.sin(s.angle) * 4.4);
@@ -686,7 +708,7 @@ export class Level1 implements Level {
           r.position.z += THREE.MathUtils.clamp(zt - r.position.z, -dt * 1.8, dt * 1.8);
           r.rotation.y = (s.dir * Math.PI) / 2;
         }
-        s.walkPhase += dt * (wild ? 19 : 9.5);
+        if (!blocked) s.walkPhase += dt * (wild ? 19 : 9.5);
         const w = Math.sin(s.walkPhase) * 0.5;
         s.d.legs[0].rotation.x = w;
         s.d.legs[3].rotation.x = w;
@@ -707,8 +729,13 @@ export class Level1 implements Level {
         nearest = dist;
       }
 
-      // Choque: el ase te empuja (solo si no está de manos)
-      if (s.rearT <= 0 && dist < 1.35 && this.invuln <= 0 && !this.busy && this.stage !== 'ending') {
+      // Choque: el ase solo empuja si va deprisa (desbocado) o si va andando y te pilla de frente. De lado, parado o
+      // de manos no empuja: es un bulto y ya está (no se le atraviesa: es un sólido)
+      const loc = r.worldToLocal(this.v1.copy(pp));
+      const ahead = loc.z > 0.35 && loc.z < 1.65 && Math.abs(loc.x) < 0.7;
+      const walking = s.rearT <= 0 && s.warnT <= 0 && (s.waitT ?? 0) === 0;
+      const fast = this.stampede && this.stage === 'returnTofol';
+      if (walking && (ahead || (fast && dist < 1.35)) && this.invuln <= 0 && !this.busy && this.stage !== 'ending') {
         this.v1.subVectors(pp, r.position).setY(0).normalize().multiplyScalar(10);
         this.walker.knock.copy(this.v1);
         this.walker.shake(0.4);
@@ -806,8 +833,24 @@ export class Level1 implements Level {
     who.times++;
     this.chats++;
     this.busy = true;
-    dialogue(lines, () => (this.busy = false));
+    // Se gira hacia quien le habla y la cámara mira por encima de su hombro: así se le ve (y su globo, encima)
+    this.talkTo = w.b;
+    const yaw = Math.atan2(w.b.x - pp.x, w.b.z - pp.z);
+    this.walker.facing = yaw;
+    this.player.root.rotation.y = yaw;
+    this.walker.yaw = yaw - 0.4;
+    dialogue(lines, () => {
+      this.busy = false;
+      this.talkTo = null;
+    });
   }
+
+  /** De dónde sale el globo de quien no es de los principales: de la persona de la fiesta con la que habla. */
+  speakerPoint(who: string) {
+    if (this.talkTo && !/^(Margaux|Azul|Gas|Marc|Carme|Tòfol|Narrador)$/.test(who)) return this.v3s.set(this.talkTo.x, 2.05, this.talkTo.z);
+    return null;
+  }
+  private v3s = new THREE.Vector3();
 
   /**
    * Las manos en el burro, cada fotograma después de la animación: la del lado de la cabeza le acaricia el cuello

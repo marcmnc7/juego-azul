@@ -1012,6 +1012,11 @@ export class LevelSantJoan implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
+    // Se gira hacia quien le habla y la cámara mira por encima de su hombro (se le ve, y su globo encima)
+    const yaw = Math.atan2(w.b.x - pp.x, w.b.z - pp.z);
+    this.walker.facing = yaw;
+    this.player.root.rotation.y = yaw;
+    this.walker.yaw = yaw - 0.4;
     dialogue(lines, () => {
       this.busy = false;
       this.talkTo = null;

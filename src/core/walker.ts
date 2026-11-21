@@ -132,7 +132,8 @@ export class Walker implements AirState {
   /** Giro de cámara manual (arrastre con el dedo). */
   turn(delta: number) {
     if (delta !== 0) {
-      this.yaw -= delta;
+      // (con el dedo, la mitad de sensible que antes: giraba demasiado rápido)
+      this.yaw -= delta * 0.5;
       this.manualCam = 2.5;
     }
   }
@@ -195,9 +196,9 @@ export class Walker implements AirState {
       const mz = fz * ax.y + fx * ax.x;
       const want = Math.atan2(mx, mz);
       // Se gira algo más rápido parado que corriendo, pero sin brusquedad (Marc lo quería más lento: antes 14 → 7)
-      const maxTurn = THREE.MathUtils.lerp(7.5, 4.5, Math.min(1, spd / this.speed));
+      const maxTurn = THREE.MathUtils.lerp(3.75, 2.25, Math.min(1, spd / this.speed)); // (21 nov: la mitad otra vez)
       const diff = wrap(want - this.facing);
-      this.facing += Math.sign(diff) * Math.min(Math.abs(diff), maxTurn * dt, Math.abs(diff) * Math.min(1, dt * 8));
+      this.facing += Math.sign(diff) * Math.min(Math.abs(diff), maxTurn * dt, Math.abs(diff) * Math.min(1, dt * 4));
       // Girar en seco frena: la velocidad deseada cae con el ángulo entre hacia dónde miras y hacia dónde vas
       const off = Math.abs(wrap(want - this.facing));
       const turnPenalty = 0.3 + 0.7 * Math.max(0, Math.cos(Math.min(Math.PI / 2, off * 1.2)));
@@ -218,7 +219,7 @@ export class Walker implements AirState {
       // La cámara se recoloca sola detrás, salvo si se camina hacia ella
       this.manualCam -= dt;
       // (más rápido cuanto más corres, y nada en el primer instante para que girar sobre sí no maree)
-      if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * (0.6 + 1.6 * Math.min(1, spd / this.speed)) * mag);
+      if (this.manualCam <= 0 && ax.y > -0.35) this.yaw += wrap(this.facing - this.yaw) * Math.min(1, dt * (0.3 + 0.8 * Math.min(1, spd / this.speed)) * mag); // (la cámara, la mitad de rápida)
     }
     else {
       this.fullT = 0;
@@ -449,7 +450,7 @@ export class Walker implements AirState {
             side = da;
           }
         }
-        if (side) this.yaw += Math.sign(side) * Math.min(Math.abs(side), dt * 0.9);
+        if (side) this.yaw += Math.sign(side) * Math.min(Math.abs(side), dt * 0.45);
       }
     } else {
       for (; d < dist; d += 0.25) {

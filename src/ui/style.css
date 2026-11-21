@@ -2274,3 +2274,19 @@ html, body { background: #000; }
 .bark.anchored.tail-up::after { bottom: auto; top: -7px; border-top: 0; border-bottom: 7px solid rgba(255, 250, 238, .74); border-top-color: transparent; }
 .comic-mode .bark.anchored.tail-up::before { top: auto; bottom: calc(100% - 1px); border-width: 0 7px 13px 7px; border-color: transparent transparent var(--ink-c) transparent; }
 .comic-mode .bark.anchored.tail-up::after { top: auto; bottom: calc(100% - 4px); border-width: 0 4px 9px 4px; border-color: transparent transparent var(--paper-g) transparent; }
+
+/* ---------- Globos más discretos (21 nov, 2.ª): letra más pequeña, menos relleno y rectangulares ---------- */
+.comic-mode .dialogue.speech {
+  border-radius: 12px; border-width: 2px; padding: 9px 11px 7px; max-width: min(230px, calc(100vw - 32px));
+  box-shadow: 2px 2px 0 rgba(20, 16, 24, .5);
+}
+.comic-mode .dialogue.speech .text { font-size: 12px; line-height: 1.22; letter-spacing: .01em; text-align: left; }
+.comic-mode .dialogue.speech .who { font-size: 12.5px; padding: 0 6px; top: -10px; left: 10px; transform: none; border-width: 2px; box-shadow: 1px 1px 0 var(--ink-c); }
+.comic-mode .dialogue.speech .next { font-size: 9px; right: 5px; bottom: 1px; }
+.comic-mode .dialogue.speech.tail-up .who { top: auto; bottom: -10px; }
+.comic-mode .dialogue.speech::before { border-width: 12px 6px 0 6px; transform: translateX(-50%) skewX(-12deg); }
+.comic-mode .dialogue.speech::after { top: calc(100% - 3px); border-width: 9px 3.5px 0 3.5px; transform: translateX(-50%) skewX(-12deg); }
+.comic-mode .dialogue.speech.tail-up::before { border-width: 0 6px 12px 6px; transform: translateX(-50%) skewX(12deg); }
+.comic-mode .dialogue.speech.tail-up::after { bottom: calc(100% - 3px); border-width: 0 3.5px 9px 3.5px; transform: translateX(-50%) skewX(12deg); }
+.comic-mode .bark { border-radius: 10px; border-width: 2px; padding: 4px 9px 5px; font-size: 11px; line-height: 1.2; max-width: min(200px, 56vw); box-shadow: 2px 2px 0 rgba(20, 16, 24, .5); text-align: left; }
+.comic-mode .bark b { font-size: 11px; margin-bottom: 0; }
