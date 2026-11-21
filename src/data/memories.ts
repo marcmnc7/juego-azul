@@ -18,6 +18,26 @@ import motoVideo from '../assets/recuerdos/moto-video.mp4';
 import motoPoster from '../assets/recuerdos/moto-video.jpg';
 import ferreriesVideo from '../assets/recuerdos/ferreries-video.mp4';
 import ferreriesPoster from '../assets/recuerdos/ferreries-video.jpg';
+import lpaCarteles from '../assets/recuerdos/lpa-carteles.jpg';
+import gcVideo from '../assets/recuerdos/gc-acantilado.mp4';
+import gcPoster from '../assets/recuerdos/gc-acantilado-video.jpg';
+import tossa from '../assets/recuerdos/tossa.jpg';
+import cadaques from '../assets/recuerdos/cadaques.jpg';
+import saBarca from '../assets/recuerdos/sa-barca.jpg';
+import motoComida from '../assets/recuerdos/moto-comida.mp4';
+import motoComidaPoster from '../assets/recuerdos/moto-comida-video.jpg';
+import santJoanBaile from '../assets/recuerdos/sant-joan-baile.jpg';
+import barca from '../assets/recuerdos/barca.mp4';
+import barcaPoster from '../assets/recuerdos/barca-video.jpg';
+import carbonara from '../assets/recuerdos/carbonara.jpg';
+import gafasEclipse from '../assets/recuerdos/gafas-eclipse.jpg';
+import eclipseVideo from '../assets/recuerdos/eclipse.mp4';
+import eclipsePoster from '../assets/recuerdos/eclipse-video.jpg';
+import bailePiscina from '../assets/recuerdos/baile-piscina.mp4';
+import bailePiscinaPoster from '../assets/recuerdos/baile-piscina-video.jpg';
+import atardecer from '../assets/recuerdos/atardecer.jpg';
+import amigos from '../assets/recuerdos/amigos.mp4';
+import amigosPoster from '../assets/recuerdos/amigos-video.jpg';
 import stOso from '../assets/recuerdos/st-oso.webp';
 import stJuzgamos from '../assets/recuerdos/st-juzgamos.webp';
 import stCarita from '../assets/recuerdos/st-carita.webp';
@@ -48,14 +68,28 @@ export const MEMORIES: Memory[] = [
   { level: 4, src: lpaDesayuno, caption: 'Gran Canaria, marzo de 2026. Desayuno al sol.' },
   { level: 4, src: lpaAscensor, caption: 'Camiseta de Fito puesta. Listos.' },
   { level: 4, src: lpaConcierto, caption: 'Fito, en directo. Y nosotros.' },
+  { level: 4, src: lpaCarteles, caption: 'Las Palmas, la víspera: Fito por todas las paredes.' },
   { level: 4, src: lpaCarnaval, caption: 'Todo lo que fuimos fue icónico.' },
+  { level: 4, src: gcPoster, video: gcVideo, caption: 'Gran Canaria, en lo alto. 15 de marzo.' },
   { level: 5, src: moto1, caption: 'La moto. Y el garaje, antes de salir.' },
   { level: 5, src: motoPoster, video: motoVideo, caption: 'Cargando la moto: casco, chupa y maleta.' },
   { level: 5, src: moto2, caption: 'Comiendo en la Costa Brava.' },
   { level: 5, src: moto3, caption: 'Cena en L’Escala.' },
+  { level: 5, src: tossa, caption: 'Tossa de Mar, 1 de mayo.' },
+  { level: 5, src: motoComidaPoster, video: motoComida, caption: 'Comer con ganas. Muchas.' },
+  { level: 5, src: cadaques, caption: 'Cadaqués, desde arriba.' },
+  { level: 5, src: saBarca, caption: 'Sa Barca: a ver qué pedimos.' },
   { level: 6, src: caballos, caption: '«Dime exacto pls.» Así de exacto.' },
   { level: 6, src: santJoanSelfie, caption: 'Sant Joan, 24 de junio.' },
   { level: 6, src: santJoan, caption: '«Muy dificil si…. Deslumbras»' },
+  { level: 6, src: santJoanBaile, caption: 'Sant Joan, 23 de junio: ¡arriba!' },
+  { level: 6, src: barcaPoster, video: barca, caption: 'Mayo, en barca por las calas.' },
+  { level: 7, src: carbonara, caption: 'La carbonara de verdad. 13 de julio, 22:15.' },
+  { level: 8, src: gafasEclipse, caption: 'Gafas puestas: 12 de agosto de 2026.' },
+  { level: 8, src: eclipsePoster, video: eclipseVideo, caption: 'El eclipse, desde las rocas.' },
+  { level: 8, src: bailePiscinaPoster, video: bailePiscina, caption: '15 de agosto, bailando junto a la piscina.' },
+  { level: 9, src: atardecer, caption: 'Un año después: 25 de agosto de 2026.' },
+  { level: 9, src: amigosPoster, video: amigos, caption: 'Y con todos, a finales de agosto.' },
 ];
 
 export const memoriesFor = (level: number) => MEMORIES.filter((m) => m.level === level);

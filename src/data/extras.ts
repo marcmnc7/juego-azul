@@ -5,6 +5,23 @@ import diadema from '../assets/recuerdos/diadema.jpg';
 import joyFoto from '../assets/recuerdos/joy.jpg';
 import trenes from '../assets/recuerdos/trenes.jpg';
 import ruta from '../assets/recuerdos/ruta.jpg';
+import playaCB from '../assets/recuerdos/playa-costa-brava.jpg';
+import amapolas from '../assets/recuerdos/amapolas.jpg';
+import paella from '../assets/recuerdos/paella.jpg';
+import cervezasCala from '../assets/recuerdos/cervezas-cala.jpg';
+import cineAzotea from '../assets/recuerdos/cine-azotea.jpg';
+import hipica from '../assets/recuerdos/hipica.jpg';
+import madridCrema from '../assets/recuerdos/madrid-crema.jpg';
+import paredRoja from '../assets/recuerdos/pared-roja.jpg';
+import caballoJulio from '../assets/recuerdos/caballo-julio.jpg';
+import bailando from '../assets/recuerdos/bailando.jpg';
+import ferryFoto from '../assets/recuerdos/ferry.jpg';
+import agostoPaseo from '../assets/recuerdos/agosto-paseo.jpg';
+import piscinaNoche from '../assets/recuerdos/piscina-noche.jpg';
+import cesped from '../assets/recuerdos/cesped.jpg';
+import calaOlivas from '../assets/recuerdos/cala-olivas.jpg';
+import fiestaSept from '../assets/recuerdos/fiesta-sept.jpg';
+import ferreries46 from '../assets/recuerdos/ferreries-46.jpg';
 import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 
 /** Una pista de lo que viene. Se ve al acabar el capítulo anterior y en el mapa. */
@@ -210,33 +227,34 @@ export const KEEPSAKES: Keepsake[] = [
   { id: 'r4-d', chapter: 4, phases: ST4, x: 19, z: 24, caption: 'Fito, en directo' },
   { id: 'r4-e', chapter: 4, phases: ST4, x: -21, z: -21, caption: 'El estadio' },
   // 5 · La moto: cuelgan a un lado de la carretera
-  { id: 'r5-a', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.21, side: 1, caption: 'Costa Brava' },
-  { id: 'r5-b', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.34, side: -1, caption: 'De paquete' },
+  { id: 'r5-a', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.21, side: 1, src: playaCB, caption: 'Tumbados en la arena, Costa Brava' },
+  { id: 'r5-b', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.34, side: -1, src: amapolas, caption: 'Un campo de amapolas, 2 de mayo' },
   { id: 'r5-c', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.46, side: 1, caption: 'Cap de Creus' },
   { id: 'r5-d', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.62, side: -1, caption: 'La tramontana' },
   { id: 'r5-e', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.74, side: 1, caption: 'MotoTrip4life' },
   // 6 · Sant Joan
   { id: 'r6-mar', chapter: 6, phases: SJ6, x: 87, z: 10, src: cocacola, caption: '«Que estaba escrito solo MAR. Y no creo en las coincidencias»' },
-  { id: 'r6-a', chapter: 6, phases: SJ6, x: 34, z: 3.6, caption: 'Ciutadella, 23 de junio' },
-  { id: 'r6-b', chapter: 6, phases: SJ6, x: -16.5, z: 0.5, caption: 'Ses Voltes' },
-  { id: 'r6-c', chapter: 6, phases: SJ6, x: 102, z: -10.5, caption: 'Caballos y avellanes' },
-  { id: 'r6-d', chapter: 6, phases: ['be'], x: 124, z: 9, caption: 'Sa Plaça d’es Bè' },
-  { id: 'r6-e', chapter: 6, phases: ['home'], x: -8, z: 14.1, caption: 'A casa, de noche' },
+  { id: 'r6-a', chapter: 6, phases: SJ6, x: 34, z: 3.6, src: paella, caption: 'La paella con todos, 24 de mayo' },
+  { id: 'r6-b', chapter: 6, phases: SJ6, x: -16.5, z: 0.5, src: cervezasCala, caption: 'Unas cervezas en la cala, 25 de mayo' },
+  { id: 'r6-c', chapter: 6, phases: SJ6, x: 102, z: -10.5, src: cineAzotea, caption: 'Cine en la azotea, con telescopio' },
+  { id: 'r6-d', chapter: 6, phases: ['be'], x: 124, z: 9, src: hipica, caption: 'A caballo, 23 de mayo' },
+  { id: 'r6-e', chapter: 6, phases: ['home'], x: -8, z: 14.1, src: madridCrema, caption: 'Madrid, 6 de junio: la crema catalana' },
   // 7 · La cena
-  { id: 'r7-a', chapter: 7, phases: C7, x: 4, z: 1.6, caption: 'Sa Farola' },
-  { id: 'r7-b', chapter: 7, phases: C7, x: -3.5, z: 8, caption: 'La carbonara' },
+  { id: 'r7-a', chapter: 7, phases: C7, x: 4, z: 1.6, src: paredRoja, caption: '25 de julio, de fiesta' },
+  { id: 'r7-b', chapter: 7, phases: C7, x: -3.5, z: 8, src: caballoJulio, caption: 'Otra vez caballos, 25 de julio' },
   { id: 'r7-c', chapter: 7, phases: C7, x: 4.2, z: 8.8, caption: 'Cena a escondidas' },
   { id: 'r7-d', chapter: 7, phases: C7, x: -4, z: 2.6, caption: 'La guirnalda' },
   // 8 · El día del eclipse
   { id: 'r8-joy', chapter: 8, phases: ['walk', 'back'], x: -70, z: 11.5, src: joyFoto, caption: 'Joy, con su pelota' },
-  { id: 'r8-a', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, caption: '12 de agosto de 2026' },
-  { id: 'r8-b', chapter: 8, phases: ['walk', 'back'], x: 39, z: 13.1, caption: 'El paseo' },
-  { id: 'r8-c', chapter: 8, phases: ['marcParents'], x: 3.6, z: -1.8, caption: 'La cocina' },
+  { id: 'r8-a', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, src: agostoPaseo, caption: '11 de agosto, la víspera' },
+  { id: 'r8-b', chapter: 8, phases: ['walk', 'back'], x: 39, z: 13.1, src: bailando, caption: 'Bailando, 6 de agosto' },
+  { id: 'r8-c', chapter: 8, phases: ['marcParents'], x: 3.6, z: -1.8, src: ferryFoto, caption: 'En el ferry, 8 de agosto' },
+  { id: 'r8-d', chapter: 8, phases: ['walk', 'back'], x: -31, z: 14.6, src: piscinaNoche, caption: 'De noche, junto a la piscina' },
   // 9 · Un año después
-  { id: 'r9-a', chapter: 9, phases: M9, x: -44, z: -3.5, caption: 'Un año después' },
-  { id: 'r9-b', chapter: 9, phases: M9, x: 32.5, z: 4.5, caption: 'Otra vez Ferreries' },
-  { id: 'r9-c', chapter: 9, phases: M9, x: 20, z: -3.5, caption: 'Bar Sa Font' },
-  { id: 'r9-d', chapter: 9, phases: M9, x: 7.5, z: 7.4, caption: '25 de agosto de 2026' },
+  { id: 'r9-a', chapter: 9, phases: M9, x: -44, z: -3.5, src: cesped, caption: 'Siesta en el césped, 23 de agosto' },
+  { id: 'r9-b', chapter: 9, phases: M9, x: 32.5, z: 4.5, src: calaOlivas, caption: 'Olivas en la cala, 22 de agosto' },
+  { id: 'r9-c', chapter: 9, phases: M9, x: 20, z: -3.5, src: ferreries46, caption: 'Otra vez de fiesta, 26 de agosto' },
+  { id: 'r9-d', chapter: 9, phases: M9, x: 7.5, z: 7.4, src: fiestaSept, caption: '6 de septiembre' },
 ];
 
 export const keepsakesFor = (chapter: number) => KEEPSAKES.filter((k) => k.chapter === chapter);
