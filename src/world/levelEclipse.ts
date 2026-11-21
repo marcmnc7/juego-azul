@@ -1023,7 +1023,7 @@ export class LevelEclipse implements Level {
       animatePerson(this.gas, dt, moving ? 'walk' : 'idle', 0.8);
       if (!moving) {
         this.getOutT = -1;
-        this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 1.4, speed: 4.2 });
+        this.followers.push({ p: this.gas, lead: () => this.player.root.position, gap: 0.85, speed: 4.2 }); // (21 nov: más juntos)
         dialogue(
           ECLIPSE.arriveAzul,
           this.chain(() => {
@@ -1070,7 +1070,7 @@ export class LevelEclipse implements Level {
   private joyFollows() {
     const j = this.joy!;
     this.followers = this.followers.filter((f) => f.p !== j);
-    this.followers.push({ p: j, lead: () => this.player.root.position, gap: 1.3, speed: 5.5 });
+    this.followers.push({ p: j, lead: () => this.player.root.position, gap: 0.95, speed: 5.5 });
   }
 
   /**
@@ -1114,7 +1114,7 @@ export class LevelEclipse implements Level {
         for (const o of this.others) o.mode = 'idle';
         // Eric se apunta al paseo con Gas
         const eric = this.others.pop()!;
-        this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 1.0, speed: 4.4 });
+        this.followers.push({ p: eric.p, lead: () => this.gas.root.position, gap: 0.75, speed: 4.4 });
         this.phase = 'walk';
         this.busy = false;
         this.updateHud();
@@ -1661,14 +1661,15 @@ export class LevelEclipse implements Level {
     }
     // Van por el mismo rastro: que se abran a los lados en vez de atravesarse
     const fs = this.followers;
-    const radius = (f: (typeof fs)[number]) => ('body' in f.p ? 0.42 : 0.56);
+    // (21 nov: más juntos, pero sin atravesarse: lo justo para que no se toquen)
+    const radius = (f: (typeof fs)[number]) => ('body' in f.p ? 0.33 : 0.46);
     for (let i = 0; i < fs.length; i++) {
       const a = fs[i], ap = a.p.root.position;
       // Con quien lleva el mando solo se aparta quien sigue
       const toX = ap.x - this.player.root.position.x, toZ = ap.z - this.player.root.position.z;
       const dp = Math.hypot(toX, toZ);
-      if (dp > 1e-3 && dp < radius(a) + 0.4) {
-        const k = (radius(a) + 0.4 - dp) * Math.min(1, dt * 10);
+      if (dp > 1e-3 && dp < radius(a) + 0.36) {
+        const k = (radius(a) + 0.36 - dp) * Math.min(1, dt * 10);
         a.trail?.nudge(a.p.root, (toX / dp) * k, (toZ / dp) * k, this.colliders);
       }
       for (let j = i + 1; j < fs.length; j++) {
