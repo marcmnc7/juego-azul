@@ -12,7 +12,7 @@ import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
 import { stage } from '../core/stage';
 import { tryApply } from '../core/updater';
-import { BUILD } from '../core/release';
+import { BUILD, APP_VERSION } from '../core/release';
 import { previousTrail } from '../core/trail';
 import { GATE, openDay, now, faking, daysUntil, longDate, left, MONTHS } from '../core/calendar';
 import cover1 from '../assets/covers/c1.jpg';
@@ -121,7 +121,7 @@ function cover(cls: string) {
   const eyebrow = el('div', 'hm-eyebrow', 'De Gas');
   testTaps(eyebrow);
   const slot = el('div', 'hm-slot');
-  s.append(sky, el('div', 'hm-glow'), eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), slot);
+  s.append(sky, el('div', 'hm-glow'), eyebrow, el('h1', 'hm-display', 'Para <em>Azul</em>'), slot, el('div', 'hm-version', `v${APP_VERSION}`));
   return { s, slot };
 }
 
@@ -540,7 +540,7 @@ export function mapScreen(save: SaveData, opts: MapOptions, tab: Tab = lastTab) 
   const s = el('div', 'screen hm-screen' + (switching ? ' still' : ''));
   const head = el('header', 'hm-head');
   const brand = el('div', 'hm-brand');
-  brand.append(el('div', 'hm-logo', 'Para <em>Azul</em>'), el('div', 'hm-sub', opts.test && !faking() ? 'Modo prueba · todo abierto' : `${save.levelsDone.length} de ${LEVELS.length} capítulos`));
+  brand.append(el('div', 'hm-logo', 'Para <em>Azul</em>'), el('div', 'hm-sub', (opts.test && !faking() ? 'Modo prueba · todo abierto' : `${save.levelsDone.length} de ${LEVELS.length} capítulos`) + ` · v${APP_VERSION}`));
   const btns = el('div', 'hm-head-btns');
   if (tab === 'album') {
     const back = el('button', 'hm-icon', '‹');

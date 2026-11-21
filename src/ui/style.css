@@ -1461,6 +1461,7 @@ html, body { background: #000; }
 }
 .hm-logo { font: 600 26px/1 var(--serif); color: var(--cream); }
 .hm-logo em { font-style: italic; font-weight: 700; color: var(--warm); }
+.hm-version { position: absolute; left: 0; right: 0; bottom: calc(10px + env(safe-area-inset-bottom)); text-align: center; font: 700 11px/1 var(--font); letter-spacing: .08em; color: rgba(255, 248, 236, .4); pointer-events: none; }
 .hm-sub { margin-top: 4px; font: 700 12px/1 var(--font); color: rgba(255, 248, 236, .55); }
 .hm-head-btns { display: flex; gap: 10px; }
 .hm-icon {

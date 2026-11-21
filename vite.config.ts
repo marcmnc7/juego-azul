@@ -6,6 +6,9 @@ import { resolve } from 'node:path';
 /** La versión de esta compilación: la misma en el código, en sw.js y en version.json. */
 const STAMP = String(Date.now());
 
+/** La versión que se ve en la portada y en el mapa (package.json; sube en cada publicación). */
+const APP_VERSION = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version as string;
+
 /** Lo que pase de este tamaño (modelos, VRM, música, fotos, cielos) va en dist/assets/, no dentro del HTML. */
 const INLINE_MAX = 64 * 1024;
 
@@ -34,7 +37,7 @@ export default defineConfig({
   plugins: [viteSingleFile({ useRecommendedBuildConfig: false }), swVersion()],
   // Rutas relativas: el mismo index.html sirve en cualquier carpeta (GitHub Pages, un servidor propio…)
   base: './',
-  define: { __BUILD__: JSON.stringify(STAMP) },
+  define: { __BUILD__: JSON.stringify(STAMP), __APP_VERSION__: JSON.stringify(APP_VERSION) },
   // Modelos glTF, personajes de VRoid y cielos HDRI
   assetsInclude: ['**/*.glb', '**/*.vrm'],
   build: {
