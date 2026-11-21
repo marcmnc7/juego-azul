@@ -604,7 +604,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   body.classList.add('mp-body');
   const states = LEVELS.map((_, i) => chapterState(i, save, opts.test));
   const allDone = LEVELS.every((l) => save.levelsDone.includes(l.id));
-  const nextI = allDone ? LEVELS.length - 1 : states.findIndex((c) => !c.done);
+  const nextI = allDone ? LEVELS.length : states.findIndex((c) => !c.done);
   const allOpen = opts.test && !faking();
   const wrap = el('div', 'mp-wrap');
   const track = el('div', 'mp-track');
@@ -649,6 +649,20 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     nodes.push(n);
     track.append(n);
   });
+  // Al final del camino, «Continuará…»: una parada cerrada, sin fecha, que no se abre (la historia sigue fuera del
+  // juego). Al terminar el último capítulo, el mapa se centra aquí y late
+  const more = el('button', 'mp-node mp-more' + (allDone ? ' next' : ''));
+  const moreTile = el('div', 'mp-tile mp-more-tile', '<span>…</span>');
+  moreTile.append(el('span', 'mp-badge', '🔒'));
+  more.append(moreTile, el('div', 'mp-label', `<small>${new Date(now()).getFullYear() + 1}</small><b>Continuará…</b><i>Sin fecha todavía</i>`));
+  more.onclick = () => {
+    more.classList.remove('nope');
+    void more.offsetWidth;
+    more.classList.add('nope');
+    vibrate(20);
+  };
+  nodes.push(more);
+  track.append(more);
   // Los «conecta»: un punto más pequeño a medio camino entre dos capítulos, con su día; se abren ese día
   const minis = PUZZLES.map((pz) => {
     const open = allOpen || now() >= puzzleDate(pz).getTime();
@@ -784,10 +798,11 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       }
       return d.trim();
     };
-    const lit = Math.min(nodes.length - 1, Math.max(0, nextI));
+    const lit = Math.min(LEVELS.length - 1, Math.max(0, nextI));
     pathOff.setAttribute('d', seg(0, nodes.length - 1));
     pathOn.setAttribute('d', lit > 0 ? seg(0, lit) : '');
-    const focus = pts[lit];
+    // Con todo hecho, la vista va a «Continuará…» (el camino encendido llega hasta el último capítulo)
+    const focus = pts[allDone ? nodes.length - 1 : lit];
     if (tall) wrap.scrollTop = Math.max(0, focus[1] - H * 0.45);
     else wrap.scrollLeft = Math.max(0, focus[0] - W / 2);
   };

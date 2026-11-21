@@ -2049,6 +2049,11 @@ html, body { background: #000; }
 .mp-node .hm-count { justify-content: center; margin-top: 0; }
 .mp-node .hm-count b { font-size: 20px; }
 .mp-node .hm-count span { font-size: 10px; margin-right: 4px; }
+.mp-tile.mp-more-tile { display: grid; place-items: center; background: radial-gradient(circle at 30% 25%, rgba(255, 248, 236, .18) 0 2px, transparent 3px), radial-gradient(circle at 72% 60%, rgba(255, 248, 236, .14) 0 1.5px, transparent 2.5px), linear-gradient(150deg, #24345e, #101a33); box-shadow: 0 0 0 3px rgba(255, 248, 236, .25), 0 14px 26px -12px rgba(0, 0, 0, .8); }
+.mp-more-tile > span:first-child { font: 600 calc(var(--tile) * .42)/1 var(--serif); color: var(--warm); transform: translateY(-12%); }
+.mp-more .mp-badge { inset: auto 8px 8px auto; }
+.mp-more .mp-label b { font-style: italic; }
+.mp-node.mp-more.next .mp-tile::after, .mp-node.mp-more .mp-tile::after { content: none; display: none; }
 .mp-tile.heart { display: grid; place-items: center; font-size: calc(var(--tile) * .5); background: linear-gradient(135deg, #f7d6dc, #e9a7b6); }
 .mp-node.final.locked .mp-tile.heart { filter: grayscale(.6) brightness(.6); }
 .ap-version { text-align: center; opacity: .6; margin-top: 4px; }
