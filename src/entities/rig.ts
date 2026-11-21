@@ -780,8 +780,15 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
     blink: 2 + Math.random() * 3, t: Math.random() * 10, rig,
   };
   if (loaded) vrmOwner.set(loaded, p);
+  // (de quién es: los globos de diálogo buscan así a quien habla, ver main.ts)
+  root.userData.vrm = look.vrm;
   people.add(p);
   return p;
+}
+
+/** Todos los muñecos con esqueleto del capítulo (estén o no en escena). */
+export function rigPeopleList(): Iterable<Person> {
+  return people;
 }
 
 /**

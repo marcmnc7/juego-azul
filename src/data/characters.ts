@@ -20,6 +20,11 @@ const FILES = import.meta.glob('../assets/vrm/*.vrm', { eager: true, query: '?ur
 const BY_NAME = new Map(Object.entries(FILES).map(([path, url]) => [path.split('/').pop()!.replace(/\.vrm$/, ''), url]));
 const NAME_OF = new Map([...BY_NAME].map(([n, u]) => [u, n]));
 
+/** El nombre del personaje (azul_ferreries, taxista…) de una dirección de VRM. */
+export function castName(url: string | undefined): string {
+  return url ? NAME_OF.get(url) ?? '' : '';
+}
+
 /** La dirección del VRM de ese personaje, o undefined si todavía no está hecho. */
 export function castVrm(name: string): string | undefined {
   return BY_NAME.get(name);

@@ -23,12 +23,13 @@ import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
-import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
+import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs, rigPeopleList } from './entities/rig';
 import { ensureCrowd } from './entities/crowdRig';
 import { initClock, faking } from './core/calendar';
 import { preloadDonkey } from './entities/donkeyHD';
 import { preloadVehicles } from './entities/vehiclesHD';
-import { castFor } from './data/characters';
+import { castFor, castName } from './data/characters';
+import type { Person } from './entities/models';
 import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } from './core/comic';
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
@@ -202,44 +203,135 @@ let closeDebug: (() => void) | null = null;
 let extras: ChapterExtras | null = null;
 // Bocadillos de diálogo: quién es quién en cada capítulo (los niveles guardan a los personajes con estos nombres)
 const SPEAKERS: Record<string, string[]> = {
-  Azul: ['azul', 'player'], Margaux: ['azul', 'player'], Gas: ['gas', 'marc'], Marc: ['marc', 'gas'],
+  Azul: ['azul', 'player'], Margaux: ['azul', 'player'], azul: ['azul', 'player'], Gas: ['gas', 'marc'], Marc: ['marc', 'gas'],
   Carme: ['carme'], Tòfol: ['tofol'], Camarero: ['barman'],
 };
+/**
+ * Quién es quién por su modelo de VRoid (el nombre del archivo): así sale el globo de los que el capítulo no nombra
+ * en un campo (los padres, el taxista, los agentes, los caixers…).
+ */
+const ROLE: [RegExp, RegExp][] = [
+  [/^(Azul|Margaux|azul)$/, /^azul_/],
+  [/^(Gas|Marc)$/, /^gas_/],
+  [/^Carme$/, /^carme$/],
+  [/^Tòfol$/, /^tofol$/],
+  [/^Camarero/, /^camarero_/],
+  [/^Taxista$/, /^taxista$/],
+  [/^Madre de Gas$/, /^madre_gas$/],
+  [/^Padre de Gas$/, /^padre_gas$/],
+  [/^Padre de Azul$/, /^padre_azul$/],
+  [/^Madre( de Azul)?$/, /^madre_azul$/],
+  [/^Agente/, /^agente_/],
+  [/^Fito$/, /^fito$/],
+  [/^Eric$/, /^eric$/],
+  [/^Amiga/, /^amiga_/],
+  [/^Amigo/, /^amigo_/],
+  [/caixer/i, /^caixer$/],
+  [/^Un crío/, /^nino_/],
+  [/^Fabiolera/, /^fabiolera$/],
+  [/ecino/, /^vecino$/],
+];
+/** Los que tienen nombre propio: si no se les encuentra, no se le pone su frase a otro. */
+const NAMED = /^(Azul|Margaux|azul|Gas|Marc|Carme|Tòfol|Fito|Eric|Joy|Vaca)$/;
 const _head = new THREE.Vector3();
+const _v = new THREE.Vector3();
 const lastSpeaker = { pos: new THREE.Vector3(), at: 0 };
+/** A quién se le ha dado la voz de un extra sin nombre: se mantiene mientras siga hablando (no salta de uno a otro). */
+const stick = new Map<string, { p: Person; at: number }>();
+type PersonLike = { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } };
+/** ¿Está en esta escena y se ve? */
+const inScene = (root: THREE.Object3D, scene: THREE.Object3D) => {
+  let o: THREE.Object3D | null = root;
+  while (o) {
+    if (!o.visible) return false;
+    if (o === scene) return true;
+    o = o.parent;
+  }
+  return false;
+};
+/** Punto de encima de la cabeza (en el mundo). */
+const headTop = (p: PersonLike, out: THREE.Vector3) => {
+  const bone = p.rig?.bones.get('Head') ?? p.head!;
+  bone.getWorldPosition(out);
+  out.y += 0.32 * (p.root!.scale.y || 1);
+  return out;
+};
+/**
+ * El punto del mundo a la pantalla. Si queda fuera (o detrás de la cámara), se devuelve igual, marcado `off`: el
+ * globo se queda en el borde, del lado de quien habla, en vez de irse a la caja de abajo (que es del narrador).
+ */
+function toScreen(p: THREE.Vector3) {
+  _v.copy(p).project(camera);
+  let x = _v.x, y = _v.y;
+  const behind = _v.z > 1;
+  if (behind) {
+    x = -x;
+    y = -y;
+  }
+  const off = behind || Math.abs(x) > 0.95 || Math.abs(y) > 1.0;
+  return { x: (x * 0.5 + 0.5) * window.innerWidth, y: (-y * 0.5 + 0.5) * window.innerHeight, off };
+}
 setSpeakerResolver((who) => {
-  // (en una misión manda su escena y su cámara: los personajes del capítulo que espera no valen)
-  if (stage.current) return null;
-  const L = level as unknown as Record<string, { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } }> | null;
-  if (!L) return null;
-  // El nivel puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
+  // En una misión manda su escena (con su gente) y lo que diga ella; si no, el capítulo
+  const mission = stage.current as (typeof stage.current & { speakerPoint?: (who: string) => THREE.Vector3 | null }) | null;
+  const scene: THREE.Object3D | undefined = mission ? mission.scene : (level as unknown as { threeScene?: THREE.Scene } | null)?.threeScene;
+  if (!scene) return null;
+  const L = (mission ? mission : level) as unknown as Record<string, PersonLike>;
+  // El nivel (o la misión) puede decir dónde habla alguien que no se ve de cuerpo entero (dentro del coche)
   // (y hacia qué lado se abre el globo: en un coche, cada uno desde su asiento)
-  const lv = level as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined; speakerBelow?: () => boolean };
+  const lv = (mission ?? level) as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined; speakerBelow?: () => boolean };
   const hook = lv.speakerPoint?.(who);
   if (hook) {
-    _head.copy(hook).project(camera);
-    if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
+    const at = toScreen(hook);
     // (conduciendo, el globo sale por detrás, abajo: encima tapaba la carretera)
-    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight, side: lv.speakerSide?.(who), below: lv.speakerBelow?.() ?? false };
+    return { ...at, side: lv.speakerSide?.(who), below: lv.speakerBelow?.() ?? false };
   }
-  for (const f of SPEAKERS[who] ?? []) {
-    const p = L[f];
-    if (!p?.root || !p.head) continue;
-    // Tiene que estar en la escena y visible
-    let o: THREE.Object3D | null = p.root;
-    while (o && o.visible && o.parent) o = o.parent;
-    if (!o || !o.visible || !(o as THREE.Scene).isScene) continue;
-    const bone = p.rig?.bones.get('Head') ?? p.head;
-    bone.getWorldPosition(_head);
+  const found = (p: PersonLike) => {
+    headTop(p, _head);
     lastSpeaker.pos.copy(_head);
     lastSpeaker.at = performance.now();
-    if (_head.distanceTo(camera.position) > 22) return null;
-    _head.y += 0.32 * (p.root.scale.y || 1);
-    _head.project(camera);
-    if (_head.z > 1 || Math.abs(_head.x) > 0.95 || Math.abs(_head.y) > 1.1) return null;
-    return { x: (_head.x * 0.5 + 0.5) * window.innerWidth, y: (-_head.y * 0.5 + 0.5) * window.innerHeight };
+    return toScreen(_head);
+  };
+  // 1) Por el campo del capítulo (azul, marc, carme…)
+  for (const f of SPEAKERS[who] ?? []) {
+    const p = L[f];
+    if (p?.root && p.head && inScene(p.root, scene)) return found(p);
   }
-  return null;
+  // 2) Por su modelo de VRoid; si hay varios iguales (caixers, críos), el más cercano a la cámara
+  const role = ROLE.find(([w]) => w.test(who))?.[1];
+  const pp = (L.player?.root ?? L.azul?.root)?.position ?? camera.position;
+  if (role) {
+    let best: Person | null = null, bd = Infinity;
+    for (const p of rigPeopleList()) {
+      if (!role.test(castName(p.root.userData.vrm)) || !inScene(p.root, scene)) continue;
+      const d = p.root.getWorldPosition(_v).distanceTo(camera.position);
+      if (d < bd) (bd = d), (best = p);
+    }
+    if (best) return found(best);
+  }
+  if (NAMED.test(who) || who === 'Narrador') return null;
+  // 3) Un extra sin nombre («Una señora», «Un señor de Telde», la gente de la fiesta): quien esté más cerca de
+  // Azul (o de Gas), que no sea ninguno de los dos, mejor si se le ve. Se queda con él mientras habla
+  const now = performance.now();
+  const st = stick.get(who);
+  if (st && now - st.at < 8000 && inScene(st.p.root, scene)) {
+    st.at = now;
+    return found(st.p);
+  }
+  const mine = new Set<THREE.Object3D>();
+  for (const f of ['player', 'azul', 'marc', 'gas']) if (L[f]?.root) mine.add(L[f].root!);
+  let best: Person | null = null, bd = Infinity;
+  for (const p of rigPeopleList()) {
+    if (mine.has(p.root) || /^(azul|gas)_/.test(castName(p.root.userData.vrm)) || !inScene(p.root, scene)) continue;
+    const d = p.root.getWorldPosition(_v).distanceTo(pp);
+    if (d > 12) continue;
+    // (los que no salen en pantalla, como si estuvieran el doble de lejos)
+    const score = d * (toScreen(headTop(p, _head)).off ? 2 : 1);
+    if (score < bd) (bd = score), (best = p);
+  }
+  if (!best) return null;
+  stick.set(who, { p: best, at: now });
+  return found(best);
 });
 const idle = new THREE.Scene();
 idle.background = new THREE.Color(0x2b1840);

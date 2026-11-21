@@ -1,4 +1,6 @@
 // Regalos reales que se desbloquean en el juego.
+import vuelosTenerife from '../assets/regalos/vuelos-tenerife.jpg';
+
 // Marc: cambia aquí el texto de cada regalo. Nada más hace falta tocar.
 export interface Gift {
   id: string;
@@ -7,6 +9,8 @@ export interface Gift {
   title: string;
   description: string;
   howToRedeem: string;
+  /** Una foto que va con el vale (los billetes ya comprados…): sale en el vale y se abre en grande al tocarla. */
+  photo?: { src: string; caption: string };
 }
 
 export const GIFTS: Gift[] = [
@@ -17,6 +21,7 @@ export const GIFTS: Gift[] = [
     title: 'Vuelos para… ¡el Carnaval de Tenerife 2027!',
     description: 'Volvemos a Canarias, esta vez a disfrazarnos. Ve pensando el disfraz.',
     howToRedeem: 'Los billetes corren de mi cuenta. Enséñale este vale a Gas.',
+    photo: { src: vuelosTenerife, caption: 'Ya están comprados: del 17 al 24 de febrero ✈️' },
   },
   {
     id: 'masaje15',

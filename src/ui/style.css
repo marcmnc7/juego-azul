@@ -1796,12 +1796,12 @@ html, body { background: #000; }
 .wn-gift .wn-ch { display: inline-block; opacity: 0; }
 .wn-gift.open .wn-ch { animation: wnCh .55s var(--d, 0s) ease-out both; }
 @keyframes wnCh { from { opacity: 0; transform: translateY(6px) scale(1.4); filter: blur(6px); color: #f6b252; } to { opacity: 1; transform: none; filter: blur(0); } }
-.wn-gift .wn-tdesc, .wn-gift .wn-tredeem, .wn-gift .wn-tlabel { opacity: 0; }
+.wn-gift .wn-tdesc, .wn-gift .wn-tredeem, .wn-gift .wn-tlabel, .wn-gift .wn-tphoto { opacity: 0; }
 .wn-gift.open .wn-tlabel { animation: wnUp .6s 2.4s ease both; }
-.wn-gift.open .wn-tdesc, .wn-gift.open .wn-tredeem { animation: wnUp .8s var(--d, 0s) ease both; }
+.wn-gift.open .wn-tdesc, .wn-gift.open .wn-tredeem, .wn-gift.open .wn-tphoto { animation: wnUp .8s var(--d, 0s) ease both; }
 .wn-gift.revealed .wn-ticket { box-shadow: 0 0 0 2px rgba(255, 207, 122, .6), 0 0 60px rgba(255, 207, 122, .45), 0 30px 60px -20px rgba(0, 0, 0, .7); transition: box-shadow 1s ease; }
 /* Saltado a medias: todo ya */
-.wn-gift.fast .wn-ticket, .wn-gift.fast .wn-ch, .wn-gift.fast .wn-tdesc, .wn-gift.fast .wn-tredeem, .wn-gift.fast .wn-tlabel { animation: none; opacity: 1; filter: none; transform: none; }
+.wn-gift.fast .wn-ticket, .wn-gift.fast .wn-ch, .wn-gift.fast .wn-tdesc, .wn-gift.fast .wn-tredeem, .wn-gift.fast .wn-tlabel, .wn-gift.fast .wn-tphoto { animation: none; opacity: 1; filter: none; transform: none; }
 .wn-saved { position: absolute; bottom: 6px; opacity: 0; }
 .wn-gift.revealed .wn-saved { animation: wnUp .5s .4s ease both; }
 .wn-gift > .wn-kicker { position: absolute; top: max(16px, env(safe-area-inset-top)); }
@@ -1813,6 +1813,10 @@ html, body { background: #000; }
 .wn-tlabel { font: 800 10px/1 var(--font); letter-spacing: .26em; text-transform: uppercase; color: #c0563f; }
 .wn-ttitle { margin: 0; font: 600 clamp(22px, 4.4vh + 8px, 32px)/1.05 var(--serif); color: #2f2210; }
 .wn-tdesc { margin: 0; font: 600 14px/1.4 var(--font); color: #5a4630; }
+.wn-tphoto { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px 6px 6px; border: 0; border-radius: 10px; background: rgba(58, 42, 24, .07); text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.wn-tphoto img { width: 56px; height: 54px; object-fit: cover; object-position: top; border-radius: 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); flex: none; }
+.wn-tphoto b { display: block; font: 700 13px/1.25 var(--font); color: #3a2a18; }
+.wn-tphoto i { display: block; margin-top: 2px; font: italic 500 12px/1.2 var(--serif); color: #8a5a2a; }
 .wn-tredeem { margin-top: 4px; font: italic 500 15px/1.3 var(--serif); color: #8a5a2a; }
 
 /* 3 · Álbum */
@@ -2246,3 +2250,27 @@ html, body { background: #000; }
 .ap-trail { font-size: 11px; color: var(--ink-2); }
 .ap-trail summary { cursor: pointer; font-weight: 700; }
 .ap-trail pre { white-space: pre-wrap; font: 10px/1.35 ui-monospace, Menlo, monospace; max-height: 40vh; overflow: auto; background: rgba(0,0,0,.05); padding: 6px; border-radius: 8px; }
+
+/* ---------- Globos de los personajes (21 nov): siempre junto a quien habla y menos opacos ---------- */
+/* Lo que falta por escribir ocupa su sitio, invisible (el globo no crece mientras se escribe) */
+.dialogue .text .ghost { visibility: hidden; }
+/* Más transparentes: en el móvil tapaban demasiado. El texto y la tinta, enteros */
+.comic-mode { --paper-g: rgba(255, 251, 240, .74); }
+.comic-mode .dialogue.speech:not(.wa), .comic-mode .bark:not(.wa) { background: var(--paper-g); box-shadow: 2px 3px 0 rgba(20, 16, 24, .55); }
+.comic-mode .dialogue.speech:not(.wa)::after { border-color: var(--paper-g) transparent transparent transparent; }
+.comic-mode .bark.anchored:not(.wa)::after { border-color: var(--paper-g) transparent transparent transparent; }
+.dialogue.speech:not(.wa) { background: rgba(255, 250, 238, .76); }
+.bark:not(.wa) { background: rgba(255, 250, 238, .74); }
+.dialogue.speech:not(.wa)::after { border-top-color: rgba(255, 250, 238, .76); }
+.bark.anchored:not(.wa)::after { border-top-color: rgba(255, 250, 238, .74); }
+/* Sin nadie a quien apuntar: sin rabito */
+.dialogue.speech.notail::before, .dialogue.speech.notail::after { display: none; }
+/* Debajo de la cabeza (no cabía encima): el rabito, arriba y apuntando hacia arriba */
+.dialogue.speech.tail-up::before { top: auto; bottom: 100%; border-width: 0 11px 16px 11px; border-color: transparent transparent var(--sea) transparent; }
+.dialogue.speech.tail-up::after { top: auto; bottom: calc(100% - 5px); border-width: 0 8px 13px 8px; border-color: transparent transparent rgba(255, 250, 238, .76) transparent; }
+.comic-mode .dialogue.speech.tail-up::before { top: auto; bottom: calc(100% - 1px); border-width: 0 9px 20px 9px; border-color: transparent transparent var(--ink-c) transparent; transform: translateX(-50%) skewX(14deg); }
+.comic-mode .dialogue.speech.tail-up::after { top: auto; bottom: calc(100% - 4px); border-width: 0 5.5px 15px 5.5px; border-color: transparent transparent var(--paper-g) transparent; transform: translateX(-50%) skewX(14deg); }
+.comic-mode .dialogue.speech.tail-up .who { top: auto; bottom: -16px; }
+.bark.anchored.tail-up::after { bottom: auto; top: -7px; border-top: 0; border-bottom: 7px solid rgba(255, 250, 238, .74); border-top-color: transparent; }
+.comic-mode .bark.anchored.tail-up::before { top: auto; bottom: calc(100% - 1px); border-width: 0 7px 13px 7px; border-color: transparent transparent var(--ink-c) transparent; }
+.comic-mode .bark.anchored.tail-up::after { top: auto; bottom: calc(100% - 4px); border-width: 0 4px 9px 4px; border-color: transparent transparent var(--paper-g) transparent; }

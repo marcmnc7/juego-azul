@@ -83,13 +83,13 @@ export const FERRERIES_VARIANT: JaleoVariant = {
 
 // toFont: capítulo 9, después del jaleo, a bailar juntos a Sa Font (donde se conocieron) antes del beso
 /** Lo que dura la caricia al burro (s). */
-const PET = 1.6;
+const PET = 0.9;
 
 type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'toFont' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
 const REAR = 1.8;
-const TOUCH_R = 3.2;
+const TOUCH_R = 1.9; // (sin deslizarse hacia él: hay que estar a su lado)
 
 interface DonkeyState {
   d: Donkey;
@@ -860,6 +860,10 @@ export class Level1 implements Level {
     // De qué lado del burro está ella (en el espacio del burro, que mira a +z)
     const loc = s.d.root.worldToLocal(this.v1.copy(this.player.root.position));
     this.pet = { s, t: PET, side: loc.x >= 0 ? 1 : -1 };
+    // El ase se queda quieto hasta que ella acaba (antes echaba a andar a media caricia y la empujaba al final)
+    // (y al acabar, un respiro: se queda un poco más quieto y, si echa a andar con ella al lado, no la empuja)
+    s.rearT = Math.max(s.rearT, PET + 0.9);
+    this.invuln = Math.max(this.invuln, PET + 2.2);
     this.startPetIK();
     // (corazón dibujado, no el emoji 💕 del sistema)
     later(() => this.fx.burst(this.v1.copy(s.d.root.position).setY(2.1), '❤️', 4, 1.6, 0.9), 350);
@@ -1052,13 +1056,13 @@ export class Level1 implements Level {
       P.t -= dt;
       const d = P.s.d;
       const w = Math.min(1, (PET - P.t) / 0.3, P.t / 0.3);
-      // Su sitio: al lado del cuello, a medio metro, mirándolo
-      const spot = d.root.localToWorld(this.v2.set(P.side * 0.5, 0, 0.55));
+      // Se queda donde está (no se desliza hacia él) y se gira hacia su cuello
       const pp = this.player.root.position;
-      pp.x += (spot.x - pp.x) * Math.min(1, dt * 8) * w;
-      pp.z += (spot.z - pp.z) * Math.min(1, dt * 8) * w;
       const neck = d.root.localToWorld(this.v2.set(0, 0, 0.55));
-      const yaw = Math.atan2(neck.x - pp.x, neck.z - pp.z);
+      const want = Math.atan2(neck.x - pp.x, neck.z - pp.z);
+      // (girándose poco a poco, no de golpe)
+      const f0 = this.walker.facing;
+      const yaw = f0 + Math.atan2(Math.sin(want - f0), Math.cos(want - f0)) * Math.min(1, dt * 10);
       this.player.root.rotation.y = yaw;
       this.walker.facing = yaw;
       if (!this.player.rig) {

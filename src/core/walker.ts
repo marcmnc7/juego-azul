@@ -194,10 +194,10 @@ export class Walker implements AirState {
       const mx = fx * ax.y - fz * ax.x;
       const mz = fz * ax.y + fx * ax.x;
       const want = Math.atan2(mx, mz);
-      // Se gira rápido parado y más despacio corriendo
-      const maxTurn = THREE.MathUtils.lerp(14, 7, Math.min(1, spd / this.speed));
+      // Se gira algo más rápido parado que corriendo, pero sin brusquedad (Marc lo quería más lento: antes 14 → 7)
+      const maxTurn = THREE.MathUtils.lerp(7.5, 4.5, Math.min(1, spd / this.speed));
       const diff = wrap(want - this.facing);
-      this.facing += Math.sign(diff) * Math.min(Math.abs(diff), maxTurn * dt, Math.abs(diff) * Math.min(1, dt * 16));
+      this.facing += Math.sign(diff) * Math.min(Math.abs(diff), maxTurn * dt, Math.abs(diff) * Math.min(1, dt * 8));
       // Girar en seco frena: la velocidad deseada cae con el ángulo entre hacia dónde miras y hacia dónde vas
       const off = Math.abs(wrap(want - this.facing));
       const turnPenalty = 0.3 + 0.7 * Math.max(0, Math.cos(Math.min(Math.PI / 2, off * 1.2)));

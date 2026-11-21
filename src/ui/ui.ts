@@ -320,6 +320,11 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     desc.style.setProperty('--d', `${after.toFixed(2)}s`);
     redeem.style.setProperty('--d', `${(after + 0.9).toFixed(2)}s`);
     main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), title, desc, redeem);
+    const gp = giftPhoto(gift);
+    if (gp) {
+      gp.style.setProperty('--d', `${(after + 1.3).toFixed(2)}s`);
+      main.append(gp);
+    }
     ticket.append(stub, main);
     const revealAt = (after + 1.6) * 1000;
     const saved = el('p', 'wn-hint wn-saved', 'Queda guardado en la ficha del capítulo');
@@ -465,6 +470,21 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
 }
 
 /** Visor de fotos a pantalla completa: deslizar o flechas para pasar, tocar fuera para cerrar. */
+/** La foto que va con un vale (los billetes…): una miniatura dentro del vale que se abre en grande. */
+function giftPhoto(gift: Gift) {
+  if (!gift.photo) return null;
+  const b = el('button', 'wn-tphoto');
+  const im = el('img') as HTMLImageElement;
+  im.src = gift.photo.src;
+  im.alt = '';
+  b.append(im, el('span', '', `<b>${gift.photo.caption}</b><i>Toca para verlos</i>`));
+  b.onclick = (e) => {
+    e.stopPropagation();
+    lightbox([{ src: gift.photo!.src, caption: gift.photo!.caption, level: gift.level }], 0);
+  };
+  return b;
+}
+
 function lightbox(items: Shot[], start: number) {
   let i = start;
   const o = el('div', 'ap-light');
@@ -851,6 +871,8 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     stub.append(el('div', 'wn-stub-icon', gift.icon), el('div', 'wn-stub-num', `Nº ${String(id).padStart(2, '0')}`));
     const main = el('div', 'wn-tmain');
     main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
+    const gp = giftPhoto(gift);
+    if (gp) main.append(gp);
     ticket.append(stub, main);
     list.append(ticket);
   } else if (GIFTS.some((g) => g.level === id)) {
@@ -1338,6 +1360,21 @@ export function shownName(who: string) {
 
 const SHOW_POW = false;
 
+/** Lo que ocupa arriba la isla o la muesca del iPhone (env(safe-area-inset-top)), en px. */
+let safeTopPx = -1;
+function safeTop() {
+  if (safeTopPx < 0) {
+    const probe = el('div');
+    probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+    document.body.append(probe);
+    safeTopPx = probe.offsetHeight;
+    probe.remove();
+    // (al girar el móvil cambia: se vuelve a medir)
+    window.addEventListener('resize', () => (safeTopPx = -1), { once: true });
+  }
+  return safeTopPx;
+}
+
 /** Una frase al andar: bocadillo sobre quien habla (o arriba, si no se le ve). No para nada ni recoge toques. */
 export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
   // (los mensajes de móvil sueltos, el bocadillo verde con 📱, no salen en ningún nivel: los chats van en el móvil)
@@ -1355,6 +1392,7 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
   t.append(el('b', '', wa ? `📱 ${shownName(who)}` : shownName(who)), el('span', '', body));
   root.append(t);
   barkEnd = performance.now() + 2100 + Math.min(2400, body.length * 55);
+  let bx = NaN, by = NaN, bt = performance.now(), logged = false;
   const place = () => {
     if (!t.isConnected) return;
     const left = barkEnd - performance.now();
@@ -1362,6 +1400,8 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
     t.style.opacity = String(Math.min(1, left / 300));
     const at = wa ? null : speakerAt(who);
     const W = window.innerWidth;
+    const logB = (window as unknown as { __speechLog?: unknown[] }).__speechLog;
+    if (logB && !logged && (logged = true)) logB.push({ bark: 1, who, text: body.slice(0, 40), at: at ? (at.off ? 'off' : 'on') : 'none' });
     if (at && at.below) {
       // Conduciendo: pegado al vehículo, a su lado y a la altura de la carrocería, con el rabito hacia el asiento de
       // quien habla (ni encima del coche ni lejos: la carretera de delante, despejada)
@@ -1375,22 +1415,37 @@ export function bark(who: string, text: string, side?: 'l' | 'r', waited = 0) {
       t.style.setProperty('--tail-y', `${Math.min(h - 12, Math.max(12, at.y + 6 - (Math.min(Math.max(at.y + 6 - h / 2, 70), H - h - 10))))}px`);
       t.classList.remove('to-l', 'to-r');
       t.classList.add('anchored', 'below', sd === 'l' ? 'to-r' : 'to-l');
-    } else if (at && at.y > 90) {
+    } else if (at) {
       t.classList.remove('below');
-      const w = t.offsetWidth, h = t.offsetHeight;
+      const w = t.offsetWidth, h = t.offsetHeight, H = window.innerHeight;
       // De lado (dos que hablan uno junto al otro, como en el coche): el globo se abre hacia su lado y el rabito
-      // apunta a quien habla
+      // apunta a quien habla. Si no se le ve, se queda en el borde de su lado (nunca en medio, sin dueño)
       const sd = side ?? at.side;
       const want = sd === 'l' ? at.x - w + 30 : sd === 'r' ? at.x - 30 : at.x - w / 2;
-      const left = Math.min(Math.max(want, 10), W - w - 10);
-      t.style.left = `${left}px`;
-      t.style.top = `${Math.max(at.y - h - 16, 72)}px`;
-      t.style.setProperty('--tail-x', `${Math.min(w - 16, Math.max(16, at.x - left))}px`);
+      const tx = Math.min(Math.max(want, 10), W - w - 10);
+      const topMin = 70 + safeTop();
+      let ty = at.y - h - 16, up = false;
+      if (ty < topMin) {
+        if (at.y + 16 + h <= H - 10 && at.y > -40) {
+          ty = Math.max(at.y + 16, topMin);
+          up = true;
+        } else ty = topMin;
+      }
+      ty = Math.min(ty, H - h - 10);
+      const now = performance.now();
+      const k = isNaN(bx) ? 1 : Math.min(1, (now - bt) / 1000 * 14);
+      bt = now;
+      bx = isNaN(bx) ? tx : bx + (tx - bx) * k;
+      by = isNaN(by) ? ty : by + (ty - by) * k;
+      t.style.left = `${bx.toFixed(1)}px`;
+      t.style.top = `${by.toFixed(1)}px`;
+      t.style.setProperty('--tail-x', `${Math.min(w - 16, Math.max(16, at.x - bx))}px`);
       t.classList.add('anchored');
+      t.classList.toggle('tail-up', up);
     } else {
       t.style.left = `${(W - t.offsetWidth) / 2}px`;
       t.style.top = 'calc(env(safe-area-inset-top) + 76px)';
-      t.classList.remove('anchored');
+      t.classList.remove('anchored', 'tail-up');
     }
     barkRaf = requestAnimationFrame(place);
   };
@@ -1441,7 +1496,7 @@ export function later(fn: () => void, ms: number) {
 }
 
 /** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */
-let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r'; below?: boolean } | null = () => null;
+let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r'; below?: boolean; off?: boolean } | null = () => null;
 export function setSpeakerResolver(fn: typeof speakerAt) {
   speakerAt = fn;
 }
@@ -1470,21 +1525,66 @@ export function dialogue(lines: Line[], onDone: () => void) {
   // Las líneas que empiezan por «(WhatsApp)» se pintan como un mensaje del móvil
   const WA = '(WhatsApp) ';
   const body = (ln: Line) => (ln.text.startsWith(WA) ? ln.text.slice(WA.length) : ln.text);
-  // Coloca el bocadillo sobre la cabeza de quien habla, sin salirse de la pantalla
+  // Coloca el bocadillo junto a la cabeza de quien habla, sin salirse de la pantalla. Los personajes hablan
+  // SIEMPRE en globo (la caja de abajo es solo del narrador): si no se le ve, el globo se queda en el borde, de su
+  // lado; si no hay nadie a quien pegarlo, arriba. Se mueve suave (sin saltos) y no cambia de tamaño al escribirse
+  let cx = NaN, cy = NaN, ct = NaN, lastT = 0, lastWho = '';
   const place = () => {
     raf = requestAnimationFrame(place);
     const ln = lines[i];
-    const at = ln && !ln.text.startsWith(WA) && ln.who !== 'Narrador' ? speakerAt(ln.who) : null;
-    const W = window.innerWidth;
-    if (at && at.y > 70) {
-      box.classList.add('speech');
-      const w = box.offsetWidth, h = box.offsetHeight;
-      const left = Math.min(Math.max(at.x - w / 2, 12), W - w - 12);
-      const top = Math.max(at.y - h - 18, 8);
-      box.style.setProperty('--bx', `${left}px`);
-      box.style.setProperty('--by', `${top}px`);
-      box.style.setProperty('--tail', `${Math.min(Math.max(at.x - left, 22), w - 22)}px`);
-    } else box.classList.remove('speech');
+    if (!ln) return;
+    const speech = ln.who !== 'Narrador' && !ln.text.startsWith(WA);
+    if (!speech) {
+      box.classList.remove('speech', 'tail-up', 'notail');
+      return;
+    }
+    box.classList.add('speech');
+    const at = speakerAt(ln.who);
+    const W = window.innerWidth, H = window.innerHeight;
+    const w = box.offsetWidth, h = box.offsetHeight;
+    const topMin = 10 + safeTop(), botMax = H - h - 10;
+    let tx: number, ty: number, tail: number, up = false;
+    if (!at) {
+      box.classList.add('notail');
+      tx = (W - w) / 2;
+      ty = topMin + 56;
+      tail = w / 2;
+    } else {
+      box.classList.remove('notail');
+      tx = Math.min(Math.max(at.x - w / 2, 12), W - w - 12);
+      ty = at.y - h - 20;
+      // Si no cabe encima (la cabeza pegada arriba o por encima de la pantalla), debajo, con el rabito hacia arriba
+      if (ty < topMin) {
+        if (at.y + 20 + h <= H - 10 && at.y > -40) {
+          ty = Math.max(at.y + 20, topMin);
+          up = true;
+        } else ty = topMin;
+      }
+      ty = Math.min(ty, botMax);
+      tail = Math.min(Math.max(at.x - tx, 26), w - 26);
+    }
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - lastT) / 1000);
+    lastT = now;
+    // (modo prueba: quién habla y dónde ha ido su globo, para revisar todos los capítulos de una pasada)
+    const logS = (window as unknown as { __speechLog?: unknown[] }).__speechLog;
+    if (logS && (ln.who !== lastWho || isNaN(cx))) logS.push({ who: ln.who, text: ln.text.slice(0, 40), at: at ? (at.off ? 'off' : 'on') : 'none' });
+    // Nuevo que habla: el globo aparece ya en su sitio; el mismo: lo sigue sin tirones
+    if (ln.who !== lastWho || isNaN(cx)) {
+      cx = tx;
+      cy = ty;
+      ct = tail;
+      lastWho = ln.who;
+    } else {
+      const k = Math.min(1, dt * 14);
+      cx += (tx - cx) * k;
+      cy += (ty - cy) * k;
+      ct += (tail - ct) * k;
+    }
+    box.classList.toggle('tail-up', up);
+    box.style.setProperty('--bx', `${cx.toFixed(1)}px`);
+    box.style.setProperty('--by', `${cy.toFixed(1)}px`);
+    box.style.setProperty('--tail', `${ct.toFixed(1)}px`);
   };
   const show = () => {
     const ln = lines[i];
@@ -1493,11 +1593,16 @@ export function dialogue(lines: Line[], onDone: () => void) {
     who.textContent = wa ? `📱 ${shownName(ln.who)}` : shownName(ln.who);
     const full = body(ln);
     shown = 0;
-    text.textContent = '';
+    // (lo que falta por escribir ya ocupa su sitio, invisible: el globo no crece ni se mueve mientras se escribe)
+    const typed = document.createTextNode('');
+    const rest = el('span', 'ghost');
+    rest.textContent = full;
+    text.replaceChildren(typed, rest);
     clearInterval(timer);
     timer = window.setInterval(() => {
       shown++;
-      text.textContent = full.slice(0, shown);
+      typed.data = full.slice(0, shown);
+      rest.textContent = full.slice(shown);
       if (shown % 3 === 0) audio.talk();
       if (shown >= full.length) clearInterval(timer);
     }, 22);
