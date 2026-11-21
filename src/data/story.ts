@@ -806,10 +806,10 @@ export const ECLIPSE = {
     { who: 'Margaux', text: 'Vamos a dar una vuelta con Joy y Eric.' },
   ] as Line[],
   walkHint: 'Sa Farola',
-  /** (inventado) Llegando al faro, Joy se va calle arriba a oler algo y hay que ir a por ella. */
+  /** (inventado) Llegando al faro, Joy se va calle arriba a oler algo y hay que ir a por él. */
   joyRuns: '¡Joy! ¿Adónde vas? Se ha ido a oler algo 🙄',
   joyBtn: '🐕 ¡Joy, ven!',
-  joyCall: '¡Joy! Ven aquí, bonita.',
+  joyCall: '¡Joy! Ven aquí, bonito.',
   walkDone: [
     { who: 'Narrador', text: 'Eric quiere ir a hombros. Joy quiere ir a todas partes.' },
     { who: 'Margaux', text: 'Venga, para casa, que se nos hace tarde.' },
@@ -887,7 +887,7 @@ export const ANIVERSARIO = {
   ] as Line[],
   tofolAgain: [{ who: 'Tòfol', text: 'Encara aquí? Vinga, que es jaleo no espera!' }] as Line[],
   september: [{ who: 'Narrador', text: 'Septiembre. Gas se apunta a vóley playa.' }] as Line[],
-  october: [{ who: 'Narrador', text: 'Octubre. Joy, lista para campeonatos.' }] as Line[],
+  october: [{ who: 'Narrador', text: 'Octubre. Joy, listo para campeonatos.' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ell és per aquí. Segueix sa ubicació!' }] as Line[],
   marcMeet: [
     { who: 'Marc', text: 'Ya era hora. Un año justo, ¿eh?' },
@@ -963,7 +963,7 @@ export const MINIS = {
     done: (ok: number) => `${ok} trucos. Ahora, el circuito 🏁`,
   },
   agility: {
-    title: 'Joy, campeona de agility',
+    title: 'Joy, campeón de agility',
     hint: 'Toca para saltar vallas y aros. En los túneles, no saltes',
     btn: '🐕 ¡Salta!',
     /** Onomatopeyas (`comicWord`). */
@@ -1107,7 +1107,7 @@ export const SIDE = {
     hint: '🪨',
     btn: '🪨 Saltar',
     /** Lo dice Gas cuando la ola la pilla (y vuelve a la última roca alta). */
-    fall: ['¡La ola! Espera en las altas 💦', '¡Otra vez! Deja que pase 💦', '¿Está fría? 😂'],
+    fall: ['¡La ola! Desde el principio 💦', '¡Otra vez desde la primera! Deja que pase 💦', '¿Está fría? 😂 Venga, desde el principio'],
     end: [{ who: 'Gas', text: 'Seca. Lo dudaba. Brutal.' }] as Line[],
   },
   pee: {
@@ -1167,6 +1167,7 @@ export const FAIL = {
   peltMax: 6,
   nuts: { title: 'Coscorrón', text: 'Te han dado seis veces. Cuando veas el círculo en el suelo, apártate.' },
   alarm: { title: 'Os han pillado', text: 'Si llegan a ser tus padres… Platos y sartén fuera de la vista antes de que el coche llegue a la puerta.' },
-  eclipse: { title: 'Te lo has perdido', text: 'El eclipse no espera. Aparca sin darle a nada: cada golpe son dos minutos.' },
+  wall: { title: '¡Clonc!', text: 'Has tocado el muro. Otra vez desde la calle: despacio, que Azul te guía.' },
+  eclipse: { title: 'Te lo has perdido', text: 'El eclipse no espera. Aparca a tiempo y sin tocar nada.' },
   starsReset: 'Uy, se ha borrado. Desde la primera, que es un corazón 😉',
 };

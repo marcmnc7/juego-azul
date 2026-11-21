@@ -284,6 +284,8 @@ export class LevelEclipse implements Level {
   /** Minutos que quedan para el eclipse: cuenta desde que os despedís. Cada golpe aparcando, dos menos. */
   private rockHop: RockHop | null = null;
   private clockMin = 26;
+  /** El reloj al empezar a aparcar (al tocar el muro se vuelve a empezar con este). */
+  private parkClock = 26;
   private clockSaid = false;
   private joy: Dog | null = null;
   private joyOutT = -1;
@@ -665,6 +667,8 @@ export class LevelEclipse implements Level {
     m.add(G.box, WALL, 0, H / 2, -D, 0, 0, 0, W * 2, H, 0.2);
     for (const sx of [-1, 1]) m.add(G.box, WALL, sx * W, H / 2, 1, 0, 0, 0, 0.2, H, D * 2 + 2);
     for (let i = 0; i < 4; i++) m.add(G.box, 0x6b4a2e, 0, H - 0.1, -D + 0.6 + i * 1.9, 0, 0, 0, W * 2, 0.18, 0.2);
+    // (21 nov) El techo: estamos dentro, no se tiene que ver el cielo
+    m.add(G.box, 0xf3eee2, 0, H + 0.05, 1, 0, 0, 0, W * 2 + 0.2, 0.1, D * 2 + 2.2);
     this.colliders.push({ minX: -W - 1, maxX: W + 1, minZ: -D - 1, maxZ: -D + 0.1 }, { minX: -W - 1, maxX: -W + 0.1, minZ: -D, maxZ: D + 2 }, { minX: W - 0.1, maxX: W + 1, minZ: -D, maxZ: D + 2 });
     // Encimera con fregadero y fogones, armarios altos y nevera
     m.add(G.box, 0xe9e2d2, -0.6, 0.45, -D + 0.35, 0, 0, 0, 6.4, 0.9, 0.7);
@@ -1209,6 +1213,7 @@ export class LevelEclipse implements Level {
 
   /** Calle de casa de Gas: el coche llega ya en marcha y, cuando para, se aparca a mano. */
   private startPark() {
+    this.parkClock = this.clockMin;
     this.buildMarc();
     applyShadows(this.scene);
     this.phase = 'park';
@@ -1224,8 +1229,24 @@ export class LevelEclipse implements Level {
     );
   }
 
+  /** Otra vez desde la calle, con el reloj como estaba al empezar a aparcar. */
+  private retryPark() {
+    const c = this.car.root;
+    c.position.set(PARK_FROM, 0, -22.2);
+    c.rotation.y = -Math.PI / 2;
+    this.carSpeed = 0;
+    this.parkedT = 0;
+    this.parkArriveT = 0;
+    this.bumpT = 0;
+    this.clockMin = Math.max(this.clockMin, this.parkClock);
+    this.busy = false;
+    this.input.reset();
+    this.updateHud();
+  }
+
   private parked() {
-    this.phase = 'marcParents';
+    // (21 nov: la fase de la cocina, solo después del fundido; antes cambiaba ya y, durante casi dos segundos, la
+    // cámara de la cocina seguía a Azul por la calle: la imagen se veía rota)
     this.busy = true;
     this.carSpeed = 0;
     this.hud.setAction(null);
@@ -1236,6 +1257,7 @@ export class LevelEclipse implements Level {
     later(
       () =>
         fadeFlash(() => {
+          this.phase = 'marcParents';
           this.buildKitchen();
           applyShadows(this.scene);
           this.busy = false;
@@ -1308,7 +1330,8 @@ export class LevelEclipse implements Level {
     if (this.input.consumeAction() && free && near) this.meetMarcParents();
     // (el marcador, solo si se ha perdido: 40 s en la cocina sin saludar)
     this.hint(this.lost.tick(this.phase, dt, this.busy) && free && !near ? KITCHEN_PARENTS : null, dt, 2.4);
-    this.walker.camera(this.camera, dt, [], 4.2, 2.9);
+    // (por debajo del techo de la cocina)
+    this.walker.camera(this.camera, dt, [], 3.3, 2.15);
     this.sun.follow(pp);
   }
 
@@ -1744,8 +1767,16 @@ export class LevelEclipse implements Level {
     const rowing = this.phase === 'kayak' && !this.busy;
     this.hud.setAction(rowing ? '🛶 Remar' : null, rowing);
     const f = this.ferry.position;
-    const pos = this.phase === 'ferry' ? this.v1.set(k.x - 14, 4.5, k.z + 9) : this.v1.set(k.x - 6.5, 2.4, k.z - 2.8);
-    const look = this.phase === 'ferry' ? new THREE.Vector3((k.x + f.x) / 2, 3, Math.max(k.z - 28, (k.z + f.z) / 2)) : new THREE.Vector3(k.x + 6, 0.6, k.z + 1);
+    // (21 nov) En vertical, por detrás del kayak y en la línea por donde llega el ferry: de lado, en el móvil no se
+    // veía cómo os pasaba por encima (el kayak quedaba fuera del plano)
+    const tall = this.camera.aspect < 1;
+    const pos = this.phase === 'ferry' ? (tall ? this.v1.set(k.x - 6, 5, k.z + 17) : this.v1.set(k.x - 14, 4.5, k.z + 9)) : this.v1.set(k.x - 6.5, 2.4, k.z - 2.8);
+    const look =
+      this.phase === 'ferry'
+        ? tall
+          ? new THREE.Vector3(k.x + 1, 2.5, Math.max(k.z - 30, (k.z + f.z) / 2))
+          : new THREE.Vector3((k.x + f.x) / 2, 3, Math.max(k.z - 28, (k.z + f.z) / 2))
+        : new THREE.Vector3(k.x + 6, 0.6, k.z + 1);
     this.camera.position.lerp(pos, Math.min(1, dt * 2.5));
     this.camLook.lerp(look, Math.min(1, dt * 3));
     this.camera.lookAt(this.camLook);
@@ -1914,16 +1945,17 @@ export class LevelEclipse implements Level {
       const nx = c.position.x + Math.sin(yaw) * this.carSpeed * dt;
       const nz = c.position.z + Math.cos(yaw) * this.carSpeed * dt;
       if (this.carHits(nx, nz, yaw)) {
-        if (Math.abs(this.carSpeed) > 0.6 && this.bumpT <= 0) {
+        if (Math.abs(this.carSpeed) > 0.25 && this.bumpT <= 0) {
+          // (21 nov) Tocar el muro: otra vez a aparcar desde la calle
           this.bumps++;
-          this.bumpT = 0.8;
-          this.clockMin = Math.max(0, this.clockMin - 2);
+          this.bumpT = 99;
           comicWord('¡CLONC!', 'hit');
-          bark('Margaux', ECLIPSE.parkBump);
           audio.hit();
           vibrate(60);
           this.rig?.kick(0.4, 0.2);
           this.updateHud();
+          this.busy = true;
+          later(() => failCard(FAIL.wall.title, FAIL.wall.text, () => this.retryPark()), 700);
         }
         this.carSpeed = 0;
       } else {

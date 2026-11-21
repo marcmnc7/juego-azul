@@ -173,18 +173,20 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     const discards: { me: number[]; gas: number[] } = { me: [], gas: [] };
     let over = false;
 
+    // (21 nov) Marcador claro arriba: tú y Gas con vuestros corazones y la ronda en medio; debajo, lo de Gas y el mazo
     const top = el('div', 'll-top');
-    const title = el('div', 'll-title', `${T.title} <span>Ronda ${rounds} · Tú ${hearts(myTokens)} · Gas ${hearts(gasTokens)}</span>`);
+    const score = () => `<div class="ll-sc me"><b>Tú</b><i>${hearts(myTokens)}</i></div><div class="ll-round">${T.title}<small>Ronda ${rounds}</small></div><div class="ll-sc gas"><b>Gas</b><i>${hearts(gasTokens)}</i></div>`;
+    const title = el('div', 'll-title ll-board', score());
     const gasInfo = el('div', 'll-gas');
     top.append(title, gasInfo);
+    const turnEl = el('div', 'll-turn');
     // (las reglas, solo en la primera ronda; lo que pasa se lee y se va: no se queda tapando la escena)
     const log = el('div', 'pr-log ll-log', rounds === 1 ? T.start : '');
     let logTimer = rounds === 1 ? window.setTimeout(() => (log.textContent = ''), 9000) : 0;
     const bottom = el('div', 'll-bottom');
-    const help = el('div', 'pr-help ll-help');
     const meRow = el('div', 'pr-row me');
-    // Abajo, juntos: lo que pasa, qué hace cada carta y tu mano. El centro de la pantalla queda para ellos dos
-    bottom.append(log, help, meRow);
+    // Abajo, juntos: lo que pasa, de quién es el turno y tu mano (sin explicar las cartas: ya os las sabéis)
+    bottom.append(log, turnEl, meRow);
     o.append(top, bottom);
 
     const mini = (v: number | null) => {
@@ -211,7 +213,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
         for (const v of discards.gas) d.append(mini(v));
         gasInfo.append(d);
       }
-      const up = el('div', 'll-up', `🂠 ${deck.length} · fuera:`);
+      const up = el('div', 'll-up', `<span class="ll-deck">🂠 ${deck.length}</span><span>fuera</span>`);
       for (const v of faceUp) up.append(mini(v));
       gasInfo.append(up);
       meRow.innerHTML = '';
@@ -237,8 +239,8 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
         meRow.append(d);
       }
       if (meSafe) meRow.append(el('div', 'll-safe', '🌸'));
-      // En el móvil no hay "hover": las dos cartas se explican siempre encima
-      help.innerHTML = me.length === 2 && !over ? me.map((v) => `<b>${card(v).name}</b>: ${card(v).text}`).join('<br>') : '';
+      turnEl.textContent = over ? '' : me.length === 2 ? '✨ Tu turno: juega una carta' : '⏳ Turno de Gas…';
+      turnEl.classList.toggle('mine', me.length === 2 && !over);
       stage?.hands(me.length, gas.length);
     };
     const say = (t: string) => {
@@ -252,7 +254,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       if (iWin) myTokens++;
       else gasTokens++;
       render();
-      title.innerHTML = `${T.title} <span>Ronda ${rounds} · Tú ${hearts(myTokens)} · Gas ${hearts(gasTokens)}</span>`;
+      title.innerHTML = score();
       const won = myTokens >= TOKENS;
       const lost = gasTokens >= TOKENS;
       // Si Gas gana la partida entera, revancha; a la segunda se rinde: ya empieza el eclipse
@@ -390,7 +392,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       const v = me.splice(i, 1)[0];
       discards.me.push(v);
       stage?.play('me', v);
-      help.textContent = '';
+      turnEl.textContent = "";
       if (v === 1 && !gasSafe) {
         render();
         // Elegir qué carta crees que tiene Gas
@@ -677,7 +679,7 @@ export function radar(onDone: () => void) {
   requestAnimationFrame(loop);
 }
 
-/** 6 de octubre: Joy, campeona de agility. Toca para saltar las vallas. */
+/** 6 de octubre: Joy, campeón de agility. Toca para saltar las vallas. */
 
 /** 6 de octubre: «Este perro seria increiblemente bueno en agility». Primero trucos, luego el circuito. */
 export function joyTraining(onDone: () => void) {

@@ -2366,3 +2366,18 @@ html, body { background: #000; }
 .vf-frame { width: 24vmin; height: 30vmin; }
 .vf-frame .c { width: 16px; height: 16px; }
 .rose-phone .rp-box { left: 36%; right: 36%; top: 30%; bottom: 26%; border-width: 3px; }
+
+/* ---------- La princesa (21 nov): marcador claro y sin la explicación de cada carta ---------- */
+.ll-board { display: flex; align-items: stretch; gap: 8px; font-style: normal; text-shadow: none; }
+.ll-board .ll-sc { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 86px; padding: 5px 10px; border-radius: 14px; background: rgba(24,14,22,.62); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); font: 800 13px/1.1 var(--font); color: var(--paper); }
+.ll-board .ll-sc i { font-style: normal; font-size: 15px; letter-spacing: 1px; margin-top: 2px; }
+.ll-board .ll-sc.me { border: 2px solid #f4d27a; }
+.ll-board .ll-round { display: flex; flex-direction: column; align-items: center; justify-content: center; font: italic 700 21px/1 Georgia, serif; color: #f4d27a; text-shadow: 0 2px 0 #6a0f1c, 0 0 12px rgba(0,0,0,.55); }
+.ll-board .ll-round small { font: 800 11px/1 var(--font); color: var(--paper); margin-top: 4px; letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+.ll-up .ll-deck { font-weight: 800; margin-right: 6px; }
+.ll-up span { margin-right: 3px; }
+.ll-turn { font: 800 13px/1 var(--font); color: var(--paper); background: rgba(24,14,22,.6); padding: 6px 12px; border-radius: 999px; }
+.ll-turn:empty { display: none; }
+.ll-turn.mine { background: #f4d27a; color: #3a1a10; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+.ll-top { left: calc(50% - 24px); }
+@media (max-width: 420px) { .ll-board .ll-sc { min-width: 70px; padding: 4px 8px; } .ll-board .ll-round { font-size: 18px; } }

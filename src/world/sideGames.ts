@@ -1831,7 +1831,7 @@ const HOP_ROCKS: { x: number; z: number; safe: boolean }[] = [
   { x: -21.5, z: 2.4, safe: true },
   { x: -19.6, z: 1.9, safe: false },
   { x: -17.8, z: 2.4, safe: false },
-  { x: -15.9, z: 1.7, safe: true },
+  { x: -15.9, z: 1.7, safe: false }, // (21 nov: una roca alta menos, más difícil)
   { x: -14.1, z: 2.1, safe: false },
   { x: -12.3, z: 1.4, safe: false },
   { x: -10.5, z: 1.7, safe: true },
@@ -1840,8 +1840,9 @@ const HOP_ROCKS: { x: number; z: number; safe: boolean }[] = [
 ];
 const SAFE_Y = -0.75;
 const LOW_Y = -1.32;
-const SWELL_EVERY = 4.1;
-const SWELL_SPEED = 8;
+/** Cada cuánto llega una ola (con algo de azar) y lo rápido que corre (21 nov: más seguidas y más rápidas). */
+const SWELL_EVERY = 2.7;
+const SWELL_SPEED = 9.5;
 
 /**
  * Ola de tebeo para RockHop: una cresta de espuma blanca plana con el borde festoneado y su tinta, y debajo una banda
@@ -1949,12 +1950,11 @@ export class RockHop {
     return !this.hop && !this.over;
   }
 
-  /** La ola te ha pillado en una roca baja: al agua y a la última roca alta. */
+  /** La ola te ha pillado en una roca baja: al agua y otra vez desde la primera roca (21 nov). */
   private wash() {
     this.falls++;
     this.hop = null;
-    let back = this.idx;
-    while (back > 0 && !HOP_ROCKS[back].safe) back--;
+    const back = 0;
     this.idx = back;
     this.splashT = 0.7;
     const p = this.azul.root.position;
@@ -1979,7 +1979,7 @@ export class RockHop {
       if (this.clock <= 0 && this.swellX === null) {
         this.swellX = -3;
         this.foam.visible = true;
-        this.clock = SWELL_EVERY;
+        this.clock = SWELL_EVERY + Math.random() * 1.1;
         this.lastWarn = false;
       }
       if (this.swellX !== null) {
@@ -1989,7 +1989,11 @@ export class RockHop {
         if (this.swellX < -26) {
           this.swellX = null;
           this.foam.visible = false;
-        } else if (!this.hop && !HOP_ROCKS[this.idx].safe && Math.abs(cur.x - this.swellX) < 0.9) this.wash();
+        } else if (Math.abs(cur.x - this.swellX) < 1.1) {
+          // (también a medio salto, si sale o cae en una roca baja y aún va bajo)
+          const low = this.hop ? !HOP_ROCKS[this.hop.t < 0.5 ? this.hop.from : this.hop.to].safe && Math.sin(Math.min(1, this.hop.t) * Math.PI) < 0.5 : !HOP_ROCKS[this.idx].safe;
+          if (low) this.wash();
+        }
       }
     }
     if (this.hop) {
