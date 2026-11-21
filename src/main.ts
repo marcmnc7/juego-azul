@@ -34,6 +34,8 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
+import { hobbiesFinale, credits } from './ui/finale';
+import { ridingMission } from './world/missions/riding';
 import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
@@ -533,7 +535,8 @@ async function buildLevel(n: number, card: ChapterLoading) {
     if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
     if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
     save(data);
-    const after = () => goMap();
+    // (21 nov) Al acabar el último capítulo, después del regalo: los hobbies compartidos y el final con créditos
+    const after = n === LEVELS.length ? () => hobbiesFinale(() => goMap()) : () => goMap();
     // Todo el final en una pantalla: estrellas, regalo, fotos y lo que viene mañana
     const teaser = TEASERS[n + 1] && !data.levelsDone.includes(n + 1) ? n + 1 : null;
     chapterComplete(n, result, g ?? null, teaser, after);
@@ -630,6 +633,10 @@ if (TEST)
         return canvas.toDataURL('image/png');
       },
       skip: dbgSkip,
+      /** El final del año (hobbies, hípica y créditos), para probarlo sin jugar el cap. 9. */
+      finale: () => hobbiesFinale(() => goMap()),
+      hipica: () => ridingMission(() => {}),
+      credits: () => credits(() => goMap()),
       /** Anima a los personajes un paso (con la página oculta el bucle casi no corre). */
       rig: (dt = 0.033) => updateRigPeople(dt),
       /** Abre el capítulo n y pasa la introducción. */

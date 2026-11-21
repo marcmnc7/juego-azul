@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { PersonLook } from './models';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -88,7 +89,8 @@ const lin = (hex: number) => new THREE.Color(hex);
 let riderN = 0;
 
 /** Ase con jinete; la misma interfaz que el de los muñecos (root, pivot, patas, cabeza). */
-export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false): Donkey {
+/** riderLook: otra jinete (21 nov: Azul en la hípica), con casco de montar en vez de bombín. */
+export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false, riderLook?: PersonLook): Donkey {
   const P = horse ? prepHorse! : prep!;
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
@@ -165,9 +167,10 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   // Ferreries, uno del pueblo en ropa de verano y sin sombrero.
   const R0 = riderN++;
   const rider = makeRigPerson(
-    horse
+    riderLook ??
+    (horse
       ? castLook({ skin: 0xe8b894, shirt: 0x1b1b22, pants: 0xf3f0ea, hair: 0x2a1d14, hairStyle: 'short', male: true, shoes: 0x111111 }, 'caixer')
-      : { skin: [0xe8b894, 0xd9a27c, 0xf0c8a6, 0xc98e64][R0 % 4], shirt: [0xffffff, 0x2f6b8a, 0xd7263d, 0xe9c75a][R0 % 4], pants: [0x3b4a6b, 0xc9b48a, 0x6f8fb8, 0x2d2d3a][R0 % 4], hair: [0x2a1d14, 0x6b3f22, 0x1f1610, 0x8a6a40][R0 % 4], hairStyle: 'short', male: true, shorts: true },
+      : { skin: [0xe8b894, 0xd9a27c, 0xf0c8a6, 0xc98e64][R0 % 4], shirt: [0xffffff, 0x2f6b8a, 0xd7263d, 0xe9c75a][R0 % 4], pants: [0x3b4a6b, 0xc9b48a, 0x6f8fb8, 0x2d2d3a][R0 % 4], hair: [0x2a1d14, 0x6b3f22, 0x1f1610, 0x8a6a40][R0 % 4], hairStyle: 'short', male: true, shorts: true }),
     1,
     new THREE.Object3D(),
   );
@@ -182,7 +185,22 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   rider.armL.rotation.set(-0.45, 0, -0.1);
   rider.armR.rotation.set(-0.45, 0, 0.1);
   rider.elbowL.rotation.x = rider.elbowR.rotation.x = -0.9;
-  if (horse) {
+  if (riderLook) {
+    // Casco de montar: casquete oscuro con su visera
+    const mat = new THREE.MeshStandardMaterial({ color: lin(0x1e2230), roughness: 0.45 });
+    const helmet = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+    shell.scale.set(1.05, 0.95, 1.12);
+    shell.position.y = 0.1;
+    const peak = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.012, 16, 1, false, -Math.PI / 2, Math.PI), mat);
+    peak.position.set(0, 0.1, 0.1);
+    helmet.add(shell, peak);
+    helmet.traverse((o) => {
+      o.castShadow = true;
+      o.userData.person = true;
+    });
+    boneAnchor(rider, 'Head').add(helmet);
+  } else if (horse) {
     const black = new THREE.MeshStandardMaterial({ color: lin(0x111111), roughness: 0.55 });
     const hat = new THREE.Group();
     const crown = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), black);

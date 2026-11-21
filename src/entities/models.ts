@@ -1113,8 +1113,8 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
 }
 
 /** Caballo menorquín negro con su caixer, como los de Sant Joan: alto, crin larga y escarapelas. Mira hacia +Z. */
-export function makeHorse(coat = 0x0e0c0b): Donkey {
-  if (rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true);
+export function makeHorse(coat = 0x0e0c0b, riderLook?: PersonLook): Donkey {
+  if (rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.6), true, riderLook);
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
   const pivot = new THREE.Group();

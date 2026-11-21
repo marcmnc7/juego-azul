@@ -2381,3 +2381,34 @@ html, body { background: #000; }
 .ll-turn.mine { background: #f4d27a; color: #3a1a10; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
 .ll-top { left: calc(50% - 24px); }
 @media (max-width: 420px) { .ll-board .ll-sc { min-width: 70px; padding: 4px 8px; } .ll-board .ll-round { font-size: 18px; } }
+
+/* ---------- Hípica de saltos (21 nov) ---------- */
+.hp-screen { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: radial-gradient(120% 70% at 50% 0%, #27406a, #141a33); padding: max(14px, env(safe-area-inset-top)) 0 max(14px, env(safe-area-inset-bottom)); touch-action: none; user-select: none; -webkit-user-select: none; }
+.hp-head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hp-title { font: 24px Bangers, 'Arial Black', sans-serif; letter-spacing: .05em; color: #141018; background: #fffbf0; border: 3px solid #141018; border-radius: 6px; padding: 1px 12px; box-shadow: 3px 3px 0 #141018; }
+.hp-score { display: flex; gap: 8px; font: 800 13px var(--font); }
+.hp-score span { background: rgba(255,251,240,.92); color: #2f2210; padding: 4px 10px; border-radius: 999px; border: 2px solid #141018; }
+.hp-score .ok { background: #c8f2d3; } .hp-score .bad { background: #ffd2cc; }
+.hp-canvas { display: block; border-top: 3px solid #141018; border-bottom: 3px solid #141018; }
+.hp-hint { font: 700 13px var(--font); color: rgba(255,248,236,.8); text-align: center; padding: 0 16px; }
+#ui:has(.hp-screen) .hud-top, #ui:has(.hp-screen) .action-btn, #ui:has(.hp-screen) .stick-base { display: none !important; }
+
+/* ---------- El final: créditos y escena post-créditos (21 nov) ---------- */
+.fin-screen { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: radial-gradient(120% 80% at 50% 20%, #1d2b4f, #07090f); color: #fbf5e6; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .7s; }
+.fin-screen.out { opacity: 0; }
+.fin-roll { position: absolute; left: 0; right: 0; top: 100%; display: flex; flex-direction: column; align-items: center; gap: 26px; padding: 0 24px; text-align: center; animation: finRoll 34s linear forwards; }
+@keyframes finRoll { to { transform: translateY(calc(-100% - 100vh)); } }
+.fin-end { font: italic 700 54px/1 Georgia, serif; color: #f4d27a; margin-bottom: 30px; text-shadow: 0 3px 0 #6a0f1c; }
+.fin-end small { display: block; font: 800 14px var(--font); letter-spacing: .2em; text-transform: uppercase; color: rgba(251,245,230,.75); margin-top: 8px; text-shadow: none; }
+.fin-row { display: flex; flex-direction: column; gap: 4px; max-width: 460px; }
+.fin-row b { font: 800 12px var(--font); letter-spacing: .18em; text-transform: uppercase; color: #f4d27a; }
+.fin-row span { font: 600 19px/1.35 Georgia, serif; }
+.fin-heart { font-size: 46px; margin-top: 30px; }
+.fin-skip { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); background: rgba(255,255,255,.12); color: #fbf5e6; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; padding: 8px 16px; font: 800 13px var(--font); }
+.fin-post { background: #050608; gap: 18px; }
+.fin-tag { position: absolute; top: max(24px, env(safe-area-inset-top)); font: 800 11px var(--font); letter-spacing: .24em; text-transform: uppercase; color: rgba(251,245,230,.55); }
+.fin-keys { font-size: 54px; animation: finPop .6s cubic-bezier(.2,1.6,.4,1) both; }
+.fin-cont { font: italic 700 44px/1 Georgia, serif; color: #f4d27a; text-align: center; animation: finPop .8s .2s cubic-bezier(.2,1.6,.4,1) both; }
+.fin-cont small { display: block; font: 800 16px var(--font); letter-spacing: .3em; color: rgba(251,245,230,.8); margin-top: 10px; }
+.fin-btn { margin-top: 20px; animation: finPop .6s .6s ease both; }
+@keyframes finPop { from { opacity: 0; transform: scale(.7); } }

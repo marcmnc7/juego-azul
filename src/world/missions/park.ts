@@ -253,7 +253,7 @@ class ParkMission implements Mission {
         r.rotation.x = -0.45 * k;
         r.position.y = -0.04 * k;
         break;
-      case 1: // tumba
+      case 1: // abajo
         r.position.y = -0.16 * k;
         r.rotation.x = 0.08 * k;
         break;

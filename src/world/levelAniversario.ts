@@ -2,8 +2,6 @@ import * as THREE from 'three';
 import type { Input } from '../core/input';
 import { ANIVERSARIO, ANIVERSARIO_GAS } from '../data/story';
 import { CHATS, type ChatFrag } from '../data/chats';
-import { dialogue } from '../ui/ui';
-import { voley, joyTraining } from '../ui/minis';
 import { Level1, FERRERIES_VARIANT, type JaleoVariant } from './level1';
 import type { LevelDone } from './level';
 
@@ -37,8 +35,7 @@ const VARIANT: JaleoVariant = {
   },
   endChats: [CHATS.fecha],
   meetScene: undefined,
-  // Lo que vino después: el vóley de septiembre y Joy en octubre
-  afterEnd: (next) => dialogue(ANIVERSARIO.september, () => voley(() => dialogue(ANIVERSARIO.october, () => joyTraining(next)))),
+  // (21 nov) El vóley, Joy y la hípica ya no van aquí: se juegan después del regalo, como final del año (ui/finale.ts)
 };
 
 export class LevelAniversario extends Level1 {

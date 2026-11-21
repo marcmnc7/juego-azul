@@ -953,7 +953,7 @@ export const MINIS = {
     hint: 'Gas da la orden: toca el gesto correcto antes de que Joy se despiste',
     commands: [
       { say: 'Sienta', label: 'Sienta', icon: '🪑' },
-      { say: 'Tumba', label: 'Tumba', icon: '⬇️' },
+      { say: 'Abajo', label: 'Abajo', icon: '⬇️' },
       { say: 'Pata', label: 'Pata', icon: '🐾' },
       { say: 'Gira', label: 'Gira', icon: '🔄' },
     ],
@@ -1170,4 +1170,39 @@ export const FAIL = {
   wall: { title: '¡Clonc!', text: 'Has tocado el muro. Otra vez desde la calle: despacio, que Azul te guía.' },
   eclipse: { title: 'Te lo has perdido', text: 'El eclipse no espera. Aparca a tiempo y sin tocar nada.' },
   starsReset: 'Uy, se ha borrado. Desde la primera, que es un corazón 😉',
+};
+
+/**
+ * El final del año (21 nov), después del regalo del cap. 9: llega Barcelona y, con ella, lo que les gusta hacer juntos
+ * (vóley, Joy y los caballos). Inventado salvo las fechas: Marc, cámbialo si quieres.
+ */
+export const FINALE = {
+  barcelona: [
+    { who: 'Narrador', text: 'Y después de Ferreries… llega Barcelona.' },
+    { who: 'Gas', text: 'Ahora sí: tú y yo, en la misma ciudad.' },
+    { who: 'Azul', text: 'Y con todo lo que nos gusta hacer juntos.' },
+    { who: 'Narrador', text: 'Vóley en la playa, Joy en el parque y caballos. Lo que viene, juntos.' },
+  ] as Line[],
+  horses: [
+    { who: 'Narrador', text: 'Y los caballos: ella, desde siempre; él, aprendiendo a su lado.' },
+    { who: 'Gas', text: 'Tú delante, que yo te sigo. Salto a salto.' },
+  ] as Line[],
+  end: [{ who: 'Narrador', text: 'Y así se acaba este año. Solo este.' }] as Line[],
+  credits: [
+    ['Para Azul', ''],
+    ['Azul', 'ella misma'],
+    ['Gas', 'Marc'],
+    ['Joy', 'el mejor chico del mundo'],
+    ['Con', 'Eric, Carme, Tòfol, tus padres, los míos, el camarero de la Laurel y medio Ferreries'],
+    ['Música', 'Fito & Fitipaldis, James Blunt y las canciones de cada capítulo'],
+    ['Ases, caballos y vacas', 'sin que ninguno saliera herido'],
+    ['Escrito, dibujado y programado por', 'Marc (con un poco de ayuda)'],
+    ['', 'Gracias por jugar. Y por este año.'],
+  ] as [string, string][],
+  post: [
+    { who: 'Narrador', text: '13 de octubre de 2026.' },
+    { who: 'Narrador', text: 'Gas va a ver un piso en Barcelona.' },
+    { who: 'Azul', text: '¿Y?' },
+    { who: 'Gas', text: 'Tiene sitio para dos. Y para Joy.' },
+  ] as Line[],
 };
