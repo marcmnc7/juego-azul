@@ -23,8 +23,8 @@ import type { Box2 } from './ferreries';
 /** Medidas de la cabaña: media anchura (x), medio fondo (z; la puerta, en -Z) y alto de las paredes. */
 const CX = 5.4, CZ = 3.2, CH = 2.4;
 
-export type CampSpot = 'estufa';
-const SPOT_LABEL: Record<CampSpot, string> = { estufa: '🔥 Probar la estufa' };
+export type CampSpot = 'estufa' | 'abridor' | 'sofa';
+const SPOT_LABEL: Record<CampSpot, string> = { estufa: '🔥 Probar la estufa', abridor: '🍷 Buscar el abridor', sofa: '🛋️ Al sofá, con el vino' };
 
 export class Camp {
   scene = new THREE.Scene();
@@ -61,7 +61,16 @@ export class Camp {
   onSearched: ((key: CampSpot) => void) | null = null;
   private spots: Record<CampSpot, { at: THREE.Vector3; reach: number }> = {
     estufa: { at: new THREE.Vector3(-3.9, 0, 1.75), reach: 1.25 },
+    // (21 nov) El abridor, en la guantera del coche: un paseo por fuera de la cabaña; luego, vino en el sofá
+    abridor: { at: new THREE.Vector3(-9.95, 0, -4.75), reach: 1.45 },
+    sofa: { at: new THREE.Vector3(-3.95, 0, -1.0), reach: 1.3 },
   };
+  /** Gas se queda dentro, junto a la estufa, mientras ella va al coche. */
+  private gasStay: THREE.Vector3 | null = null;
+  /** En el sofá, con una copa de vino cada uno, mientras el pollo se hace en la estufa. */
+  private onSofa = false;
+  private glasses: THREE.Object3D[] = [];
+  private glassQ = new THREE.Quaternion();
   /** La estufa de pellets (para encuadrarla) y su humo. */
   readonly pellet = new THREE.Vector3(-4.7, 0.9, 2.55);
   private puffs: { s: THREE.Sprite; t: number }[] = [];
@@ -401,11 +410,24 @@ export class Camp {
     camera.position.set(-2, 3, -12.5);
   }
 
-  /** Hay que ir a un sitio (la gasolinera, luego la estufa): andando, y Gas detrás. */
-  startSearch(key: CampSpot) {
+  /**
+   * Hay que ir a un sitio (la estufa, el coche, el sofá): andando, y Gas detrás (o, con `gasStay`, esperando dentro).
+   * from: dónde empieza ella, si venía de una escena sin andar.
+   */
+  startSearch(key: CampSpot, from?: { x: number; z: number; yaw: number }, gasStay?: THREE.Vector3) {
     this.searching = true;
     this.active = key;
-    if (!this.walker) {
+    this.standing = false;
+    this.onSofa = false;
+    this.unforce();
+    this.gasStay = gasStay ?? null;
+    if (from) {
+      this.azul.root.position.set(from.x, 0, from.z);
+      this.azul.root.rotation.set(0, from.yaw, 0);
+      this.walker = new Walker(this.azul.root.position);
+      this.walker.yaw = this.walker.facing = from.yaw;
+      this.gasTrail = new Trail();
+    } else if (!this.walker) {
       this.azul.root.position.set(-1.3, 0, -0.75);
       this.azul.root.rotation.set(0, Math.PI, 0);
       this.gas.root.position.set(0.9, 0, -0.4);
@@ -447,6 +469,7 @@ export class Camp {
 
   /** Para el plano de la estufa: ella y él, a un lado, mirándola. */
   standAtPellet() {
+    this.unforce();
     this.walker = null;
     this.searching = false;
     this.standing = true;
@@ -457,12 +480,55 @@ export class Camp {
     this.gas.root.rotation.set(0, Math.atan2(-0.35, 1.05), 0);
   }
 
+  /** Una copa de vino (tinto) para la mano. */
+  private wineGlass() {
+    const g = new THREE.Group();
+    const glass = new THREE.MeshBasicMaterial({ color: 0xdfeaf2, transparent: true, opacity: 0.55, depthWrite: false });
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.03, 0.08, 12, 1, true), glass);
+    bowl.position.y = 0.11;
+    const wine = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.03, 0.04, 12), toon({ color: 0x6e1023 }));
+    wine.position.y = 0.09;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.07, 6), glass);
+    stem.position.y = 0.035;
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.005, 12), glass);
+    g.add(bowl, wine, stem, foot);
+    g.userData.noCam = true;
+    for (const c of g.children) c.userData.noCast = true;
+    return g;
+  }
+
+  /** En el sofá los dos, con su copa, mirando a la estufa donde se hace el pollo. */
+  sitOnSofa() {
+    this.walker = null;
+    this.searching = false;
+    this.active = null;
+    this.standing = false;
+    this.onSofa = true;
+    this.gasStay = null;
+    for (const [p, z] of [[this.azul, -1.45], [this.gas, -0.55]] as const) {
+      p.root.position.set(-4.62, seatedRootY(p, 0.58), z);
+      p.root.rotation.set(0, Math.PI / 2, 0);
+    }
+    if (!this.glasses.length) {
+      for (const p of [this.azul, this.gas]) {
+        const g = this.wineGlass();
+        g.position.set(0, -0.02, 0.02);
+        p.handR.add(g);
+        this.glasses.push(g);
+      }
+    }
+    for (const g of this.glasses) g.visible = true;
+  }
+
   /** Dentro: cada uno a su silla. */
   sitDown() {
     this.walker = null;
     this.searching = false;
     this.active = null;
     this.standing = false;
+    this.onSofa = false;
+    this.gasStay = null;
+    for (const g of this.glasses) g.visible = false;
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.44), 0);
       p.root.rotation.y = -sx * Math.PI / 2;
@@ -483,8 +549,15 @@ export class Camp {
   }
 
   private sit(p: Person) {
+    // (en los VRM, que manden las piernas y el brazo del muñeco: si no, se quedaban de pie, hundidos en el suelo)
+    if (p.rig) p.rig.force = { legL: 1, legR: 1, body: 1, armR: 1 };
     animatePerson(p, 0.016, 'idle');
     seatPose(p);
+  }
+
+  /** De pie otra vez: el cuerpo vuelve a su animación. */
+  private unforce() {
+    for (const p of [this.azul, this.gas]) if (p.rig) p.rig.force = undefined;
   }
 
   update(dt: number, camera: THREE.PerspectiveCamera, input: Input | null, hud: Hud) {
@@ -500,8 +573,15 @@ export class Camp {
       this.azul.root.rotation.y = w.facing;
       animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
       this.who.length = 0;
-      const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
-      animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      if (this.gasStay) {
+        // (él, dentro, junto a la estufa)
+        this.gas.root.position.copy(this.gasStay);
+        this.gas.root.rotation.y = Math.atan2(this.pellet.x - this.gasStay.x, this.pellet.z - this.gasStay.z);
+        animatePerson(this.gas, dt, 'idle');
+      } else {
+        const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
+        animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      }
       this.who.push(pp, this.gas.root.position);
       this.door.update(dt, this.who, camera.position);
       // A dónde hay que ir: al llegar, su botón
@@ -532,6 +612,22 @@ export class Camp {
       if (pp.z > -CZ + 1.2 && pp.z < CZ - 0.1 && Math.abs(pp.x) < CX - 0.3 && !this.inside) this.inside = true;
       const indoor = pp.z > -CZ - 0.2 && pp.z < CZ && Math.abs(pp.x) < CX;
       w.camera(camera, dt, this.colliders, indoor ? 2.6 : 5.5, indoor ? 1.9 : 2.8);
+    } else if (this.onSofa) {
+      this.sit(this.azul);
+      this.sit(this.gas);
+      this.door.update(dt, this.who.slice(0, 0), camera.position);
+      // La copa en la mano y, de vez en cuando, un sorbo (cada uno a su ritmo)
+      for (const [p, ph] of [[this.azul, 0], [this.gas, 2.1]] as const) {
+        const sip = Math.max(0, Math.sin(this.t * 0.9 + ph) - 0.75) * 4;
+        p.armR.rotation.x = -1.05 - sip * 0.55;
+        p.armR.rotation.z = 0.25;
+      }
+      // La copa, siempre derecha (la mano gira con el brazo)
+      for (const g of this.glasses) {
+        g.parent!.updateWorldMatrix(true, false);
+        g.parent!.getWorldQuaternion(this.glassQ).invert();
+        g.quaternion.copy(this.glassQ);
+      }
     } else if (this.standing) {
       animatePerson(this.azul, dt, 'idle');
       animatePerson(this.gas, dt, 'idle');

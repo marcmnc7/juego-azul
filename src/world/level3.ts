@@ -4,7 +4,7 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
-import { CONCERT, SIDE, FAIL } from '../data/story';
+import { CONCERT, SIDE, FAIL, ROAD } from '../data/story';
 import { FITO_SONG, SONG_OF } from '../core/songs';
 import { BeerRun, BEERS_NEED, Cabin3D, PeeAim3D } from './sideGames';
 import { MARC_LOOK, castLook, AZUL_DIARIO } from '../data/characters';
@@ -15,7 +15,7 @@ import { LOOK_LIGHT } from '../core/comic';
 import { comicBulbTexture, comicStarTexture } from '../core/comicTiles';
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, beachBallTexture, type Mover } from '../core/physics';
-import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard } from '../ui/ui';
+import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard, setGasNamed } from '../ui/ui';
 import { hugFor, twoBone } from '../entities/embrace';
 import { boneAnchor, rigPost } from '../entities/rig';
 import { CHATS } from '../data/chats';
@@ -23,7 +23,7 @@ import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
-import { cinema, headOf, rel } from '../core/cinema';
+import { cinema, headOf, rel, cineTitle } from '../core/cinema';
 import { juice } from '../core/juice';
 import { beacon } from '../core/beacon';
 import { Lost } from '../core/lost';
@@ -138,6 +138,11 @@ const FLASH_SPOT = new THREE.Vector3(AISLE_X, 0, 4);
 // Dónde está Azul cada vez que Gas vuelve del baño (en el pasillo, entre el público)
 const AZUL_SPOTS = [FLASH_SPOT, new THREE.Vector3(-6, 0, 18), new THREE.Vector3(-10, 0, 13.5)];
 const TRIPS = AZUL_SPOTS.length;
+/**
+ * Dónde la tiene que encontrar Gas con el flash (21 nov): metida de verdad entre el público, no en el pasillo ni
+ * delante de todos (era demasiado fácil). La gente le deja un hueco alrededor.
+ */
+const SEEK_SPOTS = [new THREE.Vector3(-3.6, 0, 12.4), new THREE.Vector3(3.2, 0, 18.6), new THREE.Vector3(-1.4, 0, 22.8)];
 /** Luz principal: en Barajas, el día que entra por la cubierta (alto, para que las cristaleras no llenen el suelo
  * de sombra); en el estadio, desde la torre de sonido, detrás del público (ilumina a la banda de frente). */
 const DAY_SUN = new THREE.Vector3(0.25, 1, -0.3);
@@ -844,6 +849,9 @@ export class Level3 implements Level {
   private filmIn = 0;
   private filmYaw = 0;
   private filmPitch = 0;
+  /** A dónde apunta de verdad el móvil (va detrás de lo que se pide, sin tirones). */
+  private filmAimYaw = 0;
+  private filmAimPitch = 0;
   private filmUi: HTMLDivElement | null = null;
   private filmDone = false;
   private baseFov = 0;
@@ -863,6 +871,8 @@ export class Level3 implements Level {
   private wasDay: boolean | null = null;
   private dark = false;
   private darkK = 0;
+  /** Lo deprisa que se encienden o apagan las luces de la pista (al salir la banda, despacio). */
+  private darkRate = 2.5;
   private daySky: Sky;
   /** Lo que solo se ve de noche desde el estadio (montes, luces de los barrios, el estadio grande). */
   private nightOnly = new THREE.Group();
@@ -929,6 +939,8 @@ export class Level3 implements Level {
     this.walker = new Walker(this.player.root.position);
     this.player.root.position.set(0, 0, -18);
     sc.add(this.player.root);
+    // (21 nov) Azul también arrastra su maleta de cabina por el aeropuerto
+    giveCase(this.azul, 0x3b6fd1, this.posts);
 
     // Gas vuela por su cuenta. Lleva su camiseta de Fito, azul y roja
     this.gas = makePerson(castLook({ ...MARC_LOOK, shirt: 0x1f4fa8 }, 'gas_fito'));
@@ -975,15 +987,25 @@ export class Level3 implements Level {
     this.applyLight(1);
     later(() => {
       if (this.phase !== 'intro') return;
-      dialogue(CONCERT.airport, () =>
+      // Primero, el chat donde nace el mote (6 de noviembre): hasta aquí, Marc y Margaux; desde aquí, Gas y Azul
+      const named = () => {
+        setGasNamed(true);
+        dialogue(CONCERT.airport, chats);
+      };
+      const chats = () =>
         phoneChat([CHATS.fitoEntradas, CHATS.burger], () => {
           this.busy = false;
           this.phase = 'airport';
           this.lost.reset();
           this.updateHud();
           later(() => bark('Margaux', CONCERT.whichGate), 400);
-        }),
-      );
+        });
+      phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => {
+        // El rótulo del mote, con lo que le escribió ella: «por nuestro intento fallido de camping gas»
+        audio.fanfare();
+        cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+        later(() => dialogue(ROAD.named, named), 3800);
+      });
     }, 500);
   }
 
@@ -1017,7 +1039,7 @@ export class Level3 implements Level {
       this.hemi.color.setHex(day ? 0xf4f7ff : 0x8f86d8);
       this.hemi.groundColor.setHex(day ? 0xc9b9a2 : 0x2a2444);
     }
-    this.darkK += ((this.dark && !day ? 1 : 0) - this.darkK) * Math.min(1, dt * 2.5);
+    this.darkK += ((this.dark && !day ? 1 : 0) - this.darkK) * Math.min(1, dt * this.darkRate);
     const k = this.darkK;
     this.hemi.intensity = day ? 0.6 : THREE.MathUtils.lerp(0.4, 0.15, k);
     // (topes del cómic: 2,1 de día y 2,5 de noche)
@@ -2331,6 +2353,23 @@ export class Level3 implements Level {
         b.live = false;
         b.o.visible = false;
         this.updateHud();
+        // (21 nov) Con una sola maleta, otra vez desde la entrada
+        this.busy = true;
+        this.walker.stop();
+        this.input.reset();
+        later(() =>
+          failCard(FAIL.suitcase.title, FAIL.suitcase.text, () => {
+            for (const x of this.burgers) {
+              x.live = false;
+              x.o.visible = false;
+            }
+            this.burgerT = 1.6;
+            this.invuln = 0;
+            this.busy = false;
+            this.startAirport();
+          }),
+        800);
+        break;
       }
     }
     // A la cola de embarque: al llegar al final de la cola (o al pasillo de cintas), se pone en ella
@@ -2684,40 +2723,57 @@ export class Level3 implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
+    // (21 nov) Más suave: se apaga la luz y la canción de antes se funde, unos segundos de silencio, y la banda y las
+    // luces van apareciendo mientras entra Fito. Sin ruido de ambiente ni gritos: solo la música
+    this.darkRate = 1.2;
     this.setDark(true);
-    audio.ambience(0.35);
+    audio.ambience(0);
+    audio.stopTrack();
     this.updateHud();
     const stage = new THREE.Vector3(0, 3.2, 33);
     const gp = () => headOf(this.gas);
     cinema.play(
       [
-        { dur: 1.8, pos: () => rel(gp(), stage, 2.4, 0.6, 0.5), look: stage, fov: 50 },
+        { dur: 2.6, pos: () => rel(gp(), stage, 2.4, 0.6, 0.5), look: stage, fov: 50 },
         {
-          dur: 3,
+          dur: 4.6,
+          move: 4.6,
           pos: () => rel(gp(), stage, 2.4, 0.6, 0.5),
-          pos2: () => rel(gp(), stage, 1.4, 0.4, 0.3),
+          pos2: () => rel(gp(), stage, 1.6, 0.45, 0.35),
           look: () => headOf(this.band[0]),
-          fov: 30,
+          fov: 36,
+          fov2: 30,
           at: () => {
             this.setShow(true);
+            this.darkRate = 0.45;
             this.setDark(false);
-            audio.cheer(0.8);
-            comicWord('¡FITOOO!', 'cheer');
             later(() => {
               bark('Fito', CONCERT.showHello);
               this.talk(this.band[0], 1.5);
-            }, 600);
+            }, 2200);
           },
         },
       ],
       () =>
         dialogue(CONCERT.showWc, () => {
+          this.darkRate = 2.5;
           this.busy = false;
           this.phase = 'toWc';
           this.lost.reset();
           this.updateHud();
         }),
     );
+  }
+
+  /** La maleta de Azul solo en el aeropuerto (en el estadio, no). */
+  private azulCase() {
+    const c = this.azul.root.userData.case as THREE.Group | undefined;
+    const on = this.phase === 'airport' || this.phase === 'gateQueue' || this.phase === 'arrivals' || this.phase === 'intro';
+    if (c && c.visible !== on) {
+      c.visible = on;
+      if (!on) this.azul.root.userData.caseK = 0;
+    }
+    return on;
   }
 
   /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
@@ -3079,6 +3135,7 @@ export class Level3 implements Level {
       const z = 6 + Math.random() * 21.5;
       if (distToPath(x, z) < 0.85) continue;
       if (Math.hypot(x - GAS_POS.x, z - GAS_POS.z) < 1.6) continue;
+      if (SEEK_SPOTS.some((q) => Math.hypot(x - q.x, z - q.z) < 1.0)) continue;
       if (pts.some((p) => Math.hypot(p.x - x, p.z - z) < 0.92)) continue;
       pts.push({ x, z });
     }
@@ -3885,8 +3942,13 @@ export class Level3 implements Level {
   }
 
   private enterCabin(hard: number, i: number, next: () => void) {
-    this.side = new PeeAim3D(this.cabin, this.camera, hard, () => {
+    this.side = new PeeAim3D(this.cabin, this.camera, hard, (q) => {
       this.side = null;
+      // (21 nov) Sin pasar del 75 % dentro de la taza, otra vez
+      if (q < FAIL.skillMin) {
+        failCard(FAIL.pee.title, FAIL.pee.text(Math.round(q * 100)), () => this.enterCabin(hard, i, next));
+        return;
+      }
       fadeFlash(() => {
         // Sale: la puerta se abre, la cabina queda libre y él vuelve al concierto
         this.qShift = 0;
@@ -3916,8 +3978,8 @@ export class Level3 implements Level {
     this.input.reset();
     this.filmT = 0;
     this.filmIn = 0;
-    this.filmYaw = 0;
-    this.filmPitch = 0.12;
+    this.filmYaw = this.filmAimYaw = 0;
+    this.filmPitch = this.filmAimPitch = 0.12;
     if (!this.filmUi) this.baseFov = this.camera.fov;
     this.azul.root.visible = false;
     // (Gas sigue en la cola, lejos y detrás de ella: fuera del encuadre)
@@ -3930,7 +3992,7 @@ export class Level3 implements Level {
     ui.innerHTML =
       `<div style="position:absolute;left:16px;top:10px;${lab}"><span data-rec style="color:#e2302a">●</span> REC <span data-t>0:00</span></div>` +
       `<div style="position:absolute;right:16px;top:10px;${lab}">🎸 <span data-q>0</span>%</div>` +
-      '<div data-box style="position:absolute;left:29%;right:29%;top:25%;bottom:25%;border:4px dashed #fffbf0;border-radius:10px;box-shadow:0 0 0 2px #141018,inset 0 0 0 2px #141018"></div>' +
+      '<div data-box style="position:absolute;left:27%;right:27%;top:24%;bottom:24%;border:4px dashed #fffbf0;border-radius:10px;box-shadow:0 0 0 2px #141018,inset 0 0 0 2px #141018"></div>' +
       '<div data-hands style="position:absolute;inset:0;overflow:hidden"></div>';
     // (dentro de la interfaz y el primero, como el mapa del cap. 6: la pausa y los bocadillos, por encima)
     const uiRoot = document.getElementById('ui');
@@ -3947,23 +4009,26 @@ export class Level3 implements Level {
     // Fito va y viene por el escenario
     const fito = this.band[0];
     // (andando: a más de 2 m/s ya no parece una persona)
-    fito.root.position.x = Math.sin(this.filmT * 0.42) * 5.2 + Math.sin(this.filmT * 1.1) * 0.6;
-    // El móvil: joystick o arrastrar para apuntar
+    // (21 nov: algo más despacio, y el pulso mucho más suave: antes temblaba demasiado para encuadrarlo bien)
+    fito.root.position.x = Math.sin(this.filmT * 0.34) * 5.0 + Math.sin(this.filmT * 0.9) * 0.4;
+    // El móvil: joystick o arrastrar para apuntar (con un poco de inercia, sin tirones)
     const ax = this.input.axes();
-    this.filmYaw = THREE.MathUtils.clamp(this.filmYaw - ax.x * 1.6 * dt - this.input.consumeCam() * 0.6, -0.9, 0.9);
-    this.filmPitch = THREE.MathUtils.clamp(this.filmPitch + ax.y * 1.0 * dt, -0.1, 0.5);
+    this.filmYaw = THREE.MathUtils.clamp(this.filmYaw - ax.x * 1.1 * dt - this.input.consumeCam() * 0.45, -0.9, 0.9);
+    this.filmPitch = THREE.MathUtils.clamp(this.filmPitch + ax.y * 0.8 * dt, -0.1, 0.5);
+    this.filmAimYaw += (this.filmYaw - this.filmAimYaw) * Math.min(1, dt * 9);
+    this.filmAimPitch += (this.filmPitch - this.filmAimPitch) * Math.min(1, dt * 9);
     const pp = this.azul.root.position;
-    const shake = Math.sin(this.filmT * 23) * 0.006 + Math.sin(this.filmT * 7) * 0.01;
+    const shake = Math.sin(this.filmT * 17) * 0.0012 + Math.sin(this.filmT * 3.1) * 0.0025;
     this.camera.position.set(pp.x + 0.15, 1.75, pp.z + 0.3);
     // Con el zoom del móvil: Fito se ve entero y grande, no un muñequito al fondo
     this.camera.fov += ((this.camera.aspect < 1 ? 21 : 15) - this.camera.fov) * Math.min(1, dt * 4);
     this.camera.updateProjectionMatrix();
-    this.tmpV.set(pp.x + Math.sin(this.filmYaw + shake) * 10, 1.75 + Math.tan(this.filmPitch + shake) * 10, pp.z + Math.cos(this.filmYaw + shake) * 10);
+    this.tmpV.set(pp.x + Math.sin(this.filmAimYaw + shake) * 10, 1.75 + Math.tan(this.filmAimPitch + shake) * 10, pp.z + Math.cos(this.filmAimYaw + shake) * 10);
     this.camera.lookAt(this.tmpV);
     this.camera.updateMatrixWorld();
     // ¿Fito dentro del recuadro?
     this.tmpV.copy(fito.root.position).setY(fito.root.position.y + 1.6).project(this.camera);
-    const inside = Math.abs(this.tmpV.x) < 0.42 && Math.abs(this.tmpV.y) < 0.5 && this.tmpV.z < 1;
+    const inside = Math.abs(this.tmpV.x) < 0.46 && Math.abs(this.tmpV.y) < 0.52 && this.tmpV.z < 1;
     if (inside) this.filmIn += dt;
     (ui.querySelector('[data-box]') as HTMLElement).style.borderColor = inside ? '#5fcf80' : '#fffbf0';
     (ui.querySelector('[data-t]') as HTMLElement).textContent = `0:${Math.floor(this.filmT).toString().padStart(2, '0')}`;
@@ -3978,12 +4043,24 @@ export class Level3 implements Level {
       requestAnimationFrame(() => (h.style.transform = 'translateY(-120px)'));
       later(() => (h.style.transform = 'translateY(0)'), 650);
       later(() => h.remove(), 1200);
-      this.filmYaw += (Math.random() - 0.5) * 0.12;
+      this.filmYaw += (Math.random() - 0.5) * 0.04;
     }
     if (this.filmT >= FILM_SECS) this.endFilm();
   }
 
   private endFilm() {
+    // (21 nov) Sin Fito en plano más del 75 % del vídeo, otra vez
+    const pct = this.filmPct();
+    if (pct < FAIL.skillMin * 100) {
+      this.filmUi?.remove();
+      this.filmUi = null;
+      this.busy = true;
+      failCard(FAIL.film.title, FAIL.film.text(pct), () => {
+        this.band[0].root.position.x = 0;
+        this.startFilm();
+      });
+      return;
+    }
     this.filmUi?.remove();
     this.filmUi = null;
     this.filmDone = true;
@@ -4045,12 +4122,11 @@ export class Level3 implements Level {
     this.gas.root.position.set(WC_X - 4.5, 0, Q_Z + 2.2);
     this.walker.stop();
     this.walker.yaw = this.walker.facing = -0.75;
-    this.placeAzul(AZUL_SPOTS[(this.trip - 1) % TRIPS]);
+    this.placeAzul(SEEK_SPOTS[(this.trip - 1) % SEEK_SPOTS.length]);
     this.phase = 'seek';
     this.seekT = 0;
     this.flashT = 1.2;
     this.setDark(true);
-    audio.ambience(0.25);
     this.busy = true;
     this.updateHud();
     const chat = CHATS.temon;
@@ -4149,7 +4225,7 @@ export class Level3 implements Level {
         // Ella, con el móvil en alto
         { dur: 2.2, slow: 0.35, pos: () => rel(az(), gs(), -0.95, 0.8, 0.05), pos2: () => rel(az(), gs(), -0.7, 0.55, 0.02), look: az, fov: 42, focus: az, at: () => flash(true) },
         // El abrazo: la cámara les da la vuelta mientras dura la conversación
-        { dur: Infinity, slow: 1, pos: around, look: mid, fov: 50, focus: mid, at: () => { flash(false); audio.cheer(0.4); } },
+        { dur: Infinity, slow: 1, pos: around, look: mid, fov: 50, focus: mid, at: () => flash(false) },
       ]);
     later(() => dialogue(lines, () => {
       if (first) cinema.stop();
@@ -4463,7 +4539,9 @@ export class Level3 implements Level {
       // (hablando y andando a la vez: anda; si no, se deslizaba con los gestos de hablar)
       else if (this.talkers.has(this.player) && mag < 0.03) animatePerson(this.player, dt, 'talk');
       else animatePerson(this.player, dt, mag > 0.03 ? 'walk' : 'idle', mag, this.walker.walk, this.walker);
+      if (this.player === this.azul && this.azulCase()) caseStep(this.azul, mag > 0.03, dt);
     }
+    if (this.player !== this.azul || scripted) this.azulCase();
     // Azul (si no la llevas): en su sitio, bailando, o con el móvil en alto haciendo flash; mira a Gas si viene
     if (this.player !== this.azul && this.azul.root.visible) {
       if (live) animatePerson(this.azul, dt, 'dance', 0, beat * Math.PI + 1);
@@ -4591,7 +4669,7 @@ export class Level3 implements Level {
     // Pistas, solo si se ha perdido: el marcador, la flecha del HUD y la columna salen a los 40 s sin avanzar
     const key = `${this.phase}|${this.trip}|${this.beers?.stage ?? ''}|${this.gateStep}|${this.showOn}`;
     const tgt = this.lost.tick(key, dt, this.busy || !!this.auto) ? this.target() : null;
-    this.marker.visible = !!tgt && !this.busy;
+    this.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     if (tgt) {
       this.marker.position.set(tgt.x, 2.6 + Math.sin(this.t * 3) * 0.15, tgt.z);
       this.marker.rotation.y += dt * 2;
@@ -4651,7 +4729,6 @@ export class Level3 implements Level {
       if (combo > 0 && combo % 10 === 0) {
         this.fireworks.burst(new THREE.Vector3(-15 + Math.random() * 30, 18 + Math.random() * 6, 40));
         comicWord(`¡${combo}!`, 'perfect');
-        audio.cheer(0.4);
         vibrate(40);
       } else if (perfect) vibrate(12);
     };
@@ -4673,8 +4750,6 @@ export class Level3 implements Level {
     this.result = { hits: r.hits, total: r.total, perfects: r.perfects, maxCombo: r.maxCombo };
     bark('Gas', CONCERT.rhythmDone(r.hits, r.total));
     comicWord('¡BRAVO!', 'fanfare');
-    audio.cheer(0.7);
-    audio.ambience(0.2);
     r.dispose();
     this.rhythm = null;
     this.phase = 'ending';
@@ -4765,6 +4840,7 @@ export class Level3 implements Level {
     };
     /** El estadio, con lo de antes hecho: llegado, cervezas entregadas y, si `show`, la banda en el escenario. */
     const stadium = (show: boolean, trip: number, missed: number) => {
+      setGasNamed(true);
       stop();
       this.beers?.dispose();
       this.beers = null;
@@ -4776,6 +4852,7 @@ export class Level3 implements Level {
       this.filmDone = trip > 0;
     };
     const airport = () => {
+      setGasNamed(true);
       stop();
       this.beers?.dispose();
       this.beers = null;

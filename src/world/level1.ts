@@ -231,6 +231,8 @@ export class Level1 implements Level {
   private folkNext = 0;
   private playTime = 0;
   private invuln = 0;
+  /** parpadeo tras un golpe (la caricia da invulnerabilidad sin parpadear) */
+  private blinkT = 0;
   private t = 0;
   private busy = false; // diálogo abierto
   private endingT = 0;
@@ -740,6 +742,7 @@ export class Level1 implements Level {
         this.walker.knock.copy(this.v1);
         this.walker.shake(0.4);
         this.invuln = 1.5;
+        this.blinkT = 1.5;
         this.hits++;
         audio.hit();
         vibrate(90);
@@ -1067,8 +1070,9 @@ export class Level1 implements Level {
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCups(dt);
     this.invuln -= dt;
+    this.blinkT = Math.max(0, this.blinkT - dt);
     this.player.root.rotation.y = this.walker.facing;
-    this.player.root.visible = this.invuln <= 0 || Math.floor(this.invuln * 10) % 2 === 0;
+    this.player.root.visible = this.blinkT <= 0 || Math.floor(this.blinkT * 10) % 2 === 0;
 
     if (ending || this.stage === 'barDance' || this.stage === 'pairDance') animatePerson(this.player, dt, 'dance', 0, this.t * 8);
     else if (this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'kiss' || this.stage === 'kissing') animatePerson(this.player, dt, 'idle');
@@ -1335,7 +1339,7 @@ export class Level1 implements Level {
       this.pinOn = 15;
       this.lost.reset();
     } else if (lostNow) tgt = this.target();
-    this.marker.visible = !!tgt && !this.busy;
+    this.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     if (tgt) {
       this.marker.position.set(tgt.x, (tgt.y > 0.5 ? tgt.y + 0.7 : 2.6) + Math.sin(this.t * 3) * 0.1, tgt.z);
       this.marker.rotation.y += dt * 2;

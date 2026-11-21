@@ -4,7 +4,7 @@ import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { MEMORIES } from '../data/memories';
 import { PUZZLES, WHO_SAID, SOUP_WORDS, TIMELINE, FILL, HANGMAN, EMOJI_ROUNDS, type PuzzleInfo } from '../data/puzzles';
-import { crossword, clearScreens } from './ui';
+import { crossword, clearScreens, shareWithMarc } from './ui';
 
 const root = () => document.getElementById('ui')!;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string) {
@@ -25,13 +25,13 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 export const puzzleDate = (p: PuzzleInfo) => new Date(p.day[0], p.day[1], p.day[2]);
 export const puzzleDay = (p: PuzzleInfo) => `${p.day[2]} ${MONTHS[p.day[1]]}`;
 
-/** El marco: cabecera (conecta, título, de qué va), el cuerpo del juego y un pie con Volver. */
+/** El marco: cabecera (día, título, de qué va), el cuerpo del juego y un pie con Volver. */
 function frame(p: PuzzleInfo, onBack: () => void) {
   clearScreens();
   const o = el('div', 'screen pz-screen');
   const card = el('div', 'letter pz-card');
   const head = el('div', 'pz-head');
-  head.append(el('div', 'pz-kicker', `${p.icon} Conecta · ${puzzleDay(p)}`), el('h2', '', p.title), el('p', 'pz-sub', p.sub));
+  head.append(el('div', 'pz-kicker', `${p.icon} ${puzzleDay(p)}`), el('h2', '', p.title), el('p', 'pz-sub', p.sub));
   const body = el('div', 'pz-body');
   const status = el('div', 'pz-status');
   card.append(head, status, body);
@@ -39,7 +39,7 @@ function frame(p: PuzzleInfo, onBack: () => void) {
   back.onclick = onBack;
   o.append(card, back);
   root().append(o);
-  return { o, card, body, status };
+  return { o, card, body, status, back, p };
 }
 
 /** Pantalla de hecho, dentro de la misma tarjeta. */
@@ -50,9 +50,13 @@ function done(f: ReturnType<typeof frame>, line: string, onDone: () => void) {
   f.status.textContent = '';
   const w = el('div', 'pz-done');
   w.append(el('div', 'pz-done-ico', '💙'), el('h3', '', '¡Hecho!'), el('p', '', line));
-  const b = el('button', 'big-btn', 'Volver al mapa');
+  // Un solo «volver» al acabar (antes quedaba también el del pie) y, antes, compartir el resultado con Marc
+  f.back.remove();
+  const share = el('button', 'big-btn pz-share', '📤 Compartir con Marc');
+  share.onclick = () => shareWithMarc(f.p.icon, f.p.title, line);
+  const b = el('button', 'link-btn pz-home', 'Volver al mapa');
   b.onclick = onDone;
-  w.append(b);
+  w.append(share, b);
   f.body.append(w);
 }
 
@@ -65,11 +69,12 @@ export function runPuzzle(id: string, onDone: () => void, onBack: () => void) {
 
 // ---------------- ¿Quién lo dijo? ----------------
 function quien(f: ReturnType<typeof frame>, end: (l: string) => void) {
-  const items = shuffle(WHO_SAID).slice(0, 10);
+  // Diez distintas: ninguna frase sale dos veces en la misma partida
+  const items = shuffle([...new Map(WHO_SAID.map((x) => [x.text, x])).values()]).slice(0, 10);
   let i = 0, ok = 0;
   const show = () => {
     f.body.innerHTML = '';
-    f.status.textContent = `${i + 1} de ${items.length} · ${ok} bien`;
+    f.status.textContent = `Frase ${i + 1} de ${items.length} · ${ok} acertadas`;
     const it = items[i];
     const q = el('div', 'pz-quote', `<span>«${it.text}»</span>`);
     const row = el('div', 'pz-row');
@@ -81,7 +86,7 @@ function quien(f: ReturnType<typeof frame>, end: (l: string) => void) {
         b.classList.add(good ? 'good' : 'bad');
         row.querySelectorAll('button').forEach((x) => ((x as HTMLButtonElement).disabled = true));
         (good ? audio.pickup : audio.boo).call(audio);
-        f.body.append(el('p', 'pz-when', `${good ? '¡Sí!' : 'Nop:'} lo escribió ${it.who === 'Azul' ? 'Azul' : 'Gas'} · ${it.when}`));
+        f.body.append(el('p', 'pz-when', `${good ? '¡Sí! ' : 'No: '}la escribió ${it.who}, el ${it.when}`));
         setTimeout(() => (++i < items.length ? show() : end(`${ok} de ${items.length}. ${ok >= 8 ? 'Brutal: te sabes el chat de memoria.' : 'Tonses habrá que releer el chat 😜'}`)), 1500);
       };
       row.append(b);
@@ -143,16 +148,10 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
       cellEl[r][c] = d;
     }
   }
-  const list = el('div', 'pz-words');
-  const tags = new Map<string, HTMLElement>();
-  for (const w of words) {
-    const t = el('span', '', w);
-    tags.set(w, t);
-    list.append(t);
-  }
+  // (sin la lista de palabras debajo: solo cuántas quedan; 21 nov)
   const found = new Set<string>();
   let start: [number, number] | null = null;
-  const status = () => (f.status.textContent = `${found.size} de ${words.length} · toca la primera letra y luego la última`);
+  const status = () => (f.status.textContent = `${found.size} de ${words.length} encontradas · toca la primera letra y la última`);
   const tap = (r: number, c: number) => {
     if (!start) {
       start = [r, c];
@@ -174,7 +173,6 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
         const cells = line;
         found.add(w);
         cells.forEach(([rr, cc]) => cellEl[rr][cc].classList.add('found'));
-        tags.get(w)!.classList.add('done');
         audio.chime(found.size % 8);
         vibrate(20);
         status();
@@ -185,7 +183,7 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
     audio.boo();
   };
   status();
-  f.body.append(g, list);
+  f.body.append(g);
 }
 
 // ---------------- En orden ----------------
@@ -227,51 +225,69 @@ function orden(f: ReturnType<typeof frame>, end: (l: string) => void) {
 }
 
 // ---------------- Parejas ----------------
+/** Fallos que se permiten: al sexto, las cartas se barajan y se empieza de cero (21 nov). */
+const PAIR_FAILS = 6;
 function parejas(f: ReturnType<typeof frame>, end: (l: string) => void) {
   // (solo fotos de capítulos ya abiertos: antes podían salir las de Sant Joan, que se juega después)
   const after = PUZZLES.find((p) => p.kind === 'parejas')?.after ?? 9;
   const pics = shuffle(MEMORIES.filter((m) => m.src && !m.sticker && !m.chat && m.level <= after)).slice(0, 6);
-  const deck = shuffle([...pics, ...pics].map((m, i) => ({ m, i })));
-  const g = el('div', 'pz-cards');
-  let open: { c: HTMLElement; m: (typeof pics)[number] }[] = [];
-  let pairs = 0, moves = 0, lock = false;
-  const status = () => (f.status.textContent = `${pairs} de ${pics.length} parejas · ${moves} intentos`);
-  for (const d of deck) {
-    const c = el('button', 'pz-card-f');
-    const img = el('img') as HTMLImageElement;
-    img.src = d.m.src!;
-    img.alt = '';
-    c.append(el('span', 'pz-card-back', '💙'), img);
-    c.onclick = () => {
-      if (lock || c.classList.contains('up')) return;
-      c.classList.add('up');
-      audio.pop();
-      open.push({ c, m: d.m });
-      if (open.length < 2) return;
-      moves++;
-      const [a, b] = open;
-      open = [];
-      if (a.m === b.m) {
-        pairs++;
-        a.c.classList.add('done');
-        b.c.classList.add('done');
-        audio.chime(pairs);
-        status();
-        if (pairs === pics.length) setTimeout(() => end(`${moves} intentos. ${moves <= 10 ? 'Memoria de elefante (y de tierna).' : 'Brutal igualmente.'}`), 800);
-      } else {
-        lock = true;
-        status();
-        setTimeout(() => {
-          a.c.classList.remove('up');
-          b.c.classList.remove('up');
-          lock = false;
-        }, 900);
-      }
-    };
-    g.append(c);
-  }
-  status();
-  f.body.append(g);
+  let rounds = 0;
+  const deal = () => {
+    rounds++;
+    f.body.innerHTML = '';
+    const deck = shuffle([...pics, ...pics].map((m, i) => ({ m, i })));
+    const g = el('div', 'pz-cards');
+    let open: { c: HTMLElement; m: (typeof pics)[number] }[] = [];
+    let pairs = 0, moves = 0, fails = 0, lock = false;
+    const status = () => (f.status.textContent = `${pairs} de ${pics.length} parejas · fallos ${fails} de ${PAIR_FAILS}`);
+    for (const d of deck) {
+      const c = el('button', 'pz-card-f');
+      const img = el('img') as HTMLImageElement;
+      img.src = d.m.src!;
+      img.alt = '';
+      c.append(el('span', 'pz-card-back', '💙'), img);
+      c.onclick = () => {
+        if (lock || c.classList.contains('up')) return;
+        c.classList.add('up');
+        audio.pop();
+        open.push({ c, m: d.m });
+        if (open.length < 2) return;
+        moves++;
+        const [a, b] = open;
+        open = [];
+        if (a.m === b.m) {
+          pairs++;
+          a.c.classList.add('done');
+          b.c.classList.add('done');
+          audio.chime(pairs);
+          status();
+          if (pairs === pics.length) setTimeout(() => end(`${fails === 0 ? 'Sin un solo fallo' : `Con ${fails} ${fails === 1 ? 'fallo' : 'fallos'}`}${rounds > 1 ? `, a la ${rounds}.ª` : ''}. ${fails <= 2 ? 'Memoria de elefante (y de tierna).' : 'Brutal igualmente.'}`), 800);
+        } else {
+          fails++;
+          lock = true;
+          status();
+          audio.boo();
+          setTimeout(() => {
+            a.c.classList.remove('up');
+            b.c.classList.remove('up');
+            if (fails >= PAIR_FAILS) {
+              // Al sexto fallo: todas boca abajo, se barajan y otra vez
+              f.status.textContent = 'Seis fallos: se barajan otra vez 🔀';
+              g.classList.add('pz-shuffle');
+              vibrate([40, 30, 40]);
+              setTimeout(deal, 1100);
+              return;
+            }
+            lock = false;
+          }, 900);
+        }
+      };
+      g.append(c);
+    }
+    status();
+    f.body.append(g);
+  };
+  deal();
 }
 
 // ---------------- Completa la frase ----------------

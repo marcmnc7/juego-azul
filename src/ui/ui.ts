@@ -38,6 +38,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
   return e;
 }
 
+/** Modo prueba (#test): solo entonces hay atajos como «Saltar» en los chats. */
+let testMode = false;
+export const setTestMode = (v: boolean) => void (testMode = v);
+export const isTestMode = () => testMode;
+
 export function clearScreens() {
   // (y una tarjeta de «Otra vez» que hubiera quedado de otro capítulo)
   root.querySelectorAll('.screen, .gift-overlay, .fail-back').forEach((e) => e.remove());
@@ -325,6 +330,9 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
       gp.style.setProperty('--d', `${(after + 1.3).toFixed(2)}s`);
       main.append(gp);
     }
+    const sv = saveVoucherBtn(gift);
+    sv.style.setProperty('--d', `${(after + 1.5).toFixed(2)}s`);
+    main.append(sv);
     ticket.append(stub, main);
     const revealAt = (after + 1.6) * 1000;
     const saved = el('p', 'wn-hint wn-saved', 'Queda guardado en la ficha del capítulo');
@@ -375,12 +383,15 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     b.append(el('div', 'wn-kicker', `Nuevo en tu álbum · ${shotsLabel(photos)}`));
     const fan = el('div', 'wn-fan');
     const shown = photos.slice(0, 5);
+    // (con 4 o 5, más juntas: antes se salían de la pantalla en vertical; el paso lo pone el CSS según cuántas haya)
+    fan.dataset.n = String(shown.length);
     shown.forEach((m, i) => {
       const t = el('button', 'wn-photo' + (m.chat ? ' chat' : '') + (m.sticker ? ' sticker' : ''));
       const mid = (shown.length - 1) / 2;
       t.style.setProperty('--r', `${(i - mid) * 7}deg`);
-      t.style.setProperty("--x", `${(i - mid) * 82}%`);
+      t.style.setProperty('--k', String(i - mid));
       t.style.setProperty('--y', `${Math.abs(i - mid) * 6}%`);
+      if (i === shown.length - 1 && photos.length > shown.length) t.append(el('span', 'wn-more', `+${photos.length - shown.length}`));
       t.style.animationDelay = `${0.15 + i * 0.12}s`;
       t.append(thumb(m));
       t.onclick = () => lightbox(photos, i);
@@ -471,6 +482,164 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
 
 /** Visor de fotos a pantalla completa: deslizar o flechas para pasar, tocar fuera para cerrar. */
 /** La foto que va con un vale (los billetes…): una miniatura dentro del vale que se abre en grande. */
+/** Parte un texto en líneas que quepan en `maxW` (para dibujarlo en un canvas). */
+function canvasLines(g: CanvasRenderingContext2D, text: string, maxW: number) {
+  const out: string[] = [];
+  let row = '';
+  for (const w of text.split(' ')) {
+    const t = row ? `${row} ${w}` : w;
+    if (g.measureText(t).width > maxW && row) {
+      out.push(row);
+      row = w;
+    } else row = t;
+  }
+  if (row) out.push(row);
+  return out;
+}
+
+/** El vale, dibujado como imagen (1080 × 1350) para guardarlo en el carrete. */
+async function voucherImage(gift: Gift): Promise<File | null> {
+  const W = 1080, H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#27406a');
+  bg.addColorStop(0.45, '#1a2342');
+  bg.addColorStop(1, '#10162c');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  // Estrellitas
+  g.fillStyle = 'rgba(255,248,236,.55)';
+  for (let i = 0; i < 70; i++) {
+    const x = (i * 397) % W, y = (i * 211) % 420, r = 1 + (i % 3);
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  const photo = gift.photo
+    ? await new Promise<HTMLImageElement | null>((res) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => res(null);
+        im.src = gift.photo!.src;
+      })
+    : null;
+  // El papel: talón a la izquierda y el cuerpo
+  const X = 80, Y = 150, TW = W - 160, TH = H - 300, STUB = 190;
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.55)';
+  g.shadowBlur = 50;
+  g.shadowOffsetY = 24;
+  g.fillStyle = '#fbf5e6';
+  g.beginPath();
+  g.roundRect(X, Y, TW, TH, 36);
+  g.fill();
+  g.restore();
+  g.fillStyle = '#f1e2c2';
+  g.beginPath();
+  g.roundRect(X, Y, STUB, TH, [36, 0, 0, 36]);
+  g.fill();
+  g.setLineDash([14, 12]);
+  g.strokeStyle = 'rgba(120,90,50,.45)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(X + STUB, Y + 24);
+  g.lineTo(X + STUB, Y + TH - 24);
+  g.stroke();
+  g.setLineDash([]);
+  g.textAlign = 'center';
+  g.fillStyle = '#2f2210';
+  g.font = '110px system-ui, sans-serif';
+  g.fillText(gift.icon, X + STUB / 2, Y + 170);
+  g.font = '800 34px -apple-system, system-ui, sans-serif';
+  g.fillStyle = '#b4632f';
+  g.fillText(`Nº ${String(gift.level).padStart(2, '0')}`, X + STUB / 2, Y + 240);
+  // El cuerpo
+  const L = X + STUB + 50, MW = TW - STUB - 100;
+  g.textAlign = 'left';
+  g.fillStyle = '#b4632f';
+  g.font = '800 30px -apple-system, system-ui, sans-serif';
+  g.fillText('TU VALE REGALO', L, Y + 90);
+  let y = Y + 170;
+  g.fillStyle = '#2f2210';
+  g.font = `600 ${gift.title.length > 55 ? 54 : 64}px Georgia, "Times New Roman", serif`;
+  for (const ln of canvasLines(g, gift.title, MW)) {
+    g.fillText(ln, L, y);
+    y += gift.title.length > 55 ? 64 : 76;
+  }
+  y += 20;
+  g.fillStyle = '#5a4630';
+  g.font = '500 38px -apple-system, system-ui, sans-serif';
+  for (const ln of canvasLines(g, gift.description, MW)) {
+    g.fillText(ln, L, y);
+    y += 50;
+  }
+  y += 24;
+  g.font = '700 34px -apple-system, system-ui, sans-serif';
+  const red = canvasLines(g, gift.howToRedeem, MW - 48);
+  const rh = red.length * 46 + 36;
+  g.fillStyle = '#f3e3c0';
+  g.beginPath();
+  g.roundRect(L, y, MW, rh, 18);
+  g.fill();
+  g.fillStyle = '#3a2a18';
+  red.forEach((ln, i) => g.fillText(ln, L + 24, y + 52 + i * 46));
+  y += rh + 36;
+  if (photo) {
+    const room = Y + TH - 50 - y;
+    if (room > 160) {
+      const s = Math.min(MW / photo.width, room / photo.height);
+      const pw = photo.width * s, ph = photo.height * s;
+      g.save();
+      g.beginPath();
+      g.roundRect(L, y, pw, ph, 16);
+      g.clip();
+      g.drawImage(photo, L, y, pw, ph);
+      g.restore();
+    }
+  }
+  g.textAlign = 'center';
+  g.fillStyle = 'rgba(255,248,236,.85)';
+  g.font = 'italic 600 44px Georgia, serif';
+  g.fillText('Para Azul 💙', W / 2, H - 70);
+  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+  return blob ? new File([blob], `vale-${gift.id}.png`, { type: 'image/png' }) : null;
+}
+
+/** Botón para guardar el vale en la galería (el menú de compartir del iPhone tiene «Guardar imagen»). */
+function saveVoucherBtn(gift: Gift) {
+  const b = el('button', 'wn-savev', '📥 Guardar en la galería');
+  b.onclick = async (e) => {
+    e.stopPropagation();
+    b.disabled = true;
+    try {
+      const file = await voucherImage(gift);
+      if (!file) throw new Error('sin imagen');
+      if (navigator.canShare?.({ files: [file] })) {
+        toast('Elige «Guardar imagen» y se queda en tus fotos');
+        await navigator.share({ files: [file] });
+      } else {
+        // (sin menú de compartir: se descarga)
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(file);
+        a.download = file.name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        toast('Vale descargado');
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') toast('No se ha podido guardar: prueba otra vez');
+    }
+    b.disabled = false;
+  };
+  return b;
+}
+
 function giftPhoto(gift: Gift) {
   if (!gift.photo) return null;
   const b = el('button', 'wn-tphoto');
@@ -688,7 +857,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     const open = allOpen || now() >= puzzleDate(pz).getTime();
     const doneIt = !!save.minis?.includes(pz.id);
     const b = el('button', 'mp-mini' + (doneIt ? ' done' : open ? ' open' : ' locked'));
-    b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Conecta'}</b><i>${puzzleDay(pz)}</i>`));
+    b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Sorpresa'}</b><i>${puzzleDay(pz)}</i>`));
     b.onclick = (e) => {
       e.stopPropagation();
       if (!open) {
@@ -873,6 +1042,7 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     main.append(el('div', 'wn-tlabel', 'Tu vale regalo'), el('h2', 'wn-ttitle' + (gift.title.length > 55 ? ' long' : ''), gift.title), el('p', 'wn-tdesc', gift.description), el('div', 'wn-tredeem', gift.howToRedeem));
     const gp = giftPhoto(gift);
     if (gp) main.append(gp);
+    main.append(saveVoucherBtn(gift));
     ticket.append(stub, main);
     list.append(ticket);
   } else if (GIFTS.some((g) => g.level === id)) {
@@ -880,7 +1050,7 @@ function chapterSheet(id: number, save: SaveData, opts: MapOptions) {
     r.querySelector('.cp-ico')!.classList.add('seal');
   }
   if (photos.length) item('📸', `${shotsLabel(photos)} para tu álbum`, doneIt ? 'Ya están en el álbum' : 'De aquellos días: se guardan al terminar');
-  if (kp.length) item('✨', `${kp.length} recuerdos escondidos`, `${found} de ${kp.length} encontrados · son polaroids que brillan: acércate`);
+  if (kp.length) item('✨', `${kp.length} fotos escondidas`, `${found} de ${kp.length} encontradas · son polaroids que brillan por el escenario: búscalas`);
   if (doneIt) item('✓', 'Completado', 'Puedes volver a jugarlo cuando quieras', 'done');
   body.append(list);
   const play = el('button', 'hm-btn cp-play', doneIt ? 'Volver a jugar' : 'Jugar');
@@ -916,13 +1086,13 @@ function albumTab(body: HTMLElement, save: SaveData, test: boolean) {
   });
   body.append(grid);
   const found = KEEPSAKES.filter((k) => save.found?.includes(k.id));
-  const fShots: Shot[] = found.map((k) => ({ level: k.chapter, src: k.src, chat: k.chat, caption: k.caption, sticker: k.sticker }));
-  body.append(el('h3', 'ap-section', `Recuerdos escondidos · ${found.length}/${KEEPSAKES.length}`));
+  const fShots: Shot[] = found.map((k) => ({ level: k.chapter, src: k.src, caption: k.caption }));
+  body.append(el('h3', 'ap-section', `Fotos escondidas · ${found.length}/${KEEPSAKES.length}`));
   const g2 = el('div', 'ap-grid');
   KEEPSAKES.forEach((k) => {
     const card = el('button', 'ap-photo' + (save.found?.includes(k.id) ? '' : ' locked'));
     if (save.found?.includes(k.id)) {
-      const sh = fShots.find((f) => f.caption === k.caption)!;
+      const sh = fShots[found.indexOf(k)];
       card.append(thumb(sh), el('span', 'ap-photo-cap', k.caption));
       card.onclick = () => lightbox(fShots, fShots.indexOf(sh));
     } else card.append(el('div', 'ap-photo-lock', `✨<small>Escondido en el capítulo ${k.chapter}</small>`));
@@ -1034,6 +1204,76 @@ function norm(t: string) {
 }
 
 /** Crucigrama de verdad antes de la carta: casillas cruzadas, y las del círculo forman el mensaje. */
+/**
+ * Comparte el resultado de un juego con Marc: abre el menú de compartir del iPhone (WhatsApp, Mensajes…) con una
+ * tarjeta en imagen y el texto. Sin menú de compartir, lo copia para pegarlo.
+ */
+export async function shareWithMarc(icon: string, title: string, line: string) {
+  const text = `${icon} ${title}\n${line}\n— Para Azul 💙`;
+  let file: File | null = null;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1080;
+    const g = c.getContext('2d')!;
+    const bg = g.createLinearGradient(0, 0, 0, 1080);
+    bg.addColorStop(0, '#27406a');
+    bg.addColorStop(1, '#141a33');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, 1080, 1080);
+    g.fillStyle = '#fbf5e6';
+    g.beginPath();
+    g.roundRect(90, 150, 900, 780, 48);
+    g.fill();
+    g.textAlign = 'center';
+    g.textBaseline = 'alphabetic';
+    g.font = '150px system-ui, sans-serif';
+    g.fillText(icon, 540, 360);
+    g.fillStyle = '#2f2210';
+    g.font = '600 70px Georgia, "Times New Roman", serif';
+    g.fillText(title, 540, 480, 820);
+    g.fillStyle = '#4a3a26';
+    g.font = '600 46px -apple-system, system-ui, sans-serif';
+    // (la frase, en varias líneas)
+    const words = line.split(' ');
+    let row = '';
+    let y = 590;
+    for (const w of words) {
+      const t = row ? `${row} ${w}` : w;
+      if (g.measureText(t).width > 780 && row) {
+        g.fillText(row, 540, y);
+        row = w;
+        y += 62;
+      } else row = t;
+    }
+    if (row) g.fillText(row, 540, y);
+    g.fillStyle = '#b4632f';
+    g.font = 'italic 600 44px Georgia, serif';
+    g.fillText('Para Azul 💙', 540, 870);
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+    if (blob) file = new File([blob], 'para-azul.png', { type: 'image/png' });
+  } catch {
+    file = null;
+  }
+  try {
+    if (file && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], text });
+      return;
+    }
+    if (navigator.share) {
+      await navigator.share({ text });
+      return;
+    }
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copiado: pégaselo a Marc por WhatsApp');
+  } catch {
+    toast(text);
+  }
+}
+
 export function crossword(onSolved: () => void, onBack: () => void, doneLabel = 'Abrir la carta 💌') {
   clearScreens();
   const o = el('div', 'screen crossword-screen');
@@ -1155,6 +1395,9 @@ export function crossword(onSolved: () => void, onBack: () => void, doneLabel = 
       audio.fanfare();
       hidden.classList.add('done');
       finish.hidden = false;
+      share.hidden = false;
+      // (al acabar, un solo «volver»: el del pie sobraba)
+      back.remove();
       toast(CROSSWORD.solved);
     }
   };
@@ -1195,17 +1438,22 @@ export function crossword(onSolved: () => void, onBack: () => void, doneLabel = 
     const k = cellsOf(c).findIndex(([r, col], j) => cells.get(key(r, col))!.val !== c.answer[j]);
     if (k < 0) return;
     pos = k;
+    hints++;
     write(c.answer[k]);
   };
-  const finish = el('button', 'big-btn', doneLabel);
+  let hints = 0;
+  const finish = el('button', 'link-btn', doneLabel === '¡Hecho! 💙' ? 'Volver al mapa' : doneLabel);
   finish.hidden = true;
   finish.onclick = onSolved;
+  const share = el('button', 'big-btn pz-share', '📤 Compartir con Marc');
+  share.hidden = true;
+  share.onclick = () => shareWithMarc('✏️', CROSSWORD.title, `Resuelto: ${CROSSWORD.hidden} 💙 ${hints === 0 ? 'Sin pedir ni una pista.' : `Con ${hints} ${hints === 1 ? 'pista' : 'pistas'}.`}`);
   const tools = el('div', 'cw-tools');
   tools.append(bar, hint);
   card.append(hidden, tools, grid, input, list);
   const back = el('button', 'link-btn', 'Volver');
   back.onclick = onBack;
-  o.append(card, finish, back);
+  o.append(card, share, finish, back);
   root.append(o);
   paint();
 }
@@ -1343,16 +1591,21 @@ export function comicWord(text: string, kind: string) {
 let barkEnd = 0;
 let barkRaf = 0;
 let castChapter = 1;
+/** En el cap. 4: ¿ya ha salido el chat del mote («Porque Gas???»)? Antes de eso siguen siendo Marc y Margaux. */
+let gasNamed = true;
 /** El capítulo que se juega: decide cómo se llaman los dos en pantalla. */
 export function setCastChapter(n: number) {
   castChapter = n;
+  gasNamed = n !== 4;
 }
+/** El cap. 4 lo llama justo después del chat del mote (y al saltar de fase en el modo prueba). */
+export const setGasNamed = (v = true) => void (gasNamed = v);
 /**
- * Hasta el capítulo de las zamburiñas (el 3) son Marc y Margaux; a partir del 4, Gas y Azul. Los textos usan uno u
- * otro nombre según dónde se escribieron: lo que se ve lo decide esto.
+ * Hasta que se descubre el mote, al principio del cap. 4, son Marc y Margaux; desde entonces, Gas y Azul (21 nov).
+ * Los textos usan uno u otro nombre según dónde se escribieron: lo que se ve lo decide esto.
  */
 export function shownName(who: string) {
-  const early = castChapter <= 3;
+  const early = castChapter <= 3 || (castChapter === 4 && !gasNamed);
   if (/^(Azul|Margaux)$/.test(who)) return early ? 'Margaux' : 'Azul';
   if (/^(Gas|Marc)$/.test(who)) return early ? 'Marc' : 'Gas';
   return who;
@@ -1460,14 +1713,14 @@ export function keepsakePop(k: Keepsake, found: number, total: number) {
   // Un aviso pequeño arriba (se está jugando, a veces conduciendo): la foto entera se ve luego en el álbum
   const o = el('div', 'kp-pop');
   let thumb: HTMLElement;
-  if (k.src && !k.chat) {
+  if (k.src) {
     const img = el('img', 'kp-thumb') as HTMLImageElement;
     img.src = k.src;
     img.alt = '';
     thumb = img;
-  } else thumb = el('div', 'kp-thumb', k.chat ? '💬' : '📷');
+  } else thumb = el('div', 'kp-thumb', '📷');
   const txt = el('div', 'kp-text');
-  txt.append(el('b', '', `✨ Recuerdo escondido ${found}/${total} · al álbum`), el('span', '', k.caption));
+  txt.append(el('b', '', `📷 Foto escondida ${found}/${total} · al álbum`), el('span', '', k.caption));
   o.append(thumb, txt);
   root.append(o);
   setTimeout(() => o.classList.add('out'), 3600);
@@ -1832,7 +2085,8 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   ph.append(chat);
   const skip = el('button', 'phone-skip', 'Saltar ⏭');
   const hint = el('div', 'phone-hint', 'Toca para seguir');
-  o.append(ph, hint, skip);
+  // «Saltar» solo en el modo prueba: Azul lee los chats enteros (21 nov)
+  o.append(ph, hint, ...(testMode ? [skip] : []));
   root.append(o);
   type Item = { kind: 'date'; text: string } | { kind: 'msg'; me: boolean; t: string; text: string; first: boolean };
   const items: Item[] = [];
@@ -2032,7 +2286,7 @@ export interface Hud {
 export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrastra a la izquierda para andar · a la derecha para girar la cámara', mission = false): Hud {
   const top = el('div', 'hud-top' + (mission ? ' m-hud' : ''));
   const obj = el('div', 'objective');
-  const arrow = el('span', 'arrow', '⬆');
+  const arrow = el('span', 'arrow', '✦');
   const objText = el('span', 'obj-text');
   obj.append(arrow, objText);
   let objTimer = 0;
@@ -2181,11 +2435,10 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       };
       textTimer = window.setTimeout(reveal, TEXT_AFTER);
     },
-    setArrow: (a) => {
-      // Sin dirección, la estrella; con dirección (perdida o tras pedir pista), la flecha que apunta
-      const glyph = a === null ? '✦' : '⬆';
-      if (arrow.textContent !== glyph) arrow.textContent = glyph;
-      arrow.style.transform = a === null ? '' : `rotate(${a}rad)`;
+    setArrow: () => {
+      // Siempre la estrella: Marc quitó la flecha que señalaba adónde ir o con quién hablar (21 nov), que lo descubra ella
+      if (arrow.textContent !== '✦') arrow.textContent = '✦';
+      arrow.style.transform = '';
     },
     setCounters: (h) => {
       if (counters.innerHTML !== h) counters.innerHTML = h;

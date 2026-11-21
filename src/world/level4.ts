@@ -1,8 +1,9 @@
+import { cinema } from '../core/cinema';
 import * as THREE from 'three';
 import { faceTo } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Walker, type Circle } from '../core/walker';
+import { Walker, WALK_SPEED, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicStarTexture, comicBulbTexture } from '../core/comicTiles';
 import { NIGHT, FAIL, type Line } from '../data/story';
@@ -97,7 +98,7 @@ const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se encie
 const MP_CALLS = 7;
 const MP = {
   start: () => txt<string>('mpStart', '¿Jugamos a Marco Polo? Flojito, que duermen… 🤫'),
-  rules: () => txt<string>('mpRules', '🙈 Marco Polo: cuando Gas diga «Marco», contesta «Polo» y escápate. Nada a ratos: si chapoteas sin parar, te oye'),
+  rules: () => txt<string>('mpRules', '🙈 Marco Polo: cuando Marc diga «Marco», contesta «Polo» y escápate. Nada a ratos: si chapoteas sin parar, te oye'),
   marco: () => txt<string>('mpMarco', '¡Marco!'),
   polo: () => txt<string>('mpPolo', 'Polo…'),
   noAnswer: () => txt<string>('mpNoAnswer', '¡Eh, tramposa! Que hay que contestar 😜'),
@@ -185,6 +186,14 @@ export class Level4 implements Level {
   /** En el jardín: el susto de la luz a medio camino (sin que haya hecho ruido). */
   private sneakFreezeT = 0;
   private sneakFreezeDone = false;
+  /**
+   * La luz de los padres durante todo el capítulo (21 nov: Marc lo quería mucho más difícil y en todas partes, no un
+   * solo susto): de camino a la piscina, nadando y yendo a las toallas se enciende cuando quiere; hay un instante para
+   * pararse y, si se mueve con la luz encendida, el ruido sube muy deprisa.
+   */
+  private lampT = 4.5;
+  private lampOn = 0;
+  private lampAge = 0;
   /** Las toallas: dobladas en la mesa de la terraza; se cogen y, al desnudarse, quedan en el césped. */
   private towelsTaken = false;
   private towelNag = false;
@@ -367,7 +376,7 @@ export class Level4 implements Level {
         }),
       );
     }, 2300);
-    audio.startMusic('night');
+    // (sin música sintetizada: solo la canción del capítulo, James Blunt)
   }
 
   get threeScene() {
@@ -849,7 +858,7 @@ export class Level4 implements Level {
   private updateHud() {
     const h = this.hud;
     let chips = '';
-    if (this.phase === 'toPool') {
+    if (this.phase === 'toPool' || this.phase === 'toTowels' || (this.phase === 'swim' && !this.mp)) {
       const n = Math.min(6, Math.round(this.noise * 6));
       const seg = (on: boolean, i: number) =>
         `<i style="display:inline-block;width:7px;height:14px;margin-left:2px;border-radius:2px;vertical-align:-2px;background:${on ? (i >= 4 ? '#ff6b6b' : '#ffd166') : 'rgba(255,255,255,.25)'}"></i>`;
@@ -868,7 +877,7 @@ export class Level4 implements Level {
         h.setObjective('🤫');
         break;
       case 'toPool':
-        h.setObjective('🤫 Que no se despierten');
+        h.setObjective(this.lampOn > 0 || this.sneakFreezeT > 0 ? '💡 ¡Quieta!' : '🤫 Que no se despierten');
         break;
       case 'hug':
         h.setObjective('🫂');
@@ -879,13 +888,13 @@ export class Level4 implements Level {
             ? this.mp.ask > 0
               ? '🗣️ ¡Polo!'
               : `🙈 Marco Polo ${this.mp.calls}/${MP_CALLS}`
-            : this.freezeT > 0
+            : this.freezeT > 0 || this.lampOn > 0
               ? '💡 ¡Quieta!'
               : '💙',
         );
         break;
       case 'toTowels':
-        h.setObjective('💙');
+        h.setObjective(this.lampOn > 0 ? '💡 ¡Quieta!' : '🤫 A las toallas');
         break;
       case 'love':
         h.setObjective('💙');
@@ -950,7 +959,7 @@ export class Level4 implements Level {
       // En el jardín se puede ir rápido, pero hace ruido; de puntillas, con el joystick poco empujado o con
       // Mayúsculas en el teclado. Con la luz encendida, quieta
       const tiptoe = this.phase === 'toPool' && (this.input.held('ShiftLeft') || this.input.held('ShiftRight'));
-      this.walker.speed = swimming ? 1.5 + 0.8 * Math.max(0, Math.sin(stroke?.ph ?? 0)) : tiptoe ? 1.9 : 5.0;
+      this.walker.speed = swimming ? 1.5 + 0.8 * Math.max(0, Math.sin(stroke?.ph ?? 0)) : tiptoe ? 1.9 : WALK_SPEED * 1.15;
       this.walker.traction = swimming ? 0.28 : 1;
       this.solids.length = 0;
       if (this.phase !== 'toTowels') this.solids.push({ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 });
@@ -979,7 +988,9 @@ export class Level4 implements Level {
     if (this.phase === 'atBar') this.updatePickup(dt);
     // (en cuanto se llega a donde marcaba la columna de luz: si no, se quedaba una parada delante del pasillo sin que pasara nada)
     if (this.phase === 'arrive' && !this.busy && pp.x < CORRIDOR.maxX + 0.1 && pp.z > -15.7) this.enterCorridor();
-    if (this.phase === 'toPool' && !this.busy) this.updateSneak(dt);
+    if ((this.phase === 'toPool' || this.phase === 'toTowels') && !this.busy) this.updateSneak(dt);
+    // (nadando también, salvo mientras se juega a Marco Polo)
+    if (this.phase === 'swim' && swimming && !this.busy && !this.mp) this.updateSneak(dt, true);
     // Al borde de la piscina sin las toallas: Gas se lo recuerda (una vez cada vez que llega)
     if (this.phase === 'toPool' && !this.towelsTaken) {
       const near = this.nearPoolEdge();
@@ -992,7 +1003,6 @@ export class Level4 implements Level {
     if (this.phase === 'swim' && swimming && !this.busy && !this.swimOut) {
       if (this.freezeT > 0) {
         this.freezeT -= dt;
-        this.winMat.color.lerp(this.winTarget.setRGB(1, 0.86, 0.6), Math.min(1, dt * 6));
         if (this.swimMove > 0.12 && !this.frozeMoved) {
           this.frozeMoved = true;
           this.caught++;
@@ -1005,10 +1015,7 @@ export class Level4 implements Level {
           bark('Gas', NIGHT.freezeOff);
           this.updateHud();
         }
-      } else {
-        this.winMat.color.lerp(this.winTarget.setRGB(0.105, 0.13, 0.21), Math.min(1, dt * 6));
-        this.swimT += dt;
-      }
+      } else if (this.lampOn <= 0) this.swimT += dt;
       if (!this.freezeDone && this.swimT > 4.5) {
         this.freezeDone = true;
         this.freezeT = 4.2;
@@ -1021,7 +1028,7 @@ export class Level4 implements Level {
       }
       // Pasada la luz de los padres, a jugar a Marco Polo; al acabar, a la escalera
       if (this.mp) this.updateMarcoPolo(dt);
-      else if (!this.mpDone && this.freezeDone && this.freezeT <= 0 && this.swimT > 8) this.startMarcoPolo();
+      else if (!this.mpDone && this.freezeDone && this.freezeT <= 0 && this.lampOn <= 0 && this.swimT > 8) this.startMarcoPolo();
     }
 
     // Acción contextual
@@ -1055,7 +1062,7 @@ export class Level4 implements Level {
     // Pistas, solo si se ha perdido: la flecha, la columna de luz y la del HUD salen a los 40 s sin avanzar
     const key = `${this.phase}|${this.pickedUp}|${this.saidBye}|${this.towelsTaken}|${this.swimOut}|${this.gasPlan}`;
     const tgt = this.lost.tick(key, dt, this.busy) ? this.target() : null;
-    this.marker.visible = !!tgt && !this.busy;
+    this.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     if (tgt) {
       this.marker.position.set(tgt.x, 2.4 + Math.sin(this.t * 3) * 0.15, tgt.z);
       this.marker.rotation.y += dt * 2;
@@ -1240,14 +1247,14 @@ export class Level4 implements Level {
     } else if (this.phase === 'swim') {
       // Gas nada en círculos lentos por la piscina
       // (con la luz encendida, él también se queda quieto)
-      if (this.freezeT <= 0) this.gasSwim += dt;
+      if (this.freezeT <= 0 && this.lampOn <= 0) this.gasSwim += dt;
       const a = this.gasSwim * 0.3;
       const x = Math.cos(a) * 2.6;
       const z = 7.6 + Math.sin(a) * 1.1;
       // Flota: sube y baja con cada brazada y se balancea un poco
       g.root.position.set(x, g.root.position.y, z);
       g.root.rotation.y = Math.atan2(-Math.sin(a) * 2.6, Math.cos(a) * 1.1);
-      this.swimPose(g, this.freezeT > 0 ? 0 : 0.6, dt);
+      this.swimPose(g, this.freezeT > 0 || this.lampOn > 0 ? 0 : 0.6, dt);
     } else if (this.phase === 'toTowels') {
       // Te sigue a pie
       const pp = this.player.root.position;
@@ -1291,41 +1298,70 @@ export class Level4 implements Level {
     return STONES.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 0.4);
   }
 
-  /** Sigilo: la grava cruje, correr retumba, y si el ruido sube se encienden las ventanas de los padres. */
-  private updateSneak(dt: number) {
+  /**
+   * Sigilo: la grava cruje, correr retumba, y si el ruido sube se encienden las ventanas de los padres. Además, la luz
+   * se enciende sola de vez en cuando (en tierra y en el agua): con ella encendida, quieta.
+   */
+  private updateSneak(dt: number, swimming = false) {
     const p = this.player.root.position;
     const sp = Math.min(this.walker.speed, this.walker.currentSpeed);
-    const gravel = p.x > GRAVEL.minX && p.x < GRAVEL.maxX && p.z > GRAVEL.minZ && p.z < GRAVEL.maxZ && !this.onStone(p.x, p.z);
-    // La grava cruje (y más cuanto más deprisa); en las losas, solo correr hace ruido, y se va acumulando
-    if (gravel && sp > 0.3) this.noise += dt * (0.25 + sp * 0.2);
-    else this.noise += dt * Math.max(0, sp - 2.6) * 0.14;
+    const gravel = !swimming && p.x > GRAVEL.minX && p.x < GRAVEL.maxX && p.z > GRAVEL.minZ && p.z < GRAVEL.maxZ && !this.onStone(p.x, p.z);
+    if (!swimming) {
+      // La grava cruje (y más cuanto más deprisa); en las losas, solo correr hace ruido, y se va acumulando
+      if (gravel && sp > 0.3) this.noise += dt * (0.36 + sp * 0.28);
+      else this.noise += dt * Math.max(0, sp - 2.0) * 0.24;
+    }
     // A medio camino, una luz arriba (sin haber hecho nada): quieta hasta que se apague; moverse ahí es ruido
-    if (!this.sneakFreezeDone && p.z > -3.5) {
+    if (this.phase === 'toPool' && !this.sneakFreezeDone && p.z > -3.5) {
       this.sneakFreezeDone = true;
       this.sneakFreezeT = 3.8;
+      this.lampT = Math.max(this.lampT, 6);
       bark('Gas', NIGHT.sneakLight);
       comicWord('¡LUZ!', 'hit');
       audio.warn();
       vibrate([30, 30, 30]);
     }
+    const moving = swimming ? this.swimMove > 0.12 : this.walker.currentSpeed > 0.35;
     if (this.sneakFreezeT > 0) {
       this.sneakFreezeT -= dt;
-      // (casi un segundo para reaccionar y pararse; después, moverse se oye)
-      if (this.sneakFreezeT < 3.0 && this.walker.currentSpeed > 0.4) this.noise += dt * 0.6;
+      // (medio segundo para reaccionar y pararse; después, moverse se oye)
+      if (this.sneakFreezeT < 3.3 && moving) this.noise += dt * 1.6;
       if (this.sneakFreezeT <= 0) bark('Gas', NIGHT.sneakLightOff);
     }
-    this.noise = Math.max(0, this.noise - dt * 0.16);
+    // La luz que se enciende sola, a ratos
+    if (this.sneakFreezeT <= 0 && this.freezeT <= 0) {
+      if (this.lampOn > 0) {
+        this.lampOn -= dt;
+        this.lampAge += dt;
+        if (this.lampAge > 0.5 && moving) this.noise += dt * 1.7;
+        if (this.lampOn <= 0) {
+          this.lampT = 5 + Math.random() * 5;
+          bark('Gas', NIGHT.sneakLightOff);
+          this.updateHud();
+        }
+      } else if ((this.lampT -= dt) <= 0) {
+        this.lampOn = 2.2 + Math.random() * 1.8;
+        this.lampAge = 0;
+        bark('Gas', swimming ? NIGHT.freeze : NIGHT.sneakLight);
+        comicWord('¡LUZ!', 'hit');
+        audio.warn();
+        vibrate([30, 30, 30]);
+        this.updateHud();
+      }
+    } else if (this.freezeT > 0 && moving) this.noise += dt * 1.2;
+    this.noise = Math.max(0, this.noise - dt * 0.12);
     // Cada pisada en la grava, un crujido
     const step = Math.floor(this.walker.walk / Math.PI);
     if (step !== this.lastStep) {
       this.lastStep = step;
       if (gravel) audio.knock(0.25 + sp * 0.06, 2600 + Math.random() * 900, 0.05);
     }
-    if (this.noise > 0.35 && Math.random() < dt * 1.5) this.fx.burst(this.v1.copy(this.gas.root.position).setY(2.3), '🤫', 1, 0.5, 0.6);
-    const on = this.noise > NOISE_LIGHT || this.sneakFreezeT > 0;
+    if (this.noise > 0.35 && Math.random() < dt * 1.5) this.fx.burst(this.v1.copy(this.gas.root.position).setY(swimming ? WATER_Y + 1.2 : 2.3), '🤫', 1, 0.5, 0.6);
+    const lit = this.sneakFreezeT > 0 || this.lampOn > 0 || this.freezeT > 0;
+    const on = this.noise > NOISE_LIGHT || lit;
     if (on !== this.lightOn) {
       this.lightOn = on;
-      if (on && this.sneakFreezeT <= 0) {
+      if (on && !lit) {
         bark('Gas', NIGHT.sneakLight);
         comicWord('¡LUZ!', 'hit');
         audio.warn();
@@ -1345,12 +1381,28 @@ export class Level4 implements Level {
     this.hud.setAction(null);
     audio.hit();
     vibrate(60);
+    const where = this.phase;
     dialogue(T_CAUGHT(), () => {
       fadeFlash(() => {
         this.noise = 0;
         this.lightOn = false;
-        this.player.root.position.set(-5.45, 0, -1.2);
-        this.walker.yaw = this.walker.facing = 0;
+        this.lampOn = 0;
+        this.lampT = 5 + Math.random() * 3;
+        this.sneakFreezeT = 0;
+        if (where === 'swim') {
+          // Otra vez desde el principio del baño: cada uno a su lado de la piscina
+          this.player.root.position.set(-1.6, this.player.root.position.y, 7.9);
+          this.gas.root.position.set(1.8, this.gas.root.position.y, 7.6);
+          this.freezeT = 0;
+          this.swimT = 0;
+        } else if (where === 'toTowels') {
+          // Otra vez desde la escalera de la piscina
+          this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
+          this.walker.yaw = this.walker.facing = Math.PI;
+        } else {
+          this.player.root.position.set(-5.45, 0, -1.2);
+          this.walker.yaw = this.walker.facing = 0;
+        }
         this.walker.stop();
         this.busy = false;
         this.updateHud();
@@ -1519,11 +1571,24 @@ export class Level4 implements Level {
       this.walker.stop();
       this.input.reset();
       this.hud.setAction(null);
-      this.carT = 0.001;
       phoneChat(CHATS.pins, () => {
-        this.pickedUp = true;
-        this.busy = false;
-        this.updateHud();
+        // Al acabar el chat, en plano de cine: el coche azul llega por la calle hasta Pins (21 nov)
+        this.carT = 0.001;
+        const carAt = new THREE.Vector3();
+        const look = () => carAt.copy(this.car.root.position).setY(0.95);
+        cinema.play(
+          [
+            // (por encima del hombro de Azul, en la acera: el coche aparece al fondo de la calle)
+            { dur: 2.6, pos: new THREE.Vector3(PINS.x + 1.3, 1.55, PINS.z + 0.7), pos2: new THREE.Vector3(PINS.x + 1.0, 1.6, PINS.z + 0.9), look, fov: 30, fov2: 34, focus: look },
+            // (desde la acera, delante de ella: el coche llega y para a su lado)
+            { dur: 2.8, pos: new THREE.Vector3(PINS.x + 5.2, 1.45, PINS.z + 0.6), pos2: new THREE.Vector3(PINS.x + 4.4, 1.5, PINS.z + 0.8), look: () => carAt.set(PINS.x + 0.3, 1.1, (STREET.laneZ + PINS.z * 2) / 3), fov: 46, fov2: 42, focus: look },
+          ],
+          () => {
+            this.pickedUp = true;
+            this.busy = false;
+            this.updateHud();
+          },
+        );
       });
     }
     if (this.carT > 0 && this.carT < 5) {
@@ -1578,6 +1643,21 @@ export class Level4 implements Level {
     this.walker.stop();
     this.input.reset();
     this.updateHud();
+    // El abrazo en el agua, como escena de cine (21 nov): un plano abierto a ras de agua y otro cerrado que gira
+    const p = this.player.root.position;
+    const yaw = this.walker.facing;
+    const mid = new THREE.Vector3();
+    const look = () => mid.set((p.x + this.gas.root.position.x) / 2, 0.18, (p.z + this.gas.root.position.z) / 2);
+    const side = (ang: number, d: number, y: number) => {
+      const c = look();
+      return new THREE.Vector3(c.x + Math.sin(yaw + ang) * d, y, c.z + Math.cos(yaw + ang) * d);
+    };
+    // (dentro de la piscina, que la cámara no atraviese la pared)
+    const inPool = (v: THREE.Vector3) => v.set(THREE.MathUtils.clamp(v.x, POOL.minX - 1.6, POOL.maxX + 1.6), v.y, THREE.MathUtils.clamp(v.z, POOL.minZ - 1.6, POOL.maxZ + 1.6));
+    cinema.play([
+      { dur: 1.9, pos: inPool(side(Math.PI / 2, 3.4, 0.25)), pos2: inPool(side(Math.PI / 2 + 0.25, 2.6, 0.32)), look, fov: 44, fov2: 40, focus: look },
+      { dur: 3.4, pos: inPool(side(-Math.PI / 2 - 0.5, 1.9, 0.55)), pos2: inPool(side(-Math.PI / 2 + 0.35, 1.7, 0.42)), look, fov: 34, fov2: 30, focus: look },
+    ]);
   }
 
   private updateHug(dt: number) {
@@ -1605,6 +1685,7 @@ export class Level4 implements Level {
     if (close) this.hugE ??= embrace(this.player, this.gas, 'hug');
     if (this.hugE) this.hugE.k = THREE.MathUtils.clamp(this.hugE.k + dt * (this.hugT < 4.3 ? 1.2 : -1.6), 0, 1);
     if (this.hugT > 5) {
+      cinema.stop();
       this.hugE?.stop();
       this.hugE = null;
       // Al soltarse, quieta y mirando hacia donde miraba en el abrazo: antes salía disparada hasta el fondo de la

@@ -17,7 +17,7 @@ import { Laurel } from './laurel';
 import { SIDE } from '../data/story';
 import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
-import { cinema, cineTitle, headOf, rel } from '../core/cinema';
+import { cinema, headOf, rel } from '../core/cinema';
 import { Surf, setSurface } from '../core/surfaces';
 
 // La plancha y su carro son de acero (sin esto, el gris se dibujaba como losas de piedra)
@@ -39,7 +39,12 @@ type Region = 'madrid' | 'meseta' | 'cantabria' | 'rioja';
 const LANES = [-2.6, 0, 2.6];
 const LEG1 = 1500; // metros hasta San Vicente
 const LEG2 = 650; // metros de San Vicente a Logroño
-const MAX_SPEED = 26;
+/**
+ * Fotos mínimas de cada tramo (21 nov): Madrid → Marcial, Marcial → el camping y San Vicente → Logroño. Si al llegar
+ * no las tiene, o si se pasa de Marcial o de la gasolinera, o choca con una vaca o con el tráfico, repite el tramo.
+ */
+const TRAMO_NEED = { marcial: 12, camp: 6, sv: 0, logrono: 9 } as const;
+const MAX_SPEED = 21; // (21 nov: algo más lento; antes 26)
 const NEED_ZAMB = 8;
 
 const REGION_STYLE: Record<Region, { ground: number; fog: number; sky: number; top: number }> = {
@@ -194,7 +199,6 @@ export class Level2 implements Level {
   private campDone = false;
   private campHintT = 0;
   /** El último punto bueno del viaje (la salida, la última vaca saludada, el camping): si se pasa de largo, se vuelve ahí. */
-  private checkpoint = 0;
   /** La charla del gas (bocadillos mientras se conduce), la parada en la gasolinera y Gas a pie hasta la tienda. */
   private gasTalkIdx = 0;
   private gasDone = false;
@@ -259,6 +263,11 @@ export class Level2 implements Level {
   private hits = 0;
   /** Choques desde el último punto bueno: al tercero, vuelta atrás. */
   private hitsSinceCp = 0;
+  private fuelWait = 0;
+  /** El tramo de ahora: dónde empieza, cuántas fotos llevaba al empezar y cuántas tiene que coger. */
+  private tramoZ = 0;
+  private tramoBase = 0;
+  private tramoNeed: number = TRAMO_NEED.marcial;
   private burnt = 0;
   private burntRun = 0;
   private nearMisses = 0;
@@ -820,7 +829,8 @@ export class Level2 implements Level {
       const total = this.phase === 'drive1' ? LEG1 : LEG2;
       const left = Math.max(0, Math.round((total - this.dist) / 10));
       h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} · ${left} km`);
-      h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
+      const got = this.photos - this.tramoBase;
+      h.setCounters(this.tramoNeed > 0 ? `<span class="chip${got >= this.tramoNeed ? ' ok' : ''}">📸 ${Math.max(0, got)}/${this.tramoNeed}</span>` : `<span class="chip">📸 ${this.photos}</span>`);
     } else if (this.phase === 'terrace') {
       this.showLaneButtons(false);
       h.setObjective('🐚');
@@ -1016,7 +1026,7 @@ export class Level2 implements Level {
     this.turboT -= dt;
     const turbo = drive && this.turboT > 0 && this.hitT <= 0;
     // (volviendo al último punto bueno: frena en seco, antes de llegar a la vaca)
-    const target = this.phase === 'fuel' ? Math.max(0, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : this.phase === 'marcial' ? Math.max(0, Math.min(11, (MARCIAL_Z - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    const target = this.phase === 'fuel' ? Math.max(-4, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : this.phase === 'marcial' ? Math.max(0, Math.min(11, (MARCIAL_Z - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
     this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : this.phase === 'cow' ? 6 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
@@ -1179,7 +1189,7 @@ export class Level2 implements Level {
           this.fx.burst(at, '💥', 4, 1.6);
           comicWord(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)], 'hit');
           this.hitsSinceCp++;
-          if (this.hitsSinceCp >= 3 && !this.rewinding) this.rewind(FAIL.crashes);
+          if (this.hitsSinceCp >= 2 && !this.rewinding) this.rewind(FAIL.crashes);
           else if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'l'), 500);
         }
         this.updateHud();
@@ -1203,13 +1213,13 @@ export class Level2 implements Level {
 
     // Llegadas
     if (this.phase === 'drive1' && this.dist >= LEG1 - 25) this.arriveSV();
-    if (this.phase === 'drive2' && this.dist >= LEG2) this.arriveLogrono();
+    if (this.phase === 'drive2' && this.dist >= LEG2 && !this.rewinding && this.tramoOk()) this.arriveLogrono();
     if (drive && Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
 
     if (this.phase === 'drive1' && !this.marcialDone) this.updateEateries(acted);
     if (this.phase === 'drive1' && this.marcialDone && !this.gasDone) this.updateGasStop(acted);
     if (this.phase === 'fuel') this.updateFuel(dt);
-    if (this.phase === 'drive1' && this.gasDone && !this.campDone && this.carZ >= CAMP_Z) this.arriveCamp();
+    if (this.phase === 'drive1' && this.gasDone && !this.campDone && this.carZ >= CAMP_Z && !this.rewinding && this.tramoOk()) this.arriveCamp();
     this.updateCows(dt, acted);
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
     this.updateRoute();
@@ -1248,9 +1258,9 @@ export class Level2 implements Level {
     later(() => this.phase === 'grill' && bark(this.him(), ROAD.zamb.rule), 700);
   }
 
-  /** Antes de la noche del camping todavía es Marc; desde entonces, Gas. */
+  /** En todo el cap. 3 es Marc: el mote se descubre al principio del cap. 4 (21 nov). */
   private him() {
-    return this.campDone ? 'Gas' : 'Marc';
+    return 'Marc';
   }
 
   /** De dónde salen los bocadillos en el coche: ella conduce (asiento izquierdo) y él va al lado. */
@@ -1330,7 +1340,7 @@ export class Level2 implements Level {
     this.phase = 'drive2';
     // La cámara salta detrás del coche (si no, vuela cientos de metros desde la terraza)
     this.camera.position.set(0, 4.6, this.carZ - 8.5);
-    this.updateHud();
+    this.startTramo(this.legStart, TRAMO_NEED.logrono);
   }
 
   /** Logroño al final: el Ebro con el Puente de Piedra, el casco viejo y las dos torres barrocas de La Redonda. */
@@ -1395,10 +1405,19 @@ export class Level2 implements Level {
     bark(this.him(), line, 'l');
     later(() =>
       fadeFlash(() => {
-        const cp = Math.max(this.checkpoint, this.phase === 'drive2' ? this.legStart : 0);
+        // Al principio del tramo, con las fotos que tenía entonces (las vacas, la gasolinera y Marcial, otra vez)
+        const cp = Math.max(this.tramoZ, this.phase === 'drive2' ? this.legStart : 0);
+        this.photos = this.tramoBase;
+        this.combo = 0;
         // (los restaurantes de después vuelven a contar)
         for (const e of EATERIES) if (e.z > cp) this.eateryTried.delete(e.name);
+        if (cp < GAS_Z && this.gasDone) {
+          this.gasDone = false;
+          this.gasTalkIdx = 0;
+        }
         this.dropCow();
+        const ci = COW_Z.findIndex((c) => c >= cp + COW_BRAKE);
+        this.cowIdx = ci < 0 ? COW_Z.length : ci;
         this.reset(cp);
         this.hitsSinceCp = 0;
         this.speed = 0;
@@ -1413,7 +1432,6 @@ export class Level2 implements Level {
   }
 
   private stopForCow() {
-    this.checkpoint = COW_Z[this.cowIdx] ?? this.carZ; this.hitsSinceCp = 0;
     this.cowFrom = this.phase;
     this.phase = 'cow';
     this.lane = 1;
@@ -1504,7 +1522,6 @@ export class Level2 implements Level {
   /** La estufa de pellets: humo, mucho humo, y no se cocina. De ahí el nombre. A la mañana siguiente, carretera. */
   private campPellet() {
     const c = this.camp!;
-    const [, noGas] = ROAD.camp;
     this.busy = true;
     this.input.reset();
     this.hud.setAction(null);
@@ -1514,46 +1531,95 @@ export class Level2 implements Level {
     c.standAtPellet();
     const look = c.pellet.clone().setY(1.15);
     cinema.play([{ dur: Infinity, move: 5, pos: new THREE.Vector3(-1.9, 1.8, -0.4), pos2: new THREE.Vector3(-2.3, 1.7, 0.2), look, fov: 50, focus: look }]);
-    dialogue(ROAD.pelletTry, () => {
-      c.smoke(6);
-      audio.warn();
-      later(() =>
-        dialogue(ROAD.pelletFail, () =>
-          fadeFlash(() => {
-            c.sitDown();
-            const mid = () => c.table.clone().setY(1.05);
-            // Los dos, frente a frente, sin cena
-            cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
-            later(() =>
-              dialogue([noGas], () => {
-                audio.fanfare();
-                // Lo que le escribió ella después: «por nuestro intento fallido de camping gas»
-                cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-                later(
-                  () =>
-                    dialogue(ROAD.campAfter, () =>
-                      fadeFlash(() => {
-                        cinema.stop();
-                        audio.stopMusic();
-                        audio.startMusic('road');
-                        this.route.style.display = '';
-                        this.busy = false;
-                        this.speed = 0;
-                        this.phase = 'drive1';
-                        this.checkpoint = this.carZ; this.hitsSinceCp = 0;
-                        this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
-                        this.nextSpawn = this.carZ + 60;
-                        this.updateHud();
-                      }, 500),
-                    ),
-                  3800,
-                );
-              }),
-            900);
-          }, 500),
-        ),
-      2600);
-    });
+    // (21 nov) Mientras el pollo se hace: ¿y el abridor? En el coche. Un paseo por fuera y vino en el sofá
+    dialogue(ROAD.pelletTry, () =>
+      dialogue(ROAD.wineAsk, () =>
+        fadeFlash(() => {
+          cinema.stop();
+          const stay = new THREE.Vector3(c.pellet.x + 0.35, 0, c.pellet.z - 1.05);
+          c.onSearched = (k) => (k === 'abridor' ? this.campOpener(stay) : this.campSofa());
+          c.startSearch('abridor', { x: c.pellet.x + 1.05, z: c.pellet.z - 0.15, yaw: Math.PI }, stay);
+          this.campHintT = 0;
+          this.input.reset();
+          this.hud.setObjective('🍷');
+          this.busy = false;
+        }, 400),
+      ),
+    );
+  }
+
+  /** El abridor, en la guantera: de vuelta a la cabaña, al sofá. */
+  private campOpener(stay: THREE.Vector3) {
+    const c = this.camp!;
+    audio.pickup();
+    bark('Margaux', ROAD.wineFound);
+    c.startSearch('sofa', undefined, stay);
+    this.campHintT = 0;
+    this.hud.setObjective('🛋️');
+  }
+
+  /** En el sofá, con el vino, mientras el pollo se hace en la estufa… hasta que sale el humo. */
+  private campSofa() {
+    const c = this.camp!;
+    this.busy = true;
+    this.input.reset();
+    this.hud.setAction(null);
+    this.hud.setObjective('');
+    fadeFlash(() => {
+      c.sitOnSofa();
+      const mid = new THREE.Vector3(-4.6, 0.95, -1.0);
+      cinema.play([
+        // (desde el otro lado del salón: en vertical, si no, solo cabía uno)
+        { dur: 4.5, pos: new THREE.Vector3(-0.6, 1.45, -1.25), pos2: new THREE.Vector3(-1.1, 1.4, -1.05), look: mid, fov: 52, focus: mid },
+        // (un poco más cerca y de lado: brindan)
+        { dur: Infinity, move: 6, pos: new THREE.Vector3(-1.4, 1.3, 0.6), pos2: new THREE.Vector3(-1.8, 1.25, 0.2), look: mid, fov: 50, focus: mid },
+      ]);
+      later(() => dialogue(ROAD.wineSofa, () => this.campSmoke()), 900);
+    }, 500);
+  }
+
+  /** La estufa de pellets: humo, mucho humo, y no se cocina. A la mañana siguiente, carretera. */
+  private campSmoke() {
+    const c = this.camp!;
+    const [, noGas] = ROAD.camp;
+    const look = c.pellet.clone().setY(1.15);
+    cinema.play([{ dur: Infinity, move: 5, pos: new THREE.Vector3(-2.4, 1.45, -1.4), pos2: new THREE.Vector3(-2.7, 1.5, -0.6), look, fov: 50, focus: look }]);
+    c.smoke(6);
+    audio.warn();
+    later(() =>
+      dialogue(ROAD.pelletFail, () =>
+        fadeFlash(() => {
+          c.sitDown();
+          const mid = () => c.table.clone().setY(1.05);
+          // Los dos, frente a frente, sin cena
+          cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
+          later(() =>
+            dialogue([noGas], () => {
+              // (el rótulo «GAS» ya no sale aquí: el mote se descubre al empezar el cap. 4)
+              later(
+                () =>
+                  dialogue(ROAD.campAfter, () =>
+                    fadeFlash(() => {
+                      cinema.stop();
+                      audio.stopMusic();
+                      audio.startMusic('road');
+                      this.route.style.display = '';
+                      this.busy = false;
+                      this.speed = 0;
+                      this.phase = 'drive1';
+                      this.startTramo(this.carZ, TRAMO_NEED.sv);
+                      this.camera.position.set(this.carX * 0.5, 4.6, this.carZ - 8.5);
+                      this.nextSpawn = this.carZ + 60;
+                      this.updateHud();
+                    }, 500),
+                  ),
+                600,
+              );
+            }),
+          900);
+        }, 500),
+      ),
+    2600);
   }
 
   /** Logroño, de fiesta. Y al acabar, la vuelta en tren y el nombre: los chats de esos días. */
@@ -1582,8 +1648,12 @@ export class Level2 implements Level {
           dialogue(ROAD.arriveLogrono, () => {
             // Antes de bailar, una ronda en la barra: sin servirla bien no se sigue
             cinema.stop();
-            // (desde más arriba: más abajo, el frente de la barra tapaba media pantalla)
-            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 2.15, -17.3), look: new THREE.Vector3(0, 1.35, -19.9), fov: 50 }]);
+            // (desde más arriba: más abajo, el frente de la barra tapaba media pantalla). En vertical, más lejos y más
+            // abierto, para que quepan los cinco pinchos: antes en el móvil solo se veían el camarero y tres platos
+            const aspect = this.camera.aspect;
+            const fov = aspect < 1 ? 60 : 50;
+            const dist = Math.max(2.6, 1.3 / (Math.tan(THREE.MathUtils.degToRad(fov / 2)) * aspect));
+            cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 1.55 + dist * 0.28, -19.42 + dist), look: new THREE.Vector3(0, 1.25, -19.7), fov }]);
             dialogue(SIDE.pinchos.intro, () =>
               l.startPinchos(() => {
                 cinema.stop();
@@ -1592,8 +1662,8 @@ export class Level2 implements Level {
                   dialogue(ROAD.logronoEnd, () => {
                     cinema.stop();
                     audio.stopMusic();
-                    // Solo el nacimiento del mote: el resto de chats de esos días va al álbum
-                    phoneChat(CHATS.findes, () => dialogue(ROAD.named, () => this.finish()));
+                    // La vuelta a casa; el mote (el chat «Porque Gas???») se descubre al empezar el cap. 4
+                    phoneChat(CHATS.findes, () => this.finish());
                   }),
                 4200);
               }),
@@ -1789,6 +1859,7 @@ export class Level2 implements Level {
   private stopFuel() {
     this.phase = 'fuel';
     this.fuelT = -1;
+    this.fuelWait = 0;
     this.hud.setAction(null);
     this.showLaneButtons(false);
     this.things.forEach((t) => this.scene.remove(t.obj));
@@ -1804,7 +1875,16 @@ export class Level2 implements Level {
   private updateFuel(dt: number) {
     const parked = Math.abs(GAS_Z + 1 - this.carZ) < 1.2 && this.speed < 0.4 && Math.abs(this.carX + 6.4) < 0.3;
     if (this.fuelT < 0) {
-      if (!parked) return;
+      // (si se paró tarde, recula hasta el surtidor; y si aun así no queda bien aparcado, se coloca: antes se quedaba
+      // ahí para siempre, sin que Gas bajara nunca del coche)
+      this.fuelWait += dt;
+      if (!parked && this.fuelWait > 5) {
+        this.carZ = GAS_Z + 1;
+        this.carX = -6.4;
+        this.carVX = 0;
+        this.speed = 0;
+      }
+      if (!parked && this.fuelWait <= 5) return;
       // Baja Gas por su puerta (la izquierda) y va a la tienda
       this.fuelT = 0;
       if (!this.fuelGas) {
@@ -1851,7 +1931,7 @@ export class Level2 implements Level {
       dialogue(ROAD.gasNone, () => {
         this.busy = false;
         this.gasDone = true;
-        this.checkpoint = GAS_Z + 8; this.hitsSinceCp = 0;
+        this.hitsSinceCp = 0;
         this.phase = 'drive1';
         this.nextSpawn = this.carZ + 60;
         this.updateHud();
@@ -1919,9 +1999,27 @@ export class Level2 implements Level {
     return g;
   }
 
+  /** ¿Lleva las fotos de este tramo? Si no, lo repite (true si puede seguir). */
+  private tramoOk() {
+    const got = this.photos - this.tramoBase;
+    if (got >= this.tramoNeed) return true;
+    this.rewind(ROAD.fewPhotos(got, this.tramoNeed));
+    return false;
+  }
+
+  private startTramo(z: number, need: number) {
+    this.tramoZ = z;
+    this.tramoBase = this.photos;
+    this.tramoNeed = need;
+
+    this.hitsSinceCp = 0;
+    this.updateHud();
+  }
+
   private stopMarcial() {
+    if (!this.tramoOk()) return;
     this.marcialDone = true;
-    this.checkpoint = MARCIAL_Z + 8; this.hitsSinceCp = 0;
+    this.hitsSinceCp = 0;
     this.phase = 'marcial';
     this.hud.setAction(null);
     this.showLaneButtons(false);
@@ -1934,7 +2032,7 @@ export class Level2 implements Level {
         dialogue(ROAD.marcial, () => {
           this.nextSpawn = this.carZ + 70;
           this.phase = 'drive1';
-          this.updateHud();
+          this.startTramo(MARCIAL_Z + 8, TRAMO_NEED.camp);
         }),
       1400,
     );
@@ -2045,6 +2143,9 @@ export class Level2 implements Level {
 
   debug(): DebugItem[] {
     const clean = () => {
+      // (saltando de fase, sin mínimo de fotos en ese tramo; el «1» sí lo pide)
+      this.tramoNeed = 0;
+      this.tramoBase = this.photos;
       for (const sc of this.scatters) sc.mesh.visible = true;
       cinema.stop();
       this.route.style.display = '';
@@ -2061,9 +2162,10 @@ export class Level2 implements Level {
         run: () => {
           clean();
           this.legStart = 0;
-          this.reset(0);
+          this.reset(0); this.tramoZ = this.carZ;
           this.speed = 0;
           this.photos = 0;
+          this.startTramo(0, TRAMO_NEED.marcial);
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -2079,7 +2181,7 @@ export class Level2 implements Level {
           this.gasTalkIdx = 0;
           this.cowIdx = 0;
           this.eateryTried.clear();
-          this.reset(MARCIAL_Z - 120);
+          this.reset(MARCIAL_Z - 120); this.tramoZ = this.carZ;
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -2094,7 +2196,7 @@ export class Level2 implements Level {
           this.gasDone = false;
           this.gasTalkIdx = 0;
           this.cowIdx = 1;
-          this.reset(MARCIAL_Z + 20);
+          this.reset(MARCIAL_Z + 20); this.tramoZ = this.carZ;
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -2109,7 +2211,7 @@ export class Level2 implements Level {
           this.gasDone = true;
           this.gasTalkIdx = 99;
           this.cowIdx = 0;
-          this.reset(CAMP_Z - 60);
+          this.reset(CAMP_Z - 60); this.tramoZ = this.carZ;
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -2122,7 +2224,7 @@ export class Level2 implements Level {
           this.marcialDone = this.campDone = this.gasDone = true;
           this.gasTalkIdx = 99;
           this.cowIdx = 0;
-          this.reset(1000);
+          this.reset(1000); this.tramoZ = this.carZ;
           this.phase = 'drive1';
           this.updateHud();
         },
@@ -2134,7 +2236,7 @@ export class Level2 implements Level {
           this.marcialDone = this.campDone = this.gasDone = true;
           this.gasTalkIdx = 99;
           this.stormSaid = 2;
-          this.reset(LEG1 - 60);
+          this.reset(LEG1 - 60); this.tramoZ = this.carZ;
           this.legStart = 0;
           this.phase = 'drive1';
           this.updateHud();
@@ -2144,7 +2246,7 @@ export class Level2 implements Level {
         label: '4 · Plancha de zamburiñas',
         run: () => {
           clean();
-          this.reset(LEG1 - 25);
+          this.reset(LEG1 - 25); this.tramoZ = this.carZ;
           this.speed = 0;
           this.startGrill();
         },
@@ -2156,7 +2258,7 @@ export class Level2 implements Level {
         run: () => {
           clean();
           this.startDrive2();
-          this.reset(this.legStart + LEG2 - 50);
+          this.reset(this.legStart + LEG2 - 50); this.tramoZ = this.carZ;
           this.camera.position.set(0, 4.6, this.carZ - 8.5);
         },
       },

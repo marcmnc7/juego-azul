@@ -4,7 +4,7 @@ import { Surf } from '../core/surfaces';
 import { steerTo, type SteerState } from '../core/steer';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Walker } from '../core/walker';
+import { Walker, WALK_SPEED } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicBulbTexture } from '../core/comicTiles';
 import { LOOK_LIGHT } from '../core/comic';
@@ -118,12 +118,22 @@ export function stairAt(path: [number, number][], d: number, out: THREE.Vector3)
 }
 
 
-const STOVE = new THREE.Vector3(-3.1, 0, 2.3);
+/**
+ * Dónde se pone a cocinar (21 nov: la cocina de fuera, contra la pared de la izquierda, enfrente de la mesa; antes
+ * estaba en la fachada, la de la puerta de abajo). La encimera queda hacia -x.
+ */
+const STOVE = new THREE.Vector3(-3.65, 0, 1.85);
+/**
+ * Un punto de la cocina en sus medidas de siempre: `along`, a lo largo de la encimera; `toward`, hacia ella si es
+ * negativo (como cuando estaba en la fachada, girado un cuarto de vuelta).
+ */
+const K = (along: number, toward: number, y = 0) => new THREE.Vector3(STOVE.x + toward, y, STOVE.z - along);
 /**
  * La mesa del patio: rectangular, de madera, con el lado largo pegado a la pared de la derecha. Contra la pared, un
  * banco blanco de obra; enfrente, dos sillas. Cenan uno delante del otro, en la mitad de la mesa que da a la casa.
  */
-const TABLE = new THREE.Vector3(3.82, 0, 7.75);
+// (21 nov: debajo de la pérgola de la buganvilla, el toldo de flores; antes casi toda quedaba fuera)
+const TABLE = new THREE.Vector3(3.82, 0, 4.35);
 /** A qué altura de la mesa (z) se sientan los dos: en la silla de delante de la casa y en el banco, enfrente. */
 const SEAT_Z = TABLE.z - 0.48;
 const WATCH = new THREE.Vector3(-2.2, 0, 9.3);
@@ -381,7 +391,7 @@ export class LevelCena implements Level {
     this.place = place;
     this.doors = [place.gate, place.door, place.upDoor];
     this.pan = place.pan;
-    this.pantry = new Pantry(sc, STOVE, TABLE);
+    this.pantry = new Pantry(sc, K(-1.45, 0.75), TABLE);
     for (let i = 0; i < 11; i++) {
       const a = i * 2.4, r = 0.05 + (i % 3) * 0.055;
       const d = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.045), this.foodMat);
@@ -807,12 +817,12 @@ export class LevelCena implements Level {
     this.nata = 0;
     this.setClock(Math.max(this.minutes, T(21, 12)));
     // Azul delante del fuego, Gas mirando junto a la encimera
-    this.player.root.position.set(STOVE.x + 0.2, 0, STOVE.z - 0.1);
-    this.player.root.rotation.y = Math.PI;
+    this.player.root.position.copy(K(0.2, -0.1));
+    this.player.root.rotation.y = -Math.PI / 2;
     this.walker.stop();
-    this.walker.facing = Math.PI;
+    this.walker.facing = -Math.PI / 2;
     // (por el mismo camino de siempre: si aún venía de la cancela, en línea recta cruzaba el escúter)
-    this.gasWalk = [new THREE.Vector3(-1.3, 0, 4.2), new THREE.Vector3(STOVE.x - 1.7, 0, STOVE.z + 0.5)];
+    this.gasWalk = [new THREE.Vector3(-1.3, 0, 4.2), K(-1.7, 0.5)];
     if (this.helmetAt === 'gas') this.dropHelmet();
     this.updateHud();
     const run = () => {
@@ -866,7 +876,8 @@ export class LevelCena implements Level {
   private steamOn(step: number) {
     this.steam.forEach((s, i) => {
       s.visible = true;
-      s.position.set(this.pan.position.x + (step === 1 ? -0.55 : 0) + (i - 1.5) * 0.12, 1.15 + i * 0.3, this.pan.position.z);
+      // (la olla, a un lado de la sartén a lo largo de la encimera)
+      s.position.set(this.pan.position.x, 1.15 + i * 0.3, this.pan.position.z + (step === 1 ? 0.55 : 0) - (i - 1.5) * 0.12);
     });
   }
 
@@ -895,7 +906,7 @@ export class LevelCena implements Level {
       this.gateT = 0;
       this.setClock(T(21, 40));
       // Rodea la mesa por detrás (en línea recta la cruzaba por el medio) y espera de pie junto a su silla
-      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.6), new THREE.Vector3(2.6, 0, 5.9), new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.13)];
+      this.gasWalk = [new THREE.Vector3(0.7, 0, 3.0), new THREE.Vector3(2.2, 0, 2.4), new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.35)];
     }, 1800);
   }
 
@@ -1058,7 +1069,7 @@ export class LevelCena implements Level {
     this.gateT = 0;
     this.setClock(T(22, 48));
     this.gas.root.visible = true;
-    this.gasWalk = [new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.13), new THREE.Vector3(2.6, 0, 5.9), new THREE.Vector3(1.2, 0, 7.4), new THREE.Vector3(1.0, 0, 8.6)];
+    this.gasWalk = [new THREE.Vector3(TABLE.x + 0.63, 0, TABLE.z - 1.35), new THREE.Vector3(2.3, 0, 2.6), new THREE.Vector3(1.0, 0, 5.8), new THREE.Vector3(1.0, 0, 8.6)];
     later(() => this.phase === 'seeOff' && bark('Gas', CENA.helmetAsk), 900);
   }
 
@@ -1425,7 +1436,7 @@ export class LevelCena implements Level {
     if (this.phase === 'alarm') this.updateAlarm();
     this.tableGame?.update(this.camera);
     // Mientras hay susto, corre: el coche no espera
-    this.walker.speed = this.phase === 'alarm' ? 4.5 : 4.0;
+    this.walker.speed = this.phase === 'alarm' ? WALK_SPEED * 1.12 : WALK_SPEED;
     this.walker.turn(this.input.consumeCam());
     if (free) {
       const move = this.walker.move(dt, this.input.axes(), this.colliders, GARDEN, this.gas.root.visible ? [{ x: this.gas.root.position.x, z: this.gas.root.position.z, r: 0.35 }] : []);
@@ -1540,7 +1551,7 @@ export class LevelCena implements Level {
     // Pistas, solo si se ha perdido: la flecha, la columna de luz y el marcador salen a los 40 s sin avanzar
     const key = `${this.phase}|${this.garlandOn}|${this.tidied}|${this.helmetAt}|${this.gasAtGate}|${this.gathering}|${this.pantry.count}`;
     const tgt = this.lost.tick(key, dt, this.busy || !walking) ? this.target() : null;
-    this.marker.visible = !!tgt && free;
+    this.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     if (tgt && free) {
       this.marker.position.set(tgt.x, 2.5 + Math.sin(this.t * 3) * 0.15, tgt.z);
       this.marker.rotation.y += dt * 2;
@@ -1573,10 +1584,10 @@ export class LevelCena implements Level {
       const [pos, look] =
         this.phase === 'cook' && this.cancelGauge
           ? // Mientras cocina: por encima de su hombro derecho, la sartén y el vapor de cerca (lo que hay que mirar)
-            [this.v1.set(STOVE.x + 0.85, 1.85, STOVE.z + 0.75), this.v2.copy(this.pan.getWorldPosition(this.v2)).setY(this.v2.y + 0.05)]
+            [this.v1.copy(K(-0.75, 0.85, 1.85)), this.v2.copy(this.pan.getWorldPosition(this.v2)).setY(this.v2.y + 0.05)]
           : this.phase === 'cook'
           ? // Por delante de la encimera, bajo el toldo y sin la buganvilla del porche en primer plano
-            [this.v1.set(STOVE.x + 1.9, 2.35, STOVE.z + 3.5), this.v2.set(STOVE.x + 0.1, 1.05, STOVE.z - 0.6)]
+            [this.v1.copy(K(-1.9, 3.4, 2.3)), this.v2.copy(K(0.1, -0.6, 1.05))]
           : this.phase === 'dinner'
             ? // Desde el lado de la calle, por dentro del muro: ni el pie de la pérgola ni la buganvilla delante
               [this.v1.set(TABLE.x - 2.6, 2.25, TABLE.z + 1.55), this.v2.set(TABLE.x + 0.15, 0.85, SEAT_Z)]
@@ -1726,7 +1737,7 @@ export class LevelCena implements Level {
         run: () => {
           this.prep('toTable');
           this.switchGarland(false);
-          this.player.root.position.set(STOVE.x + 0.4, 0, STOVE.z + 0.4);
+          this.player.root.position.copy(K(0.4, 0.4));
           this.walker.yaw = -2.2;
           this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.4);
         },
@@ -2095,9 +2106,10 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   for (const [x, y, w, h] of [[UP_DOOR.x - 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x + 0.5, 4.3, 0.1, 2.2], [UP_DOOR.x, 5.45, 1.1, 0.12]] as const)
     m.add(G.box, 0x3a3226, x, y, UP_DOOR.z + 0.03, 0, 0, 0, w, h, 0.08);
   m.add(G.box, 0xd9cfbd, UP_DOOR.x, 3.25, UP_DOOR.z + 0.2, 0, 0, 0, 1.2, 0.06, 0.4);
-  for (let k = 0; k <= 9; k++) m.add(G.box, 0xc8ccd0, 0.8 + k * 0.42, 3.72, 0.16, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
-  m.add(G.box, 0xc8ccd0, 2.69, 4.2, 0.16, 0, 0, 0, 3.82, fat(0.05), fat(0.05));
-  m.add(G.box, 0xc8ccd0, 2.69, 3.6, 0.16, 0, 0, 0, 3.82, fat(0.035), fat(0.035));
+  // (21 nov: la barandilla acaba antes; donde llega la escalera quedaba un hueco de 40 cm y casi no se pasaba)
+  for (let k = 0; k <= 7; k++) m.add(G.box, 0xc8ccd0, 0.8 + k * 0.42, 3.72, 0.16, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
+  m.add(G.box, 0xc8ccd0, 2.27, 4.2, 0.16, 0, 0, 0, 2.98, fat(0.05), fat(0.05));
+  m.add(G.box, 0xc8ccd0, 2.27, 3.6, 0.16, 0, 0, 0, 2.98, fat(0.035), fat(0.035));
   // (y por el lado de la casa de al lado, del rellano a la fachada)
   for (let k = 0; k <= 8; k++) m.add(G.box, 0xc8ccd0, 5.04, 3.72, UP_DOOR.z + 0.05 + k * 0.42, 0, 0, 0, fat(0.035), 0.95, fat(0.035));
   m.add(G.box, 0xc8ccd0, 5.04, 4.2, (UP_DOOR.z + 0.05 + 0.95) / 2, 0, 0, 0, fat(0.05), fat(0.05), 0.95 - UP_DOOR.z - 0.05);
@@ -2253,14 +2265,20 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5, low: true });
   }
   // Cocina de fuera: encimera, fogón, bombona de butano (guiño a «Gas») y estantería
-  km.add(G.box, 0xe9e2d2, STOVE.x, 0.45, STOVE.z - 1.0, 0, 0, 0, 2.6, 0.9, 0.8);
-  km.add(G.box, 0x7a6a58, STOVE.x, 0.92, STOVE.z - 1.0, 0, 0, 0, 2.7, 0.06, 0.85);
-  km.add(G.box, 0x2a2a2e, STOVE.x + 0.3, 0.97, STOVE.z - 1.0, 0, 0, 0, 0.8, 0.04, 0.6);
-  km.add(G.cyl, 0xe0662a, STOVE.x + 1.6, 0.35, STOVE.z - 1.1, 0, 0, 0, 0.42, 0.7, 0.42); // butano naranja
-  km.add(G.cyl, 0x444444, STOVE.x + 1.6, 0.76, STOVE.z - 1.1, 0, 0, 0, 0.12, 0.12, 0.12);
-  km.add(G.box, 0x8a6a44, STOVE.x, 1.9, STOVE.z - 1.35, 0, 0, 0, 2.4, 0.06, 0.35);
-  for (let i = 0; i < 4; i++) km.add(G.cyl, [0xd8b04a, 0x2f6b3a, 0xc23030, 0xf4efe2][i], STOVE.x - 0.9 + i * 0.6, 2.08, STOVE.z - 1.35, 0, 0, 0, 0.18, 0.3, 0.18);
-  colliders.push({ minX: STOVE.x - 1.4, maxX: STOVE.x + 1.9, minZ: STOVE.z - 1.5, maxZ: STOVE.z - 0.6, low: true });
+  // (21 nov: contra la pared de la izquierda, bajo el toldo verde; antes, contra la fachada)
+  const R = Math.PI / 2;
+  const kAdd = (geo: THREE.BufferGeometry, c: number, along: number, toward: number, y: number, sx: number, sy: number, sz: number) => {
+    const v = K(along, toward, y);
+    km.add(geo, c, v.x, v.y, v.z, 0, R, 0, sx, sy, sz);
+  };
+  kAdd(G.box, 0xe9e2d2, 0, -1.0, 0.45, 2.6, 0.9, 0.8);
+  kAdd(G.box, 0x7a6a58, 0, -1.0, 0.92, 2.7, 0.06, 0.85);
+  kAdd(G.box, 0x2a2a2e, 0.3, -1.0, 0.97, 0.8, 0.04, 0.6);
+  kAdd(G.cyl, 0xe0662a, 1.6, -1.1, 0.35, 0.42, 0.7, 0.42); // butano naranja
+  kAdd(G.cyl, 0x444444, 1.6, -1.1, 0.76, 0.12, 0.12, 0.12);
+  kAdd(G.box, 0x8a6a44, 0, -1.35, 1.9, 2.4, 0.06, 0.35);
+  for (let i = 0; i < 4; i++) kAdd(G.cyl, [0xd8b04a, 0x2f6b3a, 0xc23030, 0xf4efe2][i], -0.9 + i * 0.6, -1.35, 2.08, 0.18, 0.3, 0.18);
+  colliders.push({ minX: STOVE.x - 1.5, maxX: STOVE.x - 0.6, minZ: STOVE.z - 1.9, maxZ: STOVE.z + 1.4, low: true });
   // Sartén y olla sobre el fuego
   const pan = new THREE.Group();
   const pm = new Merger();
@@ -2269,7 +2287,8 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   // (de noche, la olla apoyada en la encimera: antes flotaba 6 cm)
   pm.add(G.cyl, 0x9a9aa0, -0.55, day ? 0.15 : 0.09, 0.05, 0, 0, 0, 0.45, 0.32, 0.45); // olla de la pasta
   pan.add(pm.mesh());
-  pan.position.set(STOVE.x + 0.2, 1.02, STOVE.z - 1.0);
+  pan.position.copy(K(0.2, -1.0, 1.02));
+  pan.rotation.y = Math.PI / 2;
   sc.add(pan);
   // El vapor: nubecillas de tebeo (blancas, con su contorno de tinta), cada una con su material para que se
   // desvanezca a su ritmo al subir (antes, un halo borroso)

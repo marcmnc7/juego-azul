@@ -406,6 +406,15 @@ export class Audio {
     return find(1.5, 0.45);
   }
 
+  /**
+   * Al montar un capítulo que tiene su canción: que no suene la música sintetizada mientras carga (en el cap. 2 se oía
+   * otra música antes de James Blunt). playTrack la pone luego.
+   */
+  holdForTrack() {
+    this.stopMusic();
+    this.trackOn = true;
+  }
+
   startMusic(name: SongName = 'jaleo') {
     if (!this.ctx || this.trackOn) return;
     this.song = SONGS[name];

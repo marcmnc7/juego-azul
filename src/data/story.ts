@@ -157,7 +157,9 @@ export const SANTJOAN = {
   // Objetivos: un emoji o dos palabras, sin decir qué hacer (las pistas solo salen si te pierdes)
   huntHint: '📍',
   correus: [{ who: 'Narrador', text: 'Correus. Ni rastro de Gas. Una hora después:' }] as Line[],
-  exactHint: '📷',
+  exactHint: '📷 Foto al obelisco',
+  /** (21 nov) La foto exacta, con el visor (como la del faro). */
+  exactPhoto: { title: 'Que salga el obelisco', ask: 'Una foto del obelisco del Born: así sabrá dónde estoy.', bad: 'Uy, movida… Otra, que se vea bien el obelisco.' },
   /** Lo que contesta Gas a una foto en la que no sale nada que se reconozca (inventado; era un aviso de «que salga el obelisco»). */
   notExact: ['(WhatsApp) ¿Y eso dónde es? 😅', '(WhatsApp) Ni idea de dónde es eso', '(WhatsApp) Algo que se reconozca, pls 🙏'],
   comingHint: '💙',
@@ -319,6 +321,8 @@ export const ROAD = {
   ] as Line[][],
   notM: (n: string) => `«${n}»… no empieza por M 😅`,
   missedM: '¡Eh, que ese empezaba por M! Media vuelta…',
+  /** Al llegar al final de un tramo sin las fotos que tocaban (21 nov). */
+  fewPhotos: (got: number, need: number) => `Solo ${got} ${got === 1 ? 'foto' : 'fotos'} en este tramo, y quería ${need}. Otra vez desde el principio del tramo.`,
   /** Después de Marcial, en el coche (bocadillos mientras conduce, sin parar): lo del gas. at: metro de la carretera. */
   gasTalk: [
     { at: 830, who: 'Margaux', text: 'Oye, ¿y el gas para el hornillo? ¿Lo llevas?' },
@@ -362,10 +366,26 @@ export const ROAD = {
   pelletTry: [{ who: 'Narrador', text: 'El pollo, directamente encima de la estufa de pellets. ¿Qué podría salir mal?' }] as Line[],
   pelletFail: [
     { who: 'Narrador', text: 'Humo. Mucho humo. Y el pollo, crudo.' },
-    { who: 'Margaux', text: 'Gas… creo que así no.' },
+    { who: 'Margaux', text: 'Marc… creo que así no.' },
     { who: 'Marc', text: 'Vale. Esta noche no se cocina. Tonses, cartas y a dormir.' },
   ] as Line[],
-  campHint: { estufa: 'La estufa de pellets, la del rincón de la cabaña.' },
+  campHint: {
+    estufa: 'La estufa de pellets, la del rincón de la cabaña.',
+    abridor: 'El abridor está en la guantera del coche. Fuera, al lado de la cabaña.',
+    sofa: 'Ven al sofá, que el vino no se sirve solo.',
+  },
+  // (21 nov, inventadas: Marc, cámbialas si quieres) Mientras el pollo se hace en la estufa: el abridor y el vino
+  wineAsk: [
+    { who: 'Marc', text: 'Mientras se hace… ¿abrimos el vino?' },
+    { who: 'Margaux', text: '¿Y el abridor?' },
+    { who: 'Marc', text: 'En el coche, en la guantera. ¿Vas tú? Yo vigilo el pollo.' },
+  ] as Line[],
+  wineFound: '¡Aquí está! Abridor encontrado 🍷',
+  wineSofa: [
+    { who: 'Narrador', text: 'Vino en el sofá, mientras el pollo se hace en la estufa.' },
+    { who: 'Margaux', text: 'Esto sí que es un plan.' },
+    { who: 'Marc', text: 'Por la aventura.' },
+  ] as Line[],
   campAfter: [{ who: 'Narrador', text: 'Y a la mañana siguiente, carretera otra vez. Al norte.' }] as Line[],
   terrace: [
     { who: 'Narrador', text: 'La terraza de El Ancla.' },
@@ -612,7 +632,7 @@ export const CENA = {
   ] as Line[],
   // Antes de irse, su casco (inventado: Marc, cámbialo por lo que dijisteis al despediros)
   /** Antes de irse, a la cancela: que le acompañe (inventado). */
-  helmetAsk: '¿Me acompañas a la cancela?',
+  helmetAsk: '¿Me acompañas a la puerta?',
   helmetNag: '¿No me vas a decir adiós?',
   bye: 'Corre, que no vuelvan. 🤍',
   /** Al irse en la moto, antes de dejar la mesa como estaba. */
@@ -636,33 +656,33 @@ export interface CrossClue {
 // Crucigrama antes de la carta: todo sale del chat o de lo que pasó. Las letras marcadas dicen TE QUIERO.
 export const CROSSWORD = {
   title: 'El crucigrama de Gas',
-  // Las palabras salen de nuestro chat (las que más usamos y las que solo entendemos nosotros); la cuadrícula la
-  // encaja un script (20 palabras en 15 × 15) y las casillas con círculo, en orden, dicen el mensaje
-  intro: 'Tú me hiciste uno con letras remarcadas y PORTUGAL escondido. Ahora me toca a mí, con cosas de nuestro chat que no salen en ningún capítulo. Las casillas con círculo esconden algo, y van en orden.',
+  // Palabras de nuestro año (21 nov: fuera las que no pintaban nada, como arroz o mullet); la cuadrícula la encaja
+  // un script para que quepa a lo ancho en el móvil, y las casillas con círculo, en orden, dicen el mensaje
+  intro: 'Los círculos esconden algo.',
   hidden: 'ERES MI AZUL',
-  rows: 15,
-  cols: 15,
+  rows: 16,
+  cols: 13,
   clues: [
-    { answer: 'TORTILLA', row: 7, col: 3, dir: 'A', clue: "De sobrassada y queso: «de las mejores que he probado en mi vida»", mark: 5, hiddenIdx: 9 },
-    { answer: 'GUAPISSIMA', row: 3, col: 7, dir: 'D', clue: "«Bona nit ..., muchas ganas de dormir contigo»", mark: 5, hiddenIdx: 3 },
-    { answer: 'SUDADERA', row: 4, col: 10, dir: 'D', clue: "«Por mucho que quieras la ..., no quiero dates incómodos»", mark: 5, hiddenIdx: 0 },
-    { answer: 'PROYECTOR', row: 6, col: 5, dir: 'D', clue: "«La que sea con mimos y con ese ...»", mark: 8, hiddenIdx: 1 },
-    { answer: 'VOLEY', row: 9, col: 1, dir: 'A', clue: "«Te quiero ver jugar a ...: me da curiosidad»", mark: 3, hiddenIdx: 2 },
-    { answer: 'BRUTAL', row: 4, col: 3, dir: 'D', clue: "Mi palabra favorita: más de 150 veces en el chat", mark: 4, hiddenIdx: 6 },
-    { answer: 'BOYERO', row: 13, col: 0, dir: 'A', clue: "«Mi ... 🫠🐶 Felices los 4»", mark: -1, hiddenIdx: -1 },
-    { answer: 'ARROZ', row: 10, col: 9, dir: 'A', clue: "«El ... más potente que me he comido en mi vida»", mark: 4, hiddenIdx: 7 },
-    { answer: 'TONSES', row: 9, col: 12, dir: 'D', clue: "Cómo digo yo «entonces»", mark: -1, hiddenIdx: -1 },
-    { answer: 'MULLET', row: 5, col: 9, dir: 'A', clue: "«Un poco da vibe surf, o al menos chill»", mark: 0, hiddenIdx: 4 },
-    { answer: 'CARTA', row: 2, col: 14, dir: 'D', clue: "«Estoy feliz de que te haya gustado recibir la ... y las fotos»", mark: -1, hiddenIdx: -1 },
-    { answer: 'SURF', row: 5, col: 1, dir: 'A', clue: "«El plan de los 5 días es easy: ..., playa…»", mark: 1, hiddenIdx: 8 },
-    { answer: 'PADEL', row: 1, col: 12, dir: 'D', clue: "«No hablemos del ..., ¿vale? Sigue siendo un desastre»", mark: -1, hiddenIdx: -1 },
-    { answer: 'DOGFY', row: 3, col: 5, dir: 'A', clue: "Donde trabajo de Software Manager", mark: -1, hiddenIdx: -1 },
-    { answer: 'MONO', row: 0, col: 6, dir: 'D', clue: "«Tengo un ... especial de moto»", mark: -1, hiddenIdx: -1 },
-    { answer: 'OJOS', row: 11, col: 1, dir: 'D', clue: "«Need esos ...» (la primera tarde, a las 19:48)", mark: -1, hiddenIdx: -1 },
-    { answer: 'JOY', row: 11, col: 0, dir: 'A', clue: "«3 abrazos pa ti, de mi parte y de la de ...»", mark: -1, hiddenIdx: -1 },
-    { answer: 'SETLIST', row: 14, col: 7, dir: 'A', clue: "«Estoy escuchando en repeat la ...»", mark: 4, hiddenIdx: 5 },
-    { answer: 'MILAN', row: 0, col: 6, dir: 'A', clue: "«Mañana es derby day: ...-Inter»", mark: -1, hiddenIdx: -1 },
-    { answer: 'OPORTO', row: 1, col: 1, dir: 'A', clue: "«¿Y por qué tantas ganas de ir a ...?» (el plan B de octubre)", mark: -1, hiddenIdx: -1 },
+    { answer: 'GUAPISSIMA', row: 8, col: 2, dir: 'A', clue: "«Bona nit ..., muchas ganas de dormir contigo»", mark: 5, hiddenIdx: 3 },
+    { answer: 'CARBONARA', row: 7, col: 4, dir: 'D', clue: "«El 10 es la ...»: la cena a escondidas en Sa Farola", mark: 2, hiddenIdx: 1 },
+    { answer: 'ZAMBURIÑA', row: 6, col: 10, dir: 'D', clue: "«No habrá mejor ... en el mundo que la de San Vicente»", mark: 0, hiddenIdx: 7 },
+    { answer: 'SUDADERA', row: 8, col: 8, dir: 'D', clue: "«Por mucho que quieras la ..., no quiero dates incómodos»", mark: 5, hiddenIdx: 0 },
+    { answer: 'CABALLOS', row: 1, col: 7, dir: 'D', clue: "Sant Joan: «Pero he tocado tres ...»", mark: -1, hiddenIdx: -1 },
+    { answer: 'TORTILLA', row: 5, col: 1, dir: 'A', clue: "De sobrassada y queso: «de las mejores que he probado en mi vida»", mark: 5, hiddenIdx: 9 },
+    { answer: 'ECLIPSE', row: 1, col: 6, dir: 'A', clue: "12 de agosto de 2026: lo miramos juntos en Ciutadella", mark: -1, hiddenIdx: -1 },
+    { answer: 'MILAN', row: 15, col: 1, dir: 'A', clue: "«Mañana es derby day: ...-Inter»", mark: 0, hiddenIdx: 4 },
+    { answer: 'LAUREL', row: 11, col: 7, dir: 'A', clue: "La calle de los pinchos en Logroño", mark: -1, hiddenIdx: -1 },
+    { answer: 'VOLEY', row: 9, col: 12, dir: 'D', clue: "«Te quiero ver jugar a ...: me da curiosidad»", mark: 3, hiddenIdx: 2 },
+    { answer: 'OJOS', row: 11, col: 2, dir: 'A', clue: "«Need esos ...» (la primera tarde, a las 19:48)", mark: -1, hiddenIdx: -1 },
+    { answer: 'OPORTO', row: 1, col: 1, dir: 'D', clue: "«¿Y por qué tantas ganas de ir a ...?» (el plan B de octubre)", mark: -1, hiddenIdx: -1 },
+    { answer: 'CARTA', row: 14, col: 6, dir: 'A', clue: "«Estoy feliz de que te haya gustado recibir la ... y las fotos»", mark: -1, hiddenIdx: -1 },
+    { answer: 'FITO', row: 0, col: 9, dir: 'D', clue: "«Pilla 2 entradas para ...»", mark: 1, hiddenIdx: 5 },
+    { answer: 'JOY', row: 10, col: 2, dir: 'D', clue: "«3 abrazos pa ti, de mi parte y de la de ...»", mark: -1, hiddenIdx: -1 },
+    { answer: 'GAS', row: 13, col: 3, dir: 'A', clue: "Mi mote, desde una noche de camping sin hornillo", mark: -1, hiddenIdx: -1 },
+    { answer: 'ASES', row: 0, col: 11, dir: 'D', clue: "Ferreries, 25 de agosto de 2025: jaleo d’...", mark: 0, hiddenIdx: 6 },
+    { answer: 'SURF', row: 3, col: 3, dir: 'D', clue: "«El plan de los 5 días es easy: ..., playa…»", mark: 1, hiddenIdx: 8 },
+    { answer: 'DOGFY', row: 1, col: 0, dir: 'A', clue: "Trabajo Marc", mark: -1, hiddenIdx: -1 },
+    { answer: 'TONSES', row: 3, col: 0, dir: 'A', clue: "Cómo digo yo «entonces»", mark: -1, hiddenIdx: -1 },
   ] as CrossClue[],
   solved: '¿Lo ves? Brutal. 💙',
 };
@@ -1134,10 +1154,15 @@ export const FAIL = {
   crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
   burntMax: 4,
   grill: { title: 'Carbón', text: 'Cuatro zamburiñas quemadas. Dales la vuelta cuando brillen, ni antes ni después.' },
-  rhythmMin: 0.5,
-  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas. Con la mitad, Fito te lo perdona: otra vez.` },
+  rhythmMin: 0.75, // (21 nov: antes la mitad; los juegos de habilidad piden más del 75 %)
+  skillMin: 0.75,
+  suitcase: { title: '¡Maletazo!', text: 'Te ha dado una maleta. Otra vez desde la entrada: mira bien de qué tienda sale cada una.' },
+  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta más del 75 % para que Fito te lo perdone: otra vez.` },
+  film: { title: 'Movidísimo', text: (p: number) => `Fito solo ha salido en plano el ${p} % del vídeo. Hace falta más del 75 %: otra vez, con pulso.` },
+  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta más del 75 %: otra vez, apuntando bien.` },
   pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
   windSecs: 3,
+  lean: { title: '¡Patapam!', text: 'En las curvas, inclínate con Gas hacia el mismo lado. Si no, la moto se cae: otra vez desde el principio de este tramo.' },
   wind: { title: '¡Al suelo!', text: 'La tramontana se ha llevado la moto. Échate hacia donde sopla la racha, siempre en contra.' },
   peltMax: 6,
   nuts: { title: 'Coscorrón', text: 'Te han dado seis veces. Cuando veas el círculo en el suelo, apártate.' },

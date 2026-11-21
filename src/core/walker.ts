@@ -41,8 +41,10 @@ const JUMP_V = 3.8;
 const CUT_GRAVITY = 2.4; // ×gravedad subiendo con el botón suelto
 const FALL_GRAVITY = 1.55; // ×gravedad cayendo
 // Acelerón: con el joystick a fondo y recto un rato, se corre algo más (y se nota en la cámara)
+/** Velocidad normal de Azul andando a fondo (21 nov: 4,0 → 3,3, más calmada). */
+export const WALK_SPEED = 3.3;
 const SPRINT_AFTER = 1.0; // segundos a fondo antes de acelerar
-const SPRINT = 1.15; // acelerón al correr recto un rato (antes 1,24)
+const SPRINT = 1.08; // acelerón al correr recto un rato (antes 1,24 y 1,15; 21 nov: Azul corría demasiado)
 /** La cámara nunca se acerca a la cabeza más que esto (si no cabe, sube en vez de atravesar la pared). */
 const CAM_NEAR = 0.9;
 /** Aire que la cámara deja a su alrededor, y hacia dónde lo mira. */
@@ -56,6 +58,8 @@ let jumpHeld = false;
 export let walkerActiveAt = -1e9;
 /** Solo para el modo prueba: los últimos límites del área jugable. */
 export let lastBounds: Box2 | null = null;
+/** Lo último que recibió move (para el modo prueba: ver por dónde se puede andar). */
+export let lastWalk: { boxes: Box2[]; circles: readonly Circle[]; pos: THREE.Vector3 } | null = null;
 /** Segundos empujando contra el límite del mapa sin nada visible delante, y cuándo fue la última vez. */
 export let edgePush = 0;
 export let edgePushAt = -1e9;
@@ -75,8 +79,8 @@ export class Walker implements AirState {
   yaw = 0;
   /** Fase del ciclo de paso: avanza con la distancia recorrida, así los pies no patinan. */
   walk = 0;
-  /** Velocidad punta normal (m/s). Antes 5,2: corría demasiado; algunos niveles la cambian a su gusto. */
-  speed = 4.0;
+  /** Velocidad punta normal (m/s). Antes 5,2 y 4,0: corría demasiado; algunos niveles la cambian a su gusto. */
+  speed = WALK_SPEED;
   /** Agarre: 1 en suelo; en el agua bajo, para que se deslice y cueste arrancar y frenar. */
   traction = 1;
   knock = new THREE.Vector3();
@@ -169,6 +173,7 @@ export class Walker implements AirState {
     if (dt <= 0) return Math.min(1, this.currentSpeed / this.speed);
     if (this.canJump) walkerActiveAt = performance.now();
     lastBounds = b;
+    lastWalk = { boxes, circles, pos: this.pos };
     let mag = Math.min(1, Math.hypot(ax.x, ax.y));
     const p = this.pos;
     const sx = p.x;

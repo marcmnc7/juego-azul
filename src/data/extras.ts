@@ -1,9 +1,11 @@
 // Lo que convierte la historia en juego: el avance de cada día, lo que comentan al andar, las preguntas dentro
 // de los chats y los recuerdos escondidos por los escenarios. Marc: todo el texto se retoca aquí.
-import { CHATS, type ChatMsg } from './chats';
-import { STICKERS } from './memories';
 import cocacola from '../assets/recuerdos/cocacola.jpg';
 import diadema from '../assets/recuerdos/diadema.jpg';
+import joyFoto from '../assets/recuerdos/joy.jpg';
+import trenes from '../assets/recuerdos/trenes.jpg';
+import ruta from '../assets/recuerdos/ruta.jpg';
+import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 
 /** Una pista de lo que viene. Se ve al acabar el capítulo anterior y en el mapa. */
 export const TEASERS: Record<number, string> = {
@@ -159,53 +161,82 @@ export interface Keepsake {
   /** Moto: posición en la ruta (0 a 1) y a qué lado cuelga: hay que inclinarse hacia él para cogerlo. */
   u?: number;
   side?: number;
+  /** La foto (sin ella, es un hueco para una que Marc aún tiene que pasar: en el álbum sale «Foto pendiente»). */
   src?: string;
-  chat?: ChatMsg[];
-  sticker?: boolean;
   caption: string;
 }
 
+/** Cap. 1 y 9: las fases en las que se anda por Ferreries. */
 const M1 = ['talkTofol', 'collect', 'returnTofol', 'findMarc'];
+const M9 = ['findMarc', 'toFont'];
+/** Cap. 2: el jardín y la piscina de casa de Gas. */
+const H2 = ['arrive', 'toPool', 'toTowels'];
+/** Cap. 4: el estadio (con Gas y con Azul). */
+const ST4 = ['toWc', 'seek', 'beers'];
+/** Cap. 6: las calles de Ciutadella. */
+const SJ6 = ['hunt', 'exact', 'coming', 'nuts', 'be'];
 /** Cap. 7: las fases en las que se anda por el jardín (abrir a Gas, cocina, mesa, susto, el casco y a dormir). */
 const C7 = ['toGate', 'toKitchen', 'toTable', 'alarm', 'seeOff', 'toBed'];
 
-/** Recuerdos escondidos: fotos reales y trozos literales de los chats, fuera del camino que marca la luz. */
+/**
+ * Recuerdos escondidos (21 nov): solo fotos, como las que se desbloquean al acabar cada capítulo, repartidas por
+ * todos los escenarios y lejos del camino, para que quien quiera tenerlas todas lo investigue todo. Las que aún no
+ * tienen `src` esperan la foto de Marc.
+ */
 export const KEEPSAKES: Keepsake[] = [
-  // Ferreries
-  { id: 'c1-atesoro', chapter: 1, phases: M1, x: -44, z: 2.5, chat: CHATS.atesoro.msgs, caption: 'Que ese día es nuestro' },
-  { id: 'c1-ojos', chapter: 1, phases: M1, x: 11, z: 24.5, chat: CHATS.ferreriesTarde.msgs.slice(9, 12), caption: '25 de agosto de 2025' },
-  { id: 'c1-diadema', chapter: 1, phases: M1, x: -8, z: 22, src: diadema, caption: 'Y la diadema.' },
-  // Bar Imperi y casa de Gas
-  { id: 'c2-cola', chapter: 2, phases: ['atBar'], x: -616, z: 1, chat: CHATS.imperi.msgs.slice(82, 84), caption: 'Sigo aún con la cola' },
-  { id: 'c2-cesped', chapter: 2, phases: ['toTowels'], x: 3.4, z: 13, chat: CHATS.cesped.msgs.slice(19, 22), caption: 'Tb el césped' },
-  // La carretera (un carril concreto) y el camping
-  { id: 'c3-pacto', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, chat: CHATS.pacto.msgs.slice(5, 7), caption: 'El pacto' },
-  { id: 'c3-camp', chapter: 3, phases: ['camp'], x: 8, z: -9, chat: CHATS.muyJusto.msgs.slice(8, 11), caption: '30 de octubre: logrado' },
-  { id: 'c3-langosta', chapter: 3, phases: ['drive2'], x: -2.6, z: 1965, r: 1.9, chat: CHATS.helado.msgs.slice(10, 14), caption: 'Humilde' },
-  // Barajas y el estadio
-  { id: 'c4-burger', chapter: 4, phases: ['airport'], x: 292, z: 14, chat: CHATS.burger.msgs.slice(0, 2), caption: 'NUNCA más' },
-  { id: 'c4-asiento', chapter: 4, phases: ['airport'], x: 301, z: 8, chat: CHATS.burger.msgs.slice(15, 19), caption: 'Q cabrones' },
-  { id: 'c4-entradas', chapter: 4, phases: ['toWc', 'seek'], x: 19, z: 24, chat: CHATS.somosLas.msgs.slice(1, 3), caption: '17 de enero, 21:52' },
-  // La moto: cuelgan a un lado de la carretera
-  { id: 'c5-plan', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.21, side: 1, chat: CHATS.motoPlan.msgs.slice(2, 4), caption: 'Ya tenemos moto' },
-  { id: 'c5-juzgamos', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.46, side: 1, src: STICKERS.juzgamos, sticker: true, caption: 'Nadie juzga. Solo un poco.' },
-  { id: 'c5-pequena', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.74, side: 1, chat: CHATS.motoTrip.msgs.slice(8, 12), caption: 'QUE PEQUEÑA' },
-  // Sant Joan
-  { id: 'c6-mar', chapter: 6, phases: ['hunt', 'exact', 'coming', 'be'], x: 87, z: 10, src: cocacola, caption: '«Que estaba escrito solo MAR. Y no creo en las coincidencias»' },
-  { id: 'c6-ubi', chapter: 6, phases: ['hunt', 'exact', 'coming', 'be'], x: 34, z: 3.6, chat: CHATS.ubi.msgs.slice(0, 5), caption: 'Tuuuu maldito' },
-  { id: 'c6-sueno', chapter: 6, phases: ['be'], x: 124, z: 9, chat: CHATS.arranco.msgs.slice(0, 2), caption: '23 de junio de 2026' },
-  // La cena
-  { id: 'c7-pasta', chapter: 7, phases: C7, x: 4, z: 1.6, chat: CHATS.cenaMenu.msgs.slice(0, 4), caption: 'Todo esto lo hago por una pasta' },
-  { id: 'c7-hora', chapter: 7, phases: C7, x: -3.5, z: 8, chat: CHATS.cenaPlan.msgs.slice(8, 10), caption: 'A partir de las 22.50' },
-  { id: 'c7-carita', chapter: 7, phases: C7, x: 4.2, z: 8.8, src: STICKERS.carita, sticker: true, caption: 'Esa cara' },
-  // El día del eclipse
-  { id: 'c8-ready', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, chat: CHATS.eclipseReady.msgs.slice(0, 2), caption: '12 de agosto de 2026' },
-  { id: 'c8-luna', chapter: 8, phases: ['walk', 'back'], x: -70, z: 11.5, chat: CHATS.luna.msgs, caption: '16 de agosto de 2026' },
-  { id: 'c8-cosas', chapter: 8, phases: ['marcParents'], x: 3.6, z: -1.8, chat: CHATS.eclipseFin.msgs.slice(2, 4), caption: 'Cama' },
-  // Un año después
-  { id: 'c9-22', chapter: 9, phases: M1, x: -44, z: -3.5, chat: CHATS.veintidos.msgs.slice(0, 5), caption: 'Solo te he visto 22 veces' },
-  { id: 'c9-bocata', chapter: 9, phases: M1, x: 32.5, z: 4.5, chat: CHATS.bocata.msgs.slice(5, 8), caption: 'Y patatas' },
-  { id: 'c9-fecha', chapter: 9, phases: M1, x: 20, z: -3.5, chat: CHATS.fecha.msgs.slice(0, 3), caption: 'Tenemos fecha nosotros?' },
+  // 1 · Ferreries
+  { id: 'r1-diadema', chapter: 1, phases: M1, x: -8, z: 22, src: diadema, caption: 'Y la diadema.' },
+  { id: 'r1-a', chapter: 1, phases: M1, x: -44, z: 2.5, caption: 'Ferreries, 25 de agosto de 2025' },
+  { id: 'r1-b', chapter: 1, phases: M1, x: 11, z: 24.5, caption: 'Ferreries, de fiesta' },
+  { id: 'r1-c', chapter: 1, phases: M1, x: 44, z: 1.9, caption: 'Jaleo d’ases' },
+  { id: 'r1-d', chapter: 1, phases: M1, x: 23.5, z: 4.4, caption: 'Purpurina y pomada' },
+  // 2 · Bar Imperi y casa de Gas
+  { id: 'r2-a', chapter: 2, phases: ['atBar'], x: -616, z: 1, caption: 'Bar Imperi' },
+  { id: 'r2-b', chapter: 2, phases: ['atBar'], x: -571, z: -14.8, caption: 'La noche, en el Imperi' },
+  { id: 'r2-c', chapter: 2, phases: H2, x: 3.4, z: 13, caption: 'Tb el césped' },
+  { id: 'r2-d', chapter: 2, phases: H2, x: 3.4, z: -15.6, caption: 'La piscinita' },
+  { id: 'r2-e', chapter: 2, phases: ['arrive', 'toPool'], x: -5.1, z: -25.6, caption: 'Sa Caleta, 26 de agosto' },
+  // 3 · La carretera (un carril concreto) y el camping
+  { id: 'r3-trenes', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, src: trenes, caption: 'Sants–Atocha, 30 de octubre' },
+  { id: 'r3-ruta', chapter: 3, phases: ['drive1'], x: -2.6, z: 1040, r: 1.9, src: ruta, caption: 'El primer planning: 1.454 km' },
+  { id: 'r3-a', chapter: 3, phases: ['camp'], x: 8, z: -9, caption: 'La cabaña' },
+  { id: 'r3-c', chapter: 3, phases: ['camp'], x: -6, z: -11.5, caption: 'Camping gas (sin gas)' },
+  { id: 'r3-b', chapter: 3, phases: ['drive2'], x: -2.6, z: 1965, r: 1.9, caption: 'Camino de San Vicente' },
+  // 4 · Barajas, las llegadas de Gran Canaria y el estadio
+  { id: 'r4-a', chapter: 4, phases: ['airport'], x: 292, z: 14, caption: 'Barajas' },
+  { id: 'r4-b', chapter: 4, phases: ['airport'], x: 336, z: 30.9, caption: 'La puerta de embarque' },
+  { id: 'r4-gc', chapter: 4, phases: ['arrivals'], x: 430.4, z: 12.1, src: granCanaria, caption: 'Gran Canaria, gafas puestas' },
+  { id: 'r4-c', chapter: 4, phases: ['arrivals'], x: 371.4, z: 22.1, caption: 'Llegadas' },
+  { id: 'r4-d', chapter: 4, phases: ST4, x: 19, z: 24, caption: 'Fito, en directo' },
+  { id: 'r4-e', chapter: 4, phases: ST4, x: -21, z: -21, caption: 'El estadio' },
+  // 5 · La moto: cuelgan a un lado de la carretera
+  { id: 'r5-a', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.21, side: 1, caption: 'Costa Brava' },
+  { id: 'r5-b', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.34, side: -1, caption: 'De paquete' },
+  { id: 'r5-c', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.46, side: 1, caption: 'Cap de Creus' },
+  { id: 'r5-d', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.62, side: -1, caption: 'La tramontana' },
+  { id: 'r5-e', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.74, side: 1, caption: 'MotoTrip4life' },
+  // 6 · Sant Joan
+  { id: 'r6-mar', chapter: 6, phases: SJ6, x: 87, z: 10, src: cocacola, caption: '«Que estaba escrito solo MAR. Y no creo en las coincidencias»' },
+  { id: 'r6-a', chapter: 6, phases: SJ6, x: 34, z: 3.6, caption: 'Ciutadella, 23 de junio' },
+  { id: 'r6-b', chapter: 6, phases: SJ6, x: -16.5, z: 0.5, caption: 'Ses Voltes' },
+  { id: 'r6-c', chapter: 6, phases: SJ6, x: 102, z: -10.5, caption: 'Caballos y avellanes' },
+  { id: 'r6-d', chapter: 6, phases: ['be'], x: 124, z: 9, caption: 'Sa Plaça d’es Bè' },
+  { id: 'r6-e', chapter: 6, phases: ['home'], x: -8, z: 14.1, caption: 'A casa, de noche' },
+  // 7 · La cena
+  { id: 'r7-a', chapter: 7, phases: C7, x: 4, z: 1.6, caption: 'Sa Farola' },
+  { id: 'r7-b', chapter: 7, phases: C7, x: -3.5, z: 8, caption: 'La carbonara' },
+  { id: 'r7-c', chapter: 7, phases: C7, x: 4.2, z: 8.8, caption: 'Cena a escondidas' },
+  { id: 'r7-d', chapter: 7, phases: C7, x: -4, z: 2.6, caption: 'La guirnalda' },
+  // 8 · El día del eclipse
+  { id: 'r8-joy', chapter: 8, phases: ['walk', 'back'], x: -70, z: 11.5, src: joyFoto, caption: 'Joy, con su pelota' },
+  { id: 'r8-a', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, caption: '12 de agosto de 2026' },
+  { id: 'r8-b', chapter: 8, phases: ['walk', 'back'], x: 39, z: 13.1, caption: 'El paseo' },
+  { id: 'r8-c', chapter: 8, phases: ['marcParents'], x: 3.6, z: -1.8, caption: 'La cocina' },
+  // 9 · Un año después
+  { id: 'r9-a', chapter: 9, phases: M9, x: -44, z: -3.5, caption: 'Un año después' },
+  { id: 'r9-b', chapter: 9, phases: M9, x: 32.5, z: 4.5, caption: 'Otra vez Ferreries' },
+  { id: 'r9-c', chapter: 9, phases: M9, x: 20, z: -3.5, caption: 'Bar Sa Font' },
+  { id: 'r9-d', chapter: 9, phases: M9, x: 7.5, z: 7.4, caption: '25 de agosto de 2026' },
 ];
 
 export const keepsakesFor = (chapter: number) => KEEPSAKES.filter((k) => k.chapter === chapter);

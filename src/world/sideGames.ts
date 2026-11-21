@@ -4,7 +4,7 @@ import { cinema } from '../core/cinema';
 import { Sky, Sun, settleAmbient, applyShadows, makeSea, vibrate } from '../core/gfx';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
 import { comicFlash } from '../core/comic';
-import { Walker, type Circle } from '../core/walker';
+import { Walker, WALK_SPEED, type Circle } from '../core/walker';
 import type { Input } from '../core/input';
 import { Lost } from '../core/lost';
 import { MARC_LOOK, MARGAUX_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
@@ -710,7 +710,7 @@ export class BeerRun {
     this.stage = 'toBar';
     this.tray.visible = false;
     this.meter.hidden = true;
-    this.walker.speed = 4.0; // la velocidad normal del jugador (core/walker.ts)
+    this.walker.speed = WALK_SPEED; // la velocidad normal del jugador (core/walker.ts)
   }
 
   private spill() {
@@ -796,7 +796,7 @@ export class BeerRun {
     this.post = null;
     for (const c of this.cross) c.p.root.removeFromParent();
     this.cross.length = 0;
-    this.walker.speed = 4.0; // la velocidad normal del jugador (core/walker.ts)
+    this.walker.speed = WALK_SPEED; // la velocidad normal del jugador (core/walker.ts)
   }
 }
 
@@ -2905,7 +2905,8 @@ export class RoseShoot {
     sea.position.set(120, -0.2, 40);
     sc.add(sea);
     // Las rosas: miles de flores de colores (una sola malla para las flores y otra para las matas)
-    const COLS = [0xd7263d, 0xff5fa2, 0xffd23f, 0xffffff, 0xff8c42, 0xc2185b, 0xff9ec7, 0xe9433a];
+    // (21 nov: todas rojas, como el campo de verdad; solo cambia un poco el tono)
+    const COLS = [0xd7263d, 0xc21830, 0xe0303f, 0xb3122b, 0xcf1f36, 0xe8414c];
     // Rosales: matas redondeadas y, en cada una, unas cuantas rosas asomando por arriba (metidas en la mata, no
     // encima: si no, parecían vasitos flotando)
     const NB = 1400, PER = 7;
@@ -2990,9 +2991,12 @@ export class RoseShoot {
     comicFlash(0xffffff, 0.45);
     // ¿Dentro del recuadro? (de la cabeza a la cadera)
     const cam = this.lastCam;
+    // (el recuadro de verdad, el que se ve: 21 nov, mucho más pequeño)
+    const r = this.box.getBoundingClientRect();
     const inBox = (v: THREE.Vector3) => {
       v.project(cam);
-      return Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.55 && v.z < 1;
+      const x = ((v.x + 1) / 2) * window.innerWidth, y = ((1 - v.y) / 2) * window.innerHeight;
+      return v.z < 1 && x > r.left && x < r.right && y > r.top && y < r.bottom;
     };
     const head = (this.azul.rig?.bones.get('Head') ?? this.azul.head).getWorldPosition(this.tmp.clone());
     const hips = this.azul.root.position.clone().setY(0.9);
@@ -3107,7 +3111,9 @@ export class RoseShoot {
     // ¿Está en el recuadro? (el borde, verde)
     if (this.started) {
       const v = (az.rig?.bones.get('Head') ?? az.head).getWorldPosition(this.tmp).project(cam);
-      this.box.classList.toggle('in', Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.55);
+      const r = this.box.getBoundingClientRect();
+      const x = ((v.x + 1) / 2) * window.innerWidth, y = ((1 - v.y) / 2) * window.innerHeight;
+      this.box.classList.toggle('in', v.z < 1 && x > r.left && x < r.right && y > r.top && y < r.bottom);
     }
     // El botón de disparar
     const can = this.started && this.state !== 'done';

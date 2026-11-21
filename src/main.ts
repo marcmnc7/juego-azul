@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { camWorld } from './core/camWorld';
 import './ui/style.css';
 import { Input } from './core/input';
-import { lastBounds, edgePush, edgePushAt } from './core/walker';
+import { lastBounds, lastWalk, edgePush, edgePushAt } from './core/walker';
 import { initUpdater } from './core/updater';
 import { dust } from './core/dust';
 import { beacon } from './core/beacon';
@@ -34,7 +34,7 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -355,6 +355,8 @@ const TEST =
     }
   })();
 
+setTestMode(TEST);
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -540,6 +542,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   camera.updateProjectionMatrix();
   setLook(n);
   const t0 = performance.now();
+  if (SONG_OF[n]) audio.holdForTrack();
   const me = new LEVEL_CLASSES[n - 1](camera, input, done, goMap);
   crumb(`cap ${n}: escenario construido`);
   level = me;
@@ -618,7 +621,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, walk: () => lastWalk, quality, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       /** Dibuja ya el fotograma actual y lo devuelve (para revisar con la página oculta, sin esperar al bucle). */
       snap: () => {

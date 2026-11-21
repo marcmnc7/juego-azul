@@ -1755,7 +1755,7 @@ export class LevelEclipse implements Level {
   /** Marcador, flecha del HUD y columna sobre el objetivo (null: nada). Solo se llama con objetivo si se ha perdido. */
   private hint(tgt: THREE.Vector3 | null, dt: number, h: number) {
     const pp = this.player.root.position;
-    this.marker.visible = !!tgt;
+    this.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     if (!tgt) {
       this.hud.setArrow(null);
       beacon.at(null);

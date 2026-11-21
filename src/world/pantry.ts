@@ -30,10 +30,11 @@ export class Pantry {
   private opening = false;
   private v = new THREE.Vector3();
 
-  constructor(sc: THREE.Scene, stove: THREE.Vector3, table: THREE.Vector3) {
+  /** stool: dónde va el taburete con la cesta, junto a la encimera. */
+  constructor(sc: THREE.Scene, stool0: THREE.Vector3, table: THREE.Vector3) {
     // Taburete de madera junto a la encimera, con la cesta de mimbre: huevos y un paquete de espaguetis
     const stool = new Merger(false);
-    const sx = stove.x - 1.45, sz = stove.z + 0.75;
+    const sx = stool0.x, sz = stool0.z;
     stool.add(G.cyl, 0x9a6e44, 0, 0.44, 0, 0, 0, 0, 0.38, 0.05, 0.38);
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2;
@@ -81,13 +82,14 @@ export class Pantry {
     rind.position.copy(wedge.position);
     rind.rotation.y = wedge.rotation.y;
     cheese.add(rind);
-    cheese.position.set(table.x - 0.25, 0.8, table.z + 0.18);
+    // (21 nov: en la punta de la mesa que da a la casa, al alcance; en medio, detrás de las sillas, no se llegaba)
+    cheese.position.set(table.x - 0.2, 0.8, table.z - 0.72);
     for (const c of cheese.children) {
       c.position.multiplyScalar(1.1);
       c.scale.multiplyScalar(1.1);
     }
     sc.add(cheese);
-    this.spots.push({ key: 'queso', at: new THREE.Vector3(table.x - 0.25, 0, table.z + 0.18), obj: cheese, done: false, k: 1 });
+    this.spots.push({ key: 'queso', at: new THREE.Vector3(table.x - 0.2, 0, table.z - 0.72), obj: cheese, done: false, k: 1 });
 
     // La nevera, dentro de casa: se entra por la puerta de abajo (la del porche) a la cocina de dentro. La cocina es un
     // decorado propio, apartado bajo el suelo del mundo (ROOM): al entrar, la cámara se va allí. Nevera blanca alta
@@ -179,7 +181,7 @@ export class Pantry {
   }
 
   /** El sitio por recoger más cercano, si está al alcance. */
-  near(pp: THREE.Vector3, reach = 1.25): Spot | null {
+  near(pp: THREE.Vector3, reach = 1.45): Spot | null {
     let best: Spot | null = null;
     let bd = reach;
     for (const s of this.spots) {

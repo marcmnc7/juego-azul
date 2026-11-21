@@ -37,6 +37,8 @@ type Phase = 'intro' | 'pack' | 'ride' | 'creus' | 'uturn' | 'back' | 'cala' | '
 /** Velocidad de crucero (50 km/h, la de la señal) y cómo se cambia de velocidad. */
 const SPEED = 14;
 /** Ya en marcha al empezar (arrancar desde parado se hacía eterno), y acelera fuerte a su velocidad. */
+/** Segundos (acumulados) inclinándose mal en curvas fuertes antes de que la moto se caiga. */
+const LEAN_FAIL = 1.4;
 const START_V = 4;
 const ACCEL = 4.5;
 /** Frenada que planea Gas (cómoda, con paquete) y la más fuerte que llega a hacer. */
@@ -173,6 +175,11 @@ export class LevelMoto implements Level {
   private yaw = 0;
   private yawRate = 0;
   private lean = 0;
+  /** (21 nov) Segundos inclinándose mal en curva (bajan al hacerlo bien); al pasarse, la moto se cae. */
+  private badLean = 0;
+  /** Cayéndose: tiempo desde que empezó y hacia qué lado. */
+  private fallT = 0;
+  private fallSide = 1;
   private azulLean = 0;
   private good = 0;
   private total = 0;
@@ -676,9 +683,9 @@ export class LevelMoto implements Level {
       // Bosque de encinas y pinos por la ladera
       for (let k = 0; k < 6; k++) md.add(G.bush, k % 2 ? 0x4d6e3a : 0x5a7a40, r.x + r.rx * (d + 12 + k * 4) + Math.sin(k * 2.1 + i) * 18, 6 + (k % 3) * 4, r.z + r.rz * (d + 12 + k * 4) + Math.cos(k * 1.7 + i) * 18, 0, k, 0, 22, 9, 18);
     }
-    // La planicie de rosas de colores, en la ladera junto al último apartadero (donde paran a la vuelta)
+    // La planicie de rosas rojas, en la ladera junto al último apartadero (donde paran a la vuelta)
     {
-      const COLS = [0xd7263d, 0xff5fa2, 0xffd23f, 0xffffff, 0xff8c42, 0xc2185b];
+      const COLS = [0xd7263d, 0xc21830, 0xe0303f, 0xb3122b, 0xcf1f36, 0xe8414c]; // (21 nov: todas rojas)
       const c0 = CALA_AT * L;
       for (let k = 0; k < 260; k++) {
         const mm = c0 - 45 + rnd() * 75;
@@ -963,8 +970,32 @@ export class LevelMoto implements Level {
   }
 
   /** Sale ya en marcha, con la cámara detrás de la moto desde el primer fotograma. */
+  /** La moto se va al suelo hacia el lado de la curva; luego, otra vez desde el último tramo. */
+  private fall(want: number) {
+    this.failing = true;
+    this.fallT = 0.001;
+    this.fallSide = want >= 0 ? 1 : -1;
+    audio.hit();
+    vibrate([120, 60, 200]);
+    comicWord('¡PATAPAM!', 'hit');
+    const at = this.s;
+    const L = this.len;
+    const cps = [0.02, PHOTO_AT[0] - 60 / L, TUNNEL_AT - 70 / L, WIND_AT - 40 / L, CLOSED_AT - 90 / L].filter((c) => c <= at);
+    const cp = cps[cps.length - 1] ?? 0.02;
+    later(() => {
+      failCard(FAIL.lean.title, FAIL.lean.text, () => {
+        this.failing = false;
+        this.fallT = 0;
+        this.badLean = 0;
+        this.startRide(cp, cp > 0.02 ? SPEED : START_V);
+      });
+    }, 1000);
+  }
+
   private startRide(at = 0.02, v = START_V) {
     this.clearTransient();
+    this.badLean = 0;
+    this.fallT = 0;
     this.phase = 'ride';
     this.s = at;
     this.dir = 1;
@@ -1405,7 +1436,10 @@ export class LevelMoto implements Level {
     const riding = this.phase === 'ride';
     const ax = riding ? this.input.axes().x : 0;
     const v0 = this.speed;
-    if (this.phase === 'ride') this.updateRide(dt, ax);
+    if (this.fallT > 0) {
+      this.fallT += dt;
+      this.speed = Math.max(0, this.speed - 16 * dt);
+    } else if (this.phase === 'ride') this.updateRide(dt, ax);
     else if (this.phase === 'uturn') this.updateUturn(dt);
     else if (this.phase === 'back') this.updateBack(dt);
     else this.speed = Math.max(0, this.speed - BRAKE_MAX * dt);
@@ -1435,11 +1469,15 @@ export class LevelMoto implements Level {
         this.react('Gas', MOTO.lean.bad[Math.floor(Math.random() * MOTO.lean.bad.length)], 7);
         vibrate(40);
       }
+      // Inclinarse mal en las curvas fuertes tumba la moto (y se repite el tramo)
+      if (strong && !ok) this.badLean += dt;
+      else if (ok) this.badLean = Math.max(0, this.badLean - dt * 1.5);
+      if (this.badLean > LEAN_FAIL && this.fallT <= 0 && !this.failing) this.fall(want);
       if (Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
     }
     if (this.wobbleT > 0) this.wobbleT -= dt;
     const wob = this.wobbleT > 0 ? Math.sin(this.t * 22) * 0.06 * this.wobbleT : 0;
-    this.moto.root.rotation.z = this.lean + wob + this.windK * Math.sin(this.t * 6) * 0.025;
+    this.moto.root.rotation.z = this.fallT > 0 ? this.fallSide * Math.min(1.3, this.fallT * 2.6) : this.lean + wob + this.windK * Math.sin(this.t * 6) * 0.025;
     // Se inclina de cintura para arriba: la cadera sigue en el asiento y las piernas no se mueven
     leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);
     for (const w of this.moto.wheels) w.rotation.x += (this.speed * dt) / 0.33;

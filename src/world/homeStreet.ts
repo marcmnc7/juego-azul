@@ -189,7 +189,8 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
   const S = STREET;
 
   // --- Suelo: carretera, aceras y pavimento delante de las casas ---
-  m.add(G.box, 0x2c2c34, -20, -0.06, -23.5, 0, 0, 0, 130, 0.1, 7);
+  // (el mismo asfalto que la carretera de campo, con su textura: antes era un gris más oscuro y liso; 21 nov)
+  m.add(G.box, 0x4a4a50, -20, -0.06, -23.5, 0, 0, 0, 130, 0.1, 7);
   // Línea discontinua: pintura plana sobre el asfalto (con grosor, la tinta le dibujaba un borde de dientes de sierra)
   const paint = new Merger();
   const dash = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);

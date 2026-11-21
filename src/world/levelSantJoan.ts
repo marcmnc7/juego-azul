@@ -3,7 +3,7 @@ import { steerTo, type SteerState } from '../core/steer';
 import { Trail } from '../core/follow';
 import type { Input } from '../core/input';
 import { audio } from '../core/audio';
-import { Walker, type Circle } from '../core/walker';
+import { Walker, WALK_SPEED, type Circle } from '../core/walker';
 import { Sky, Sun, toon, vibrate, applyShadows } from '../core/gfx';
 import { comicMood } from '../core/comic';
 import { comicHaloTexture } from '../core/comicTiles';
@@ -16,7 +16,7 @@ import { AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, streetLamp, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import type { Behave } from '../entities/crowdRig';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue, failCard } from '../ui/ui';
+import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue, failCard, viewfinder } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
 import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF, STAIR_PATH, TERRACE, TERRACE_Y, stairY, stairAt, pathLen } from './levelCena';
@@ -298,7 +298,7 @@ export class LevelSantJoan implements Level {
   private folkInfo = new Map<Folk, { name: string; hint: boolean; talk: number; times: number }>();
   private folkNext = 0;
   /** Cruzar la calle de la mano: los coches que dan la vuelta al Born y la pareja. */
-  private cross: { cars: { d: Donkey; s: number; v: number; walk: number }[]; hands: HandPair; hitT: number } | null = null;
+  private cross: { cars: { d: Donkey; s: number; v: number; walk: number; surge: number }[]; hands: HandPair; hitT: number } | null = null;
   /** Con quién se está hablando (se para mientras tanto). */
   private talkTo: Folk | null = null;
   private bags: { obj: THREE.Object3D; taken: boolean }[] = [];
@@ -1089,6 +1089,8 @@ export class LevelSantJoan implements Level {
         this.busy = false;
         this.phase = 'exact';
         this.updateHud();
+        // (21 nov) Como en el faro: ella misma dice qué foto hay que hacer
+        later(() => this.phase === 'exact' && bark('Margaux', SANTJOAN.exactPhoto.ask), 600);
       }),
     );
   }
@@ -1104,20 +1106,46 @@ export class LevelSantJoan implements Level {
 
   /** La foto exacta: si sale el obelisco, Gas sabe dónde está. Si no, se lo dice él por WhatsApp. */
   private takePhoto() {
-    audio.pop();
-    vibrate(25);
-    fadeFlash(() => {}, 120);
     if (!this.obeliskInShot()) {
+      audio.pop();
+      vibrate(25);
+      fadeFlash(() => {}, 120);
       this.misses++;
       const r = SANTJOAN.notExact;
       later(() => bark('Gas', r[(this.misses - 1) % r.length]), 700);
       return;
     }
+    // (21 nov) Con el visor del móvil, como la foto del faro: que el obelisco salga dentro del marco
     this.busy = true;
     this.input.reset();
+    this.walker.stop();
     this.hud.setAction(null);
-    const ex = CHATS.dimeExacto;
-    later(() => phoneChat({ ...ex, msgs: ex.msgs.slice(-1) }, () => this.sendLocation()), 500);
+    const v = new THREE.Vector3();
+    viewfinder(
+      {
+        title: SANTJOAN.exactPhoto.title,
+        sway: Math.max(0.55, 1 - this.misses * 0.2),
+        target: () => {
+          v.set(0, 6, 0).project(this.camera);
+          if (v.z > 1) return null;
+          return { x: ((v.x + 1) / 2) * window.innerWidth, y: ((1 - v.y) / 2) * window.innerHeight };
+        },
+      },
+      (q) => {
+        if (this.phase !== 'exact') return;
+        audio.pop();
+        vibrate(25);
+        if (q <= 0) {
+          this.misses++;
+          this.busy = false;
+          bark('Margaux', SANTJOAN.exactPhoto.bad);
+          return;
+        }
+        comicWord('¡CLIC!', 'perfect');
+        const ex = CHATS.dimeExacto;
+        later(() => phoneChat({ ...ex, msgs: ex.msgs.slice(-1) }, () => this.sendLocation()), 500);
+      },
+    );
   }
 
   private sendLocation() {
@@ -1744,12 +1772,14 @@ export class LevelSantJoan implements Level {
     this.phase = 'cross';
     this.gas.root.visible = true;
     const cars: NonNullable<typeof this.cross>['cars'] = [];
-    for (let i = 0; i < 5; i++) {
+    // (21 nov: más difícil) Más caballos, más rápidos y sin un ritmo fijo: a ratos alguno se arranca
+    const N = 8;
+    for (let i = 0; i < N; i++) {
       const d = makeHorse();
       d.root.userData.comicBent = true;
       markAccessories(d.root);
       this.scene.add(d.root);
-      cars.push({ d, s: (i / 5) * RING_LEN + Math.random() * 4, v: 3.4 + (i % 3) * 0.55, walk: Math.random() * 6 });
+      cars.push({ d, s: (i / N) * RING_LEN + Math.random() * 3, v: 4.1 + Math.random() * 1.6, walk: Math.random() * 6, surge: 0 });
     }
     const hands = new HandPair(this.player, this.gas);
     hands.start(this.walker.facing);
@@ -1772,12 +1802,16 @@ export class LevelSantJoan implements Level {
     for (const c of cr.cars) {
       // Al trote, sin parar: hay que mirar antes de cruzar
       const r = c.d.root;
-      c.s += c.v * dt;
+      // De vez en cuando se arranca un poco más rápido unos segundos
+      if (c.surge > 0) c.surge -= dt;
+      else if (Math.random() < dt * 0.18) c.surge = 1.2 + Math.random() * 1.2;
+      const v = c.v * (c.surge > 0 ? 1.45 : 1);
+      c.s += v * dt;
       const h = ringAt(c.s, r.position);
       r.rotation.y = h;
       r.position.y = bornHeight(r.position.x, r.position.z);
       // Las patas, al paso de la velocidad (como los del corro): no patinan
-      c.walk += c.v * dt * 4.4;
+      c.walk += v * dt * 4.4;
       const w = Math.sin(c.walk) * 0.55;
       c.d.legs[0].rotation.x = c.d.legs[3].rotation.x = w;
       c.d.legs[1].rotation.x = c.d.legs[2].rotation.x = -w;
@@ -1789,7 +1823,7 @@ export class LevelSantJoan implements Level {
       for (const q of [pp, g]) {
         const dx = q.x - r.position.x, dz = q.z - r.position.z;
         const fwd = dx * sin + dz * cos, side = dx * cos - dz * sin;
-        if (Math.abs(fwd) < 1.5 && Math.abs(side) < 0.75) {
+        if (Math.abs(fwd) < 1.75 && Math.abs(side) < 0.85) {
           this.crossHit();
           break;
         }
@@ -1966,7 +2000,7 @@ export class LevelSantJoan implements Level {
     // Del todo fuera de la plaza: los que quedan se van a la escena de casa
     this.pair?.stop();
     this.pair = null;
-    this.walker.speed = 4.0;
+    this.walker.speed = WALK_SPEED;
     this.ride = new TaxiRide();
     this.phase = 'ride';
     this.rideT = 0;
@@ -2236,7 +2270,7 @@ export class LevelSantJoan implements Level {
     // Pistas, solo si se ha perdido
     const lostNow = this.lost.tick(`home|${h.stage}|${h.unlocked}`, dt, this.busy);
     const show = lostNow && free && !near && h.climb === null;
-    h.marker.visible = show;
+    h.marker.visible = false; // (21 nov: sin flechas que señalen; lo va descubriendo ella)
     h.marker.rotation.y += dt * 2;
     if (show) {
       // (abajo, el pie de la escalera; arriba, la puerta)
@@ -2477,7 +2511,7 @@ export class LevelSantJoan implements Level {
     this.showPlazaTaxi(night);
     this.player.root.visible = true;
     this.gas.root.visible = false;
-    this.walker.speed = 4.0;
+    this.walker.speed = WALK_SPEED;
     this.walker.canSprint = true;
     this.walker.stop();
     this.input.reset();
