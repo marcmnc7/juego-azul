@@ -202,8 +202,6 @@ const M1 = ['talkTofol', 'collect', 'returnTofol', 'findMarc'];
 const M9 = ['findMarc', 'toFont'];
 /** Cap. 2: el jardín y la piscina de casa de Gas. */
 const H2 = ['arrive', 'toPool', 'toTowels'];
-/** Cap. 4: el estadio (con Gas y con Azul). */
-const ST4 = ['toWc', 'seek', 'beers'];
 /** Cap. 6: las calles de Ciutadella. */
 const SJ6 = ['hunt', 'exact', 'coming', 'nuts', 'be'];
 /** Cap. 7: las fases en las que se anda por el jardín (abrir a Gas, cocina, mesa, susto, el casco y a dormir). */
@@ -231,21 +229,15 @@ export const KEEPSAKES: Keepsake[] = [
   { id: 'r3-trenes', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, src: trenes, caption: 'Sants–Atocha, 30 de octubre' },
   { id: 'r3-ruta', chapter: 3, phases: ['drive1'], x: -2.6, z: 1040, r: 1.9, src: ruta, caption: 'El primer planning: 1.454 km' },
   { id: 'r3-a', chapter: 3, phases: ['camp'], x: 8, z: -9, src: mascarillas, caption: 'Mascarilla y sofá: el plan' },
-  { id: 'r3-c', chapter: 3, phases: ['camp'], x: -6, z: -11.5, caption: 'Camping gas (sin gas)' },
   { id: 'r3-b', chapter: 3, phases: ['drive2'], x: -2.6, z: 1965, r: 1.9, src: mirador, caption: 'Otro viaje, otro mirador' },
   // 4 · Barajas, las llegadas de Gran Canaria y el estadio
   { id: 'r4-a', chapter: 4, phases: ['airport'], x: 292, z: 14, src: carnavalMonja, caption: 'Carnaval: monja de guardia' },
   { id: 'r4-b', chapter: 4, phases: ['airport'], x: 336, z: 30.9, src: carnavalVaquera, caption: 'Carnaval: vaquera' },
   { id: 'r4-gc', chapter: 4, phases: ['arrivals'], x: 430.4, z: 12.1, src: granCanaria, caption: 'Gran Canaria, gafas puestas' },
   { id: 'r4-c', chapter: 4, phases: ['arrivals'], x: 371.4, z: 22.1, src: sanSiro, caption: 'Derby day: Milan–Inter' },
-  { id: 'r4-d', chapter: 4, phases: ST4, x: 19, z: 24, caption: 'Fito, en directo' },
-  { id: 'r4-e', chapter: 4, phases: ST4, x: -21, z: -21, caption: 'El estadio' },
   // 5 · La moto: cuelgan a un lado de la carretera
   { id: 'r5-a', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.21, side: 1, src: playaCB, caption: 'Tumbados en la arena, Costa Brava' },
   { id: 'r5-b', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.34, side: -1, src: amapolas, caption: 'Un campo de amapolas, 2 de mayo' },
-  { id: 'r5-c', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.46, side: 1, caption: 'Cap de Creus' },
-  { id: 'r5-d', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.62, side: -1, caption: 'La tramontana' },
-  { id: 'r5-e', chapter: 5, phases: ['ride'], x: 0, z: 0, u: 0.74, side: 1, caption: 'MotoTrip4life' },
   // 6 · Sant Joan
   { id: 'r6-mar', chapter: 6, phases: SJ6, x: 87, z: 10, src: cocacola, caption: '«Que estaba escrito solo MAR. Y no creo en las coincidencias»' },
   { id: 'r6-a', chapter: 6, phases: SJ6, x: 34, z: 3.6, src: paella, caption: 'La paella con todos, 24 de mayo' },
@@ -256,8 +248,6 @@ export const KEEPSAKES: Keepsake[] = [
   // 7 · La cena
   { id: 'r7-a', chapter: 7, phases: C7, x: 4, z: 1.6, src: paredRoja, caption: '25 de julio, de fiesta' },
   { id: 'r7-b', chapter: 7, phases: C7, x: -3.5, z: 8, src: caballoJulio, caption: 'Otra vez caballos, 25 de julio' },
-  { id: 'r7-c', chapter: 7, phases: C7, x: 4.2, z: 8.8, caption: 'Cena a escondidas' },
-  { id: 'r7-d', chapter: 7, phases: C7, x: -4, z: 2.6, caption: 'La guirnalda' },
   // 8 · El día del eclipse
   { id: 'r8-joy', chapter: 8, phases: ['walk', 'back'], x: -70, z: 11.5, src: joyFoto, caption: 'Joy, con su pelota' },
   { id: 'r8-a', chapter: 8, phases: ['parents', 'walk', 'back', 'toCar'], x: 4, z: 8.8, src: agostoPaseo, caption: '11 de agosto, la víspera' },
