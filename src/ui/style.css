@@ -1715,7 +1715,8 @@ html, body { background: #000; }
    Final de capítulo (noviembre de 2026): por momentos, a pantalla completa, en horizontal.
    ===================================================================================================== */
 .screen.wn-screen {
-  display: block; padding: 0; overflow: hidden; text-align: left; color: var(--cream); background: var(--night);
+  /* (clip, no hidden: con hidden, al enfocar el botón de la página siguiente el navegador desplazaba todo 50 px) */
+  display: block; padding: 0; overflow: hidden; overflow: clip; text-align: left; color: var(--cream); background: var(--night);
 }
 .screen.wn-screen::before { display: none; }
 .wn-bg { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); object-fit: cover; filter: blur(22px) saturate(1.15) brightness(.5); transform: scale(1.06); animation: hmKen 22s ease-in-out infinite alternate; }

@@ -1234,7 +1234,7 @@ export class Level2 implements Level {
     // Las matas y piedras de la cuneta se quedan en la carretera: aquí salían debajo de la plancha
     for (const sc of this.scatters) sc.mesh.visible = false;
     const g = this.grill.position;
-    this.camera.position.set(g.x - 0.1, 1.62, g.z - 1.0);
+    this.camera.position.set(g.x - 0.1, this.grillCamY(), g.z - this.grillCamBack());
     this.served = 0;
     this.scallops.forEach((s, i) => {
       s.p = 0;
@@ -1995,11 +1995,19 @@ export class Level2 implements Level {
     }
   }
 
+  private grillCamY() {
+    return (this.camera as THREE.PerspectiveCamera).aspect < 1 ? 2.25 : 1.62;
+  }
+  private grillCamBack() {
+    return (this.camera as THREE.PerspectiveCamera).aspect < 1 ? 1.45 : 1.0;
+  }
+
   private updateCamera(dt: number) {
     if (this.phase === 'grill' || this.phase === 'zambDone') {
       const g = this.grill.position;
       // Del lado del cocinero, no desde el cielo: la plancha abajo y, detrás, el arco con la barra encendida
-      this.camTarget.set(g.x - 0.1, 1.62, g.z - 1.0);
+      // (en vertical, más alta y atrás: si no, la fila de la derecha quedaba fuera de la pantalla)
+      this.camTarget.set(g.x - 0.1, this.grillCamY(), g.z - this.grillCamBack());
       this.camLook.set(g.x - 0.1, 0.9, g.z + 0.18);
     } else if (this.phase === 'logrono') {
       // Se para antes del puente y la cámara sube: el Ebro, el casco viejo y las torres de La Redonda

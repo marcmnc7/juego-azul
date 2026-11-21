@@ -412,8 +412,11 @@ export class Walker implements AirState {
     cp.set(from.x + dx * s, from.y + Math.max(dy * s, Math.max(0.05, Math.min(up, roof - 0.3))), from.z + dz * s);
   }
 
+  /** Si se pone, la cámara gira alrededor de este punto en vez de Azul (una pareja que habla: el punto medio). */
+  camPivot: THREE.Vector3 | null = null;
+
   camera(cam: THREE.Camera, dt: number, walls: Box2[], dist = 7, h = 3.6) {
-    const p = this.pos;
+    const p = this.camPivot ?? this.pos;
     // Encuadre de tercera persona más cercano y bajo: se ve a Azul y el horizonte, no el suelo desde
     // un dron. Los planos muy altos a propósito (pasillos, presentaciones) se respetan.
     if (h < 5) {

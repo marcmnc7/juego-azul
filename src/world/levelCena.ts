@@ -888,6 +888,8 @@ export class LevelCena implements Level {
     later(() => {
       if (this.phase !== 'cook') return;
       this.phase = 'toTable';
+      // La cámara, desde el patio: detrás de ella se quedaba metida en la cocina de fuera (la encimera, el aceite…)
+      this.walker.yaw = -2.2;
       this.busy = false;
       this.nagged = false;
       this.gateT = 0;
@@ -1725,6 +1727,7 @@ export class LevelCena implements Level {
           this.prep('toTable');
           this.switchGarland(false);
           this.player.root.position.set(STOVE.x + 0.4, 0, STOVE.z + 0.4);
+          this.walker.yaw = -2.2;
           this.gas.root.position.set(TABLE.x + 0.6, 0, TABLE.z - 1.4);
         },
       },
@@ -2243,7 +2246,8 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
     upDoor.leaf.add(dm.mesh());
   }
   sc.add(upDoor.group);
-  for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.35 + Math.sin(i) * 0.1, 9.9, 0, i, 0, 0.7, 0.9, 0.6);
+  // (seto bajo, que asome poco por encima del muro: alto, tapaba a Azul entera desde la cámara en la cena y en el susto)
+  for (let i = 0; i < 12; i++) m.add(G.bush, i % 4 ? 0x3d6e34 : 0x4a7d3e, 1.6 + i * 0.3, 1.0 + Math.sin(i) * 0.06, 9.9, 0, i, 0, 0.62, 0.5, 0.5);
   for (const sx of [-5.2, 5.2]) {
     m.add(G.box, WHITE, sx, 0.75, 5.1, 0, 0, 0, 0.3, 1.5, 10.4);
     colliders.push({ minX: sx - 0.2, maxX: sx + 0.2, minZ: 0, maxZ: 10.5, low: true });
@@ -2349,7 +2353,7 @@ export function buildAzulHouse(sc: THREE.Scene, colliders: Box2[], day = false) 
   };
   pine(10, 6, 9);
   pine(15, 2, 10);
-  pine(-20, -4, 9);
+  pine(-26, -4, 9); // (a -20 quedaba en mitad de la calle por la que pasean en el cap. 8)
   // Araucaria (pino de Norfolk): tronco recto y pisos de ramas horizontales
   araucaria(m, 8.4, 0, -7, 14, 3.6);
   // La calle tiene sus muros de pared seca hasta el faro: de aquí no se sale a los descampados de detrás

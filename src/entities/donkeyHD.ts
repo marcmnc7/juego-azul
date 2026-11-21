@@ -92,6 +92,7 @@ export function makeDonkeyHD(coat: number, shadow: THREE.Object3D, horse = false
   const P = horse ? prepHorse! : prep!;
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
+  root.userData.person = true; // (se aparta si se cruza pegado a la cámara, como la gente)
   const pivot = new THREE.Group();
   pivot.position.z = -0.75;
   root.add(pivot);

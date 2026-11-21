@@ -364,6 +364,15 @@ function vatify(mat: THREE.Material, part: VatPart) {
         `float vp0, vp1, vpa;
         vatFrame(vp0, vp1, vpa);
         vec3 transformed = mix(vatFetch(vatPos, vp0), vatFetch(vatPos, vp1), vpa);`,
+      )
+      // Quien queda pegado a la cámara no se dibuja (antes un brazo o una espalda llenaban media pantalla)
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        #ifdef USE_INSTANCING
+          vec4 vatWho = modelMatrix * instanceMatrix * vec4(0.0, 1.2, 0.0, 1.0);
+          if (distance(vatWho.xyz, cameraPosition) < 1.3) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);
+        #endif`,
       );
   };
   mat.customProgramCacheKey = () => 'vat';

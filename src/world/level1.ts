@@ -262,6 +262,7 @@ export class Level1 implements Level {
   // temporales reutilizables
   private v1 = new THREE.Vector3();
   private v2 = new THREE.Vector3();
+  private camMid = new THREE.Vector3();
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -1345,7 +1346,12 @@ export class Level1 implements Level {
     if (this.stage === 'eyes') {
       // (la mueve eyesCamera al principio del fotograma)
     } else if (this.stage === 'kiss' || this.stage === 'kissing') this.kissCamera(dt);
-    else this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? 3.6 : ending ? 6.5 : intro ? 11 : 5.4, close ? 2.3 : ending ? 4.2 : intro ? 6 : 2.9);
+    else {
+      // De cerca, centrada entre los dos (en vertical, centrada en ella dejaba a Marc fuera del plano) y algo más lejos
+      const portrait = (this.camera as THREE.PerspectiveCamera).aspect < 1;
+      this.walker.camPivot = close ? this.camMid.copy(pp).lerp(this.marc.root.position, 0.5) : null;
+      this.walker.camera(this.camera, intro ? dt * 0.35 : dt, this.world.colliders, close ? (portrait ? 5.4 : 3.6) : ending ? 6.5 : intro ? 11 : 5.4, close ? 2.3 : ending ? 4.2 : intro ? 6 : 2.9);
+    }
     this.world.sun.follow(pp);
     this.world.sky.update(this.camera, dt);
   }
@@ -1446,7 +1452,8 @@ export class Level1 implements Level {
     const mp = this.marc.root.position;
     this.marc.root.rotation.y = Math.atan2(pp.x - mp.x, pp.z - mp.z);
     this.walker.facing = Math.atan2(mp.x - pp.x, mp.z - pp.z);
-    this.walker.yaw = this.walker.facing - Math.PI / 2;
+    // De perfil en horizontal; en vertical no caben de lado (están a un par de metros): por encima del hombro de ella
+    this.walker.yaw = this.walker.facing - ((this.camera as THREE.PerspectiveCamera).aspect < 1 ? 0.5 : Math.PI / 2);
     this.updateHud();
     const M = this.V.meetScene;
     const toDance = () => {

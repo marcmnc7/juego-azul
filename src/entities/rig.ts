@@ -666,6 +666,7 @@ export function makeRigPerson(look: PersonLook, scale: number, blob: THREE.Objec
   const D = data[kind]!;
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
+  root.userData.person = true; // (para apartarla si se cruza pegada a la cámara)
   if (loaded) resetVRM(loaded);
   const model = loaded ? loaded.vrm.scene : SkeletonUtils.clone(tplSrc.get(kind)!.gltf.scene);
   model.scale.setScalar(D.scale);

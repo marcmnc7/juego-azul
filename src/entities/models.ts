@@ -533,6 +533,7 @@ export function makePerson(look: PersonLook, scale = 1, outline = true): Person 
   if (rigReady()) return makeRigPerson(look, scale, blobShadow(1.1));
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
+  root.userData.person = true; // (para apartarla si se cruza pegada a la cámara)
   const body = new THREE.Group();
   root.add(body);
   const shoes = look.shoes ?? 0x3a2a20;
@@ -1057,6 +1058,7 @@ export function makeDonkey(coat = 0x7d6b5d): Donkey {
   if (rigReady() && donkeyReady()) return makeDonkeyHD(coat, blobShadow(2.2));
   const root = new THREE.Group();
   root.userData.noCam = true; // se mueve: la cámara no choca con ello
+  root.userData.person = true; // (se aparta si se cruza pegado a la cámara, como la gente)
   const pivot = new THREE.Group();
   pivot.position.z = -0.75; // eje en las patas traseras
   root.add(pivot);

@@ -352,8 +352,10 @@ export function buildStreet(sc: THREE.Scene, opts: { gateOpen?: boolean; night?:
 
   // Farolas de la calle
   const lampPos: number[] = [];
-  for (let x = -69; x <= 41; x += 14) {
-    if (open && Math.abs(x - 2.4) < 3) continue; // la farola de delante de la corredera estorbaría al coche
+  for (let x0 = -69; x0 <= 41; x0 += 14) {
+    if (open && Math.abs(x0 - 2.4) < 3) continue; // la farola de delante de la corredera estorbaría al coche
+    // (la de x = 13 quedaba pegada a donde Gas la deja en el cap. 2: el poste tapaba media pantalla; un poco antes)
+    const x = x0 === 13 ? 8.5 : x0;
     m.add(G.cyl, 0x3a3a3a, x, 2.2, -19.8, 0, 0, 0, 0.12, 4.4, 0.12);
     m.add(G.box, 0x3a3a3a, x, 4.4, -20.3, 0, 0, 0, 0.08, 0.08, 1.0);
     m.add(G.box, 0x3a3a3a, x, 4.3, -20.8, 0, 0, 0, 0.4, 0.15, 0.3);

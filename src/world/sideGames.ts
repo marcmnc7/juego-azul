@@ -132,9 +132,13 @@ export class WaterFight {
   soaked = 0;
   out = 0;
   finished = false;
+  /** Los críos no disparan hasta que Azul se mueve o dispara: es lo primero del juego y hay que poder mirar con calma. */
+  private engaged = false;
+  private start: THREE.Vector3;
 
   constructor(sc: THREE.Scene, private player: Person, private walker: Walker, private fx: Particles, private colliders: readonly Box2[], private people: readonly { x: number; z: number; r: number }[], private zone: Box2, private onChange: () => void, private onDone: () => void) {
     this.drops = new Droplets(sc);
+    this.start = player.root.position.clone();
     this.gun = toyGun(0x2fb24a);
     this.gun.position.set(0, -0.05, 0.05);
     player.handR.add(this.gun);
@@ -175,6 +179,7 @@ export class WaterFight {
 
   shoot() {
     if (this.cool > 0 || this.finished) return;
+    this.engaged = true;
     this.cool = 0.45;
     this.armT = 0.5;
     const pp = this.player.root.position;
@@ -257,6 +262,7 @@ export class WaterFight {
       }
     }
     const pp = this.player.root.position;
+    if (!this.engaged && !busy && Math.hypot(pp.x - this.start.x, pp.z - this.start.z) > 1.5) this.engaged = true;
     for (const k of this.kids) {
       const r = k.p.root;
       k.flinch -= dt;
@@ -315,7 +321,7 @@ export class WaterFight {
         }
         continue;
       }
-      k.fireT -= dt;
+      if (this.engaged) k.fireT -= dt;
       if (k.fireT <= 0 && d < 8) k.warn = 0.65;
       // Huyendo de ti (y más los ya mojados, o al esquivar) corren más
       k.dodge -= dt;

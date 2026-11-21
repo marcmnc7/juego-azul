@@ -39,7 +39,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
 }
 
 export function clearScreens() {
-  root.querySelectorAll('.screen, .gift-overlay').forEach((e) => e.remove());
+  // (y una tarjeta de «Otra vez» que hubiera quedado de otro capítulo)
+  root.querySelectorAll('.screen, .gift-overlay, .fail-back').forEach((e) => e.remove());
 }
 
 /**
@@ -70,13 +71,15 @@ function testTaps(target: HTMLElement) {
  * En el navegador del móvil no se juega: se pide abrirlo desde la pantalla de inicio (a pantalla completa, sin
  * barras y sin conexión). Con el modo prueba se puede seguir en el navegador.
  */
+const SHARE_SVG = '<svg width="15" height="18" viewBox="0 0 15 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M7.5 1.5v10M4 5l3.5-3.5L11 5"/><path d="M5 8H2.5v8.5h10V8H10"/></svg>';
 export function installGate(ios: boolean) {
   // (con la misma portada que la cuenta atrás y la de Empezar: antes era una pantalla del estilo antiguo)
   const { s, slot } = cover('ig-screen');
   const steps = ios
     ? [
-        ['1', 'Toca <b>Compartir</b> <span class="ig-icon">⎋</span> abajo en Safari'],
-        ['2', 'Elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span>'],
+        // (el icono de Compartir de verdad, un cuadrado con la flecha hacia arriba; en iOS 26 está dentro de «⋯»)
+        ['1', `En Safari, toca <b>Compartir</b> <span class="ig-icon">${SHARE_SVG}</span> (si no lo ves, está dentro de <b>⋯</b>)`],
+        ['2', 'Baja un poco y elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span>'],
         ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
       ]
     : [

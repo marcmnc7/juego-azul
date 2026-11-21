@@ -4176,7 +4176,8 @@ export class Level3 implements Level {
     const h = this.hud;
     let chips = '';
     if (this.trip > 0 || this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
-    if (this.missed > 0) chips += `<span class="chip">🎵 se pierde ${this.missed}</span>`;
+    // (buscando a Azul, ningún contador: que no parezca que hay prisa; las canciones perdidas salen en el resumen)
+    if (this.missed > 0 && this.phase !== 'seek') chips += `<span class="chip">🎵 se pierde ${this.missed}</span>`;
     if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
     chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
     if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;

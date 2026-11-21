@@ -162,10 +162,16 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
     const [r0, c0] = start;
     cellEl[r0][c0].classList.remove('sel');
     start = null;
-    for (const [w, cells] of pos) {
+    // Vale cualquier línea recta que diga una palabra que falte, en un sentido u otro (NANIT está dentro de BONANIT:
+    // antes, si se marcaba esa y no la que había colocado el juego, decía que no)
+    const dr = Math.sign(r - r0), dc = Math.sign(c - c0), len = Math.max(Math.abs(r - r0), Math.abs(c - c0)) + 1;
+    const straight = (r !== r0 || c !== c0) && (r0 === r || c0 === c || Math.abs(r - r0) === Math.abs(c - c0));
+    const line: [number, number][] = straight ? Array.from({ length: len }, (_, k) => [r0 + dr * k, c0 + dc * k] as [number, number]) : [];
+    const text = line.map(([rr, cc]) => grid[rr][cc]).join('');
+    for (const w of words) {
       if (found.has(w)) continue;
-      const a = cells[0], b = cells[cells.length - 1];
-      if ((a[0] === r0 && a[1] === c0 && b[0] === r && b[1] === c) || (b[0] === r0 && b[1] === c0 && a[0] === r && a[1] === c)) {
+      if (straight && (text === w || [...text].reverse().join('') === w)) {
+        const cells = line;
         found.add(w);
         cells.forEach(([rr, cc]) => cellEl[rr][cc].classList.add('found'));
         tags.get(w)!.classList.add('done');
@@ -222,7 +228,9 @@ function orden(f: ReturnType<typeof frame>, end: (l: string) => void) {
 
 // ---------------- Parejas ----------------
 function parejas(f: ReturnType<typeof frame>, end: (l: string) => void) {
-  const pics = shuffle(MEMORIES.filter((m) => m.src && !m.sticker && !m.chat)).slice(0, 6);
+  // (solo fotos de capítulos ya abiertos: antes podían salir las de Sant Joan, que se juega después)
+  const after = PUZZLES.find((p) => p.kind === 'parejas')?.after ?? 9;
+  const pics = shuffle(MEMORIES.filter((m) => m.src && !m.sticker && !m.chat && m.level <= after)).slice(0, 6);
   const deck = shuffle([...pics, ...pics].map((m, i) => ({ m, i })));
   const g = el('div', 'pz-cards');
   let open: { c: HTMLElement; m: (typeof pics)[number] }[] = [];

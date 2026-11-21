@@ -67,8 +67,8 @@ const CAST_BY_CHAPTER: Record<number, [name: string, count: number][]> = {
   3: [['azul_diario', 4], ['gas_diario', 4], ['camarero_laurel', 1]],
   4: [['azul_diario', 1], ['gas_fito', 1], ['camarero_fito', 1], ['agente_aeropuerto_h', 1], ['agente_aeropuerto_m', 1], ['fito', 1], ['bajista', 1], ['saxofonista', 1], ['bateria', 1]],
   5: [['azul_moto', 2], ['gas_moto', 2], ['extra_h3', 1], ['extra_h4', 2], ['extra_m1', 1]],
-  // (un caixer por caballo: 4 por la calle, 2 por Ses Voltes y 3 en Es Bè)
-  6: [['azul_santjoan', 4], ['gas_santjoan', 4], ['taxista', 3], ['caixer', 9]],
+  // (un caixer por caballo: 4 por la calle, 2 por Ses Voltes, 3 en Es Bè y 5 al cruzar el Born de la mano)
+  6: [['azul_santjoan', 4], ['gas_santjoan', 4], ['taxista', 3], ['caixer', 14]],
   7: [['azul_diario', 1], ['gas_diario', 2], ['padre_azul', 2], ['madre_azul', 2], ['vecino', 1]],
   // (en el 8, Sa Farola sale en varias escenas que siguen vivas, el kayak y la casa de Azul entre ellas: cada una se queda sus dos paseantes)
   8: [['azul_diario', 3], ['gas_diario', 3], ['padre_azul', 1], ['madre_azul', 1], ['padre_gas', 1], ['madre_gas', 1], ['eric', 1], ['extra_mayor_m', 4], ['extra_mayor_h', 4]],

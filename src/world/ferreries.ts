@@ -552,7 +552,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const lightPts: number[] = [];
   const strings: [number, number, number, number][] = [];
   // (una guirnalda cada 12 m, no cada 8: la calle se veía cargada)
-  for (let sx = -42; sx <= 42; sx += 12) if (Math.abs(sx) > 12) strings.push([sx, -5, sx, 5]);
+  // (la de -30 no: ahí va la pancarta de la entrada)
+  for (let sx = -42; sx <= 42; sx += 12) if (Math.abs(sx) > 12 && sx !== -30) strings.push([sx, -5, sx, 5]);
   for (let sz = 8; sz <= 22; sz += 7) strings.push([-12, sz, 12, sz]);
   strings.push([-12, 4, 12, 24], [12, 4, -12, 24]);
   for (const [x1, z1, x2, z2] of strings) {
@@ -604,7 +605,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "23, 24 i 25 d'agost")) });
   const banners: Parameters<typeof mergedPlanes>[0] = [];
   const cables: [number, number, number, number, number, number][] = [];
-  for (const bx of [-34, 22]) {
+  // (la de la entrada, algo más adentro: a -34 quedaba encima de la cámara al empezar y tapaba el marcador en vertical; en el sitio de la guirnalda de -30, que se quita)
+  for (const bx of [-30, 22]) {
     banners.push({ w: 8, h: 2, x: bx, y: 5.3, z: 0, ry: -Math.PI / 2 }, { w: 8, h: 2, x: bx + 0.03, y: 5.3, z: 0, ry: Math.PI / 2 });
     cables.push([bx, 6.35, 0, 0.03, 0.03, 10]);
   }

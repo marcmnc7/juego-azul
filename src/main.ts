@@ -136,13 +136,50 @@ juice.onWord = (w, c) => comicWord(w, c);
 audio.onCue = (c) => juice.cue(c);
 let cine = 0;
 /** Un fotograma: el capítulo en estilo cómic; la pantalla del mapa, solo su fondo. */
+/**
+ * Quien se cruza pegado a la cámara, entre ella y Azul, no se dibuja mientras está ahí (antes una cabeza o un brazo
+ * llenaban media pantalla). Solo con la cámara normal detrás de Azul: en el cine y en los diálogos no se toca nada.
+ */
+let peopleOf: { scene: THREE.Scene | null; list: THREE.Object3D[]; at: number } = { scene: null, list: [], at: 0 };
+const hiddenNow: THREE.Object3D[] = [];
+const ocA = new THREE.Vector3(), ocB = new THREE.Vector3(), ocF = new THREE.Vector3();
+function hideOccluders(scene: THREE.Scene) {
+  hiddenNow.length = 0;
+  const pl = (level as unknown as { player?: { root: THREE.Object3D } } | null)?.player?.root;
+  if (!pl || stage.current || uiRoot.classList.contains('filming') || document.querySelector('#ui .dialogue')) return;
+  const t = performance.now();
+  if (peopleOf.scene !== scene || t - peopleOf.at > 1000) {
+    const list: THREE.Object3D[] = [];
+    scene.traverse((o) => {
+      if (o.userData.person) list.push(o);
+    });
+    peopleOf = { scene, list, at: t };
+  }
+  pl.getWorldPosition(ocA);
+  ocA.y += 1.2;
+  const dp = camera.position.distanceTo(ocA);
+  camera.getWorldDirection(ocF);
+  if (dp < 1.5 || dp > 12 || ocF.dot(ocB.subVectors(ocA, camera.position).normalize()) < 0.75) return;
+  for (const o of peopleOf.list) {
+    if (o === pl || !o.visible) continue;
+    o.getWorldPosition(ocB);
+    ocB.y += 1.25 * o.scale.y;
+    const d = camera.position.distanceTo(ocB);
+    if (d < 1.5 && d < dp - 0.4) {
+      o.visible = false;
+      hiddenNow.push(o);
+    }
+  }
+}
 function draw(scene: THREE.Scene) {
   if (scene === idle) {
     renderer.autoClear = true;
     renderer.render(scene, camera);
     return;
   }
+  hideOccluders(scene);
   drawComic(renderer, scene, camera);
+  for (const o of hiddenNow) o.visible = true;
 }
 const input = new Input(canvas, uiRoot);
 // Las misiones usan la misma cámara y el mismo control; al empezar, su escena se prepara como la de un capítulo

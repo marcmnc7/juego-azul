@@ -1865,10 +1865,14 @@ export class LevelEclipse implements Level {
 
     // (en el patio de Azul, por debajo del toldo y de la buganvilla)
     const pz = this.player.root.position;
-    if (free || onFoot) this.walker.camera(this.camera, dt, this.colliders, 6, pz.z < 10.4 && pz.z > -0.5 && Math.abs(pz.x) < 5.4 ? 2.3 : 3.4);
+    // (pegada al coche, la cámara más alta: si no, quedaba detrás del techo y no se la veía)
+    const byCar = !!this.car.root.parent && this.car.root.visible && Math.hypot(this.car.root.position.x - pz.x, this.car.root.position.z - pz.z) < 3.6;
+    if (free || onFoot) this.walker.camera(this.camera, dt, this.colliders, 6, byCar ? 5.4 : pz.z < 10.4 && pz.z > -0.5 && Math.abs(pz.x) < 5.4 ? 2.3 : 3.4);
     else {
-      this.camera.position.lerp(this.v1.set(pp.x - 2, 3.4, pp.z + 6), Math.min(1, dt * 2));
-      this.camLook.lerp(new THREE.Vector3(pp.x, 1.3, pp.z - 1), Math.min(1, dt * 3));
+      // (en vertical, más alta y atrás: a 3,4 m el coche llenaba medio plano y ella bajaba escondida detrás)
+      const portrait = this.camera.aspect < 1;
+      this.camera.position.lerp(this.v1.set(pp.x - (portrait ? 2.5 : 2), portrait ? 5.4 : 3.4, pp.z + (portrait ? 8.5 : 6)), Math.min(1, dt * 2));
+      this.camLook.lerp(new THREE.Vector3(pp.x, portrait ? 0.9 : 1.3, pp.z - (portrait ? 1.6 : 1)), Math.min(1, dt * 3));
       this.camera.lookAt(this.camLook);
     }
     this.sun.follow(pp);
@@ -1941,9 +1945,13 @@ export class LevelEclipse implements Level {
     this.hud.setAction(null);
     // Cámara alta desde la calle, mirando hacia casa
     // Sobre la calle: desde más atrás, medio plano eran los tejados de enfrente
-    const pos = this.v1.set(c.position.x * 0.6 + 1, 11, Math.min(c.position.z - 7, -24.6));
+    // En vertical, entre el coche y la entrada, y más alta: si no, el coche quedaba en el borde y la corredera, fuera
+    const portrait = this.camera.aspect < 1;
+    const mx = portrait ? (c.position.x + (PARK.minX + PARK.maxX) / 2) / 2 : c.position.x * 0.8 + 0.5;
+    const mz = portrait ? (c.position.z + (PARK.minZ + PARK.maxZ) / 2) / 2 : c.position.z + 1;
+    const pos = portrait ? this.v1.set(mx, 19, Math.min(mz - 11, -27)) : this.v1.set(c.position.x * 0.6 + 1, 11, Math.min(c.position.z - 7, -24.6));
     this.camera.position.lerp(pos, Math.min(1, dt * 2));
-    this.camLook.lerp(new THREE.Vector3(c.position.x * 0.8 + 0.5, 0, c.position.z + 1), Math.min(1, dt * 3));
+    this.camLook.lerp(new THREE.Vector3(mx, 0, mz), Math.min(1, dt * 3));
     this.camera.lookAt(this.camLook);
     this.sun.follow(c.position);
   }
