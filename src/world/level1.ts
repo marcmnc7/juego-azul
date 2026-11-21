@@ -823,7 +823,7 @@ export class Level1 implements Level {
       findMarc: this.V.findFirst
         ? // (le busca por sus ubicaciones; la del Barça, como siempre, ayuda a que la gente se acuerde)
           this.gasStep === 0
-            ? ['¿Uno con la del Barça? Hace nada estaba delante del Sa Penya, en la otra punta de la calle mayor.', '¿El de la ubicación? Eso es la calle mayor, hacia el final, donde el Sa Penya.']
+            ? ['¿Uno con la del Barça? Hace nada estaba delante del Feymar, en la otra punta de la calle mayor.', '¿El de la ubicación? Eso es la calle mayor, hacia el final, donde el Feymar.']
             : ['El de la del Barça se ha ido a por un bocata. Con patatas, eh.', 'Lo he visto con un bocata en la mano, al lado del Sa Font.']
         : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
       toFont: ['¿A Sa Font? Al fondo de la plaza, al lado de la iglesia.'],
@@ -1135,6 +1135,13 @@ export class Level1 implements Level {
     const dT = pp.distanceTo(this.world.tofolPos);
     if (this.stage === 'findMarc' && this.gasMovesLeft > 0 && !this.busy && pp.distanceTo(this.world.marcPos) < 6) this.moveGas();
     const F = this.V.findFirst;
+    // (21 nov) Capítulo 9: Gas, con la del Barça, no está en el pueblo hasta que toca encontrarle (después de la
+    // primera ubicación, cuando manda la buena); antes se le podía ver por ahí sin haber seguido los pasos
+    if (F) {
+      const hide = (this.stage === 'intro' || this.stage === 'findMarc') && this.gasStep === 0;
+      this.marc.root.visible = !hide;
+      if (this.bocata && hide) this.bocata.visible = false;
+    }
     // Capítulo 9: llega a la primera ubicación que le mandó y ya no está
     if (F && this.stage === 'findMarc' && !this.busy && this.gasStep === 0 && Math.hypot(pp.x - F.first.x, pp.z - F.first.z) < 4) this.atFirstSpot();
     const dM = pp.distanceTo(this.world.marcPos);

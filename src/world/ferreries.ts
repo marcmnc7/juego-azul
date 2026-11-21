@@ -53,8 +53,8 @@ interface Hang {
 
 /** Carteles del pueblo, para reutilizar las calles en otras fiestas (Sant Joan en Ciutadella). */
 export interface TownDressing {
-  banner: [string[], string];
-  signs: [string, string];
+  banner?: [string[], string];
+  signs?: [string, string];
   bars?: [string, string, string, string];
 }
 
@@ -602,7 +602,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   if (senyeraPlanes.length) group.add(mergedPlanes(senyeraPlanes, senyeraMat));
 
   // Pancartas de las fiestas cruzando la calle y a la entrada del Pla de l'Església
-  const bannerMat = toon({ map: (town ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "23, 24 i 25 d'agost")) });
+  const bannerMat = toon({ map: (town?.banner ? bannerTexture(...town.banner) : bannerTexture(["Festes de Sant Bartomeu", 'Ferreries · Menorca'], "23, 24 i 25 d'agost")) });
   const banners: Parameters<typeof mergedPlanes>[0] = [];
   const cables: [number, number, number, number, number, number][] = [];
   // (la de la entrada, algo más adentro: a -34 quedaba encima de la cámara al empezar y tapaba el marcador en vertical; en el sitio de la guirnalda de -30, que se quita)
@@ -624,9 +624,9 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
   }
 
   // Placas de calle (con luz, como las de piedra del cap. 2: sin ella brillaban solas a pleno sol)
-  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs[0] ?? 'Carrer de Sant Bartomeu'), roughness: 0.9 }));
+  const sign1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs?.[0] ?? 'Carrer de Sant Bartomeu'), roughness: 0.9 }));
   sign1.position.set(-43.6, 2.78, -4.86); // (por debajo de la cornisa y sin ninguna farola delante)
-  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs[1] ?? "Pla de l'Església"), roughness: 0.9 }));
+  const sign2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.52), new THREE.MeshStandardMaterial({ map: streetSignTexture(town?.signs?.[1] ?? "Pla de l'Església"), roughness: 0.9 }));
   sign2.position.set(-11.86, 3.0, 14.6);
   sign2.rotation.y = Math.PI / 2;
   const sign3 = sign2.clone();

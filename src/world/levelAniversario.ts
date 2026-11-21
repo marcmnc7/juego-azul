@@ -25,9 +25,11 @@ const VARIANT: JaleoVariant = {
     ...FERRERIES_VARIANT.hud,
     find: '📍 Gas',
   },
+  // (21 nov) El bar de la primera ubicación se llama como en el chat: «Feymar»
+  town: { ...FERRERIES_VARIANT.town, bars: ['Bar Es Pla', 'Cas Ferrer', 'Feymar', 'Bar Sa Font'] },
   introChats: [part(CHATS.bocata, 0, 4)],
   findFirst: {
-    // La primera ubicación (16:03): delante del bar Sa Penya, al otro extremo de la calle mayor
+    // La primera ubicación (16:03): delante del bar Feymar, al otro extremo de la calle mayor
     first: new THREE.Vector3(30, 0, 0.2),
     atFirst: part(CHATS.bocata, 4, 11),
     found: [part(CHATS.bocata, 11)],
