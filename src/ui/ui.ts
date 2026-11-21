@@ -1,12 +1,12 @@
 import { GIFTS, Gift } from '../data/gifts';
-import { LEVELS, Line, FINAL_LETTER, CROSSWORD, type CrossClue } from '../data/story';
+import { LEVELS, Line, CROSSWORD, type CrossClue } from '../data/story';
 import { audio } from '../core/audio';
 import { save as persist, type SaveData } from '../core/save';
 import { PUZZLES } from '../data/puzzles';
 import { runPuzzle, puzzleDate, puzzleDay } from './puzzles';
 import type { LevelResult } from '../world/level';
 import { vibrate } from '../core/gfx';
-import { MEMORIES, memoriesFor, STICKERS, LETTER_PHOTOS, Memory } from '../data/memories';
+import { MEMORIES, memoriesFor, STICKERS, Memory } from '../data/memories';
 import { KEEPSAKES, keepsakesFor, QUIZ, TEASERS, type Keepsake } from '../data/extras';
 import type { ChatFrag } from '../data/chats';
 import { cinema } from '../core/cinema';
@@ -192,8 +192,6 @@ export function countdownScreen(onOpen: () => void) {
 export interface MapOptions {
   test: boolean;
   onPlay: (level: number) => void;
-  /** La carta final (después del crucigrama). */
-  onLetter: () => void;
   onReset: () => void;
 }
 
@@ -598,7 +596,7 @@ function liveCountdown(d: Date) {
 
 /**
  * El menú de los capítulos, como un mapa: cada capítulo es una parada (su portada en una baldosa, la fecha y el
- * nombre) y un camino de puntos las une, subiendo y bajando, de la primera a la sorpresa final. Lo hecho, en color y
+ * nombre) y un camino de puntos las une, subiendo y bajando, de la primera a la última. Lo hecho, en color y
  * con el camino encendido; lo que toca, más grande, latiendo y con su botón; lo cerrado, con la portada y el nombre
  * borrosos y el candado. Se desliza de lado y arranca centrado en el que toca.
  */
@@ -606,7 +604,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   body.classList.add('mp-body');
   const states = LEVELS.map((_, i) => chapterState(i, save, opts.test));
   const allDone = LEVELS.every((l) => save.levelsDone.includes(l.id));
-  const nextI = allDone ? LEVELS.length : states.findIndex((c) => !c.done);
+  const nextI = allDone ? LEVELS.length - 1 : states.findIndex((c) => !c.done);
   const allOpen = opts.test && !faking();
   const wrap = el('div', 'mp-wrap');
   const track = el('div', 'mp-track');
@@ -651,13 +649,6 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     nodes.push(n);
     track.append(n);
   });
-  const finOpen = allDone || opts.test;
-  const fin = el('button', 'mp-node final' + (finOpen ? ' open' : ' locked') + (allDone ? ' next' : ''));
-  fin.append(el('div', 'mp-tile heart', '💌'), el('div', 'mp-label', `<small>♥ · Al final</small><b>La sorpresa final</b><i>${finOpen ? 'Tu carta' : 'Cuando termines los nueve'}</i>`));
-  // (al final, solo la carta: el crucigrama es ahora uno de los juegos de entre capítulos)
-  if (finOpen) fin.onclick = () => opts.onLetter();
-  nodes.push(fin);
-  track.append(fin);
   // Los «conecta»: un punto más pequeño a medio camino entre dos capítulos, con su día; se abren ese día
   const minis = PUZZLES.map((pz) => {
     const open = allOpen || now() >= puzzleDate(pz).getTime();
@@ -1182,22 +1173,6 @@ export function crossword(onSolved: () => void, onBack: () => void, doneLabel = 
   paint();
 }
 
-export function finalLetter(onClose: () => void) {
-  clearScreens();
-  audio.fanfare();
-  const o = el('div', 'screen letter-screen');
-  const card = el('div', 'letter');
-  const strip = el('div', 'polaroid-strip');
-  LETTER_PHOTOS.forEach((src, i) => strip.append(polaroid({ level: 0, src, caption: '' }, [-6, 3, -2][i], false)));
-  card.append(strip, el('div', 'hearts', '💙'), el('h2', '', FINAL_LETTER.title));
-  for (const p of FINAL_LETTER.paragraphs) card.append(el('p', '', p));
-  card.append(el('div', 'signature', FINAL_LETTER.signature), sticker(STICKERS.carita, 'letter-sticker'));
-  const b = el('button', 'big-btn', 'Volver');
-  b.onclick = onClose;
-  o.append(card, b);
-  root.append(o);
-}
-
 function sticker(src: string, cls: string) {
   const i = el('img', 'sticker ' + cls) as HTMLImageElement;
   i.src = src;
@@ -1205,31 +1180,6 @@ function sticker(src: string, cls: string) {
   i.draggable = false;
   return i;
 }
-
-/** Foto del chat como polaroid con su pie escrito a mano. */
-function polaroid(m: Memory, tilt: number, withCaption = true) {
-  const f = el('figure', 'polaroid' + (m.sticker ? ' is-sticker' : '') + (m.chat ? ' is-chat' : '') + (m.pending ? ' is-pending' : ''));
-  f.style.setProperty('--tilt', `${tilt}deg`);
-  if (m.chat) {
-    const c = el('div', 'mini-chat');
-    for (const msg of m.chat) {
-      c.append(el('div', 'bubble' + (msg.me ? ' me' : ''), `<span class="bt">${msg.text}</span><span class="bm">${msg.t}</span>`));
-    }
-    f.append(c);
-  } else if (m.pending || !m.src) {
-    f.append(el('div', 'photo-slot', '📷<br><small>Foto pendiente</small>'));
-  } else {
-    const img = el('img') as HTMLImageElement;
-    img.src = m.src;
-    img.alt = m.caption;
-    img.draggable = false;
-    img.decoding = 'async';
-    f.append(img);
-  }
-  if (withCaption) f.append(el('figcaption', '', m.caption));
-  return f;
-}
-
 
 /** Al acabar un capítulo: sus fotos caen sobre la mesa y pasan al álbum. */
 

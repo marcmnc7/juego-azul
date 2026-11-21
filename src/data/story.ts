@@ -667,19 +667,6 @@ export const CROSSWORD = {
   solved: '¿Lo ves? Brutal. 💙',
 };
 
-// Carta del regalo final. Marc: reescríbela con tus palabras.
-export const FINAL_LETTER = {
-  title: 'Feliz cumpleaños, Azul',
-  paragraphs: [
-    'El 25 de agosto de 2025, en Ferreries, me puse a hablar con Carme para poder presentarme a ti. A los dos días me iba, y aun así acabaste subiendo a un coche azul cerca de Pins, en una piscina en silencio y en un césped que es el único que sabe lo que pasó.',
-    'Después vino la lluvia que nos quitó la moto, la Cafetería Marcial, las zamburiñas de San Vicente y un gas de camping que se quedó en casa y me dio nombre. Vino Fito en Gran Canaria, la Costa Brava en moto y Sant Joan. Vino una carbonara a escondidas y un 23:49 en el que me escribiste que me querías. Y vino un eclipse desde la roca de Es Castellar, con las gafas puestas.',
-    'El 1 de octubre me escribiste: «Desde que te conozco no hubo un dia donde no he pensado en ti. Y cada vez que te vas hasta el dia que te vuelvo a ver no pasa ni un dia sin que te eche de menos». Yo te dije que las mías serían más cortas pero querían decir lo mismo, y tú me dijiste «Me vale». Hoy van un poco más largas: yo igual, cada día.',
-    'Un día me escribiste «Quiero que seas mi casa». Yo también lo quiero, cada día con más ganas.',
-    'Feliz cumpleaños. Deja de fumar, que lo sepas. Y gracias a ti por hacer esta apuesta conmigo.',
-  ],
-  signature: 'Te quiere, Gas 💙',
-};
-
 // Capítulo 5: la Costa Brava en moto (30 de abril – 4 de mayo de 2026). Chats: motoPlan, mochila, motoTrip.
 export const MOTO = {
   intro: [

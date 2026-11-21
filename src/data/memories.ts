@@ -1,6 +1,5 @@
 // Fotos y stickers sacados de nuestro chat. Cada capítulo desbloquea sus recuerdos en el álbum.
 import type { ChatMsg } from './chats';
-import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 import lpaDesayuno from '../assets/recuerdos/lpa-desayuno.jpg';
 import lpaAscensor from '../assets/recuerdos/lpa-ascensor.jpg';
 import lpaConcierto from '../assets/recuerdos/lpa-concierto.jpg';
@@ -60,6 +59,3 @@ export const MEMORIES: Memory[] = [
 ];
 
 export const memoriesFor = (level: number) => MEMORIES.filter((m) => m.level === level);
-
-/** Las tres que acompañan a la carta final: Gran Canaria y Sant Joan. */
-export const LETTER_PHOTOS = [granCanaria, santJoanSelfie, santJoan];

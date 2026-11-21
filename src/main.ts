@@ -21,7 +21,6 @@ import { LevelCena } from './world/levelCena';
 import { LevelMoto } from './world/levelMoto';
 import { LevelEclipse } from './world/levelEclipse';
 import { LevelAniversario } from './world/levelAniversario';
-import { LetterScene } from './world/letterScene';
 import type { Level, LevelResult } from './world/level';
 import { applyShadows, MOBILE, quality, settleAmbient, Sky, toon } from './core/gfx';
 import { clearRigPeople, preloadRig, updateRigPeople, ensureVRMs, releaseVRMs } from './entities/rig';
@@ -34,7 +33,7 @@ import { comic, comicFlash, comicMood, comicScene, drawComic, type ComicLook } f
 import { juice } from './core/juice';
 import { cinema } from './core/cinema';
 import { stage } from './core/stage';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, finalLetter, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -278,7 +277,6 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 const mapOpts = {
   test: TEST,
   onPlay: (n: number) => startLevel(n),
-  onLetter: () => startLetter(),
   onReset: () => {
     data = { version: data.version, levelsDone: [], giftsUnlocked: [] };
     save(data);
@@ -309,20 +307,6 @@ function leaveLevel() {
   clearRigPeople();
   input.reset();
   input.enabled = true;
-}
-
-/** La carta final, como escena: de noche sobre el mar, con las fotos flotando y la carta a mano. */
-function startLetter() {
-  leaveLevel();
-  clearScreens();
-  audio.bed('none');
-  setLook(0, 'noche');
-  const me = new LetterScene(camera, goMap, () => finalLetter(() => clearScreens()));
-  level = me;
-  comicScene(me.threeScene);
-  applyShadows(me.threeScene);
-  levelAt = performance.now();
-  if (TEST) closeDebug = debugPanel(me.debug());
 }
 
 function goMap() {
@@ -450,16 +434,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
     if (!data.levelsDone.includes(n)) data.levelsDone.push(n);
     if (g && !data.giftsUnlocked.includes(g.id)) data.giftsUnlocked.push(g.id);
     save(data);
-    const after = () => {
-      // Al terminar el último capítulo, directamente a la carta
-      if (n === LEVEL_CLASSES.length && LEVEL_CLASSES.every((_, i) => data.levelsDone.includes(i + 1))) {
-        if (level) {
-          level.dispose();
-          level = null;
-        }
-        startLetter();
-      } else goMap();
-    };
+    const after = () => goMap();
     // Todo el final en una pantalla: estrellas, regalo, fotos y lo que viene mañana
     const teaser = TEASERS[n + 1] && !data.levelsDone.includes(n + 1) ? n + 1 : null;
     chapterComplete(n, result, g ?? null, teaser, after);
@@ -546,7 +521,7 @@ async function dbgSkip(max = 30) {
 if (TEST)
   Object.assign(window, {
     __dbg: {
-      level: () => level, start: (n: number) => startLevel(n), letter: () => startLetter(), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
+      level: () => level, start: (n: number) => startLevel(n), camera, physLists, THREE, bounds: () => lastBounds, quality, juice, cinema, beacon, input, stage, camWorld,
       shot: () => new Promise<string>((r) => (shotReq = r)),
       /** Dibuja ya el fotograma actual y lo devuelve (para revisar con la página oculta, sin esperar al bucle). */
       snap: () => {

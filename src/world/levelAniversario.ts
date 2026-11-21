@@ -37,8 +37,6 @@ const VARIANT: JaleoVariant = {
   meetScene: undefined,
   // Lo que vino después: el vóley de septiembre y Joy en octubre
   afterEnd: (next) => dialogue(ANIVERSARIO.september, () => voley(() => dialogue(ANIVERSARIO.october, () => joyTraining(next)))),
-  // Un año después ya no va con el mono negro: vestido azul
-  outfit: { shirt: 0x5aa9e6, pants: 0x5aa9e6, skirt: true, jumpsuit: false },
 };
 
 export class LevelAniversario extends Level1 {
