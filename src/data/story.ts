@@ -79,13 +79,14 @@ export const FERRERIES = {
     luck: '¡SUERTE!',
     /** Lo dice ella, en su bocadillo. */
     dropped: '¡Uiii! Se me ha caído la pomada…',
+    droppedAll: '¡Nooo! Se me han caído todas… A por ellas otra vez a las mesas.',
     /** Etiqueta del botón de acción (solo se ve el icono). */
     rear: '¡Ahora! Hazle una caricia',
     perfect: '¡PERFECTA!',
     late: '¡POR LOS PELOS!',
     allLuck: '¡OLÉ!',
     /** Con las tres en la mano, los burros se desbocan: hasta Tòfol sin derramar. Lo dice ella. */
-    stampede: '¡Que se desbocan! Sin derramar, sin derramar…',
+    stampede: 'Ahora a Tòfol, sin que me embista ningún ase…',
     stampedeWord: '¡HIIIAAA!',
     /** Ella, cada vez que se le derrama una. */
     spilled: ['¡Nooo! Se me ha derramado una…', '¡Otra! Esto no llega entero…'],
@@ -319,7 +320,9 @@ export const ROAD = {
       { who: 'Marc', text: 'Dice que por ahí hay fiesta.' },
     ],
   ] as Line[][],
-  notM: (n: string) => `«${n}»… no empieza por M 😅`,
+  notM: (n: string) => `«${n}»… no empieza por M 😅 Aquí no era: volvemos atrás.`,
+  /** Al empezar cada tramo: lo que hace falta. */
+  tramoInfo: (need: number, max: number) => (need > 0 ? `Este tramo: ${need} fotos, y como mucho ${max} golpes (conos, coches o tabaco) 📸` : `Como mucho ${max} golpes en este tramo, ¿eh? 😘`),
   missedM: '¡Eh, que ese empezaba por M! Media vuelta…',
   /** Al llegar al final de un tramo sin las fotos que tocaban (21 nov). */
   fewPhotos: (got: number, need: number) => `Solo ${got} ${got === 1 ? 'foto' : 'fotos'} en este tramo, y quería ${need}. Otra vez desde el principio del tramo.`,
@@ -345,6 +348,8 @@ export const ROAD = {
     { who: 'Narrador', text: '📷 Recuerdo desbloqueado: Cafetería Marcial.' },
   ] as Line[],
   named: [{ who: 'Narrador', text: 'Desde ese día, Marc es Gas.' }] as Line[],
+  /** En la Laurel: a qué bar se entra. */
+  toBar: 'Al Blanco y Negro, el de la derecha, que tienen los mejores pinchos 🍷',
   arriveSV: [
     { who: 'Narrador', text: 'San Vicente de la Barquera.' },
     { who: 'Marc', text: 'Nos han habilitado aparcamiento especial. Y aparcacoches. Somos VIP.' },
@@ -512,6 +517,11 @@ export const NIGHT = {
   towelsGot: 'Eso. Y ahora, a la piscina… despacito.',
   sneakLight: '¡Shh! ¡Quieta! La luz de arriba…',
   sneakLightOff: '…Vale. Se ha apagado. Sigue.',
+  /** El ruido al tope: se abre la ventana de sus padres. Si se queda quieta, se salva. */
+  alertWho: '¡Han abierto la ventana! Ni respires…',
+  alertSafe: 'Uf… la han cerrado. Más despacito, que despacio no se oye.',
+  /** Se ha movido con la ventana abierta: otra vez desde la entrada (o desde el último punto). */
+  caughtWho: '¡Nos han visto! Otra vez, y más despacito…',
   mpRules: 'Yo cierro los ojos. Digo «Marco» y tú «Polo»… y si te oigo chapotear, voy a por ti 😏',
   getOut: 'Me estoy quedando helado… ¿Nos tumbamos un rato?',
   /** En el coche, del Born a casa (bocadillos, sin parar el viaje). */
@@ -596,7 +606,8 @@ export const CENA = {
   grade: (n: number) =>
     n >= 10 ? 'El 10 es la carbonara.'
     : n >= 9 ? `Un ${n}. Casi casi.`
-    : n >= 7 ? `Un ${n}. Regulín.`
+    : n >= 8 ? `Un ${n}. Regulín, pero pasa.`
+    : n === 7 ? 'Un 7. Así no: otra vez.'
     : n === 6 ? 'Un 6’75. Otra vez.'
     : `Un ${n}… Otra vez.`,
   // Antes de cenar, la guirnalda de la terraza (inventado: Marc, cámbialo si no fue así)
@@ -911,7 +922,7 @@ export const ANIVERSARIO_GAS = {
   /** Llega a la primera ubicación y ya no está. */
   notHere: 'Aquí no está… ¿Dónde se ha metido?',
   allLuck: 'Tres caricias, y esta vez juntos 👏',
-  stampede: '¡Que se desbocan! Agárralas fuerte 😂',
+  stampede: 'Ahora a Tòfol, que no nos embista ningún ase 😂',
   toFont: '¿Vamos? Donde nos conocimos 💙',
   carmeAfter: [{ who: 'Carme', text: 'Mira-los! Un any ja… Vinga, a ballar!' }] as Line[],
 };
@@ -950,12 +961,12 @@ export const MINIS = {
   },
   tricks: {
     title: 'Adiestrar a Joy',
-    hint: 'Gas da la orden: toca el gesto correcto antes de que Joy se despiste',
+    hint: 'Gas da la orden: toca el gesto correcto. Hasta que no los haga todos, no hay circuito',
     commands: [
-      { say: 'Sienta', label: 'Sienta', icon: '🪑' },
+      { say: 'Seu', label: 'Seu', icon: '🪑' },
       { say: 'Abajo', label: 'Abajo', icon: '⬇️' },
       { say: 'Pata', label: 'Pata', icon: '🐾' },
-      { say: 'Gira', label: 'Gira', icon: '🔄' },
+      { say: 'Vuelta', label: 'Vuelta', icon: '🔄' },
     ],
     /** Onomatopeyas (`comicWord`): Joy no entiende la orden o se despista. */
     wrong: '¿¿GUAU??',
@@ -964,7 +975,9 @@ export const MINIS = {
   },
   agility: {
     title: 'Joy, campeón de agility',
-    hint: 'Toca para saltar vallas y aros. En los túneles, no saltes',
+    hint: 'Corres a su lado: con el joystick llévale a cada obstáculo, y toca para saltar vallas y aros (los túneles, sin saltar)',
+    missed: '¡POR AHÍ NO!',
+    again: (n: number, need: number) => `${n} DE ${need}… ¡OTRA VUELTA!`,
     btn: '🐕 ¡Salta!',
     /** Onomatopeyas (`comicWord`). */
     knock: '¡CLONC!',
@@ -973,13 +986,16 @@ export const MINIS = {
   },
   voley: {
     title: 'Vóley playa nivel 6',
-    hint: 'Dale justo cuando la pelota te llegue',
+    hint: 'Corre al aro amarillo y dale cuando llegue. Haz 4 puntos',
     btn: '🏐 ¡Toca!',
     /** Onomatopeyas (`comicWord`): los toast no se ven en el cómic. */
     miss: '¡AL SUELO!',
     early: '¡PRONTO!',
     late: '¡TARDE!',
-    done: (passes: number) => `${passes} pases. Nivel 6 (apuntado al 3) 🧐`,
+    far: '¡NO LLEGAS!',
+    done: '¡Muy bieeeen! Te pondrán nivel 4 🏐',
+    again: 'Otra vez: hay que hacer 4 puntos',
+    short: (n: number) => `${n} PUNTOS… ¡OTRA!`,
   },
 };
 
@@ -1154,12 +1170,16 @@ export const FAIL = {
   crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
   burntMax: 4,
   grill: { title: 'Carbón', text: 'Cuatro zamburiñas quemadas. Dales la vuelta cuando brillen, ni antes ni después.' },
-  rhythmMin: 0.75, // (21 nov: antes la mitad; los juegos de habilidad piden más del 75 %)
+  rhythmMin: 0.85, // (más difícil: antes el 75 %)
   skillMin: 0.75,
+  /** Grabar a Fito: el 60 % del vídeo con él en plano. */
+  filmMin: 0.6,
+  /** El baño: el 85 % dentro de la taza. */
+  peeMin: 0.85,
   suitcase: { title: '¡Maletazo!', text: 'Te ha dado una maleta. Otra vez desde la entrada: mira bien de qué tienda sale cada una.' },
-  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta más del 75 % para que Fito te lo perdone: otra vez.` },
-  film: { title: 'Movidísimo', text: (p: number) => `Fito solo ha salido en plano el ${p} % del vídeo. Hace falta más del 75 %: otra vez, con pulso.` },
-  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta más del 75 %: otra vez, apuntando bien.` },
+  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta el 85 % para que Fito te lo perdone: otra vez.` },
+  film: { title: 'Movidísimo', text: (p: number) => `Fito solo ha salido en plano el ${p} % del vídeo. Hace falta el 60 %: otra vez, con pulso.` },
+  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta el 85 %: otra vez, apuntando bien.` },
   pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
   windSecs: 3,
   lean: { title: '¡Patapam!', text: 'En las curvas, inclínate con Gas hacia el mismo lado. Si no, la moto se cae: otra vez desde el principio de este tramo.' },
@@ -1189,20 +1209,12 @@ export const FINALE = {
   ] as Line[],
   end: [{ who: 'Narrador', text: 'Y así se acaba este año. Solo este.' }] as Line[],
   credits: [
-    ['Para Azul', ''],
-    ['Azul', 'ella misma'],
+    ['Azul', 'Margaux'],
     ['Gas', 'Marc'],
-    ['Joy', 'el mejor chico del mundo'],
-    ['Con', 'Eric, Carme, Tòfol, tus padres, los míos, el camarero de la Laurel y medio Ferreries'],
-    ['Música', 'Fito & Fitipaldis, James Blunt y las canciones de cada capítulo'],
+    ['Joy', 'Joysito'],
+    ['Otros', 'Eric, Carme, tus suegros, mis suegros'],
+    ['Música', 'Bad Bunny, James Blunt, PAWSA, De Vega, Fito & Fitipaldis, Josean Log, Prince Royce, Quevedo, AC Radio Show'],
     ['Ases, caballos y vacas', 'sin que ninguno saliera herido'],
-    ['Escrito, dibujado y programado por', 'Marc (con un poco de ayuda)'],
-    ['', 'Gracias por jugar. Y por este año.'],
+    ['Escrito, dibujado y programado por', 'Marc y Claude'],
   ] as [string, string][],
-  post: [
-    { who: 'Narrador', text: '13 de octubre de 2026.' },
-    { who: 'Narrador', text: 'Gas va a ver un piso en Barcelona.' },
-    { who: 'Azul', text: '¿Y?' },
-    { who: 'Gas', text: 'Tiene sitio para dos. Y para Joy.' },
-  ] as Line[],
 };

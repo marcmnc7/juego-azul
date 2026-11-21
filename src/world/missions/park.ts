@@ -22,8 +22,14 @@ const START_X = 4;
 const GAP = 6;
 const RUN_V = 4.6;
 
+/** De qué lado de la pista va cada obstáculo (z): hay que llevar a Joy hasta él. */
+const LANES = [0, -1.3, 1.3, 0, 1.3, -1.3, 0, 1.3, -1.3, 0];
+/** Cuántos hay que hacer bien para acabar (si no, otra vuelta). */
+const COURSE_NEED = 7;
+
 interface Obstacle {
   x: number;
+  z: number;
   kind: Kind;
   done: boolean;
   bar?: THREE.Object3D;
@@ -54,6 +60,7 @@ class ParkMission implements Mission {
   private hits = 0;
   private walkers: { p: Person; mode: string; dog: Dog | null; x0: number; z: number; dir: number }[] = [];
   private endT = -1;
+  private again = false;
 
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
@@ -70,30 +77,45 @@ class ParkMission implements Mission {
     sc.add(grass);
     const m = new Merger();
     // Pista del circuito (franja de césped más clara) y los obstáculos
-    m.add(G.box, 0x86ad58, 30, 0.005, 0, 0, 0, 0, 80, 0.01, 2.4);
+    // (4.3) El circuito de verdad: pista ancha de arena roja con su cuerda blanca, arco de salida y de meta con
+    // banderines, y los obstáculos a un lado u otro de la pista (hay que llevar a Joy hasta cada uno)
+    m.add(G.box, 0xc8794a, 36, 0.006, 0, 0, 0, 0, 72, 0.012, 4.6);
+    for (const z of [-2.35, 2.35]) m.add(G.box, 0xf6f1e4, 36, 0.016, z, 0, 0, 0, 72, 0.01, 0.08);
+    for (const [ax, c] of [[START_X + 2, 0x2f6fd0], [START_X + 8 + COURSE.length * GAP, 0xd7263d]] as const) {
+      for (const z of [-2.6, 2.6]) m.add(G.box, c, ax, 1.4, z, 0, 0, 0, 0.16, 2.8, 0.16);
+      m.add(G.box, c, ax, 2.85, 0, 0, 0, 0, 0.2, 0.3, 5.4);
+      for (let k = 0; k < 9; k++) m.add(G.cone, [0xd7263d, 0xf2c94c, 0x2f6fd0][k % 3], ax, 2.55, -2.2 + k * 0.55, Math.PI, 0, 0, 0.18, 0.3, 0.05);
+    }
     COURSE.forEach((kind, i) => {
       const x = START_X + 8 + i * GAP;
-      const o: Obstacle = { x, kind, done: false };
+      const z = LANES[i];
+      const o: Obstacle = { x, z, kind, done: false };
       if (kind === 'valla') {
-        for (const z of [-0.7, 0.7]) m.add(G.box, 0xf2f2ee, x, 0.45, z, 0, 0, 0, 0.06, 0.9, 0.06);
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 10).rotateX(Math.PI / 2), toon({ color: i % 2 ? 0x2f6fd0 : 0xd7263d }));
-        bar.position.set(x, 0.55, 0);
+        for (const dz of [-0.7, 0.7]) {
+          m.add(G.box, 0xf2f2ee, x, 0.45, z + dz, 0, 0, 0, 0.07, 0.9, 0.07);
+          m.add(G.box, 0xf2f2ee, x, 0.03, z + dz, 0, 0, 0, 0.5, 0.06, 0.1);
+        }
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 10).rotateX(Math.PI / 2), toon({ color: i % 2 ? 0x2f6fd0 : 0xd7263d }));
+        bar.position.set(x, 0.55, z);
         bar.castShadow = true;
         sc.add(bar);
         o.bar = bar;
       } else if (kind === 'rueda') {
-        for (const z of [-0.8, 0.8]) m.add(G.box, 0x2f6fd0, x, 0.65, z, 0, 0, 0, 0.07, 1.3, 0.07);
-        m.add(G.box, 0x2f6fd0, x, 1.3, 0, 0, 0, 0, 0.07, 0.07, 1.67);
+        for (const dz of [-0.8, 0.8]) m.add(G.box, 0x2f6fd0, x, 0.65, z + dz, 0, 0, 0, 0.07, 1.3, 0.07);
+        m.add(G.box, 0x2f6fd0, x, 1.3, z, 0, 0, 0, 0.07, 0.07, 1.67);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.07, 12, 28).rotateY(Math.PI / 2), toon({ color: 0xf2c94c }));
-        ring.position.set(x, 0.72, 0);
+        ring.position.set(x, 0.72, z);
         ring.castShadow = true;
         sc.add(ring);
       } else {
-        const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 2.4, 20, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), toon({ color: 0x1b8a6a, side: THREE.DoubleSide }));
-        tunnel.position.set(x, 0.02, 0);
+        const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 2.4, 20, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), toon({ color: 0x1b8a6a, side: THREE.DoubleSide }));
+        tunnel.position.set(x, 0.02, z);
         tunnel.castShadow = true;
         sc.add(tunnel);
+        for (const dx of [-1.2, 1.2]) m.add(new THREE.TorusGeometry(0.47, 0.04, 6, 20, Math.PI).rotateY(Math.PI / 2), 0x14684f, x + dx, 0.02, z, 0, 0, 0, 1, 1, 1);
       }
+      // Un banderín junto a cada obstáculo, del color de su lado
+      m.add(G.cyl, 0xf6f1e4, x, 0.6, z + (z > 0 ? 1.1 : -1.1) * (z ? 1 : 1), 0, 0, 0, 0.03, 1.2, 0.03);
       this.obs.push(o);
     });
     // Árboles, banco y valla del parque
@@ -190,13 +212,13 @@ class ParkMission implements Mission {
 
   private updateHud() {
     if (this.phase === 'tricks') this.hud.setCounters(`<span class="chip">🐕 ${this.ok}/${this.order.length}</span>`);
-    else this.hud.setCounters(`<span class="chip">🏁 ${this.hits}/${COURSE.length}</span>`);
+    else this.hud.setCounters(`<span class="chip${this.hits >= COURSE_NEED ? ' ok' : ''}">🏁 ${this.hits}/${COURSE_NEED}</span>`);
   }
 
   // ---------- Trucos ----------
 
-  private nextCmd() {
-    this.cmd++;
+  private nextCmd(repeat = false) {
+    if (!repeat) this.cmd++;
     this.cmdT = 0;
     this.updateHud();
     if (this.cmd >= this.order.length) {
@@ -232,11 +254,14 @@ class ParkMission implements Mission {
       this.poseT = 1.2;
       audio.pickup();
       vibrate(15);
+      this.cmdT = -1.3; // un momento para que se vea el truco antes de la siguiente orden
     } else {
+      // (4.3: hasta que no lo hace bien, no hay siguiente orden: la misma otra vez)
       comicWord(MINIS.tricks.wrong, 'hit');
       audio.boo();
+      this.cmdT = -1.0;
+      this.again = true;
     }
-    this.cmdT = -1.3; // un momento para que se vea el truco antes de la siguiente orden
   }
 
   /** Joy hace el truco con todo el cuerpo (su modelo no trae poses: se inclina, se agacha o da la vuelta). */
@@ -273,19 +298,35 @@ class ParkMission implements Mission {
     this.phase = 'course';
     this.bar.remove();
     this.hud.setObjective('🏁');
+    this.hits = 0;
+    this.jumpT = -1;
+    for (const o of this.obs) {
+      o.done = false;
+      if (o.bar) o.bar.rotation.x = 0;
+    }
     this.joy.root.position.set(START_X, 0, 0);
     this.joy.root.rotation.set(0, Math.PI / 2, 0);
+    // Azul corre al lado de Joy por fuera de la pista (en agility, la guía va con el perro)
+    this.me.root.position.set(START_X - 0.6, 0, 3.0);
+    this.me.root.rotation.y = Math.PI / 2;
+    this.gas.root.position.set(START_X - 3, 0, 3.8);
+    this.gas.root.rotation.y = Math.PI / 2;
     missionCard(MINIS.agility.title, MINIS.agility.hint);
     this.updateHud();
+    // (el bocadillo de los trucos no se queda tapando el circuito)
+    window.setTimeout(() => (this.bubble.style.display = 'none'), 2600);
   }
 
-  private updateCourse(dt: number, pressed: boolean) {
+  private updateCourse(dt: number, pressed: boolean, ax: { x: number; y: number }) {
     const r = this.joy.root;
     if (pressed && this.jumpT < 0) {
       this.jumpT = 0;
       audio.knock(0.25, 900, 0.04);
     }
     r.position.x += RUN_V * dt;
+    // Con el joystick, Joy va a un lado u otro de la pista (con la cámara detrás: derecha es +z)
+    r.position.z = THREE.MathUtils.clamp(r.position.z + ax.x * 3.2 * dt, -2.0, 2.0);
+    r.rotation.y = Math.PI / 2 - ax.x * 0.35;
     if (this.jumpT >= 0) {
       this.jumpT += dt / 0.55;
       r.position.y = Math.sin(Math.min(1, this.jumpT) * Math.PI) * 0.75;
@@ -297,26 +338,40 @@ class ParkMission implements Mission {
     for (const o of this.obs) {
       if (o.done || r.position.x < o.x) continue;
       o.done = true;
+      const lined = Math.abs(r.position.z - o.z) < 0.55;
       const air = r.position.y > 0.28;
-      const good = o.kind === 'tunel' ? !air : air;
+      const good = lined && (o.kind === 'tunel' ? !air : air);
       if (good) {
         this.hits++;
         audio.pickup();
+        comicWord('¡BIEN!', 'perfect');
       } else {
         audio.boo();
-        comicWord(o.kind === 'tunel' ? MINIS.agility.overTunnel : MINIS.agility.knock, 'hit');
-        if (o.bar) o.bar.rotation.x = 0.9; // la barra, tirada
+        comicWord(!lined ? MINIS.agility.missed : o.kind === 'tunel' ? MINIS.agility.overTunnel : MINIS.agility.knock, 'hit');
+        if (o.bar && lined) o.bar.rotation.x = 0.9; // la barra, tirada
       }
       this.updateHud();
     }
     // En el túnel, por dentro (agachada)
-    const inTunnel = this.obs.some((o) => o.kind === 'tunel' && Math.abs(r.position.x - o.x) < 1.2);
+    const inTunnel = this.obs.some((o) => o.kind === 'tunel' && Math.abs(r.position.x - o.x) < 1.2 && Math.abs(r.position.z - o.z) < 0.55);
     r.scale.y = inTunnel && r.position.y < 0.1 ? 0.8 : 1;
+    // Azul, corriendo a su lado por fuera de la pista
+    const mp = this.me.root.position;
+    mp.x += (r.position.x - 0.5 - mp.x) * Math.min(1, dt * 6);
+    mp.z += (Math.max(2.9, r.position.z + 1.4) - mp.z) * Math.min(1, dt * 4);
+    animatePerson(this.me, dt, 'walk', 1.4);
+    this.me.root.rotation.y = Math.PI / 2;
     if (r.position.x > this.obs[this.obs.length - 1].x + 4 && this.phase === 'course') {
-      this.phase = 'end';
-      this.endT = 0;
       this.hud.setAction(null);
-      missionCard(MINIS.agility.title, MINIS.agility.done(this.hits), true);
+      if (this.hits >= COURSE_NEED) {
+        this.phase = 'end';
+        this.endT = 0;
+        missionCard(MINIS.agility.title, MINIS.agility.done(this.hits), true);
+      } else {
+        // Pocos bien: otra vuelta
+        comicWord(MINIS.agility.again(this.hits, COURSE_NEED), 'hit');
+        this.startCourse();
+      }
     }
   }
 
@@ -345,25 +400,29 @@ class ParkMission implements Mission {
     if (this.phase === 'tricks') {
       this.cmdT += dt;
       if (this.cmdT > 3.4) {
+        // Se ha despistado: la misma orden otra vez
         comicWord(MINIS.tricks.slow, 'luck');
         this.cmdT = 0;
-        this.nextCmd();
+        this.nextCmd(true);
       }
-      // Después de un truco (cmdT en negativo) sale la orden siguiente
-      if (this.cmdT >= 0 && this.cmdT - dt < 0 && this.cmd >= 0) this.nextCmd();
+      // Después de un truco (cmdT en negativo) sale la orden siguiente (o la misma, si falló)
+      if (this.cmdT >= 0 && this.cmdT - dt < 0 && this.cmd >= 0) {
+        this.nextCmd(this.again);
+        this.again = false;
+      }
       this.poseJoy(dt);
       this.hud.setAction(null);
       camera.position.lerp(new THREE.Vector3(4.2, 1.5, 3.6), Math.min(1, dt * 2));
       camera.lookAt(0.5, 0.55, 0.7);
     } else {
       if (this.phase === 'course') {
-        this.updateCourse(dt, pressed);
+        this.updateCourse(dt, pressed, input.axes());
         this.hud.setAction(MINIS.agility.btn, this.obs.some((o) => !o.done && o.kind !== 'tunel' && o.x - this.joy.root.position.x < 1.6 && o.x > this.joy.root.position.x));
       }
-      // Cámara de lado siguiendo a Joy por el circuito
-      const x = this.joy.root.position.x;
-      camera.position.lerp(new THREE.Vector3(x + 1, 1.6, 6.2), Math.min(1, dt * 3));
-      camera.lookAt(x + 1.5, 0.5, 0);
+      // Cámara detrás de Joy, alta: se ve hacia qué lado está el siguiente obstáculo
+      const x = this.joy.root.position.x, z = this.joy.root.position.z;
+      camera.position.lerp(new THREE.Vector3(x - 4.6, 2.7, z * 0.5 + 1.2), Math.min(1, dt * 3));
+      camera.lookAt(x + 3, 0.4, z * 0.4);
       if (this.endT >= 0) {
         this.endT += dt;
         if (this.endT > 2.6) {
@@ -374,7 +433,7 @@ class ParkMission implements Mission {
         }
       }
     }
-    animatePerson(this.me, dt, this.phase === 'end' ? 'cheer' : 'idle');
+    if (this.phase !== 'course') animatePerson(this.me, dt, this.phase === 'end' ? 'cheer' : 'idle');
     animatePerson(this.gas, dt, this.phase === 'end' ? 'cheer' : this.phase === 'tricks' ? 'talk' : 'idle');
     // Azul hace el gesto con la mano cuando Joy hace el truco
     if (this.phase === 'tricks' && this.poseT > 0) this.me.armR.rotation.x = -1.4;

@@ -165,28 +165,21 @@ export function titleScreen(onStart: () => void, loading?: { done: Promise<unkno
 /** ¿Todavía es pronto para entrar? (antes del 26 de noviembre solo se ve la cuenta atrás) */
 export const beforeGate = () => now() < GATE.getTime();
 
-/** Cuenta atrás hasta el día en que se puede entrar, en la misma portada. Cuando llega a cero, sigue sola. */
+/**
+ * Cuenta atrás hasta el día en que se puede entrar: la misma pantalla que la de Empezar (4.3), con el mismo botón;
+ * mientras falta tiempo, el botón no se puede tocar y dice cuánto queda. Cuando llega a cero, sigue sola.
+ */
 export function countdownScreen(onOpen: () => void) {
-  const { s, slot } = cover('cd-screen');
-  const units: [string, string][] = [['d', 'días'], ['h', 'horas'], ['m', 'min'], ['s', 'seg']];
-  const clock = el('div', 'cd-clock');
-  const cells: Record<string, HTMLElement> = {};
-  for (const [k, label] of units) {
-    const c = el('div', 'cd-cell');
-    cells[k] = el('b', '', '00');
-    c.append(cells[k], el('span', '', label));
-    clock.append(c);
-  }
-  slot.append(clock);
-  s.append(el('p', 'hm-fine', 'Paciencia. Merecerá la pena.'));
+  const { s, slot } = cover('');
+  const b = el('button', 'hm-btn hm-wait') as HTMLButtonElement;
+  b.disabled = true;
+  slot.append(b);
+  s.append(el('p', 'hm-fine', 'Mejor con el sonido activado'));
   const pad = (n: number) => String(n).padStart(2, '0');
   const tick = () => {
     if (!s.isConnected) return;
     const l = left(GATE);
-    cells.d.textContent = pad(l.d);
-    cells.h.textContent = pad(l.h);
-    cells.m.textContent = pad(l.m);
-    cells.s.textContent = pad(l.s);
+    b.innerHTML = `Se abre en ${l.d ? `${l.d} ${l.d === 1 ? 'día' : 'días'} · ` : ''}${pad(l.h)}:${pad(l.m)}:${pad(l.s)}`;
     if (l.done) return void setTimeout(onOpen, 600);
     setTimeout(tick, 1000);
   };
@@ -854,7 +847,8 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   track.append(more);
   // Los «conecta»: un punto más pequeño a medio camino entre dos capítulos, con su día; se abren ese día
   const minis = PUZZLES.map((pz) => {
-    const open = allOpen || now() >= puzzleDate(pz).getTime();
+    // (el de después del último capítulo, además, solo con ese capítulo hecho)
+    const open = (allOpen || now() >= puzzleDate(pz).getTime()) && (pz.after < LEVELS.length || !!states[LEVELS.length - 1]?.done);
     const doneIt = !!save.minis?.includes(pz.id);
     const b = el('button', 'mp-mini' + (doneIt ? ' done' : open ? ' open' : ' locked'));
     b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Sorpresa'}</b><i>${puzzleDay(pz)}</i>`));
@@ -1591,12 +1585,12 @@ export function comicWord(text: string, kind: string) {
 let barkEnd = 0;
 let barkRaf = 0;
 let castChapter = 1;
-/** En el cap. 4: ¿ya ha salido el chat del mote («Porque Gas???»)? Antes de eso siguen siendo Marc y Margaux. */
+/** En el cap. 3: ¿ya ha salido el chat del mote («Porque Gas???», en la cabaña)? Antes, Marc y Margaux. */
 let gasNamed = true;
 /** El capítulo que se juega: decide cómo se llaman los dos en pantalla. */
 export function setCastChapter(n: number) {
   castChapter = n;
-  gasNamed = n !== 4;
+  gasNamed = n !== 3;
 }
 /** El cap. 4 lo llama justo después del chat del mote (y al saltar de fase en el modo prueba). */
 export const setGasNamed = (v = true) => void (gasNamed = v);
@@ -1605,7 +1599,7 @@ export const setGasNamed = (v = true) => void (gasNamed = v);
  * Los textos usan uno u otro nombre según dónde se escribieron: lo que se ve lo decide esto.
  */
 export function shownName(who: string) {
-  const early = castChapter <= 3 || (castChapter === 4 && !gasNamed);
+  const early = castChapter <= 2 || (castChapter === 3 && !gasNamed);
   if (/^(Azul|Margaux)$/.test(who)) return early ? 'Margaux' : 'Azul';
   if (/^(Gas|Marc)$/.test(who)) return early ? 'Marc' : 'Gas';
   return who;
@@ -1720,7 +1714,9 @@ export function keepsakePop(k: Keepsake, found: number, total: number) {
     thumb = img;
   } else thumb = el('div', 'kp-thumb', '📷');
   const txt = el('div', 'kp-text');
-  txt.append(el('b', '', `📷 Foto escondida ${found}/${total} · al álbum`), el('span', '', k.caption));
+  // (solo la foto y la cuenta: nada de frases)
+  const left = total - found;
+  txt.append(el('b', '', `📷 ${found}/${total}`), el('span', '', left ? `Te ${left === 1 ? 'falta 1' : `faltan ${left}`}` : '¡Todas!'));
   o.append(thumb, txt);
   root.append(o);
   setTimeout(() => o.classList.add('out'), 3600);
@@ -1911,18 +1907,33 @@ export interface GaugeZone {
  * Devuelve la calidad (1 = centrado, ~0.6 = dentro pero en el borde, 0 = fuera) y una función para cancelarlo.
  */
 export function viewfinder(o: { title: string; target: () => { x: number; y: number } | null; sway?: number }, onResult: (quality: number) => void) {
+  // (4.3) Más claro: un aro marca lo que hay que fotografiar; el recuadro se mueve con el pulso y, cuando lo tiene
+  // centrado, se pone verde y dice «¡Ahora!». El botón grande dispara.
   const w = el('div', 'vf');
   const frame = el('div', 'vf-frame');
   frame.append(el('i', 'c tl'), el('i', 'c tr'), el('i', 'c bl'), el('i', 'c br'), el('i', 'vf-cross'));
+  const now = el('span', 'vf-now', '¡Ahora!');
+  frame.append(now);
+  const mark = el('div', 'vf-target');
   const title = el('div', 'vf-title', o.title);
-  const shot = el('button', 'vf-shot') as HTMLButtonElement;
+  const hint = el('div', 'vf-hint', 'Dispara cuando el recuadro se ponga verde');
+  const shot = el('button', 'vf-shot', '📸') as HTMLButtonElement;
   shot.setAttribute('aria-label', 'Hacer la foto');
-  w.append(frame, title, shot);
+  w.append(mark, frame, title, hint, shot);
   root.append(w);
   const sway = o.sway ?? 1;
   const t0 = performance.now();
   let raf = 0;
   let fx = 0, fy = 0;
+  const score = () => {
+    const r = frame.getBoundingClientRect();
+    const p = o.target();
+    if (!p) return 0;
+    const dx = Math.abs(p.x - (r.left + r.width / 2)) / (r.width / 2);
+    const dy = Math.abs(p.y - (r.top + r.height / 2)) / (r.height / 2);
+    const d = Math.max(dx, dy);
+    return d < 0.8 ? (d < 0.35 ? 1 : 1 - ((d - 0.35) / 0.45) * 0.4) : 0;
+  };
   const loop = () => {
     const t = (performance.now() - t0) / 1000;
     // el pulso: dos ondas lentas que no se repiten igual
@@ -1934,6 +1945,12 @@ export function viewfinder(o: { title: string; target: () => { x: number; y: num
     const bx = p ? Math.min(W * 0.8, Math.max(W * 0.2, p.x)) : W / 2, by = p ? Math.min(H * 0.75, Math.max(H * 0.25, p.y)) : H / 2;
     frame.style.left = `${bx + fx * W}px`;
     frame.style.top = `${by + fy * H}px`;
+    mark.style.display = p ? '' : 'none';
+    if (p) {
+      mark.style.left = `${p.x}px`;
+      mark.style.top = `${p.y}px`;
+    }
+    frame.classList.toggle('ok', score() >= 1);
     raf = requestAnimationFrame(loop);
   };
   loop();
@@ -1944,15 +1961,7 @@ export function viewfinder(o: { title: string; target: () => { x: number; y: num
   shot.onpointerdown = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    const r = frame.getBoundingClientRect();
-    const p = o.target();
-    let q = 0;
-    if (p) {
-      const dx = Math.abs(p.x - (r.left + r.width / 2)) / (r.width / 2);
-      const dy = Math.abs(p.y - (r.top + r.height / 2)) / (r.height / 2);
-      const d = Math.max(dx, dy);
-      if (d < 0.8) q = d < 0.35 ? 1 : 1 - ((d - 0.35) / 0.45) * 0.4;
-    }
+    const q = score();
     w.classList.add('snap');
     setTimeout(() => {
       end();

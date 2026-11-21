@@ -22,6 +22,9 @@ const ME = new THREE.Vector3(-3.6, 0, 0);
 const GAS = new THREE.Vector3(3.6, 0, 0);
 const HANDS = 0.95; // altura a la que se le da (antebrazos)
 const LAUNCH = 1.9;
+/** Puntos que hay que hacer, y a cuántos se juega el partido. */
+const NEED = 4;
+const GAME = 7;
 
 class BeachMission implements Mission {
   readonly scene = new THREE.Scene();
@@ -38,8 +41,6 @@ class BeachMission implements Mission {
   private toMe = true;
   private tapped = false;
   private dropT = -1;
-  private passes = 0;
-  private misses = 0;
   private hitT = new Map<Person, number>();
   private from = new THREE.Vector3();
   private to = new THREE.Vector3();
@@ -154,27 +155,49 @@ class BeachMission implements Mission {
     this.shadow.visible = !quality.shadows;
     sc.add(this.shadow);
 
-    this.hud = hud(() => ctx.input.queueAction(), () => {}, 'Toca el botón cuando la pelota llegue a ti', true);
-    this.hud.setObjective('🏐');
+    this.hud = hud(() => ctx.input.queueAction(), () => {}, 'Muévete hasta la sombra de la pelota y dale cuando llegue', true);
+    this.hud.setObjective('🏐 4 puntos');
     this.updateHud();
     // A su espalda y un poco de lado: ella delante, la red, Gas y la playa con gente detrás; el mar a la izquierda
-    ctx.camera.position.set(-7.3, 2.15, -1.9);
-    ctx.camera.lookAt(1.8, 1.35, 0.6);
+    ctx.camera.position.set(-9.6, 3.4, -2.2);
+    ctx.camera.lookAt(0.5, 1.0, 0.4);
     missionCard(T.title, T.hint);
-    this.launch(GAS, ME);
+    this.mark = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.mark.position.y = 0.02;
+    this.mark.renderOrder = 3;
+    sc.add(this.mark);
+    this.serve();
   }
+
+  // (4.3) Un partido de verdad: Gas la manda a un sitio distinto de tu campo (el aro amarillo dice dónde cae);
+  // corres hasta allí con el joystick y le das cuando llega. Si se la devuelves, a veces Gas falla: punto tuyo.
+  // Si se te cae, punto de Gas. A 7 puntos; hay que hacer al menos 4, y si no, otra vez.
+  private mark: THREE.Mesh;
+  private mine = 0;
+  private his = 0;
+  private rally = 0;
+  private gasMiss = false;
 
   private updateHud() {
-    this.hud.setCounters(`<span class="chip">🏐 ${this.passes}</span><span class="chip">${'❤️'.repeat(3 - this.misses)}${'🤍'.repeat(this.misses)}</span>`);
+    this.hud.setCounters(`<span class="chip${this.mine >= NEED ? ' ok' : ''}">🏐 Tú ${this.mine}/${NEED}</span><span class="chip">Gas ${this.his}</span>`);
   }
 
-  private launch(a: THREE.Vector3, b: THREE.Vector3) {
-    this.dur = Math.max(0.9, 1.35 - this.passes * 0.04);
+  /** Gas saca o devuelve: a un punto al azar de tu campo. */
+  private serve() {
+    this.rally++;
+    const tz = (Math.random() * 2 - 1) * 3.2, tx = -1.8 - Math.random() * 4.6;
+    this.launchTo(GAS, new THREE.Vector3(tx, HANDS, tz));
+  }
+
+  private launchTo(a: THREE.Vector3, b: THREE.Vector3) {
+    this.dur = Math.max(1.05, 1.5 - this.rally * 0.03);
     this.from.set(a.x * 0.95, LAUNCH, a.z);
-    this.to.set(b.x, HANDS, b.z + (Math.random() - 0.5) * 0.4);
+    this.to.copy(b);
     this.flight = 0;
     this.tapped = false;
-    this.toMe = b === ME;
+    this.toMe = b.x < 0;
+    this.mark.visible = this.toMe;
+    if (this.toMe) this.mark.position.set(b.x, 0.02, b.z);
   }
 
   private ballAt(k: number, out: THREE.Vector3) {
@@ -189,6 +212,21 @@ class BeachMission implements Mission {
     audio.knock(0.4, 520, 0.05);
   }
 
+  private point(mine: boolean) {
+    if (mine) this.mine++;
+    else this.his++;
+    this.updateHud();
+    this.dropT = 0;
+    this.mark.visible = false;
+    if (mine) {
+      audio.chime(1);
+      comicWord('¡PUNTO!', 'perfect');
+    } else {
+      audio.boo();
+      comicWord(MINIS.voley.miss, 'hit');
+    }
+  }
+
   update(dt: number) {
     this.t += dt;
     this.extras.forEach((p, i) => animatePerson(p, dt, i % 2 ? 'talk' : 'idle', 0, this.t * 3 + i));
@@ -196,12 +234,33 @@ class BeachMission implements Mission {
     const T = MINIS.voley;
     const pressed = input.consumeAction();
     this.cool -= dt;
+    // Ella se mueve por su campo con el joystick (de espaldas a la cámara: arriba, hacia la red)
+    const ax = input.axes();
+    let moving = 0;
+    if (this.endT < 0) {
+      const sp = 4.6;
+      const mp = this.me.root.position;
+      mp.x = THREE.MathUtils.clamp(mp.x + ax.y * sp * dt, -7.4, -1.1);
+      mp.z = THREE.MathUtils.clamp(mp.z + ax.x * sp * dt, -3.9, 3.9);
+      moving = Math.min(1, Math.hypot(ax.x, ax.y));
+    }
     if (this.endT >= 0) {
       this.endT += dt;
-      if (this.endT > 2.6) {
-        const done = this.onDone;
-        stage.end();
-        done();
+      if (this.endT > 2.8) {
+        const won = this.mine >= NEED;
+        if (won) {
+          const done = this.onDone;
+          stage.end();
+          done();
+        } else {
+          // No llega a 4: otra vez el partido
+          this.endT = -1;
+          this.mine = this.his = 0;
+          this.rally = 0;
+          this.updateHud();
+          missionCard(T.title, T.again, false);
+          this.serve();
+        }
         return;
       }
     } else if (this.dropT >= 0) {
@@ -211,77 +270,74 @@ class BeachMission implements Mission {
       this.ball.position.y = Math.max(0.17, 0.17 + Math.abs(Math.sin(k * Math.PI * 2)) * 0.4 * (1 - k));
       if (this.dropT > 1.2) {
         this.dropT = -1;
-        if (this.misses >= 3) this.finish();
-        else this.launch(GAS, ME);
+        if (this.mine >= NEED || this.his >= GAME - NEED + 1) this.finishMatch();
+        else this.serve();
       }
     } else {
       this.flight += dt / this.dur;
       const k = Math.min(1.25, this.flight);
       this.ballAt(Math.min(1, k), this.ball.position);
       if (k > 1) this.ball.position.y = Math.max(0.17, HANDS - (k - 1) * 4);
-      const window = this.toMe && this.flight > 0.8 && this.flight < 1.1;
-      this.hud.setAction(T.btn, window);
+      const mp = this.me.root.position;
+      const near = Math.hypot(mp.x - this.to.x, mp.z - this.to.z) < 0.95;
+      const window = this.toMe && this.flight > 0.78 && this.flight < 1.1;
+      (this.mark.material as THREE.MeshBasicMaterial).color.set(near ? 0x5cff8a : 0xffd23f);
+      this.hud.setAction(T.btn, window && near);
       if (this.toMe && pressed && !this.tapped && this.cool <= 0) {
-        if (window) {
+        if (window && near) {
           this.tapped = true;
-          this.passes++;
           this.bump(this.me);
           vibrate(15);
-          this.updateHud();
-          if (this.passes >= 12) {
-            this.finish();
-            return;
-          }
-          this.launch(ME, GAS);
+          // A veces Gas no llega: punto tuyo (más a menudo cuanto más larga es la jugada)
+          this.gasMiss = Math.random() < 0.38 + Math.min(0.3, this.rally * 0.04);
+          const tz = (Math.random() * 2 - 1) * 3.4;
+          this.launchTo(ME, new THREE.Vector3(this.gasMiss ? 5.2 + Math.random() * 1.6 : GAS.x, HANDS, this.gasMiss ? tz : this.gas.root.position.z));
         } else {
           this.cool = 0.4;
-          comicWord(this.flight < 0.8 ? T.early : T.late, 'hit');
+          comicWord(!near ? T.far : this.flight < 0.78 ? T.early : T.late, 'hit');
         }
       }
       if (this.flight >= 1 && !this.toMe) {
-        // Gas siempre la devuelve
-        this.bump(this.gas);
-        this.launch(GAS, ME);
-      } else if (this.flight >= 1.2 && this.toMe && !this.tapped) {
-        this.misses++;
-        this.dropT = 0;
-        audio.boo();
-        comicWord(T.miss, 'hit');
-        this.updateHud();
-      }
+        if (this.gasMiss) this.point(true);
+        else {
+          this.bump(this.gas);
+          this.serve();
+        }
+      } else if (this.flight >= 1.2 && this.toMe && !this.tapped) this.point(false);
     }
+    // Gas se mueve hacia donde va a caer lo que le mandas
+    if (!this.toMe && !this.gasMiss) this.gas.root.position.z += (this.to.z - this.gas.root.position.z) * Math.min(1, dt * 3);
     // Brazos: listos para recibir; al darle, extendidos y un salto de rodillas
     for (const p of [this.me, this.gas]) {
       const h = (this.hitT.get(p) ?? 0) - dt;
       this.hitT.set(p, h);
-      animatePerson(p, dt, this.endT >= 0 && p === this.me && this.passes >= 5 ? 'cheer' : 'idle');
-      if (this.endT < 0) {
+      const run = p === this.me && moving > 0.1 && this.endT < 0;
+      animatePerson(p, dt, this.endT >= 0 && p === this.me && this.mine >= NEED ? 'cheer' : run ? 'walk' : 'idle', run ? moving : 0);
+      if (this.endT < 0 && !run) {
         const k = h > 0 ? 1 : 0.4;
         p.armL.rotation.set(-0.9 * k - 0.2, 0, 0.25);
         p.armR.rotation.set(-0.9 * k - 0.2, 0, -0.25);
         p.elbowL.rotation.x = p.elbowR.rotation.x = h > 0 ? 0 : -0.5;
         p.kneeL.rotation.x = p.kneeR.rotation.x = h > 0 ? 0.5 : 0.25;
       }
-      // Se mueve un poco hacia donde va a caer
-      if (p === this.me && this.toMe) p.root.position.z += (this.to.z - p.root.position.z) * Math.min(1, dt * 3);
     }
     this.shadow.position.set(this.ball.position.x, 0.01, this.ball.position.z);
     this.ball.rotation.x += dt * 6;
-    // Cámara de lado, siguiendo un poco la pelota
-    // Tres cuartos desde la banda (de canto, la red no se veía), siguiendo un poco la pelota
-    // (a su espalda; sigue un poco la pelota para que se vea venir y irse)
-    this.camAt.set(-7.3 + this.ball.position.x * 0.12, 2.15, -1.9);
-    camera.position.lerp(this.camAt, Math.min(1, dt * 1.5));
-    camera.lookAt(1.8 + this.ball.position.x * 0.2, 1.35, 0.6);
+    // A su espalda, más alta y algo más lejos para ver todo su campo, siguiéndola un poco
+    this.camAt.set(-9.6 + (this.me.root.position.x + 3.6) * 0.3, 3.4, -2.2 + this.me.root.position.z * 0.35);
+    camera.position.lerp(this.camAt, Math.min(1, dt * 2));
+    camera.lookAt(0.5 + this.ball.position.x * 0.12, 1.0, this.me.root.position.z * 0.3 + 0.4);
     this.sky.update(camera, dt);
     this.sun.follow(new THREE.Vector3());
   }
 
-  private finish() {
+  private finishMatch() {
     this.endT = 0;
     this.hud.setAction(null);
-    // (el resultado, en la tarjeta de misión cumplida: el toast no se ve)
-    missionCard(MINIS.voley.title, MINIS.voley.done(this.passes), true);
+    this.mark.visible = false;
+    const T = MINIS.voley;
+    if (this.mine >= NEED) missionCard(T.title, T.done, true);
+    else comicWord(T.short(this.mine), 'hit');
   }
 
   dispose() {

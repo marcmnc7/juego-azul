@@ -8,7 +8,7 @@ import royce from '../assets/music/c7_royce.m4a';
 import dondeVuelvo from '../assets/music/c8_dondevuelvo.m4a';
 import quevedo from '../assets/music/c9_quevedo.m4a';
 
-// La canción de cada capítulo. El 4 tiene dos: la del viaje y, ya en el estadio, la del concierto.
-// El 6 (Sant Joan) no tiene canción: suena el jaleo de siempre.
-export const SONG_OF: Record<number, string> = { 1: velda, 2: blunt, 3: careless, 4: devega, 5: jeanl, 7: royce, 8: dondeVuelvo, 9: quevedo };
+// La canción de cada capítulo. El 4, la de Fito desde el principio; la de De Vega, que era la del viaje del 4, ahora
+// es la de Sant Joan (el 6 no tenía).
+export const SONG_OF: Record<number, string> = { 1: velda, 2: blunt, 3: careless, 4: fito, 5: jeanl, 6: devega, 7: royce, 8: dondeVuelvo, 9: quevedo };
 export const FITO_SONG = fito;

@@ -7,6 +7,11 @@ import { G, Merger, makePerson, animatePerson, type Person, type PersonLook } fr
 import { canvasTex } from './deco';
 import { ROOF_GEO } from './ferreries';
 import { PinchoGame } from './sideGames';
+import { Walker } from '../core/walker';
+import { Trail } from '../core/follow';
+import type { Input } from '../core/input';
+import type { Hud } from '../ui/ui';
+import type { Box2 } from './ferreries';
 
 // Final del capítulo 3: Logroño, de fiesta. La Calle Laurel de noche: bares de tapas a los dos lados (cada uno
 // con su color, su puerta abierta, su barra al fondo, su rótulo de bandera y sus barriles de vino en la acera),
@@ -31,8 +36,18 @@ const SPOTS: [number, number][] = [
   [0.6, 8.4], [-0.5, 12.4], [1.3, 14.6], [-2.2, 15.4], [2.1, 18.4], [-1.9, 20.6],
 ];
 
+/** La puerta del Blanco y Negro (acera de la derecha): ahí se entra a por la ronda de pinchos. */
+const BAR_DOOR = new THREE.Vector3(3.0, 0, -13.85);
+
 export class Laurel {
   scene = new THREE.Scene();
+  /** Andando por la calle hasta el bar (Azul con el mando; Gas detrás). */
+  private walker: Walker | null = null;
+  private trail = new Trail();
+  private onBar: (() => void) | null = null;
+  private solids: { x: number; z: number; r: number }[] = [];
+  private readonly walls: Box2[] = [];
+  readonly barDoor = BAR_DOOR;
   private sky: Sky;
   private azul: Person;
   private gas: Person;
@@ -207,6 +222,9 @@ export class Laurel {
     const glass = new THREE.CylinderGeometry(0.035, 0.03, 0.12, 8);
     const glassMat = toon({ color: 0x7a1f30, emissive: 0x2a0a10 });
     SPOTS.forEach(([x, z], i) => {
+      // (la puerta del bar donde se entra, libre)
+      if (Math.hypot(x - BAR_DOOR.x, z - BAR_DOOR.z) < 2.4) return;
+      this.solids.push({ x, z, r: 0.38 });
       const lk = CROWD[i % CROWD.length];
       const p = makePerson(lk);
       p.root.position.set(x, 0, z);
@@ -259,8 +277,41 @@ export class Laurel {
     });
   }
 
-  update(dt: number, camera: THREE.Camera) {
+  /** Azul anda por la Laurel, entre la gente, hasta la puerta del bar; al entrar, `onBar`. */
+  startWalk(onBar: () => void) {
+    this.azul.root.position.set(-0.4, 0, 6);
+    this.gas.root.position.set(0.5, 0, 7.2);
+    this.walker = new Walker(this.azul.root.position);
+    this.walker.yaw = this.walker.facing = Math.PI;
+    this.onBar = onBar;
+  }
+
+  update(dt: number, camera: THREE.Camera, input: Input | null = null, hud: Hud | null = null) {
     this.t += dt;
+    if (this.walker) {
+      const w = this.walker;
+      const pp = this.azul.root.position;
+      w.turn(input ? input.consumeCam() : 0);
+      w.canJump = false;
+      const mag = w.move(dt, input ? input.axes() : { x: 0, y: 0 }, this.walls, { minX: -3.05, maxX: 3.05, minZ: -40, maxZ: 40 }, this.solids);
+      this.azul.root.rotation.y = w.facing;
+      animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
+      const moving = this.trail.step(this.gas.root, pp, 1.3, 3.8, dt, this.walls, 0.26);
+      animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);
+      w.camera(camera, dt, this.walls, 4.2, 2.4);
+      const near = Math.hypot(pp.x - BAR_DOOR.x, pp.z - BAR_DOOR.z) < 1.5;
+      hud?.setAction(near ? '🍷 Entrar en el Blanco y Negro' : null, near);
+      if (near && input?.consumeAction()) {
+        hud?.setAction(null);
+        this.walker = null;
+        const f = this.onBar;
+        this.onBar = null;
+        f?.();
+      }
+      this.crowd.forEach((c, i) => animatePerson(c.p, dt, c.dance ? 'dance' : 'talk', 0, this.t * 6 + i));
+      this.sky.update(camera, dt);
+      return;
+    }
     this.pinchos?.update(dt, camera);
     const play = !!this.pinchos;
     animatePerson(this.azul, dt, play ? 'idle' : 'dance', 0, this.t * 6);

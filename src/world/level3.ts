@@ -4,10 +4,10 @@ import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { Walker, type Circle } from '../core/walker';
 import { steerTo, steerSpeed, faceTo, type SteerState } from '../core/steer';
-import { CONCERT, SIDE, FAIL, ROAD } from '../data/story';
+import { CONCERT, SIDE, FAIL } from '../data/story';
 import { FITO_SONG, SONG_OF } from '../core/songs';
 import { BeerRun, BEERS_NEED, Cabin3D, PeeAim3D } from './sideGames';
-import { MARC_LOOK, castLook, AZUL_DIARIO } from '../data/characters';
+import { MARC_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { fitoPrint, shirtPrint } from '../entities/print';
 import { G, Merger, makePerson, animatePerson, Person, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, vertexMat, palmCrown, PersonLook, seatPose, seatedRootY } from '../entities/models';
 import { Sky, Sun, toon, glowTexture, vibrate } from '../core/gfx';
@@ -23,7 +23,7 @@ import type { Line } from '../data/story';
 import type { Box2 } from './ferreries';
 import type { Level, LevelDone } from './level';
 import { disposeScene } from './level';
-import { cinema, headOf, rel, cineTitle } from '../core/cinema';
+import { cinema, headOf, rel } from '../core/cinema';
 import { juice } from '../core/juice';
 import { beacon } from '../core/beacon';
 import { Lost } from '../core/lost';
@@ -581,7 +581,8 @@ class Rhythm {
     const now = audio.time();
     this.flash[lane] = 1;
     let best: RNote | null = null;
-    let bd = 0.24;
+    // (más difícil: ventana de acierto más estrecha; antes 0,24 s)
+    let bd = 0.17;
     for (const n of this.notes) {
       if (n.done || n.lane !== lane) continue;
       const d = Math.abs(n.t - now);
@@ -595,7 +596,7 @@ class Rhythm {
     this.hits++;
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    const perfect = bd < 0.09;
+    const perfect = bd < 0.07;
     if (perfect) this.perfects++;
     this.label = perfect ? '¡Perfecto!' : '¡Bien!';
     if (this.combo > 0 && this.combo % 10 === 0) this.label = `¡${this.combo} seguidas! 🔥`;
@@ -739,6 +740,8 @@ export class Level3 implements Level {
   private walker: Walker;
   private azul: Person;
   private gas: Person;
+  private gasDay: Person;
+  private gasFito: Person;
   private barman: Person;
   private smokeThrown = false;
   private colliders: Box2[] = [];
@@ -853,11 +856,12 @@ export class Level3 implements Level {
   private filmAimYaw = 0;
   private filmAimPitch = 0;
   private filmUi: HTMLDivElement | null = null;
-  private filmDone = false;
   private baseFov = 0;
   private burgers: { o: THREE.Mesh; v: THREE.Vector3; live: boolean; from: THREE.Vector3 }[] = [];
   /** De qué tienda ha salido la última maleta (de ahí sale la voz de quien la ha perdido). */
   private suitcaseFrom: THREE.Vector3 | null = null;
+  /** Parpadeo al volver a la entrada tras un maletazo. */
+  private respawnBlink = 0;
   private travelers: ({ p: Person; dir: number; x: number; walk: number; c: Circle; tx?: number } & SteerState)[] = [];
   private burgerT = 1;
   private burgerHits = 0;
@@ -942,14 +946,20 @@ export class Level3 implements Level {
     // (21 nov) Azul también arrastra su maleta de cabina por el aeropuerto
     giveCase(this.azul, 0x3b6fd1, this.posts);
 
-    // Gas vuela por su cuenta. Lleva su camiseta de Fito, azul y roja
-    this.gas = makePerson(castLook({ ...MARC_LOOK, shirt: 0x1f4fa8 }, 'gas_fito'));
-    shirtPrint(this.gas, fitoPrint(), 0.3);
-    markProps(this.gas);
+    // Gas vuela por su cuenta. En el aeropuerto y en llegadas, con su ropa de diario; la camiseta de Fito, azul y
+    // roja, solo en el concierto (se cambia al llegar al estadio: setGasFito)
+    this.gasFito = makePerson(castLook({ ...MARC_LOOK, shirt: 0x1f4fa8 }, 'gas_fito'));
+    shirtPrint(this.gasFito, fitoPrint(), 0.3);
+    markProps(this.gasFito);
+    this.gasFito.root.visible = false;
+    sc.add(this.gasFito.root);
+    this.gasDay = makePerson(GAS_DIARIO);
+    markProps(this.gasDay);
+    this.gas = this.gasDay;
     this.gas.root.position.set(AISLE_X + 1, 0, FLASH_SPOT.z + 0.4);
     sc.add(this.gas.root);
     // (sin el gesto de asentir de pie, como en el cap. 2)
-    for (const p of [this.azul, this.gas]) if (p.rig) p.rig.noFidget = true;
+    for (const p of [this.azul, this.gasDay, this.gasFito]) if (p.rig) p.rig.noFidget = true;
     // El público y Azul (cuando no la llevas tú) no se pueden atravesar
     this.people = this.crowds.flatMap((c) => c.base.map((b) => ({ x: b.x, z: b.z, r: 0.35 })));
     this.azCircle = { x: 1e4, z: 1e4, r: 0.35 };
@@ -987,25 +997,17 @@ export class Level3 implements Level {
     this.applyLight(1);
     later(() => {
       if (this.phase !== 'intro') return;
-      // Primero, el chat donde nace el mote (6 de noviembre): hasta aquí, Marc y Margaux; desde aquí, Gas y Azul
-      const named = () => {
-        setGasNamed(true);
-        dialogue(CONCERT.airport, chats);
-      };
-      const chats = () =>
+      // (el chat del mote ya ha salido en la cabaña del cap. 3: desde el principio, Gas y Azul)
+      setGasNamed(true);
+      dialogue(CONCERT.airport, () =>
         phoneChat([CHATS.fitoEntradas, CHATS.burger], () => {
           this.busy = false;
           this.phase = 'airport';
           this.lost.reset();
           this.updateHud();
           later(() => bark('Margaux', CONCERT.whichGate), 400);
-        });
-      phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => {
-        // El rótulo del mote, con lo que le escribió ella: «por nuestro intento fallido de camping gas»
-        audio.fanfare();
-        cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-        later(() => dialogue(ROAD.named, named), 3800);
-      });
+        }),
+      );
     }, 500);
   }
 
@@ -1061,8 +1063,18 @@ export class Level3 implements Level {
   }
 
   /** La banda en el escenario, con sus haces de luz, y su canción. */
-  private setShow(on: boolean) {
+  private setShow(on: boolean, soft = false) {
     this.showOn = on;
+    if (on && soft) {
+      // La entrada suave: los músicos y los haces van apareciendo uno a uno, y la canción entra muy despacio
+      for (const b of this.band) b.root.visible = false;
+      for (const s of this.spots) s.mesh.visible = false;
+      const order = [...this.band.slice(1), this.band[0]];
+      order.forEach((b, i) => later(() => this.showOn && (b.root.visible = true), 600 + i * 900));
+      this.spots.forEach((s, i) => later(() => this.showOn && (s.mesh.visible = true), 1200 + i * 700));
+      audio.playTrack(FITO_SONG, 7);
+      return;
+    }
     for (const b of this.band) b.root.visible = on;
     for (const s of this.spots) s.mesh.visible = on;
     if (on) audio.playTrack(FITO_SONG);
@@ -2353,22 +2365,21 @@ export class Level3 implements Level {
         b.live = false;
         b.o.visible = false;
         this.updateHud();
-        // (21 nov) Con una sola maleta, otra vez desde la entrada
+        // Con una sola maleta, otra vez desde la entrada: sin ventana, Azul aparece allí parpadeando y sigue
         this.busy = true;
         this.walker.stop();
         this.input.reset();
-        later(() =>
-          failCard(FAIL.suitcase.title, FAIL.suitcase.text, () => {
-            for (const x of this.burgers) {
-              x.live = false;
-              x.o.visible = false;
-            }
-            this.burgerT = 1.6;
-            this.invuln = 0;
-            this.busy = false;
-            this.startAirport();
-          }),
-        800);
+        later(() => {
+          for (const x of this.burgers) {
+            x.live = false;
+            x.o.visible = false;
+          }
+          this.burgerT = 1.6;
+          this.busy = false;
+          this.startAirport();
+          this.invuln = 1.6;
+          this.respawnBlink = 1.6;
+        }, 700);
         break;
       }
     }
@@ -2723,9 +2734,10 @@ export class Level3 implements Level {
     this.input.reset();
     this.walker.stop();
     this.hud.setAction(null);
-    // (21 nov) Más suave: se apaga la luz y la canción de antes se funde, unos segundos de silencio, y la banda y las
-    // luces van apareciendo mientras entra Fito. Sin ruido de ambiente ni gritos: solo la música
-    this.darkRate = 1.2;
+    // Muy suave (21 nov, 2.ª): la luz baja despacio y la canción se funde; un rato de silencio mirando el escenario
+    // vacío; los músicos y los haces van saliendo uno a uno, la canción entra poco a poco y la luz vuelve sin prisa.
+    // Sin gritos ni ambiente, y la cámara se acerca despacio, en un solo plano
+    this.darkRate = 0.55;
     this.setDark(true);
     audio.ambience(0);
     audio.stopTrack();
@@ -2734,24 +2746,25 @@ export class Level3 implements Level {
     const gp = () => headOf(this.gas);
     cinema.play(
       [
-        { dur: 2.6, pos: () => rel(gp(), stage, 2.4, 0.6, 0.5), look: stage, fov: 50 },
         {
-          dur: 4.6,
-          move: 4.6,
-          pos: () => rel(gp(), stage, 2.4, 0.6, 0.5),
-          pos2: () => rel(gp(), stage, 1.6, 0.45, 0.35),
-          look: () => headOf(this.band[0]),
-          fov: 36,
-          fov2: 30,
-          at: () => {
-            this.setShow(true);
-            this.darkRate = 0.45;
-            this.setDark(false);
+          dur: 12,
+          move: 12,
+          pos: () => rel(gp(), stage, 2.6, 0.7, 0.55),
+          pos2: () => rel(gp(), stage, 1.9, 0.5, 0.4),
+          look: stage,
+          look2: () => headOf(this.band[0]),
+          fov: 44,
+          fov2: 34,
+          at: () =>
             later(() => {
-              bark('Fito', CONCERT.showHello);
-              this.talk(this.band[0], 1.5);
-            }, 2200);
-          },
+              this.setShow(true, true);
+              this.darkRate = 0.22;
+              this.setDark(false);
+              later(() => {
+                bark('Fito', CONCERT.showHello);
+                this.talk(this.band[0], 1.5);
+              }, 5200);
+            }, 2400),
         },
       ],
       () =>
@@ -2777,7 +2790,24 @@ export class Level3 implements Level {
   }
 
   /** En el estadio se juega con Gas; Azul se queda en su sitio del pasillo. */
+  /** Gas con la camiseta de Fito (en el estadio) o con su ropa de diario (aeropuerto y llegadas). */
+  private setGasFito(on: boolean) {
+    const to = on ? this.gasFito : this.gasDay;
+    if (to === this.gas) return;
+    const from = this.gas;
+    to.root.position.copy(from.root.position);
+    to.root.rotation.copy(from.root.rotation);
+    to.root.visible = from.root.visible;
+    from.root.visible = false;
+    this.gas = to;
+    if (this.player === from) {
+      this.player = to;
+      this.walker.attach(to.root.position);
+    }
+  }
+
   private toStadium() {
+    this.setGasFito(true);
     this.airGroup.removeFromParent();
     this.arrGroup.removeFromParent();
     this.player = this.gas;
@@ -3942,10 +3972,10 @@ export class Level3 implements Level {
   }
 
   private enterCabin(hard: number, i: number, next: () => void) {
-    this.side = new PeeAim3D(this.cabin, this.camera, hard, (q) => {
+    // (más difícil: se desvía más y pide el 85 % dentro de la taza)
+    this.side = new PeeAim3D(this.cabin, this.camera, hard + 0.6, (q) => {
       this.side = null;
-      // (21 nov) Sin pasar del 75 % dentro de la taza, otra vez
-      if (q < FAIL.skillMin) {
+      if (q < FAIL.peeMin) {
         failCard(FAIL.pee.title, FAIL.pee.text(Math.round(q * 100)), () => this.enterCabin(hard, i, next));
         return;
       }
@@ -3978,22 +4008,29 @@ export class Level3 implements Level {
     this.input.reset();
     this.filmT = 0;
     this.filmIn = 0;
-    this.filmYaw = this.filmAimYaw = 0;
-    this.filmPitch = this.filmAimPitch = 0.12;
+    // (4.3: el móvil empieza apuntando a Fito: antes apuntaba a la pantalla negra del fondo)
+    {
+      const f = this.band[0].root.position, p = this.azul.root.position;
+      this.filmYaw = this.filmAimYaw = THREE.MathUtils.clamp(Math.atan2(f.x - p.x, f.z - p.z), -0.9, 0.9);
+      this.filmPitch = this.filmAimPitch = THREE.MathUtils.clamp(Math.atan2(f.y + 1.4 - 1.75, Math.hypot(f.x - p.x, f.z - p.z)), -0.1, 0.5);
+    }
     if (!this.filmUi) this.baseFov = this.camera.fov;
     this.azul.root.visible = false;
     // (Gas sigue en la cola, lejos y detrás de ella: fuera del encuadre)
     this.gas.root.visible = false;
     this.filmUi?.remove();
-    // El marco del móvil, en tebeo: borde de tinta, rótulos de tebeo y las manos de delante como siluetas negras
-    const lab = "font:22px Bangers,'Arial Black',sans-serif;letter-spacing:.05em;color:#141018;background:#fffbf0;border:3px solid #141018;border-radius:6px;padding:0 8px";
+    // La pantalla del móvil grabando (4.3): arriba REC y el tiempo; en medio, el recuadro donde tiene que estar Fito
+    // (se pone verde con él dentro y, si se escapa, una flecha dice hacia dónde); abajo, la barra de lo que lleva en
+    // plano con la marca de lo que hace falta. Lo que se ve es lo que cuenta: se mira si Fito cae dentro del recuadro.
     const ui = document.createElement('div');
-    ui.style.cssText = 'position:fixed;inset:17% 12% 4%;border:5px solid #141018;outline:3px solid #fffbf0;outline-offset:-9px;border-radius:22px;pointer-events:none;box-shadow:0 0 0 2000px rgba(20,16,24,.42)';
+    ui.className = 'cam';
+    const need = Math.round(FAIL.filmMin * 100);
     ui.innerHTML =
-      `<div style="position:absolute;left:16px;top:10px;${lab}"><span data-rec style="color:#e2302a">●</span> REC <span data-t>0:00</span></div>` +
-      `<div style="position:absolute;right:16px;top:10px;${lab}">🎸 <span data-q>0</span>%</div>` +
-      '<div data-box style="position:absolute;left:27%;right:27%;top:24%;bottom:24%;border:4px dashed #fffbf0;border-radius:10px;box-shadow:0 0 0 2px #141018,inset 0 0 0 2px #141018"></div>' +
-      '<div data-hands style="position:absolute;inset:0;overflow:hidden"></div>';
+      `<div class="cam-top"><span class="cam-rec"><i data-rec></i>REC <b data-t>0:00</b> / 0:${FILM_SECS}</span><span class="cam-pct">🎸 <b data-q>0</b>%</span></div>` +
+      '<div class="cam-box" data-box><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><span class="cam-state" data-state>Busca a Fito</span><span class="cam-arrow" data-arrow></span></div>' +
+      `<div class="cam-bar"><div class="cam-fill" data-fill></div><div class="cam-need" style="left:${need}%"><span>${need}%</span></div></div>` +
+      '<div class="cam-hint">Arrastra o mueve el joystick para seguir a Fito</div>' +
+      '<div data-hands class="cam-hands"></div>';
     // (dentro de la interfaz y el primero, como el mapa del cap. 6: la pausa y los bocadillos, por encima)
     const uiRoot = document.getElementById('ui');
     if (uiRoot) uiRoot.prepend(ui);
@@ -4026,13 +4063,24 @@ export class Level3 implements Level {
     this.tmpV.set(pp.x + Math.sin(this.filmAimYaw + shake) * 10, 1.75 + Math.tan(this.filmAimPitch + shake) * 10, pp.z + Math.cos(this.filmAimYaw + shake) * 10);
     this.camera.lookAt(this.tmpV);
     this.camera.updateMatrixWorld();
-    // ¿Fito dentro del recuadro?
+    // ¿Fito dentro del recuadro? (el recuadro que se ve: su rectángulo en pantalla)
     this.tmpV.copy(fito.root.position).setY(fito.root.position.y + 1.6).project(this.camera);
-    const inside = Math.abs(this.tmpV.x) < 0.46 && Math.abs(this.tmpV.y) < 0.52 && this.tmpV.z < 1;
+    const box = ui.querySelector('[data-box]') as HTMLElement;
+    const r = box.getBoundingClientRect();
+    const sx = (this.tmpV.x * 0.5 + 0.5) * window.innerWidth, sy = (-this.tmpV.y * 0.5 + 0.5) * window.innerHeight;
+    const inside = this.tmpV.z < 1 && sx > r.left && sx < r.right && sy > r.top && sy < r.bottom;
     if (inside) this.filmIn += dt;
-    (ui.querySelector('[data-box]') as HTMLElement).style.borderColor = inside ? '#5fcf80' : '#fffbf0';
+    box.classList.toggle('in', inside);
+    (ui.querySelector('[data-state]') as HTMLElement).textContent = inside ? '✓ En plano' : '¡Se te escapa!';
+    const arrow = ui.querySelector('[data-arrow]') as HTMLElement;
+    arrow.textContent = inside ? '' : sx < r.left ? '◀' : sx > r.right ? '▶' : sy < r.top ? '▲' : '▼';
+    arrow.dataset.dir = sx < r.left ? 'l' : sx > r.right ? 'r' : sy < r.top ? 'u' : 'd';
+    const pctNow = Math.round((this.filmIn / Math.max(0.1, this.filmT)) * 100);
     (ui.querySelector('[data-t]') as HTMLElement).textContent = `0:${Math.floor(this.filmT).toString().padStart(2, '0')}`;
-    (ui.querySelector('[data-q]') as HTMLElement).textContent = `${Math.round((this.filmIn / Math.max(0.1, this.filmT)) * 100)}`;
+    (ui.querySelector('[data-q]') as HTMLElement).textContent = `${pctNow}`;
+    const fill = ui.querySelector('[data-fill]') as HTMLElement;
+    fill.style.width = `${Math.min(100, pctNow)}%`;
+    fill.classList.toggle('ok', pctNow >= FAIL.filmMin * 100);
     (ui.querySelector('[data-rec]') as HTMLElement).style.opacity = this.filmT % 1 < 0.5 ? '1' : '0.2';
     // Gente que salta delante con las manos arriba (siluetas de tinta, a contraluz)
     if (Math.random() < dt * 0.7) {
@@ -4049,9 +4097,9 @@ export class Level3 implements Level {
   }
 
   private endFilm() {
-    // (21 nov) Sin Fito en plano más del 75 % del vídeo, otra vez
+    // Sin Fito en plano al menos el 60 % del vídeo, otra vez (más fácil que antes, que pedía el 75 %)
     const pct = this.filmPct();
-    if (pct < FAIL.skillMin * 100) {
+    if (pct < FAIL.filmMin * 100) {
       this.filmUi?.remove();
       this.filmUi = null;
       this.busy = true;
@@ -4063,7 +4111,6 @@ export class Level3 implements Level {
     }
     this.filmUi?.remove();
     this.filmUi = null;
-    this.filmDone = true;
     this.band[0].root.position.x = 0;
     this.azul.root.visible = true;
     this.camera.fov = this.camera.userData.baseFov ?? this.baseFov;
@@ -4251,12 +4298,8 @@ export class Level3 implements Level {
   private updateHud() {
     const h = this.hud;
     let chips = '';
-    if (this.trip > 0 || this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
-    // (buscando a Azul, ningún contador: que no parezca que hay prisa; las canciones perdidas salen en el resumen)
-    if (this.missed > 0 && this.phase !== 'seek') chips += `<span class="chip">🎵 se pierde ${this.missed}</span>`;
-    if (this.filmDone && this.phase !== 'seek') chips += '<span class="chip">📹</span>';
-    chips += this.smokeThrown ? '<span class="chip">🚭</span>' : '';
-    if (this.phase === 'airport' && this.burgerHits) chips += `<span class="chip">🧳 ${this.burgerHits}</span>`;
+    // (4.3: solo lo del objetivo de ahora, y siempre como «x/N»)
+    if (this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
       if (t !== this.hudObj) h.setObjective((this.hudObj = t));
@@ -4432,6 +4475,10 @@ export class Level3 implements Level {
     this.t += dt;
     this.fx.update(dt);
     this.fireworks.update(dt);
+    if (this.respawnBlink > 0) {
+      this.respawnBlink -= dt;
+      this.azul.root.visible = this.respawnBlink <= 0 || Math.floor(this.respawnBlink * 10) % 2 === 0;
+    }
     this.applyLight(dt);
     if (this.rhythm) {
       this.rhythm.update(dt);
@@ -4849,17 +4896,16 @@ export class Level3 implements Level {
       if (!show) audio.playTrack(SONG_OF[4]);
       this.trip = trip;
       this.missed = missed;
-      this.filmDone = trip > 0;
     };
     const airport = () => {
       setGasNamed(true);
       stop();
+      this.setGasFito(false);
       this.beers?.dispose();
       this.beers = null;
       this.setShow(false);
       audio.playTrack(SONG_OF[4]);
       this.trip = this.missed = 0;
-      this.filmDone = false;
       this.startAirport();
     };
     return [
@@ -4907,7 +4953,6 @@ export class Level3 implements Level {
         label: '3 · Grabar el temón',
         run: () => {
           stadium(true, 1, 0);
-          this.filmDone = false;
           // (Gas ya en la cola: al acabar de grabar se le ve ahí)
           this.gas.root.position.copy(this.tailSpot(new THREE.Vector3()));
           this.gas.root.rotation.y = this.walker.facing = Math.PI / 2;

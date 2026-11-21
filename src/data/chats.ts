@@ -4607,7 +4607,29 @@ export const CHATS = {
     "me": false,
     "t": "19:24",
     "text": "(Spoiler: me habia apuntado al 3)"
+   },
+   {
+    "me": true,
+    "t": "19:26",
+    "text": "Yo me apunto eh"
+   },
+   {
+    "me": true,
+    "t": "19:26",
+    "text": "Pero ya a partir de marzo"
    }
+  ]
+ },
+ "caballos": {
+  "date": "27 de septiembre de 2026",
+  "contact": "Marc",
+  "msgs": [
+   { "me": true, "t": "18:44", "text": "Yo caballo y surf" },
+   { "me": false, "t": "18:48", "text": "Yo caballo vamos a dejarlo para intensivo enero-junio" },
+   { "me": true, "t": "18:51", "text": "Entonces para estar a la par tengo que meterme a volei" },
+   { "me": true, "t": "18:55", "text": "Y asi tenemos mismos deportes ahahah" },
+   { "me": false, "t": "19:05", "text": "Hay agreement" },
+   { "me": true, "t": "19:13", "text": "🤝" }
   ]
  }
 } satisfies Record<string, ChatFrag>;

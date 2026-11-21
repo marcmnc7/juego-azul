@@ -177,12 +177,15 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     const top = el('div', 'll-top');
     const score = () => `<div class="ll-sc me"><b>Tú</b><i>${hearts(myTokens)}</i></div><div class="ll-round">${T.title}<small>Ronda ${rounds}</small></div><div class="ll-sc gas"><b>Gas</b><i>${hearts(gasTokens)}</i></div>`;
     const title = el('div', 'll-title ll-board', score());
+    // (4.3: más simple: arriba solo el marcador; abajo, lo que pasa, de quién es el turno y tus cartas. Las de Gas y
+    // el mazo ya no se enseñan)
     const gasInfo = el('div', 'll-gas');
-    top.append(title, gasInfo);
+    top.append(title);
+    let gasStatus = '';
+    let pre = '';
     const turnEl = el('div', 'll-turn');
     // (las reglas, solo en la primera ronda; lo que pasa se lee y se va: no se queda tapando la escena)
     const log = el('div', 'pr-log ll-log', rounds === 1 ? T.start : '');
-    let logTimer = rounds === 1 ? window.setTimeout(() => (log.textContent = ''), 9000) : 0;
     const bottom = el('div', 'll-bottom');
     const meRow = el('div', 'pr-row me');
     // Abajo, juntos: lo que pasa, de quién es el turno y tu mano (sin explicar las cartas: ya os las sabéis)
@@ -239,14 +242,16 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
         meRow.append(d);
       }
       if (meSafe) meRow.append(el('div', 'll-safe', '🌸'));
-      turnEl.textContent = over ? '' : me.length === 2 ? '✨ Tu turno: juega una carta' : '⏳ Turno de Gas…';
+      turnEl.textContent = over ? '' : me.length === 2 ? '✨ Te toca: juega una carta' : gasStatus;
       turnEl.classList.toggle('mine', me.length === 2 && !over);
       stage?.hands(me.length, gas.length);
     };
+    // Lo último que ha pasado se queda escrito hasta la siguiente jugada («Gas tira…», «Tiras…»)
     const say = (t: string) => {
-      log.textContent = t;
-      clearTimeout(logTimer);
-      logTimer = window.setTimeout(() => (log.textContent = ''), 5500);
+      // (sin repetir quién y qué carta, que ya lo dice «Gas tira…» / «Tiras…»)
+      if (pre) t = t.replace(/^(Gas|Tú): /, '').replace(/^(Guardia|Sacerdote|Barón|Doncella|Príncipe|Rey|Condesa|Princesa)[:.]\s*/, '');
+      log.textContent = pre + t;
+      pre = '';
       audio.talk();
     };
     const end = (iWin: boolean, why: string) => {
@@ -305,14 +310,26 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       }
       stage?.turn(next);
       if (next === 'me') {
-        meSafe = false;
-        draw('me');
+        // Te toca: un momento para leer lo que ha hecho Gas, coges carta y juegas
+        gasStatus = '🂠 Te toca: coges carta…';
         render();
+        setTimeout(() => {
+          if (over) return;
+          meSafe = false;
+          draw('me');
+          render();
+        }, 1300);
       } else {
         gasSafe = false;
+        gasStatus = '🂠 Gas coge carta…';
         draw('gas');
         render();
-        setTimeout(gasTurn, 1400);
+        setTimeout(() => {
+          if (over) return;
+          gasStatus = '🤔 Gas está pensando…';
+          render();
+          setTimeout(gasTurn, 1400);
+        }, 1000);
       }
     };
     /** Lo que Gas sabe de tu carta: se la vio con el Sacerdote, o te la dio con el Rey. */
@@ -392,7 +409,8 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       const v = me.splice(i, 1)[0];
       discards.me.push(v);
       stage?.play('me', v);
-      turnEl.textContent = "";
+      turnEl.textContent = '';
+      pre = `Tiras ${card(v).icon} ${card(v).name}. `;
       if (v === 1 && !gasSafe) {
         render();
         // Elegir qué carta crees que tiene Gas
@@ -450,6 +468,8 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
       const v = gas.splice(idx, 1)[0];
       discards.gas.push(v);
       stage?.play('gas', v);
+      gasStatus = '';
+      pre = `Gas tira ${card(v).icon} ${card(v).name}. `;
       // Adivina con lo que aún no ha salido; si te vio la carta, va a por ella
       const seen = [...faceUp, ...discards.me, ...discards.gas, ...gas];
       const left: number[] = [];
@@ -468,6 +488,7 @@ export function princesaGame(onWin: (rounds: number) => void, stage?: LoveLetter
     stage?.turn('me');
     draw('me');
     render();
+    void gasInfo;
   };
   play();
 }

@@ -920,7 +920,10 @@ export class LevelMoto implements Level {
     const obj: Record<Phase, string> = { intro: '', pack: '🎒', ride: this.windOn ? '🌬️' : '🏍️', creus: '📷', uturn: '🏍️', back: '🏍️', cala: '🌹', done: '' };
     this.hud.setObjective(obj[this.phase]);
     const riding = this.phase === 'ride' || this.phase === 'creus' || this.phase === 'uturn' || this.phase === 'back';
-    this.hud.setCounters(riding ? `<span class="chip">🏍️ ${pct}%</span><span class="chip">✌️ ${this.waves}/${this.motosMet}</span><span class="chip">📷 ${this.photos}/4</span>` : '');
+    // (4.3: los saludos, las fotos y lo bien que se inclina son opcionales: van al resumen, no al HUD)
+    void riding;
+    void pct;
+    this.hud.setCounters('');
   }
 
   /** Lo que se dice en la moto: cada uno desde su asiento (Gas delante a la izquierda del globo, ella a la derecha). */

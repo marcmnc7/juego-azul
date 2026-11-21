@@ -54,6 +54,10 @@ export interface BornOpts {
    * desde ahí tiran las avellanes y se tiene que ver a la gente). Sin la opción, como siempre.
    */
   casinoRail?: boolean;
+  /** Entre el Casino y la esquina, la calle que baja a Sa Plaça d'es Pins (ciutadella.ts), en vez de una casa. */
+  pins?: boolean;
+  /** La terraza del Imperi: mesas y sillas en la acera (abierto). Sin la opción, sí. */
+  terrace?: boolean;
 }
 
 export interface BornWorld {
@@ -324,9 +328,11 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     for (const s of [-1, 1]) directorChair(m, x, z + s * 0.62, s);
     col(x - 0.5, x + 0.5, z - 0.95, z + 0.95);
   };
-  table(W + 0.95, B.z + 3.6);
-  table(W + 0.95, B.z + 5.6);
-  table(W + 0.95, B.z - 3.2);
+  if (opts.terrace !== false) {
+    table(W + 0.95, B.z + 3.6);
+    table(W + 0.95, B.z + 5.6);
+    table(W + 0.95, B.z - 3.2);
+  }
 
   // --- Norte (lateral izquierdo): Teatre des Born, Correus y una casa ---
   const N = BORN.maxZ;
@@ -372,8 +378,10 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
     for (let x = -3.75; x <= 11.76; x += 0.17) m.add(G.box, IRON, x, 5.77, S + 1.02, 0, 0, 0, 0.035, 0.82, 0.035);
   } else m.add(G.box, 0x2a2a2a, 4, 5.75, S + 1.02, 0, 0, 0, 15.6, 0.9, 0.04);
   sign(g, 'Es Casino Nou', 4, 9.4, S + 0.24, 0, 4.2); // (por delante de las pilastras)
-  block(12, 18, S - 9, S, 9, 0xeee3c8);
-  facade(12, 18, S, 1, 2);
+  if (!opts.pins) {
+    block(12, 18, S - 9, S, 9, 0xeee3c8);
+    facade(12, 18, S, 1, 2);
+  }
 
   // --- Esquinas y este: las manzanas a los lados de Ses Voltes ---
   for (const [x0, x1, z0, z1] of [[W - 9, W, N, N + 8], [W - 9, W, S - 9, S], [18, 30, N, N + 8], [18, 30, S - 9, S]]) block(x0, x1, z0, z1, 10, SAND);
@@ -383,8 +391,11 @@ export function buildBorn(sc: THREE.Scene, colliders: Box2[], origin: THREE.Vect
   facade(S, -4.6, 18, -1, 2, false);
   facade(4.6, N, 18, -1, 2, false);
   sign(g, 'Plaça des Born', 17.9, 3, -7, -Math.PI / 2, 3.2);
-  // Hacia dónde queda la plaça dels Pins (donde recoge Gas a Azul): por la calle del sur, hacia el este
-  sign(g, 'Pins →', 17.9, 2.6, -11.6, -Math.PI / 2, 1.8);
+  // Hacia dónde queda Sa Plaça d'es Pins: por la calle corta del sur, entre el Casino y la esquina
+  if (opts.pins) {
+    sign(g, 'Pins →', 10.6, 2.9, S + 0.26, 0, 1.8);
+    sign(g, '← Pins', 19.4, 2.9, S + 0.1, 0, 1.8);
+  }
   if (!opts.voltes) {
     // La calle de Ses Voltes, cerrada a los pocos metros por una casa
     block(30, 38, -6, 6, 10, WHITE);

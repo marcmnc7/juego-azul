@@ -2,7 +2,8 @@
 // vóley, Joy en el parque (agility) y la hípica de saltos —, y al acabar, los créditos y una escena post-créditos.
 import { audio } from '../core/audio';
 import { ANIVERSARIO, FINALE } from '../data/story';
-import { dialogue, clearScreens } from './ui';
+import { dialogue, clearScreens, phoneChat } from './ui';
+import { CHATS } from '../data/chats';
 import { voley, joyTraining } from './minis';
 import { ridingMission } from '../world/missions/riding';
 
@@ -21,14 +22,14 @@ export function hobbiesFinale(onDone: () => void) {
     dialogue(ANIVERSARIO.september, () =>
       voley(() =>
         dialogue(ANIVERSARIO.october, () =>
-          joyTraining(() => dialogue(FINALE.horses, () => ridingMission(() => dialogue(FINALE.end, () => credits(onDone))))),
+          joyTraining(() => phoneChat(CHATS.caballos, () => dialogue(FINALE.horses, () => ridingMission(() => dialogue(FINALE.end, () => credits(onDone)))))),
         ),
       ),
     ),
   );
 }
 
-/** Créditos que suben despacio y, al acabar, la escena post-créditos y «Continuará… 2027». */
+/** Créditos que suben despacio y, al final, «Gracias por este año» con el corazón azul (sin escena post-créditos). */
 export function credits(onDone: () => void) {
   clearScreens();
   const o = el('div', 'fin-screen');
@@ -40,40 +41,26 @@ export function credits(onDone: () => void) {
     if (v) r.append(el('span', '', v));
     roll.append(r);
   }
-  roll.append(el('div', 'fin-heart', '💙'));
   const skip = el('button', 'fin-skip', 'Seguir ›');
   o.append(roll, skip);
   root().append(o);
   audio.fanfare();
   let gone = false;
-  const post = () => {
+  const thanks = () => {
     if (gone) return;
     gone = true;
-    o.classList.add('out');
-    setTimeout(() => {
+    roll.remove();
+    skip.remove();
+    const t = el('div', 'fin-thanks', 'Gracias por este año<i>💙</i>');
+    const b = el('button', 'hm-btn fin-btn', 'Volver al mapa');
+    b.onclick = () => {
       o.remove();
-      // Escena post-créditos: pantalla negra, unas líneas, y lo que viene
-      const p = el('div', 'fin-screen fin-post');
-      p.append(el('div', 'fin-tag', 'Escena post-créditos'));
-      root().append(p);
-      setTimeout(
-        () =>
-          dialogue(FINALE.post, () => {
-            const k = el('div', 'fin-keys', '🔑🔑');
-            const c = el('div', 'fin-cont', 'Continuará…<small>2027</small>');
-            const b = el('button', 'hm-btn fin-btn', 'Volver al mapa');
-            b.onclick = () => {
-              p.remove();
-              onDone();
-            };
-            p.append(k, c, b);
-            audio.chime(3);
-          }),
-        900,
-      );
-    }, 700);
+      onDone();
+    };
+    o.append(t, b);
+    audio.chime(3);
   };
   // (los créditos tardan lo que dura la animación; «Seguir» los salta)
-  roll.addEventListener('animationend', post, { once: true });
-  skip.onclick = post;
+  roll.addEventListener('animationend', thanks, { once: true });
+  skip.onclick = thanks;
 }

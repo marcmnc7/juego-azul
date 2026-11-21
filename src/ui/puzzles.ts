@@ -3,6 +3,7 @@
 import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { MEMORIES } from '../data/memories';
+import { hobbiesFinale } from './finale';
 import { PUZZLES, WHO_SAID, SOUP_WORDS, TIMELINE, FILL, HANGMAN, EMOJI_ROUNDS, type PuzzleInfo } from '../data/puzzles';
 import { crossword, clearScreens, shareWithMarc } from './ui';
 
@@ -63,6 +64,7 @@ function done(f: ReturnType<typeof frame>, line: string, onDone: () => void) {
 export function runPuzzle(id: string, onDone: () => void, onBack: () => void) {
   const p = PUZZLES.find((x) => x.id === id)!;
   if (p.kind === 'crucigrama') return crossword(onDone, onBack, '¡Hecho! 💙');
+  if (p.kind === 'aficiones') return hobbiesFinale(onDone);
   const f = frame(p, onBack);
   ({ quien, sopa, orden, parejas, completa, ahorcado, emojis } as Record<string, (f: ReturnType<typeof frame>, end: (l: string) => void) => void>)[p.kind](f, (l) => done(f, l, onDone));
 }
@@ -102,15 +104,18 @@ function sopa(f: ReturnType<typeof frame>, end: (l: string) => void) {
   const words = SOUP_WORDS.slice();
   const grid: string[][] = [];
   const pos = new Map<string, [number, number][]>();
-  const DIRS = [[0, 1], [1, 0], [1, 1], [-1, 1]];
+  // (en todos los sentidos: de izquierda a derecha y al revés, de arriba abajo y de abajo arriba, y en diagonal)
+  const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [-1, 1], [1, -1]];
   for (let attempt = 0; attempt < 200; attempt++) {
     for (let r = 0; r < N; r++) grid[r] = Array(N).fill('');
     pos.clear();
     let okAll = true;
-    for (const w of shuffle(words)) {
+    // Cada palabra con su sentido, repartidos (que no salgan todas igual)
+    const order = shuffle(DIRS.slice());
+    for (const [wi, w] of shuffle(words).entries()) {
       let placed = false;
       for (let t = 0; t < 300 && !placed; t++) {
-        const [dr, dc] = DIRS[Math.floor(Math.random() * DIRS.length)];
+        const [dr, dc] = t < 200 ? order[wi % order.length] : DIRS[Math.floor(Math.random() * DIRS.length)];
         const r0 = Math.floor(Math.random() * N), c0 = Math.floor(Math.random() * N);
         const cells: [number, number][] = [];
         let fits = true;
@@ -226,7 +231,7 @@ function orden(f: ReturnType<typeof frame>, end: (l: string) => void) {
 
 // ---------------- Parejas ----------------
 /** Fallos que se permiten: al sexto, las cartas se barajan y se empieza de cero (21 nov). */
-const PAIR_FAILS = 6;
+const PAIR_FAILS = 4;
 function parejas(f: ReturnType<typeof frame>, end: (l: string) => void) {
   // (solo fotos de capítulos ya abiertos: antes podían salir las de Sant Joan, que se juega después)
   const after = PUZZLES.find((p) => p.kind === 'parejas')?.after ?? 9;

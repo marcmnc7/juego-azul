@@ -287,7 +287,7 @@ export class Audio {
   }
 
   /** Suena esta canción en bucle (fundiendo la anterior). Si ya está sonando, sigue por donde iba. */
-  playTrack(url: string) {
+  playTrack(url: string, fadeIn = 1.4) {
     if (this.trackWant === url) return;
     this.trackWant = url;
     this.trackOn = true;
@@ -301,7 +301,7 @@ export class Audio {
         const ctx = this.ctx;
         const gain = ctx.createGain();
         gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(TRACK_VOL, ctx.currentTime + 1.4);
+        gain.gain.linearRampToValueAtTime(TRACK_VOL, ctx.currentTime + fadeIn);
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.loop = true;

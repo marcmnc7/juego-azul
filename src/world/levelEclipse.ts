@@ -443,8 +443,8 @@ export class LevelEclipse implements Level {
   private sitPose(p: Person) {
     p.legL.rotation.set(-2.05, 0, -0.14);
     p.legR.rotation.set(-2.05, 0, 0.14);
-    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.2;
-    p.footL.rotation.x = p.footR.rotation.x = 0.85;
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.45;
+    p.footL.rotation.x = p.footR.rotation.x = 0.45;
     p.armL.rotation.set(0.38, 0, -0.2);
     p.armR.rotation.set(0.38, 0, 0.2);
     p.elbowL.rotation.x = p.elbowR.rotation.x = -0.08;
@@ -930,7 +930,7 @@ export class LevelEclipse implements Level {
     };
     this.hud.setObjective(o[this.phase]);
     const clock = `<span class="chip${this.clockMin <= 10 ? ' chip-alert' : ''}">🌘 faltan ${Math.ceil(this.clockMin)} min</span>`;
-    this.hud.setCounters(this.phase === 'toCar' ? clock : this.phase === 'park' ? `${clock}<span class="chip">💥 ${this.bumps}</span>` : this.phase === 'eclipse' ? `<span class="chip">🌘 ${Math.round(this.progress * 100)}%</span>` : '');
+    this.hud.setCounters(this.phase === 'toCar' ? clock : this.phase === 'park' ? clock : this.phase === 'eclipse' ? `<span class="chip">🌘 ${Math.round(this.progress * 100)}%</span>` : '');
   }
 
   private startKayak() {
@@ -1280,8 +1280,14 @@ export class LevelEclipse implements Level {
       this.player.root.position.set(0.05, 0, -0.2);
       this.walker.facing = this.walker.yaw = Math.PI;
       this.player.root.rotation.y = Math.PI;
-      this.gas.root.position.set(-1.2, 0, -0.1);
-      this.gas.root.rotation.y = 2.6;
+      // (en vertical, Gas al otro lado de ella: si no, tapaba a sus padres en el plano de lado)
+      if (this.camera.aspect < 1) {
+        this.gas.root.position.set(0.85, 0, -0.1);
+        this.gas.root.rotation.y = Math.PI - 0.3;
+      } else {
+        this.gas.root.position.set(-1.2, 0, -0.1);
+        this.gas.root.rotation.y = 2.6;
+      }
       this.followers = [];
     }, 250);
     const az = () => headOf(this.player);
@@ -1290,7 +1296,10 @@ export class LevelEclipse implements Level {
     const mid = () => dad().lerp(mom(), 0.5).add(new THREE.Vector3(0, -0.12, 0));
     // Por encima de su hombro, a los padres; y luego, de entre los dos padres, a ella (y Gas al lado)
     cinema.play([
-      { dur: Infinity, move: 7, pos: new THREE.Vector3(-0.62, 1.5, 1.0), pos2: new THREE.Vector3(-0.5, 1.46, 0.72), look: mid, fov: 44, focus: mid },
+      // (4.3: en vertical no cabían los dos padres y su madre quedaba fuera: más atrás, centrado y más abierto)
+      ...(this.camera.aspect < 1
+        ? [{ dur: Infinity, move: 7, pos: new THREE.Vector3(-1.95, 1.7, 0.95), pos2: new THREE.Vector3(-1.8, 1.65, 0.7), look: mid, fov: 60, fov2: 56, focus: mid }]
+        : [{ dur: Infinity, move: 7, pos: new THREE.Vector3(-0.62, 1.5, 1.0), pos2: new THREE.Vector3(-0.5, 1.46, 0.72), look: mid, fov: 44, focus: mid }]),
       { dur: Infinity, move: 7, pos: new THREE.Vector3(0.06, 1.4, -2.45), pos2: new THREE.Vector3(0.06, 1.38, -2.2), look: () => az().add(new THREE.Vector3(-0.25, -0.1, 0)), fov: 46, focus: az },
     ]);
     later(() => {
@@ -1432,6 +1441,8 @@ export class LevelEclipse implements Level {
     for (const [p, x, ry] of seats) {
       p.root.position.x = x;
       p.root.position.z = 0.1;
+      // (4.3: un poco más arriba: con las rodillas dobladas, los pies se metían en la roca)
+      p.root.position.y = seatedRootY(p, 0.12);
       p.root.rotation.y = ry;
     }
     // (sin luz de relleno: a contraluz los rellena la hemisférica del atardecer; no hay lámparas en las rocas)

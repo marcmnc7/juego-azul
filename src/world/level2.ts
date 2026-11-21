@@ -8,7 +8,7 @@ import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, applyShadows, makeSea, paintMat } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard } from '../ui/ui';
+import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard, setGasNamed } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
@@ -17,7 +17,7 @@ import { Laurel } from './laurel';
 import { SIDE } from '../data/story';
 import { buildLogronoTown } from './logrono';
 import { cowGeometry, makeRoadCow, type RoadCow } from '../entities/cow';
-import { cinema, headOf, rel } from '../core/cinema';
+import { cinema, headOf, rel, cineTitle } from '../core/cinema';
 import { Surf, setSurface } from '../core/surfaces';
 
 // La plancha y su carro son de acero (sin esto, el gris se dibujaba como losas de piedra)
@@ -43,6 +43,8 @@ const LEG2 = 650; // metros de San Vicente a Logroño
  * Fotos mínimas de cada tramo (21 nov): Madrid → Marcial, Marcial → el camping y San Vicente → Logroño. Si al llegar
  * no las tiene, o si se pasa de Marcial o de la gasolinera, o choca con una vaca o con el tráfico, repite el tramo.
  */
+/** Golpes que se pueden llevar en un tramo (conos, coches y el tabaco): uno más y se repite. */
+const CRASH_MAX = 2;
 const TRAMO_NEED = { marcial: 12, camp: 6, sv: 0, logrono: 9 } as const;
 const MAX_SPEED = 21; // (21 nov: algo más lento; antes 26)
 const NEED_ZAMB = 8;
@@ -830,7 +832,9 @@ export class Level2 implements Level {
       const left = Math.max(0, Math.round((total - this.dist) / 10));
       h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} · ${left} km`);
       const got = this.photos - this.tramoBase;
-      h.setCounters(this.tramoNeed > 0 ? `<span class="chip${got >= this.tramoNeed ? ' ok' : ''}">📸 ${Math.max(0, got)}/${this.tramoNeed}</span>` : `<span class="chip">📸 ${this.photos}</span>`);
+      // Lo que pide el tramo: las fotos que hacen falta y los golpes (conos, coches, tabaco) que aún se pueden llevar
+      const crash = `<span class="chip${this.hitsSinceCp >= CRASH_MAX ? ' warn' : ''}">💥 ${this.hitsSinceCp}/${CRASH_MAX}</span>`;
+      h.setCounters((this.tramoNeed > 0 ? `<span class="chip${got >= this.tramoNeed ? ' ok' : ''}">📸 ${Math.max(0, got)}/${this.tramoNeed}</span>` : '') + crash);
     } else if (this.phase === 'terrace') {
       this.showLaneButtons(false);
       h.setObjective('🐚');
@@ -840,7 +844,7 @@ export class Level2 implements Level {
       h.setCounters(`<span class="chip">🐚 ${this.served}/${NEED_ZAMB}</span>`);
     } else {
       h.setObjective('Madrid → San Vicente → Logroño');
-      h.setCounters(`<span class="chip">📸 ${this.photos}</span>`);
+      h.setCounters('');
     }
   }
 
@@ -999,7 +1003,7 @@ export class Level2 implements Level {
       return;
     }
     if ((this.phase === 'logrono' || this.phase === 'done') && this.laurel) {
-      this.laurel.update(dt, this.camera);
+      this.laurel.update(dt, this.camera, this.busy ? null : this.input, this.hud);
       return;
     }
     if (this.phase === 'terrace' && this.terrace) {
@@ -1176,6 +1180,9 @@ export class Level2 implements Level {
           audio.boo();
           bark(this.him(), ROAD.smoke[Math.floor(Math.random() * ROAD.smoke.length)], 'l');
           this.fx.burst(at, '💨', 5, 1.5);
+          // (el tabaco también cuenta como golpe del tramo)
+          this.hitsSinceCp++;
+          if (this.hitsSinceCp > CRASH_MAX && !this.rewinding) this.rewind(FAIL.crashes);
         } else if (this.hitT <= 0) {
           this.hitT = 1.2;
           this.turboT = 0;
@@ -1189,7 +1196,7 @@ export class Level2 implements Level {
           this.fx.burst(at, '💥', 4, 1.6);
           comicWord(ROAD.hit[Math.floor(Math.random() * ROAD.hit.length)], 'hit');
           this.hitsSinceCp++;
-          if (this.hitsSinceCp >= 2 && !this.rewinding) this.rewind(FAIL.crashes);
+          if (this.hitsSinceCp > CRASH_MAX && !this.rewinding) this.rewind(FAIL.crashes);
           else if (this.hits % 3 === 1) later(() => bark(this.him(), ROAD.hitLine, 'l'), 500);
         }
         this.updateHud();
@@ -1595,8 +1602,9 @@ export class Level2 implements Level {
           cinema.play([{ dur: Infinity, move: 6, pos: new THREE.Vector3(0.1, 1.4, -2.4), pos2: new THREE.Vector3(0.05, 1.3, -1.9), look: mid, fov: 46, focus: mid }]);
           later(() =>
             dialogue([noGas], () => {
-              // (el rótulo «GAS» ya no sale aquí: el mote se descubre al empezar el cap. 4)
-              later(
+              // En la cabaña, sin gas: el chat donde nace el mote y su rótulo. Desde aquí, Gas y Azul
+              const afterName = () =>
+                later(
                 () =>
                   dialogue(ROAD.campAfter, () =>
                     fadeFlash(() => {
@@ -1615,6 +1623,14 @@ export class Level2 implements Level {
                   ),
                 600,
               );
+              phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => {
+                audio.fanfare();
+                cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
+                later(() => {
+                  setGasNamed(true);
+                  dialogue(ROAD.named, afterName);
+                }, 3800);
+              });
             }),
           900);
         }, 500),
@@ -1646,8 +1662,14 @@ export class Level2 implements Level {
         ]);
         later(() =>
           dialogue(ROAD.arriveLogrono, () => {
-            // Antes de bailar, una ronda en la barra: sin servirla bien no se sigue
+            // Antes de bailar, una ronda en la barra: primero hay que entrar en el bar (andando por la Laurel)
             cinema.stop();
+            this.busy = false;
+            this.hud.setObjective('🍷 Blanco y Negro');
+            later(() => bark(this.him(), ROAD.toBar, 'l'), 600);
+            l.startWalk(() => {
+            this.busy = true;
+            this.hud.setObjective('');
             // (desde más arriba: más abajo, el frente de la barra tapaba media pantalla). En vertical, más lejos y más
             // abierto, para que quepan los cinco pinchos: antes en el móvil solo se veían el camarero y tres platos
             const aspect = this.camera.aspect;
@@ -1662,12 +1684,13 @@ export class Level2 implements Level {
                   dialogue(ROAD.logronoEnd, () => {
                     cinema.stop();
                     audio.stopMusic();
-                    // La vuelta a casa; el mote (el chat «Porque Gas???») se descubre al empezar el cap. 4
+                    // La vuelta a casa
                     phoneChat(CHATS.findes, () => this.finish());
                   }),
                 4200);
               }),
             );
+            });
           }),
         1200);
       }, 500),
@@ -1826,9 +1849,9 @@ export class Level2 implements Level {
         this.eateryTried.add(near.name);
         if (near.m) this.stopMarcial();
         else {
+          // Parar donde no toca: vuelta al último punto bueno
           audio.boo();
-          bark(this.him(), ROAD.notM(near.name), 'l');
-          this.hud.setAction(null);
+          this.rewind(ROAD.notM(near.name));
         }
       }
     } else this.hud.setAction(null);
@@ -2014,6 +2037,8 @@ export class Level2 implements Level {
 
     this.hitsSinceCp = 0;
     this.updateHud();
+    // Al empezar cada tramo, Gas dice lo que hace falta (fotos y golpes que se pueden llevar)
+    later(() => bark(this.him(), ROAD.tramoInfo(need, CRASH_MAX), 'l'), 900);
   }
 
   private stopMarcial() {

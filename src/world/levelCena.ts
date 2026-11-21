@@ -610,7 +610,9 @@ export class LevelCena implements Level {
     };
     this.hud.setObjective(objective[this.phase]);
     const left = this.phase === 'alarm' && !this.busy ? `<span class="chip">⏱️ ${Math.ceil(this.alarmT)}</span>` : '';
-    this.hud.setCounters(`<span class="chip">${clock}</span>${left}${this.scares ? `<span class="chip">😱 ${this.scares}</span>` : ''}${this.grade ? `<span class="chip">🍝 ${this.grade}/10</span>` : ''}${this.phase === 'toKitchen' && this.gathering ? `<span class="chip">🧺 ${this.pantry.count}/3</span>` : ''}`);
+    // (4.3: solo lo del objetivo de ahora: la cuenta atrás de la alarma y lo que falta de la despensa)
+    void clock;
+    this.hud.setCounters(`${left}${this.phase === 'toKitchen' && this.gathering ? `<span class="chip">🧺 ${this.pantry.count}/3</span>` : ''}`);
   }
 
   // ---------------- Fases ----------------
@@ -830,9 +832,10 @@ export class LevelCena implements Level {
       const trap = { label: '🥛 ¿Nata?', onPress: () => this.pressNata() };
       const step = (i: number) => {
         const opts = [
-          { title: CENA.steps.guanciale, duration: 3.6, button: '¡Ya! 🥓', zones: [{ to: 0.44, label: 'Crudo', color: '#f3c4b5' }, { to: 0.78, label: 'Crujiente', color: '#e0a052', good: true }, { to: 1, label: 'Quemado', color: '#5a3a2a' }] },
-          { title: CENA.steps.pasta, duration: 3.0, button: 'Escurrir ⏱️', zones: [{ to: 0.5, label: 'Dura', color: '#f4e7b8' }, { to: 0.8, label: 'Al dente', color: '#f2d27a', good: true }, { to: 1, label: 'Pasada', color: '#d9cfa8' }] },
-          { title: CENA.steps.mix, duration: 2.6, button: 'Mezclar 🥚', zones: [{ to: 0.3, label: 'Revuelto', color: '#f7c94a' }, { to: 0.64, label: 'Cremosa', color: '#fff0b8', good: true }, { to: 1, label: 'Fría', color: '#e8e2d0' }] },
+          // (4.3: más difícil: la aguja va más deprisa y la zona buena es más estrecha)
+          { title: CENA.steps.guanciale, duration: 2.4, button: '¡Ya! 🥓', zones: [{ to: 0.52, label: 'Crudo', color: '#f3c4b5' }, { to: 0.71, label: 'Crujiente', color: '#e0a052', good: true }, { to: 1, label: 'Quemado', color: '#5a3a2a' }] },
+          { title: CENA.steps.pasta, duration: 2.1, button: 'Escurrir ⏱️', zones: [{ to: 0.58, label: 'Dura', color: '#f4e7b8' }, { to: 0.75, label: 'Al dente', color: '#f2d27a', good: true }, { to: 1, label: 'Pasada', color: '#d9cfa8' }] },
+          { title: CENA.steps.mix, duration: 1.8, button: 'Mezclar 🥚', zones: [{ to: 0.36, label: 'Revuelto', color: '#f7c94a' }, { to: 0.53, label: 'Cremosa', color: '#fff0b8', good: true }, { to: 1, label: 'Fría', color: '#e8e2d0' }] },
         ][i];
         this.steamOn(i);
         this.food.visible = true;
@@ -888,7 +891,7 @@ export class LevelCena implements Level {
     this.steam.forEach((s) => (s.visible = false));
     this.updateHud();
     bark('Gas', CENA.grade(this.grade));
-    if (this.grade < 7) {
+    if (this.grade < 8) {
       audio.boo();
       later(() => this.phase === 'cook' && this.startCook(), 2600);
       return;

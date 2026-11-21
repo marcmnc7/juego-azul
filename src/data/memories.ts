@@ -73,6 +73,9 @@ export interface Memory {
 export const MEMORIES: Memory[] = [
   { level: 1, src: ferreriesSelfie, caption: 'Ferreries, 25 de agosto. Purpurina y pomada.' },
   { level: 1, src: ferreriesPoster, video: ferreriesVideo, caption: 'El jaleo, en directo.' },
+  // (4.3: dos del cap. 8, que tenía muchos, al final del cap. 2, que no tenía ninguno)
+  { level: 2, src: bailePiscinaPoster, video: bailePiscina, caption: 'Bailando junto a la piscina.' },
+  { level: 2, src: joySiesta, caption: 'Joy y Gas: siesta en el sofá.' },
   { level: 3, src: marcialFoto, caption: 'Cafetería Marcial. La primera con M.' },
   { level: 3, src: torreznos, caption: 'Y sus torreznos.' },
   { level: 3, src: cabana, caption: 'La cabaña. Sin gas, pero con cama.' },
@@ -102,10 +105,8 @@ export const MEMORIES: Memory[] = [
   { level: 7, src: farolaAzotea, caption: 'Sa Farola, desde la azotea.' },
   { level: 8, src: gafasEclipse, caption: 'Gafas puestas: 12 de agosto de 2026.' },
   { level: 8, src: eclipsePoster, video: eclipseVideo, caption: 'El eclipse, desde las rocas.' },
-  { level: 8, src: bailePiscinaPoster, video: bailePiscina, caption: '15 de agosto, bailando junto a la piscina.' },
   { level: 8, src: wakeboardPoster, video: wakeboard, caption: '12 de agosto por la mañana: antes del eclipse, wakeboard.' },
   { level: 8, src: ferryBailePoster, video: ferryBaile, caption: 'En el ferry, 8 de agosto.' },
-  { level: 8, src: joySiesta, caption: 'Joy y Gas: siesta en el sofá.' },
   { level: 9, src: atardecer, caption: 'Un año después: 25 de agosto de 2026.' },
   { level: 9, src: amigosPoster, video: amigos, caption: 'Y con todos, a finales de agosto.' },
   { level: 9, src: botasHipica, caption: 'Botas de montar: lo que viene.' },

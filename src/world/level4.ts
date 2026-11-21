@@ -6,14 +6,15 @@ import { audio } from '../core/audio';
 import { Walker, WALK_SPEED, type Circle } from '../core/walker';
 import { Sky, Sun, toon, glowTexture, vibrate, makeSea } from '../core/gfx';
 import { comicStarTexture, comicBulbTexture } from '../core/comicTiles';
-import { NIGHT, FAIL, type Line } from '../data/story';
+import { NIGHT, FAIL } from '../data/story';
 import { CHATS } from '../data/chats';
 import { MARGAUX_LOOK, MARC_LOOK, castLook, AZUL_DIARIO, GAS_DIARIO } from '../data/characters';
 import { POT_CORE, woodChair, CarRig, G, Merger, makePerson, makeCar, animatePerson, palmCrown, grassTufts, Person, type PersonLook } from '../entities/models';
 import { buildStreet, STREET, CORRIDOR } from './homeStreet';
 import { Door } from './door';
 import { buildSurroundings } from './surround';
-import { buildBorn, bornHeight, BORN, BORN_SOUTH_LANE, IMPERI } from './born';
+import { bornHeight, BORN_SOUTH_LANE, IMPERI } from './born';
+import { buildCiutadella, CIUTADELLA_BOUNDS, PINS_WAIT, PINS_LANE_Z } from './ciutadella';
 import { Particles } from '../entities/fx';
 import { PoolWater } from '../core/poolWater';
 import { Trail } from '../core/follow';
@@ -67,15 +68,18 @@ const PLOT = { minX: CORRIDOR.minX + 0.2, maxX: 4.1, minZ: -26.6, maxZ: 13.62 };
 // El Born de Ciutadella (con el Bar Imperi), lejos de casa: su calle del sur coincide con el carril
 // de la carretera, así el coche azul usa el mismo carril en los dos sitios
 const BORN_O = new THREE.Vector3(-600, 0, STREET.laneZ - BORN_SOUTH_LANE);
-const BAR_AREA = { minX: BORN_O.x + BORN.minX + 0.4, maxX: BORN_O.x + 29.6, minZ: BORN_O.z + BORN.minZ + 0.4, maxZ: BORN_O.z + BORN.maxZ - 0.4 };
+// Todo Ciutadella se puede andar (el Born, Ses Voltes, la Plaça Espanya, Sa Plaça d'es Bè y Sa Plaça d'es Pins)
+const B0 = CIUTADELLA_BOUNDS;
+const BAR_AREA = { minX: BORN_O.x + B0.minX, maxX: BORN_O.x + B0.maxX, minZ: BORN_O.z + B0.minZ, maxZ: BORN_O.z + B0.maxZ };
 const BAR_START = new THREE.Vector3(BORN_O.x + IMPERI.x + 3.2, 0, BORN_O.z + IMPERI.z - 1);
 /** Llegada a casa: calle, patio delantero y el pasillo lateral hasta el jardín. */
 // Al llegar: la calle desde donde para el coche (delante del vecino) hasta casa
 const HOME_AREA = { ...PLOT, maxX: 15.5 };
-// «Ve hacia Pins»: la esquina sureste de la explanada, junto a la calle por donde llega el coche
-const PINS = new THREE.Vector3(BORN_O.x + 11, 0, STREET.laneZ + 1.9);
+// «Ve hacia Pins»: Sa Plaça d'es Pins, pasado el Born por la calle corta del sur; Gas llega por su calle de coches
+const PINS = new THREE.Vector3(BORN_O.x + PINS_WAIT.x, 0, BORN_O.z + PINS_WAIT.z);
+const PINS_LANE = BORN_O.z + PINS_LANE_Z;
 const CAR_START_X = PINS.x + 1.2;
-const CAR_FAR_X = BORN_O.x - 14;
+const CAR_FAR_X = BORN_O.x - 42;
 // Del Born a casa, por el camino de campo de countryRoad.ts: entra en la calle de casa (de sentido único hacia el
 // oeste) por el este y para unos metros antes de casa, delante del vecino; desde ahí se va andando hasta la verja
 const CAR_STOP_X = 11;
@@ -93,7 +97,6 @@ const txt = <T,>(k: string, d: T): T => (TXT[k] as T | undefined) ?? d;
 const TABLE = new THREE.Vector3(-1.0, 0, 0.8);
 /** Dónde está la tertulia del Imperi (el centro del corro, en el mundo). */
 const FRIENDS = new THREE.Vector3(BORN_O.x - 17.0, 0, BORN_O.z + 3.8);
-const T_CAUGHT = () => txt<Line[]>('caught', [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga.' }]);
 // Marco Polo en la piscina, en voz baja (están los padres durmiendo)
 const MP_CALLS = 7;
 const MP = {
@@ -283,7 +286,8 @@ export class Level4 implements Level {
     const street = buildStreet(sc, { night: true });
     buildCountryRoad(sc);
     this.gate = street.gate;
-    buildBorn(sc, this.colliders, BORN_O, { cars: true, night: true });
+    // Ciutadella, la misma que en Sant Joan: de noche, con coches, el Imperi abierto con su terraza y poca gente
+    buildCiutadella(sc, this.colliders, BORN_O, { night: true, cars: true, terrace: true });
     // Tres que siguen de tertulia en la terraza del Imperi, de pie en la acera alrededor de la mesa del sur (con los que estaba ella;
     // en la otra mesa está el recuerdo de «la cola»)
     const B = BORN_O;
@@ -305,7 +309,7 @@ export class Level4 implements Level {
     this.colliders.push({ minX: 13.3, maxX: 16, minZ: STREET.wallZ - 0.3, maxZ: STREET.wallZ + 0.3, low: true });
     this.car.root.rotation.y = Math.PI / 2;
     this.car.azul.visible = false;
-    this.placeCar(CAR_FAR_X);
+    this.placeCar(CAR_FAR_X, PINS_LANE);
     sc.add(this.car.root);
 
     this.player = makePerson(AZUL_DIARIO);
@@ -868,7 +872,7 @@ export class Level4 implements Level {
     switch (this.phase) {
       case 'intro':
       case 'atBar':
-        h.setObjective(this.pickedUp ? '🚗' : 'Ve hacia Pins');
+        h.setObjective(this.pickedUp ? '🚗' : 'Ve a la Plaça des Pins');
         break;
       case 'drive':
         h.setObjective('');
@@ -1308,8 +1312,9 @@ export class Level4 implements Level {
     const gravel = !swimming && p.x > GRAVEL.minX && p.x < GRAVEL.maxX && p.z > GRAVEL.minZ && p.z < GRAVEL.maxZ && !this.onStone(p.x, p.z);
     if (!swimming) {
       // La grava cruje (y más cuanto más deprisa); en las losas, solo correr hace ruido, y se va acumulando
-      if (gravel && sp > 0.3) this.noise += dt * (0.36 + sp * 0.28);
-      else this.noise += dt * Math.max(0, sp - 2.0) * 0.24;
+      // (despacio casi no se oye: el ruido crece con el cuadrado de la velocidad)
+      if (gravel && sp > 0.3) this.noise += dt * 0.11 * sp * sp;
+      else this.noise += dt * Math.max(0, sp - 1.8) * 0.3;
     }
     // A medio camino, una luz arriba (sin haber hecho nada): quieta hasta que se apague; moverse ahí es ruido
     if (this.phase === 'toPool' && !this.sneakFreezeDone && p.z > -3.5) {
@@ -1369,9 +1374,32 @@ export class Level4 implements Level {
       }
     }
     this.winMat.color.lerp(this.winTarget.setRGB(on ? 1 : 0.105, on ? 0.86 : 0.13, on ? 0.6 : 0.21), Math.min(1, dt * 6));
-    if (this.noise >= 1) this.wakeParents();
+    // Al tope, no te pillan de golpe: se abre la ventana («Qui hi ha?») y hay un momento para quedarse de piedra.
+    // Si no te mueves, la ventana se cierra y el ruido baja a la mitad; si te mueves, te han pillado.
+    if (this.alertT > 0) {
+      this.alertT -= dt;
+      this.noise = 1;
+      if (this.alertT < 1.45 && moving) {
+        this.alertT = 0;
+        this.wakeParents();
+        return;
+      }
+      if (this.alertT <= 0) {
+        this.noise = 0.5;
+        bark('Gas', NIGHT.alertSafe);
+      }
+    } else if (this.noise >= 1) {
+      this.alertT = 1.8;
+      bark('Gas', NIGHT.alertWho);
+      comicWord('¿QUI HI HA?', 'hit');
+      audio.warn();
+      vibrate([40, 40, 40]);
+    }
     this.updateHud();
   }
+
+  /** La ventana de los padres abierta: quieta (ver updateSneak). */
+  private alertT = 0;
 
   private wakeParents() {
     this.busy = true;
@@ -1382,17 +1410,22 @@ export class Level4 implements Level {
     audio.hit();
     vibrate(60);
     const where = this.phase;
-    dialogue(T_CAUGHT(), () => {
+    // (sin ventana que tapa: se oye a su madre, un fundido y otra vez desde el último punto)
+    bark('Gas', NIGHT.caughtWho);
+    comicWord('¡PILLADOS!', 'hit');
+    later(() => {
       fadeFlash(() => {
         this.noise = 0;
         this.lightOn = false;
         this.lampOn = 0;
         this.lampT = 5 + Math.random() * 3;
         this.sneakFreezeT = 0;
+        this.alertT = 0;
         if (where === 'swim') {
-          // Otra vez desde el principio del baño: cada uno a su lado de la piscina
+          // Otra vez desde el principio del baño, en su lado de la piscina. Gas, si ya ha salido del agua, sigue a lo
+          // suyo (antes lo devolvía a la piscina a la altura del césped y andaba por encima del agua)
           this.player.root.position.set(-1.6, this.player.root.position.y, 7.9);
-          this.gas.root.position.set(1.8, this.gas.root.position.y, 7.6);
+          if (this.gasPlan === 'none') this.gas.root.position.set(1.8, SWIM_Y, 7.6);
           this.freezeT = 0;
           this.swimT = 0;
         } else if (where === 'toTowels') {
@@ -1400,27 +1433,37 @@ export class Level4 implements Level {
           this.player.root.position.set(LADDER.x - 0.95, 0, LADDER.z);
           this.walker.yaw = this.walker.facing = Math.PI;
         } else {
-          this.player.root.position.set(-5.45, 0, -1.2);
+          // Otra vez desde que entran en casa (el pasillo), y las toallas otra vez dobladas en la mesa
+          const cx = (CORRIDOR.minX + CORRIDOR.maxX) / 2;
+          this.player.root.position.set(cx, 0, -15.0);
           this.walker.yaw = this.walker.facing = 0;
+          this.gas.root.position.set(cx, 0, -13.9);
+          this.gas.root.rotation.y = 0;
+          this.gasPath = [[cx, -12], [GAS_POOL.x, GAS_POOL.z]];
+          this.towelsTaken = false;
+          this.towelPile.visible = true;
+          this.towelNag = false;
         }
         this.walker.stop();
         this.busy = false;
         this.updateHud();
       });
-    });
+    }, 1100);
   }
 
   // ---------------- Bar Imperi y viaje a casa ----------------
 
-  private placeCar(x: number) {
-    this.car.root.position.set(x, 0, STREET.laneZ);
+  private placeCar(x: number, z = STREET.laneZ) {
+    this.car.root.position.set(x, 0, z);
+    this.carBox.minZ = z - 0.95;
+    this.carBox.maxZ = z + 0.95;
     this.carBox.minX = x - 2.0;
     this.carBox.maxX = x + 2.0;
   }
 
   /** Puerta del copiloto, del lado de la acera. */
   private carDoor() {
-    return this.v2.set(this.car.root.position.x + 0.2, 0, STREET.laneZ + 1.35);
+    return this.v2.set(this.car.root.position.x + 0.2, 0, this.car.root.position.z + 1.35);
   }
 
   private boardCar() {
@@ -1581,7 +1624,7 @@ export class Level4 implements Level {
             // (por encima del hombro de Azul, en la acera: el coche aparece al fondo de la calle)
             { dur: 2.6, pos: new THREE.Vector3(PINS.x + 1.3, 1.55, PINS.z + 0.7), pos2: new THREE.Vector3(PINS.x + 1.0, 1.6, PINS.z + 0.9), look, fov: 30, fov2: 34, focus: look },
             // (desde la acera, delante de ella: el coche llega y para a su lado)
-            { dur: 2.8, pos: new THREE.Vector3(PINS.x + 5.2, 1.45, PINS.z + 0.6), pos2: new THREE.Vector3(PINS.x + 4.4, 1.5, PINS.z + 0.8), look: () => carAt.set(PINS.x + 0.3, 1.1, (STREET.laneZ + PINS.z * 2) / 3), fov: 46, fov2: 42, focus: look },
+            { dur: 2.8, pos: new THREE.Vector3(PINS.x + 5.2, 1.45, PINS.z + 0.6), pos2: new THREE.Vector3(PINS.x + 4.4, 1.5, PINS.z + 0.8), look: () => carAt.set(PINS.x + 0.3, 1.1, (PINS_LANE + PINS.z * 2) / 3), fov: 46, fov2: 42, focus: look },
           ],
           () => {
             this.pickedUp = true;
@@ -1595,7 +1638,7 @@ export class Level4 implements Level {
       const prev = this.car.root.position.x;
       this.carT += dt;
       const k = Math.min(1, this.carT / 5);
-      this.placeCar(THREE.MathUtils.lerp(CAR_FAR_X, CAR_START_X, 1 - (1 - k) * (1 - k)));
+      this.placeCar(THREE.MathUtils.lerp(CAR_FAR_X, CAR_START_X, 1 - (1 - k) * (1 - k)), PINS_LANE);
       if (!this.rig) this.rig = new CarRig(this.car);
       this.rig.update(dt, dt > 0 ? (this.car.root.position.x - prev) / dt : 0, 0, 1.4);
     }
@@ -2352,7 +2395,7 @@ export class Level4 implements Level {
           this.towelsTaken = false;
           this.towelPile.visible = true;
           for (const t of this.lawnTowels) t.visible = false;
-          this.placeCar(CAR_FAR_X);
+          this.placeCar(CAR_FAR_X, PINS_LANE);
           this.car.azul.visible = false;
           this.player.root.visible = true;
           this.gas.root.visible = false;

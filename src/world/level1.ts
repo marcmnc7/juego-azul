@@ -99,6 +99,9 @@ interface DonkeyState {
   warnT: number; // aviso antes de encabritarse
   rearT: number; // tiempo restante encabritado
   nextRear: number;
+  /** Desbocado (3-4 s, de vez en cuando durante todo el capítulo): corre y embiste. */
+  wildT: number;
+  nextWild: number;
   touched: boolean;
   walkPhase: number;
   /** Lo que lleva esperando a que se aparte el que tiene delante (s). */
@@ -201,8 +204,6 @@ export class Level1 implements Level {
   private cupAt: [THREE.Object3D, number, number][] = [];
   private cupPost: (() => void) | null = null;
   private tofolCup: THREE.Mesh | null = null;
-  /** De vuelta a Tòfol: los burros van desbocados, y cada empujón derrama una. */
-  private stampede = false;
   /** Antes de nada, los críos de las pistolas de agua (no en el último capítulo). */
   private water: WaterFight | null = null;
   private spilled = 0;
@@ -412,6 +413,8 @@ export class Level1 implements Level {
         warnT: 0,
         rearT: 0,
         nextRear: 2 + i * 1.7,
+        wildT: 0,
+        nextWild: 6 + i * 3.5 + Math.random() * 4,
         touched: false,
         walkPhase: i,
         alert,
@@ -535,8 +538,7 @@ export class Level1 implements Level {
       { minX: pp.x + 4, maxX: pp.x + 21, minZ: -3.1, maxZ: 3.1 },
       () => this.updateHud(),
       () => {
-        this.water?.dispose();
-        this.water = null;
+        // (los críos no se van: se quedan correteando por la calle)
         if (this.stage !== 'water') return;
         this.busy = false;
         this.stage = 'talkTofol';
@@ -677,7 +679,21 @@ export class Level1 implements Level {
           s.rearT = REAR;
         }
       } else {
-        const wild = this.stampede && this.stage === 'returnTofol';
+        // De vez en cuando (todo el capítulo) uno se desboca 3-4 s: «!» encima, corre y se te echa encima
+        const roam = ['talkTofol', 'collect', 'returnTofol', 'findMarc', 'toFont'].includes(this.stage) && !this.busy;
+        if (s.wildT > 0) {
+          s.wildT -= dt;
+          s.alert.visible = s.wildT > 0;
+          s.alert.scale.setScalar(1 + Math.abs(Math.sin(this.t * 14)) * 0.3);
+          if (s.wildT <= 0) s.nextWild = 7 + Math.random() * 8;
+        } else if (roam && (s.nextWild -= dt) <= 0 && !this.pet) {
+          s.wildT = 3 + Math.random();
+          if (dist < 22) {
+            audio.warn();
+            if (dist < 12) comicWord(FERRERIES.hints.stampedeWord, 'hit');
+          }
+        }
+        const wild = s.wildT > 0;
         const spd = s.mode === 'circle' ? (wild ? 0.95 : 0.36) : wild ? 5 : 1.75; // al paso, pero a paso de burro de verdad (1,8 m/s)
         // Ningún ase atraviesa a otro: si tiene uno delante, pegado, espera (y si es en la calle y se eterniza, da
         // media vuelta)
@@ -736,7 +752,7 @@ export class Level1 implements Level {
       const loc = r.worldToLocal(this.v1.copy(pp));
       const ahead = loc.z > 0.35 && loc.z < 1.65 && Math.abs(loc.x) < 0.7;
       const walking = s.rearT <= 0 && s.warnT <= 0 && (s.waitT ?? 0) === 0;
-      const fast = this.stampede && this.stage === 'returnTofol';
+      const fast = s.wildT > 0;
       if (walking && (ahead || (fast && dist < 1.35)) && this.invuln <= 0 && !this.busy && this.stage !== 'ending') {
         this.v1.subVectors(pp, r.position).setY(0).normalize().multiplyScalar(10);
         this.walker.knock.copy(this.v1);
@@ -747,23 +763,17 @@ export class Level1 implements Level {
         audio.hit();
         vibrate(90);
         this.fx.burst(this.v2.copy(pp).setY(0.1), 'dust', 5, 1.5, 0.3);
-        if (this.stage === 'collect' && this.pomadaCount > 0) {
-          this.pomadaCount--;
-          const lost = this.pomadas.find((p) => p.taken);
-          if (lost) {
-            lost.taken = false;
-            lost.mesh.visible = true;
+        if (fast && (this.stage === 'collect' || this.stage === 'returnTofol') && this.pomadaCount > 0) {
+          // Un ase desbocado te embiste antes de llegar a Tòfol: se caen todas y a por ellas otra vez a las mesas
+          this.pomadaCount = 0;
+          for (const p of this.pomadas) {
+            p.taken = false;
+            p.mesh.visible = true;
           }
+          if (this.stage === 'returnTofol') this.stage = 'collect';
           // (los toast no se ven en el cómic: lo dice ella; el «¡PAF!» ya lo pone el golpe)
-          bark('Margaux', this.T.hints.dropped);
-          this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 5);
-          this.updateHud();
-        } else if (this.stage === 'returnTofol' && this.spilled < 3) {
-          // Si se derraman las tres, vuelta a empezar el camino (con otras tres)
-          this.spilled++;
-          this.fx.burst(this.v1.copy(pp).setY(1.4), '🍋', 7);
-          if (this.spilled < 3) bark('Margaux', FERRERIES.hints.spilled[this.spilled - 1]);
-          else this.fail(FAIL.pomadas, '3 ·');
+          bark('Margaux', FERRERIES.hints.droppedAll);
+          this.fx.burst(this.v1.copy(pp).setY(1.5), '🍋', 9);
           this.updateHud();
         } else if (this.hits === 1) {
           bark('Margaux', this.V.bumped);
@@ -1440,20 +1450,13 @@ export class Level1 implements Level {
         d.alert.visible = false;
         d.warnT = d.rearT = 0;
       });
-      this.stampede = true;
       this.spilled = 0;
-      this.invuln = 1.5; // un respiro para arrancar
-      // (antes un toast, que no se ve: la onomatopeya y lo dice quien va con las pomadas, o Gas a su lado)
-      comicWord(FERRERIES.hints.stampedeWord, 'hit');
       later(() => {
         if (this.stage !== 'returnTofol') return;
         if (this.together && this.V.findFirst) bark('Gas', this.V.findFirst.lines.stampede);
         else bark('Margaux', FERRERIES.hints.stampede);
-      }, 700);
-      audio.warn();
+      }, 500);
       audio.cheer(0.5);
-      vibrate([60, 40, 60]);
-      this.walker.shake(0.35);
     }
     this.updateHud();
   }
@@ -1470,7 +1473,6 @@ export class Level1 implements Level {
     else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
     else if (this.stage === 'returnTofol') {
       this.giveCups();
-      this.stampede = false;
       // Si se han derramado, Tòfol lo nota
       const lines = this.spilled ? [...FERRERIES.hints.arrived(3 - this.spilled), ...this.T.tofolDone.slice(2)] : this.T.tofolDone;
       // (capítulo 9: antes del beso, a bailar juntos a Sa Font, donde se conocieron; antes el beso era ahí mismo)
@@ -1877,7 +1879,6 @@ export class Level1 implements Level {
       this.petPost = null;
       this.sit = null;
       this.player.body.position.y = 0;
-      this.stampede = false;
       this.spilled = 0;
       this.invuln = 0;
       this.endingT = this.pairT = this.barT = this.kissT = 0;
@@ -1959,7 +1960,6 @@ export class Level1 implements Level {
           collect(true);
           tp(-6, 2);
           gas(true);
-          this.stampede = true;
           this.invuln = 1.5;
         }),
       },

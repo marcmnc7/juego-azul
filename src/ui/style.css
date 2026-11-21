@@ -2412,3 +2412,74 @@ html, body { background: #000; }
 .fin-cont small { display: block; font: 800 16px var(--font); letter-spacing: .3em; color: rgba(251,245,230,.8); margin-top: 10px; }
 .fin-btn { margin-top: 20px; animation: finPop .6s .6s ease both; }
 @keyframes finPop { from { opacity: 0; transform: scale(.7); } }
+/* 4.3 · Foto escondida: la foto grande y solo la cuenta */
+.kp-pop { padding: 6px 14px 6px 6px; }
+.kp-thumb { width: 84px; height: 84px; border-radius: 10px; }
+.kp-text b { font-size: 17px; }
+.kp-text span { font-size: 13px; opacity: .85; }
+/* 4.3 · El rótulo del nombre nunca encima del texto: hueco propio arriba (o abajo, si el globo va debajo) */
+.comic-mode .dialogue.speech { padding-top: 12px; padding-bottom: 5px; }
+.comic-mode .dialogue.speech.tail-up { padding-top: 6px; padding-bottom: 13px; }
+.comic-mode .dialogue.speech.tail-up .next { bottom: auto; top: 2px; }
+.comic-mode .dialogue.speech .who:empty + .text, .comic-mode .dialogue.speech.who-narr { padding-top: 6px; }
+/* 4.3 · Etiquetas de los juegos del mapa: nunca se salen de la pantalla (parten en dos líneas) */
+.mp-mini.side-r .mp-mini-lab, .mp-mini.side-l .mp-mini-lab { width: max-content; max-width: min(84px, 21vw); }
+.mp-mini.side-r .mp-mini-lab b, .mp-mini.side-l .mp-mini-lab b { white-space: normal; text-wrap: balance; }
+.mp-mini.side-l .mp-mini-lab b { text-align: right; }
+.mp-mini.side-r .mp-mini-lab b { text-align: left; }
+/* ---------- 4.3 · Cámara del móvil (grabar a Fito) y visor de fotos, rehechos ---------- */
+.cam { position: fixed; inset: 0; z-index: 6; pointer-events: none; font-family: var(--font); }
+.cam::before { content: ''; position: absolute; inset: calc(max(10px, env(safe-area-inset-top)) + 54px) 10px calc(max(12px, env(safe-area-inset-bottom)) + 96px); border: 4px solid #141018; outline: 2px solid #fffbf0; outline-offset: -7px; border-radius: 26px; box-shadow: 0 0 0 200vmax rgba(14, 10, 22, .5); }
+.cam-top { position: absolute; left: 22px; right: 22px; top: calc(max(10px, env(safe-area-inset-top)) + 66px); display: flex; justify-content: space-between; gap: 8px; }
+.cam-top > span { font: 15px/1 var(--font); font-weight: 800; color: #fff; background: rgba(14, 10, 22, .72); border-radius: 999px; padding: 6px 11px; display: inline-flex; align-items: center; gap: 6px; }
+.cam-rec i { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; display: inline-block; }
+.cam-box { position: absolute; left: 50%; top: 46%; width: min(62vw, 300px); height: min(40vh, 340px); transform: translate(-50%, -50%); border-radius: 12px; transition: background .2s; }
+.cam-box .c { position: absolute; width: 30px; height: 30px; border: 4px solid #fffbf0; filter: drop-shadow(0 0 2px #141018); transition: border-color .15s; }
+.cam-box .tl { left: 0; top: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+.cam-box .tr { right: 0; top: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 10px; }
+.cam-box .bl { left: 0; bottom: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
+.cam-box .br { right: 0; bottom: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+.cam-box.in { background: rgba(80, 220, 120, .08); }
+.cam-box.in .c { border-color: #4be07a; }
+.cam-state { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); white-space: nowrap; font: 800 14px/1 var(--font); color: #fff; background: #e2302a; border-radius: 999px; padding: 6px 12px; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.cam-box.in .cam-state { background: #23a454; }
+.cam-arrow { position: absolute; font-size: 34px; color: #fff; text-shadow: 0 0 4px #141018, 0 0 2px #141018; animation: camArrow .6s ease-in-out infinite alternate; }
+.cam-arrow[data-dir='l'] { left: -40px; top: 50%; transform: translateY(-50%); }
+.cam-arrow[data-dir='r'] { right: -40px; top: 50%; transform: translateY(-50%); }
+.cam-arrow[data-dir='u'] { top: -42px; left: 50%; transform: translateX(-50%); }
+.cam-arrow[data-dir='d'] { bottom: -70px; left: 50%; transform: translateX(-50%); }
+@keyframes camArrow { from { opacity: .45; } to { opacity: 1; } }
+.cam-bar { position: absolute; left: 34px; right: 34px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 120px); height: 12px; border-radius: 999px; background: rgba(255, 255, 255, .25); border: 2px solid #141018; }
+.cam-fill { height: 100%; width: 0; border-radius: 999px; background: #ffb020; transition: width .2s; }
+.cam-fill.ok { background: #4be07a; }
+.cam-need { position: absolute; top: -6px; bottom: -6px; width: 3px; background: #fff; box-shadow: 0 0 0 1px #141018; }
+.cam-need span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font: 800 11px/1 var(--font); color: #fff; text-shadow: 0 0 3px #141018; }
+.cam-hint { position: absolute; left: 0; right: 0; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px); text-align: center; font: 700 13px/1.2 var(--font); color: #fff; text-shadow: 0 1px 3px #000; padding: 0 20px; }
+.cam-hands { position: absolute; inset: 0; overflow: hidden; }
+.vf-target { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px dashed #ffd23f; filter: drop-shadow(0 0 2px #141018); animation: vfSpin 3s linear infinite; }
+@keyframes vfSpin { to { transform: rotate(360deg); } }
+.vf-frame { transition: none; }
+.vf-frame .c { transition: border-color .12s; }
+.vf-frame.ok .c { border-color: #4be07a; }
+.vf-frame.ok { box-shadow: 0 0 0 200vmax rgba(12, 12, 24, .32), inset 0 0 0 3px rgba(75, 224, 122, .5); }
+.vf-now { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font: 800 14px/1 var(--font); color: #fff; background: #23a454; border-radius: 999px; padding: 5px 11px; opacity: 0; transition: opacity .12s; white-space: nowrap; }
+.vf-frame.ok .vf-now { opacity: 1; }
+.vf-hint { position: absolute; left: 0; right: 0; bottom: calc(max(22px, env(safe-area-inset-bottom)) + 96px); text-align: center; font: 700 13px/1.2 var(--font); color: #fff; text-shadow: 0 1px 3px #000; padding: 0 20px; }
+.vf-shot { left: 50% !important; right: auto !important; transform: translateX(-50%); width: 80px !important; height: 80px !important; font-size: 30px; }
+.vf-shot:active { transform: translateX(-50%) scale(.94); }
+/* 4.3 · Love Letter más simple: marcador pequeño en una línea que no se sale ni choca con la pausa */
+.ll-top { left: 12px; right: 64px; transform: none; width: auto; max-width: none; align-items: flex-start; top: calc(max(8px, env(safe-area-inset-top)) + 4px); }
+.ll-board { display: flex !important; align-items: center; gap: 8px; padding: 4px 10px !important; border-radius: 999px !important; max-width: 100%; }
+.ll-board .ll-sc { display: flex; align-items: center; gap: 4px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important; }
+.ll-board .ll-sc b { font-size: 12px; }
+.ll-board .ll-sc i { font-size: 11px; font-style: normal; letter-spacing: -1px; }
+.ll-board .ll-round { font-size: 13px !important; line-height: 1; white-space: nowrap; }
+.ll-board .ll-round small { display: inline; margin-left: 4px; font-size: 11px; }
+.ll .ll-log { font-size: 13px; padding: 6px 12px; }
+.ll-turn { font-size: 14px; }
+/* 4.3 · Final de los créditos: solo «Gracias por este año» y el corazón azul */
+.fin-thanks { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); text-align: center; font: 700 clamp(26px, 7vw, 40px)/1.2 var(--font-display, Georgia, serif); color: #f6ecd0; animation: kpIn .8s ease both; width: 90vw; }
+.fin-thanks i { display: block; font-style: normal; font-size: 1.6em; margin-top: 14px; }
+.fin-screen .fin-btn { position: absolute; left: 50%; bottom: max(40px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
+/* 4.3 · La cuenta atrás, en el mismo botón de Empezar */
+.hm-btn.hm-wait { opacity: 1; cursor: default; font-variant-numeric: tabular-nums; filter: saturate(.75); }

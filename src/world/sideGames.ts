@@ -246,8 +246,43 @@ export class WaterFight {
     this.finished = true;
     this.gun.removeFromParent();
     dialogue(SIDE.water.end, () => {
+      this.roaming = true;
       this.onDone();
     });
+  }
+
+  /** Ganada la pelea, los críos se quedan por la calle correteando (y se mojan entre ellos de vez en cuando). */
+  private roaming = false;
+  private roam(dt: number, busy: boolean) {
+    const z = this.zone;
+    const pp = this.player.root.position;
+    for (const k of this.kids) {
+      const r = k.p.root;
+      k.alert.visible = false;
+      if (busy) {
+        animatePerson(k.p, dt, 'idle');
+        continue;
+      }
+      k.goalT -= dt;
+      const d = Math.hypot(pp.x - r.position.x, pp.z - r.position.z);
+      if (k.goalT <= 0 || r.position.distanceTo(k.goal) < 0.6) {
+        k.goalT = 2 + Math.random() * 3;
+        k.goal.set(THREE.MathUtils.randFloat(z.minX - 8, z.maxX + 8), 0, THREE.MathUtils.randFloat(z.minZ, z.maxZ));
+      }
+      k.fireT -= dt;
+      if (k.fireT <= 0) {
+        // Un chorro a otro crío, de juego
+        k.fireT = 3 + Math.random() * 4;
+        const o = this.kids[(this.kids.indexOf(k) + 1 + Math.floor(Math.random() * (this.kids.length - 1))) % this.kids.length];
+        if (o !== k && o.p.root.position.distanceTo(r.position) < 6) {
+          this.drops.jet(r.position.clone().setY(0.92), o.p.root.position.clone().setY(0.8), 0.45, 12);
+          if (d < 10) audio.knock(0.1, 1300, 0.05);
+        }
+      }
+      const run = d < 2.5 ? 3.6 : 2.8;
+      steerTo(r, k.st, k.goal.x, k.goal.z, run, dt, this.people as never, 6, 0.26, undefined, this.colliders as Box2[]);
+      animatePerson(k.p, dt, 'walk', 0.95);
+    }
   }
 
   update(dt: number, busy: boolean) {
@@ -261,6 +296,7 @@ export class WaterFight {
         r();
       }
     }
+    if (this.roaming) return this.roam(dt, busy);
     const pp = this.player.root.position;
     if (!this.engaged && !busy && Math.hypot(pp.x - this.start.x, pp.z - this.start.z) > 1.5) this.engaged = true;
     for (const k of this.kids) {

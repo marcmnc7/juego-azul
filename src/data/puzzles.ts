@@ -2,7 +2,7 @@
 // une). Todo lo que sale aquí está sacado de nuestro chat: las frases son literales (quién las escribió y cuándo,
 // tal cual) y las palabras, las que más usamos o las que solo entendemos nosotros.
 
-export type PuzzleKind = 'quien' | 'sopa' | 'orden' | 'crucigrama' | 'parejas' | 'completa' | 'ahorcado' | 'emojis';
+export type PuzzleKind = 'quien' | 'sopa' | 'orden' | 'crucigrama' | 'parejas' | 'completa' | 'ahorcado' | 'emojis' | 'aficiones';
 
 export interface PuzzleInfo {
   id: string;
@@ -26,6 +26,9 @@ export const PUZZLES: PuzzleInfo[] = [
   { id: 'completa', kind: 'completa', after: 6, day: [2026, 11, 17], icon: '🧩', title: 'Completa la frase', sub: 'Nos las dijimos tal cual' },
   { id: 'ahorcado', kind: 'ahorcado', after: 7, day: [2026, 11, 20], icon: '🪢', title: 'El ahorcado', sub: 'Frases que solo entendemos nosotros' },
   { id: 'emojis', kind: 'emojis', after: 8, day: [2026, 11, 23], icon: '😍', title: 'En emojis', sub: 'Momentos de nuestro chat: ¿cuál es?' },
+  // (4.3) Lo que nos gusta hacer juntos: el vóley, Joy en el agility y la hípica, con sus chats; al acabar, los créditos.
+  // Se abre al terminar el capítulo 9, antes de «Continuará…»
+  { id: 'aficiones', kind: 'aficiones', after: 9, day: [2026, 11, 25], icon: '🏐', title: 'Lo que nos gusta', sub: 'Vóley, Joy y caballos' },
 ];
 
 /**
@@ -33,19 +36,19 @@ export const PUZZLES: PuzzleInfo[] = [
  * (Ninguna se repite en los otros juegos.)
  */
 export const WHO_SAID: { text: string; who: 'Azul' | 'Gas'; when: string }[] = [
-  // (21 nov: ninguna se repite en una partida, y sin tantas «contigo» seguidas, que parecían la misma)
-  { text: 'Quiero bailar contigo para siempre', who: 'Azul', when: '31 de mayo de 2026' },
+  // (literal del chat; las cuatro que le gustaron a Marc, y el resto escogidas de nuevo)
   { text: 'Pq amo el amor mierdaaaaaa', who: 'Azul', when: '18 de julio de 2026' },
   { text: 'Del haberse visto dos noches en agosto a pasar 4 dias juntos', who: 'Azul', when: '25 de octubre de 2025' },
-  { text: 'Ojala una casa con una nevera buena', who: 'Azul', when: '3 de septiembre de 2026' },
-  { text: 'Uff estas muy guapo con una camisa blanca eh', who: 'Azul', when: '7 de septiembre de 2026' },
-  { text: 'Muy friooooo? Tipo lapponia? Vamos hacer perros de trineo?', who: 'Azul', when: '31 de agosto de 2026' },
-  { text: 'Tatuate el momento en el que lo veamos juntos', who: 'Gas', when: '6 de mayo de 2026' },
-  { text: 'Yo siempre te concedo lo que quieres', who: 'Gas', when: '2 de septiembre de 2026' },
-  { text: 'No quiero bajar ahi aahha no se negocia con terroristas', who: 'Gas', when: '26 de marzo de 2026' },
-  { text: 'Yo caballo vamos a dejarlo para intensivo enero-junio', who: 'Gas', when: '27 de septiembre de 2026' },
-  { text: 'He deseado estar contigo prácticamente en toda la noche, eres muy divertida', who: 'Gas', when: '11 de abril de 2026' },
   { text: 'Contigo en la llamada lo tengo todo', who: 'Gas', when: '2 de septiembre de 2026' },
+  { text: 'Yo siempre te concedo lo que quieres', who: 'Gas', when: '2 de septiembre de 2026' },
+  { text: 'Te echo de menos, mas que ayer y menos que mañana', who: 'Azul', when: '9 de mayo de 2026' },
+  { text: 'Pocas cosas típicas hay contigo! Y es parte de tu magia', who: 'Gas', when: '16 de enero de 2026' },
+  { text: 'Ojala te vieras como te veo yo', who: 'Azul', when: '22 de marzo de 2026' },
+  { text: 'Si con alguien no me podre enfadar es contigo', who: 'Gas', when: '10 de mayo de 2026' },
+  { text: 'Podemos ir probando gildas para siempre', who: 'Azul', when: '29 de julio de 2026' },
+  { text: 'El abrazo a cambio que me das hace valerle la pena', who: 'Gas', when: '5 de abril de 2026' },
+  { text: 'Me encanta como levantas el pantalon para enseñar el mocasin', who: 'Azul', when: '12 de septiembre de 2026' },
+  { text: 'Me encanta ver ubicación no sé porque', who: 'Gas', when: '3 de enero de 2026' },
 ];
 
 /** Sopa de letras: cómo nos damos las buenas noches (y lo que va detrás). Al encontrar cada una, de dónde sale. */

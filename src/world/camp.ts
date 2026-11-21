@@ -71,6 +71,7 @@ export class Camp {
   private onSofa = false;
   private glasses: THREE.Object3D[] = [];
   private glassQ = new THREE.Quaternion();
+  private glassP = new THREE.Vector3();
   /** La estufa de pellets (para encuadrarla) y su humo. */
   readonly pellet = new THREE.Vector3(-4.7, 0.9, 2.55);
   private puffs: { s: THREE.Sprite; t: number }[] = [];
@@ -512,7 +513,8 @@ export class Camp {
     if (!this.glasses.length) {
       for (const p of [this.azul, this.gas]) {
         const g = this.wineGlass();
-        g.position.set(0, -0.02, 0.02);
+        // (el puño en el tallo: la copa, un poco por debajo de la muñeca para que la mano la rodee)
+        g.position.set(0, -0.07, 0.03);
         p.handR.add(g);
         this.glasses.push(g);
       }
@@ -619,14 +621,26 @@ export class Camp {
       // La copa en la mano y, de vez en cuando, un sorbo (cada uno a su ritmo)
       for (const [p, ph] of [[this.azul, 0], [this.gas, 2.1]] as const) {
         const sip = Math.max(0, Math.sin(this.t * 0.9 + ph) - 0.75) * 4;
-        p.armR.rotation.x = -1.05 - sip * 0.55;
-        p.armR.rotation.z = 0.25;
+        // (brazo pegado al cuerpo y el codo doblado: la copa delante del pecho, cogida por el tallo; antes, el brazo
+        // estirado hacia las rodillas y la copa flotando)
+        p.armR.rotation.x = -0.45 - sip * 0.35;
+        p.armR.rotation.z = 0.12;
+        p.elbowR.rotation.x = -1.55 - sip * 0.45;
       }
       // La copa, siempre derecha (la mano gira con el brazo)
       for (const g of this.glasses) {
-        g.parent!.updateWorldMatrix(true, false);
-        g.parent!.getWorldQuaternion(this.glassQ).invert();
+        const hand = g.parent!;
+        hand.updateWorldMatrix(true, true);
+        hand.getWorldQuaternion(this.glassQ).invert();
         g.quaternion.copy(this.glassQ);
+        // El tallo, dentro del puño (en los VRM, el nudillo del dedo corazón; la muñeca quedaba lejos y la copa flotaba)
+        const bone = hand.parent;
+        const fist = (g.userData.fist ??= (bone && (bone.getObjectByName(bone.name + 'Middle1') ?? bone.getObjectByName(bone.name.replace('Hand', 'MiddleProximal')))) ?? null) as THREE.Object3D | null;
+        if (fist) {
+          fist.getWorldPosition(this.glassP);
+          this.glassP.y -= 0.06;
+          g.position.copy(hand.worldToLocal(this.glassP));
+        }
       }
     } else if (this.standing) {
       animatePerson(this.azul, dt, 'idle');
