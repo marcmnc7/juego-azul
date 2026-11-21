@@ -22,6 +22,20 @@ import cesped from '../assets/recuerdos/cesped.jpg';
 import calaOlivas from '../assets/recuerdos/cala-olivas.jpg';
 import fiestaSept from '../assets/recuerdos/fiesta-sept.jpg';
 import ferreries46 from '../assets/recuerdos/ferreries-46.jpg';
+import fiestaCarrete from '../assets/recuerdos/fiesta-carrete.jpg';
+import dogfyCrew from '../assets/recuerdos/dogfy-crew.jpg';
+import corazonDedos from '../assets/recuerdos/corazon-dedos.jpg';
+import amigosCalle from '../assets/recuerdos/amigos-calle.jpg';
+import calaCarrete from '../assets/recuerdos/cala-carrete.jpg';
+import arroz from '../assets/recuerdos/arroz.jpg';
+import tortilla from '../assets/recuerdos/tortilla.jpg';
+import calaMayo from '../assets/recuerdos/cala-mayo.jpg';
+import cenaCoreana from '../assets/recuerdos/cena-coreana.jpg';
+import mascarillas from '../assets/recuerdos/mascarillas.jpg';
+import mirador from '../assets/recuerdos/mirador.jpg';
+import carnavalMonja from '../assets/recuerdos/carnaval-monja.jpg';
+import carnavalVaquera from '../assets/recuerdos/carnaval-vaquera.jpg';
+import sanSiro from '../assets/recuerdos/san-siro.jpg';
 import granCanaria from '../assets/recuerdos/gran-canaria.jpg';
 
 /** Una pista de lo que viene. Se ve al acabar el capítulo anterior y en el mapa. */
@@ -203,27 +217,27 @@ const C7 = ['toGate', 'toKitchen', 'toTable', 'alarm', 'seeOff', 'toBed'];
 export const KEEPSAKES: Keepsake[] = [
   // 1 · Ferreries
   { id: 'r1-diadema', chapter: 1, phases: M1, x: -8, z: 22, src: diadema, caption: 'Y la diadema.' },
-  { id: 'r1-a', chapter: 1, phases: M1, x: -44, z: 2.5, caption: 'Ferreries, 25 de agosto de 2025' },
-  { id: 'r1-b', chapter: 1, phases: M1, x: 11, z: 24.5, caption: 'Ferreries, de fiesta' },
-  { id: 'r1-c', chapter: 1, phases: M1, x: 44, z: 1.9, caption: 'Jaleo d’ases' },
-  { id: 'r1-d', chapter: 1, phases: M1, x: 23.5, z: 4.4, caption: 'Purpurina y pomada' },
+  { id: 'r1-a', chapter: 1, phases: M1, x: -44, z: 2.5, src: fiestaCarrete, caption: 'Pistolas de agua y fiesta, en carrete' },
+  { id: 'r1-b', chapter: 1, phases: M1, x: 11, z: 24.5, src: dogfyCrew, caption: 'DOGFY CREW, de fiesta' },
+  { id: 'r1-c', chapter: 1, phases: M1, x: 44, z: 1.9, src: corazonDedos, caption: 'Un corazón con los dedos' },
+  { id: 'r1-d', chapter: 1, phases: M1, x: 23.5, z: 4.4, src: amigosCalle, caption: 'Con los amigos, de paseo' },
   // 2 · Bar Imperi y casa de Gas
-  { id: 'r2-a', chapter: 2, phases: ['atBar'], x: -616, z: 1, caption: 'Bar Imperi' },
-  { id: 'r2-b', chapter: 2, phases: ['atBar'], x: -571, z: -14.8, caption: 'La noche, en el Imperi' },
-  { id: 'r2-c', chapter: 2, phases: H2, x: 3.4, z: 13, caption: 'Tb el césped' },
-  { id: 'r2-d', chapter: 2, phases: H2, x: 3.4, z: -15.6, caption: 'La piscinita' },
-  { id: 'r2-e', chapter: 2, phases: ['arrive', 'toPool'], x: -5.1, z: -25.6, caption: 'Sa Caleta, 26 de agosto' },
+  { id: 'r2-a', chapter: 2, phases: ['atBar'], x: -616, z: 1, src: calaCarrete, caption: 'En carrete, en la cala' },
+  { id: 'r2-b', chapter: 2, phases: ['atBar'], x: -571, z: -14.8, src: arroz, caption: 'Arroz con carne, a medias' },
+  { id: 'r2-c', chapter: 2, phases: H2, x: 3.4, z: 13, src: tortilla, caption: 'La tortilla, con su cerveza' },
+  { id: 'r2-d', chapter: 2, phases: H2, x: 3.4, z: -15.6, src: calaMayo, caption: 'Una cala para nosotros' },
+  { id: 'r2-e', chapter: 2, phases: ['arrive', 'toPool'], x: -5.1, z: -25.6, src: cenaCoreana, caption: 'Cena coreana' },
   // 3 · La carretera (un carril concreto) y el camping
   { id: 'r3-trenes', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, src: trenes, caption: 'Sants–Atocha, 30 de octubre' },
   { id: 'r3-ruta', chapter: 3, phases: ['drive1'], x: -2.6, z: 1040, r: 1.9, src: ruta, caption: 'El primer planning: 1.454 km' },
-  { id: 'r3-a', chapter: 3, phases: ['camp'], x: 8, z: -9, caption: 'La cabaña' },
+  { id: 'r3-a', chapter: 3, phases: ['camp'], x: 8, z: -9, src: mascarillas, caption: 'Mascarilla y sofá: el plan' },
   { id: 'r3-c', chapter: 3, phases: ['camp'], x: -6, z: -11.5, caption: 'Camping gas (sin gas)' },
-  { id: 'r3-b', chapter: 3, phases: ['drive2'], x: -2.6, z: 1965, r: 1.9, caption: 'Camino de San Vicente' },
+  { id: 'r3-b', chapter: 3, phases: ['drive2'], x: -2.6, z: 1965, r: 1.9, src: mirador, caption: 'Otro viaje, otro mirador' },
   // 4 · Barajas, las llegadas de Gran Canaria y el estadio
-  { id: 'r4-a', chapter: 4, phases: ['airport'], x: 292, z: 14, caption: 'Barajas' },
-  { id: 'r4-b', chapter: 4, phases: ['airport'], x: 336, z: 30.9, caption: 'La puerta de embarque' },
+  { id: 'r4-a', chapter: 4, phases: ['airport'], x: 292, z: 14, src: carnavalMonja, caption: 'Carnaval: monja de guardia' },
+  { id: 'r4-b', chapter: 4, phases: ['airport'], x: 336, z: 30.9, src: carnavalVaquera, caption: 'Carnaval: vaquera' },
   { id: 'r4-gc', chapter: 4, phases: ['arrivals'], x: 430.4, z: 12.1, src: granCanaria, caption: 'Gran Canaria, gafas puestas' },
-  { id: 'r4-c', chapter: 4, phases: ['arrivals'], x: 371.4, z: 22.1, caption: 'Llegadas' },
+  { id: 'r4-c', chapter: 4, phases: ['arrivals'], x: 371.4, z: 22.1, src: sanSiro, caption: 'Derby day: Milan–Inter' },
   { id: 'r4-d', chapter: 4, phases: ST4, x: 19, z: 24, caption: 'Fito, en directo' },
   { id: 'r4-e', chapter: 4, phases: ST4, x: -21, z: -21, caption: 'El estadio' },
   // 5 · La moto: cuelgan a un lado de la carretera
