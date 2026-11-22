@@ -2634,3 +2634,22 @@ html, body { background: #000; }
 .fn-pz .fn-quote { background: #fff; color: #1d1a22; border: 1.5px solid rgba(43,34,51,.12); }
 .fn-pz .fn-quote b { display: block; font: 800 11px/1 var(--font); letter-spacing: .12em; text-transform: uppercase; color: #1a73e8; margin-bottom: 4px; }
 .fn-pz .fn-go { width: 100%; margin-top: 12px; }
+/* 4.4.8 · Créditos al acabar el cap. 9: el título y, de fondo, las fotos del año subiendo como polaroids */
+.fin-open { position: absolute; top: 42%; left: 0; right: 0; text-align: center; font: italic 700 58px/1 Georgia, serif; color: #fbf5e6; text-shadow: 0 4px 18px rgba(0,0,0,.6); animation: finOpen 5s ease forwards; pointer-events: none; z-index: 2; }
+.fin-open i { color: #f4d27a; }
+.fin-open small { display: block; font: 800 13px var(--font); letter-spacing: .24em; text-transform: uppercase; color: rgba(251,245,230,.75); margin-bottom: 10px; font-style: normal; }
+@keyframes finOpen { 0% { opacity: 0; transform: scale(.94); } 18%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-30px); } }
+.fin-roll { z-index: 3; animation-delay: 4s !important; }
+.fin-pics { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.fin-pic { position: absolute; top: 100%; width: min(34vw, 170px); padding: 7px 7px 22px; background: #fbf6ea; border-radius: 3px; box-shadow: 0 10px 24px rgba(0,0,0,.55); transform: rotate(var(--r)); opacity: 0; animation: finPic 13s linear var(--d) forwards; }
+.fin-pic.l { left: calc(2% + var(--x) * .3); }
+.fin-pic.r { right: calc(2% + var(--x) * .3); }
+.fin-pic img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; filter: saturate(.9); }
+@keyframes finPic { 0% { opacity: 0; transform: translateY(0) rotate(var(--r)); } 10% { opacity: .85; } 85% { opacity: .85; } 100% { opacity: 0; transform: translateY(calc(-100dvh - 260px)) rotate(var(--r)); } }
+.fin-roll .fin-row, .fin-roll .fin-end { background: radial-gradient(closest-side, rgba(7,9,15,.75), rgba(7,9,15,0)); padding: 10px 20px; }
+.fn-pz .fn-how { margin: 0 0 4px; font: 600 15px/1.45 var(--font); color: #4a3f52; text-align: center; max-width: 320px; }
+.fin-pic { width: min(25vw, 130px); padding: 5px 5px 16px; animation-duration: 12s !important; }
+.fin-pic.l { left: calc(1.5% + var(--x) * .12); }
+.fin-pic.r { right: calc(1.5% + var(--x) * .12); }
+@keyframes finPic { 0% { opacity: 0; transform: translateY(0) rotate(var(--r)); } 12% { opacity: .78; } 85% { opacity: .78; } 100% { opacity: 0; transform: translateY(calc(-100dvh - 220px)) rotate(var(--r)); } }
+.fin-roll { padding: 0 max(28vw, 24px) !important; }

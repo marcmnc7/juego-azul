@@ -68,6 +68,10 @@ class BeachMission implements Mission {
   private over = false;
   private camAt = new THREE.Vector3();
   private camLook = new THREE.Vector3(0, 1.2, 0);
+  /** (para que los bocadillos de Azul salgan de su cabeza) */
+  get azul() {
+    return this.me;
+  }
 
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
@@ -190,6 +194,7 @@ class BeachMission implements Mission {
 
     this.hud = hud(() => ctx.input.queueAction(), () => {}, '', true);
     this.hud.setIcon('🏐');
+    this.show.bind(this.hud);
     this.hud.setObjective(`🏐 A ${NEED} puntos`);
     this.paint();
     // Entrada: desde el mar, volando hasta detrás de ella, con el rótulo del partido
@@ -201,7 +206,7 @@ class BeachMission implements Mission {
   }
 
   private paint() {
-    this.show.score(`<span class="t">AZUL</span><span class="n">${this.mine}</span><span class="n">${this.his}</span><span class="t g">GAS</span><span class="k">a ${NEED}</span>`);
+    this.show.score(`<span class="chip${this.mine >= NEED ? ' ok' : ''}">🏐 Tú ${this.mine} · ${this.his} Gas <small>a ${NEED}</small></span>`);
   }
 
   private fly(from: THREE.Vector3, to: THREE.Vector3, dur: number, arc: number) {

@@ -6,7 +6,7 @@ import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, makeDog, animatePerson, type Person, type Dog } from '../../entities/models';
-import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
+import { hud, comicWord, missionCard, livesChip, bark, type Hud } from '../../ui/ui';
 import { Show } from './show';
 import { disposeScene } from '../level';
 import { canvasTex } from '../deco';
@@ -290,6 +290,7 @@ class ParkMission implements Mission {
     this.hud = hud(() => ctx.input.queueAction(), () => {}, T.hint, true);
     // (en los trucos mandan los botones de las órdenes; en el circuito, 🐕 para saltar)
     this.hud.setIcon('');
+    this.show.bind(this.hud);
     this.hud.setObjective('🐕');
     ctx.camera.position.set(4.2, 1.5, 3.6 + TRICK_Z);
     ctx.camera.lookAt(0.5, 0.55, 0.7 + TRICK_Z);
@@ -300,15 +301,11 @@ class ParkMission implements Mission {
 
   private updateHud() {
     if (this.phase === 'tricks') {
-      this.show.score('');
       this.hud.setCounters(`<span class="chip">🐕 ${this.ok}/${this.order.length}</span>`);
       return;
     }
-    this.hud.setCounters('');
-    const left = FAULTS - this.faults;
-    const hearts = '<i class="hp on">♥</i>'.repeat(Math.max(0, left)) + '<i class="hp">♥</i>'.repeat(Math.min(FAULTS, this.faults));
     const passed = this.obs.filter((o) => o.done).length;
-    this.show.score(`<span class="t">JOY</span><span class="n">${passed}/${this.obs.length}</span><span class="k">${hearts}</span>`);
+    this.show.score(`<span class="chip">🏁 ${passed}/${this.obs.length}</span>${livesChip('🐕', FAULTS - this.faults, FAULTS)}`);
   }
 
 
@@ -330,7 +327,15 @@ class ParkMission implements Mission {
   }
 
   /** Lo que dice Gas, en su bocadillo de abajo. */
+  /** (para que los bocadillos de Azul salgan de su cabeza) */
+  get azul() {
+    return this.me;
+  }
+
+  /** Lo que dicen, en su bocadillo de siempre (pegado a la cabeza, como en los capítulos). */
   private say(text: string, name = 'Gas') {
+    bark(name, text);
+    return;
     // (como un bocadillo de tebeo: el nombre arriba y la frase, sin comillas)
     this.bubble.innerHTML = '';
     this.bubble.style.display = '';
@@ -498,7 +503,7 @@ class ParkMission implements Mission {
     const next = this.obs.find((o) => !o.done);
     if (next && next !== this.obs[this.callAt] && next.x - r.position.x < 7) {
       this.callAt = this.obs.indexOf(next);
-      this.say(({ valla: '¡Hop!', doble: '¡Hop, hop!', rueda: '¡Rueda!', tunel: '¡Túnel!', slalom: '¡Slalom!', pasarela: '¡Arriba!', mesa: '¡Mesa!' } as Record<Kind, string>)[next.kind], 'Azul');
+      bark('Azul', ({ valla: '¡Hop!', doble: '¡Hop, hop!', rueda: '¡Rueda!', tunel: '¡Túnel!', slalom: '¡Slalom!', pasarela: '¡Arriba!', mesa: '¡Mesa!' } as Record<Kind, string>)[next.kind]);
     }
     for (const o of this.obs) {
       if (o.done) continue;

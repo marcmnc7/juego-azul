@@ -1,13 +1,14 @@
 // El final del año (21 nov): después del regalo del cap. 9, llega Barcelona y lo que les gusta hacer juntos — el
 // vóley, Joy en el parque (agility) y la hípica de saltos —, y al acabar, los créditos.
 import { audio } from '../core/audio';
-import { ANIVERSARIO, FINALE } from '../data/story';
+import { MEMORIES } from '../data/memories';
+import { SONG_OF } from '../core/songs';
+import { FINALE } from '../data/story';
 import { setCastChapter, setGasNamed, clearScreens, phoneChat, hud, closeDialogue, pauseState, debugPanel, isTestMode } from './ui';
 import { parkMission } from '../world/missions/park';
 import { stage } from '../core/stage';
 import { CHATS } from '../data/chats';
 import { beachMission } from '../world/missions/beach';
-import type { Line } from '../data/story';
 import { ridingMission } from '../world/missions/riding';
 import { surfMission } from '../world/missions/surf';
 
@@ -24,17 +25,15 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
  * sobre el azul de noche, la etiqueta con el icono y la fecha, el título y su línea, lo que se cuenta dentro, frase a
  * frase (toca para seguir), el botón dorado y «‹ Volver». El chat de esos días sale encima; el juego, al cerrarlo.
  */
-function storyCard(o: { kicker: string; title: string; sub: string; icon: string; lines: Line[]; go?: string }, onGo: (card: HTMLElement) => void, onBack: () => void) {
+function storyCard(o: { kicker: string; title: string; sub: string; icon: string; how: string; go?: string }, onGo: (card: HTMLElement) => void, onBack: () => void) {
   const scr = el('div', 'screen pz-screen fn-screen');
   const card = el('div', 'letter pz-card fn-pz');
   const head = el('div', 'pz-head');
   head.append(el('div', 'pz-kicker', `${o.icon} ${o.kicker}`), el('h2', '', o.title), el('p', 'pz-sub', o.sub));
   const body = el('div', 'pz-body fn-body');
-  body.append(el('div', 'fn-ico', o.icon));
-  const story = el('div', 'fn-story');
-  body.append(story);
-  const btn = el('button', 'hm-btn fn-go', 'Toca para seguir');
-  btn.disabled = true;
+  // (4.4.8: sin frases de narrador; solo su dibujo y cómo se juega)
+  body.append(el('div', 'fn-ico', o.icon), el('p', 'fn-how', o.how));
+  const btn = el('button', 'hm-btn fn-go', o.go ?? 'Jugar');
   card.append(head, body, btn);
   const back = el('button', 'link-btn pz-back', '‹ Volver');
   back.onclick = (e) => {
@@ -44,30 +43,11 @@ function storyCard(o: { kicker: string; title: string; sub: string; icon: string
   scr.append(card, back);
   root().append(scr);
   audio.whoosh();
-  let i = -1;
-  const next = () => {
-    if (i >= o.lines.length - 1) return;
-    i++;
-    const l = o.lines[i];
-    story.append(el('p', l.who === 'Narrador' ? 'fn-narr' : 'fn-quote', l.who === 'Narrador' ? l.text : `<b>${l.who === 'Margaux' ? 'Azul' : l.who}</b>${l.text}`));
-    story.scrollTop = story.scrollHeight;
-    audio.talk();
-    if (i >= o.lines.length - 1) {
-      btn.disabled = false;
-      btn.textContent = o.go ?? 'Jugar';
-    }
-  };
-  card.onpointerdown = (e) => {
-    if ((e.target as HTMLElement).closest('.fn-go')) return;
-    next();
-  };
   btn.onclick = (e) => {
     e.stopPropagation();
-    if (btn.disabled) return;
     btn.disabled = true;
     onGo(scr);
   };
-  setTimeout(next, 600);
   return scr;
 }
 
@@ -106,19 +86,17 @@ export function hobbyGame(which: Hobby, onDone: () => void, onExit: () => void =
   h.root.style.display = 'none';
   h.setIcon('');
   const CARD = {
-    voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4', icon: '🏐', lines: [...FINALE.barcelona, ...ANIVERSARIO.september] },
-    agility: { kicker: 'Octubre', title: 'Joy, campeón', sub: 'Lo que nos gusta · 2 de 4', icon: '🐕', lines: ANIVERSARIO.october },
-    hipica: { kicker: 'Noviembre', title: 'A caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', lines: FINALE.horses },
-    surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', lines: FINALE.surf },
+    voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4', icon: '🏐', how: 'Un partido contra Gas, a 5 puntos. Ponte bajo la pelota y dale a tiempo; luego remata arriba del todo, apuntando adonde no esté él.' },
+    agility: { kicker: 'Octubre', title: 'Agility con Joy', sub: 'Lo que nos gusta · 2 de 4', icon: '🐕', how: 'Primero, las órdenes de Gas en el césped. Luego, el recorrido: lleva a Joy por cada obstáculo. Tres faltas y eliminada.' },
+    hipica: { kicker: 'Noviembre', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', how: 'Doce obstáculos. Lleva el galope y bate en su punto: ni muy pronto ni muy tarde. Tres faltas y eliminada.' },
+    surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', how: 'Cuando llegue la ola, rema y ponte de pie a tiempo. Luego, delante de la espuma, sin que te pille. Tres olas buenas.' },
   }[which];
   const CHAT = { voley: CHATS.voley, agility: CHATS.agility, hipica: CHATS.caballos, surf: null }[which];
   let token = 0;
   const finish = (my: number) => () => {
     if (gone || my !== token) return;
     end();
-    if (which !== 'surf') return onDone();
-    // (el último: el final del año y los créditos)
-    storyCard({ kicker: 'Y ahora', title: 'Fin de este año', sub: 'Lo que nos gusta', icon: '💙', lines: FINALE.end, go: 'Seguir' }, (c) => (c.remove(), credits(onDone)), onDone);
+    onDone();
   };
   const game = (done: () => void, course = false) => (which === 'voley' ? beachMission(done) : which === 'agility' ? parkMission(done, course) : which === 'hipica' ? ridingMission(done) : surfMission(done));
   const play = (direct = false, course = false) => {
@@ -164,9 +142,29 @@ export function credits(onDone: () => void) {
     roll.append(r);
   }
   const skip = el('button', 'fin-skip', 'Seguir ›');
-  o.append(roll, skip);
+  // (4.4.8) Mientras suben los nombres, las fotos del año: polaroids que suben despacio a los dos lados, giradas,
+  // una detrás de otra (las del álbum, en orden), y la canción del capítulo 9 de fondo
+  const pics = el('div', 'fin-pics');
+  // (unas cuantas, repartidas por todo el año: pocas a la vez, en los bordes, sin tapar los nombres)
+  const all = MEMORIES.filter((m) => m.src && !m.sticker && !m.chat && !m.pending);
+  const shots = Array.from({ length: Math.min(16, all.length) }, (_, i) => all[Math.floor((i * all.length) / Math.min(16, all.length))]);
+  shots.forEach((m, i) => {
+    const p = el('div', 'fin-pic' + (i % 2 ? ' r' : ' l'));
+    const img = el('img') as HTMLImageElement;
+    img.src = m.src!;
+    img.alt = '';
+    img.loading = 'lazy';
+    p.append(img);
+    p.style.setProperty('--d', `${2 + i * 2.2}s`);
+    p.style.setProperty('--r', `${(i % 2 ? 1 : -1) * (4 + (i * 7) % 9)}deg`);
+    p.style.setProperty('--x', `${(i * 37) % 22}%`);
+    pics.append(p);
+  });
+  const title = el('div', 'fin-open', '<small>Un regalo de Gas</small>Para <i>Azul</i>');
+  o.append(pics, title, roll, skip);
   root().append(o);
   audio.fanfare();
+  if (SONG_OF[9]) audio.playTrack(SONG_OF[9], 2.5);
   let gone = false;
   const thanks = () => {
     if (gone) return;
@@ -176,6 +174,7 @@ export function credits(onDone: () => void) {
     const t = el('div', 'fin-thanks', 'Gracias por este año<i>💙</i>');
     const b = el('button', 'hm-btn fin-btn', 'Volver al mapa');
     b.onclick = () => {
+      audio.stopTrack();
       o.remove();
       onDone();
     };

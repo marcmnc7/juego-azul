@@ -604,7 +604,8 @@ async function buildLevel(n: number, card: ChapterLoading) {
     save(data);
     // (21 nov) Al acabar el último capítulo, después del regalo: los hobbies compartidos y el final con créditos
     // (los minijuegos del final ya no van pegados al cap. 9: son el juego pequeño de después, en el mapa)
-    const after = () => goMap();
+    // (al acabar el capítulo 9, los créditos del año, y después al mapa)
+    const after = () => (n === 9 ? credits(() => goMap()) : goMap());
     // Todo el final en una pantalla: estrellas, regalo, fotos y lo que viene mañana
     const teaser = TEASERS[n + 1] && !data.levelsDone.includes(n + 1) ? n + 1 : null;
     chapterComplete(n, result, g ?? null, teaser, after);

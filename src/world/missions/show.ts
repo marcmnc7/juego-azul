@@ -1,64 +1,43 @@
-// Lo común de los tres juegos del final (vóley, agility, hípica): presentación de «retransmisión». Un rótulo de
-// entrada con el «Azul vs …», un marcador de tele arriba, rótulos grandes para lo que pasa (las onomatopeyas del
-// cómic están apagadas) y el confeti del final.
+// Lo común de los juegos del final (vóley, agility, hípica, surf), con el HUD y los textos de los niveles normales
+// (4.4.8): el rótulo de misión al empezar y al acabar, los contadores en chips (x/N y corazones) y los comentarios en el
+// bocadillo de Gas, pegado a su cabeza (como en cualquier capítulo).
 import { audio } from '../../core/audio';
-import { cssConfetti } from '../../ui/ui';
+import { bark, missionCard, type Hud } from '../../ui/ui';
 
-const ui = () => document.getElementById('ui')!;
-function el(cls: string, html = '') {
-  const e = document.createElement('div');
-  e.className = cls;
-  e.innerHTML = html;
-  return e;
-}
+/** «¡AL TUBO!» → «¡Al tubo!» (como hablan en los bocadillos). */
+const say = (t: string) => t.toLowerCase().replace(/\p{L}/u, (c) => c.toUpperCase());
 
 export class Show {
-  private board = el('sw-board');
-  private callEl: HTMLElement | null = null;
-  private callT = 0;
+  private hud: Hud | null = null;
+  constructor(_label?: string) {}
 
-  constructor(private kicker: string) {
-    ui().append(this.board);
+  bind(h: Hud) {
+    this.hud = h;
   }
 
-  /** El rótulo de entrada: el título, el «quién contra quién» y una línea de lo que hay que hacer. */
-  intro(title: string, vs: string, how: string, secs = 3.6) {
-    const c = el('sw-intro', `<small>${this.kicker}</small><b>${title}</b><i>${vs}</i><p>${how}</p>`);
-    ui().append(c);
-    audio.whoosh();
-    setTimeout(() => audio.chime(3), 300);
-    setTimeout(() => c.classList.add('out'), secs * 1000);
-    setTimeout(() => c.remove(), secs * 1000 + 600);
+  /** Al empezar: el rótulo de misión de siempre (título y qué hay que hacer). */
+  intro(title: string, _vs: string, how: string, _secs?: number) {
+    missionCard(title, how);
   }
 
-  /** El marcador de arriba (html libre: nombres, puntos, corazones). */
+  /** Los contadores de arriba, en chips como en los capítulos. */
   score(html: string) {
-    if (this.board.innerHTML !== html) this.board.innerHTML = html;
+    this.hud?.setCounters(html);
   }
 
-  /** Un rótulo grande en el centro (¡PUNTO!, ¡LIMPIO!…). good: verde/dorado; si no, rojo. */
-  call(text: string, good = true, secs = 1.1) {
-    this.callEl?.remove();
-    const c = el('sw-call' + (good ? ' good' : ' bad'), `<span>${text}</span>`);
-    ui().append(c);
-    this.callEl = c;
-    clearTimeout(this.callT);
-    this.callT = window.setTimeout(() => c.remove(), secs * 1000);
+  /** Lo que pasa, comentado por Gas en su bocadillo. */
+  call(text: string, _good = true, _secs?: number) {
+    bark('Gas', say(text));
   }
 
-  /** Fin con premio: confeti y el rótulo. */
+  /** Conseguido: el rótulo de misión cumplida. */
   win(text: string) {
-    const c = el('sw-win', `<span>${text}</span>`);
-    ui().append(c);
-    cssConfetti(c, 110);
+    missionCard(say(text), '', true);
     audio.fanfare();
-    audio.cheer(0.6);
-    setTimeout(() => c.remove(), 3600);
+    audio.cheer(0.5);
   }
 
   dispose() {
-    this.board.remove();
-    this.callEl?.remove();
-    ui().querySelectorAll('.sw-intro, .sw-win').forEach((n) => n.remove());
+    this.hud?.setCounters('');
   }
 }

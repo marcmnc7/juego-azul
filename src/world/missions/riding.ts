@@ -6,7 +6,7 @@ import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, type Person, type Donkey } from '../../entities/models';
 import { Particles } from '../../entities/fx';
-import { hud, type Hud } from '../../ui/ui';
+import { hud, livesChip, type Hud } from '../../ui/ui';
 import { disposeScene } from '../level';
 import { Show } from './show';
 
@@ -143,6 +143,7 @@ class RidingMission implements Mission {
 
     this.hud = hud(() => this.jump(), () => {}, '', true);
     this.hud.setIcon('🐎');
+    this.show.bind(this.hud);
     this.hud.setObjective('🏇 Salto de obstáculos');
     // Los trancos hasta la siguiente valla (tres puntos que se encienden al ritmo del galope)
     this.dots = document.createElement('div');
@@ -221,10 +222,8 @@ class RidingMission implements Mission {
   }
 
   private paint() {
-    const left = FAULTS - this.faults;
-    const hearts = '<i class="hp on">♥</i>'.repeat(Math.max(0, left)) + '<i class="hp">♥</i>'.repeat(Math.min(FAULTS, this.faults));
     const passed = this.fences.filter((f) => f.state !== 'up').length;
-    this.show.score(`<span class="t">AZUL</span><span class="n">${passed}/${this.fences.length}</span><span class="k">${hearts}</span>`);
+    this.show.score(`<span class="chip">🏇 ${passed}/${this.fences.length}</span>${livesChip('🚧', FAULTS - this.faults, FAULTS)}`);
   }
 
   /** La siguiente valla que no se ha saltado. */

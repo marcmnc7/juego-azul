@@ -6,7 +6,7 @@ import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { MARGAUX_LOOK, MARC_LOOK, castLook } from '../../data/characters';
 import { G, Merger, makePerson, animatePerson, type Person } from '../../entities/models';
 import { Particles } from '../../entities/fx';
-import { hud, type Hud } from '../../ui/ui';
+import { hud, livesChip, type Hud } from '../../ui/ui';
 import { disposeScene } from '../level';
 import { Show } from './show';
 
@@ -58,9 +58,14 @@ class SurfMission implements Mission {
   private slow = 1;
   private camAt = new THREE.Vector3();
   private look = new THREE.Vector3();
+  /** (para que los bocadillos de Azul salgan de su cabeza) */
+  get azul() {
+    return this.me;
+  }
   private onTap = (e: PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, .pause, .ap-sheet')) return;
-    if (e.clientX < window.innerWidth * 0.45) return; // (el lado izquierdo es el joystick)
+    // (remar y ponerse de pie: tocando en cualquier sitio; de pie, la pantalla es del joystick)
+    if (this.state !== 'paddle' && this.state !== 'pop') return;
     this.press();
   };
 
@@ -118,6 +123,7 @@ class SurfMission implements Mission {
 
     this.hud = hud(() => this.press(), () => {}, '', true);
     this.hud.setIcon('🏄');
+    this.show.bind(this.hud);
     this.hud.setObjective(`🌊 ${NEED} olas`);
     window.addEventListener('pointerdown', this.onTap);
     this.paint();
@@ -127,33 +133,33 @@ class SurfMission implements Mission {
   }
 
   private paint() {
-    const left = LIVES - this.lost;
-    const hearts = '<i class="hp on">♥</i>'.repeat(Math.max(0, left)) + '<i class="hp">♥</i>'.repeat(Math.min(LIVES, this.lost));
-    this.show.score(`<span class="t">AZUL</span><span class="n">${this.good}/${NEED}</span><span class="k">🌊 ${hearts}</span>`);
+    this.show.score(`<span class="chip">🌊 ${this.good}/${NEED}</span>${livesChip('🏄', LIVES - this.lost, LIVES)}`);
   }
 
   /** El botón 🏄: remar (mientras viene la ola), ponerse de pie (cuando levanta la tabla). */
   private press() {
     if (this.state === 'paddle') {
-      this.paddleV = Math.min(1.25, this.paddleV + 0.16);
+      this.paddleV = Math.min(1.25, this.paddleV + 0.22);
       this.stroke = 1;
       audio.knock(0.15, 500, 0.04);
       this.fx.burst(this.board.position.clone().setY(0.1), 'spray', 2, 0.5, 0.3);
     } else if (this.state === 'pop') {
       // De pie: en su momento (con la tabla ya cayendo por la pared, ni antes ni cuando ya ha pasado)
       const k = this.stT;
-      if (k < 0.3) this.wipe('¡SE CLAVA!');
-      else if (k > 0.95) this.wipe('¡SE VA LA OLA!');
+      if (k < 0.22) this.wipe('¡SE CLAVA!');
+      else if (k > 1.25) this.wipe('¡SE VA LA OLA!');
       else {
         this.state = 'ride';
         this.stT = 0;
         this.rideT = this.tubeT = this.turns = 0;
         this.lastDir = 0;
-        this.vx = 2.5;
+        this.vx = PEEL_V;
+        // (la ola rompe a unos metros a su izquierda: empieza en el bolsillo)
+        this.curlX = this.x - 4.5;
         this.slow = 0.35;
         audio.whoosh();
         vibrate(25);
-        this.show.call(k < 0.62 ? '¡DE PIE!' : '¡JUSTO!', true, 0.8);
+        this.show.call(k < 0.8 ? '¡DE PIE!' : '¡JUSTO!', true, 0.8);
       }
     }
   }
@@ -225,11 +231,11 @@ class SurfMission implements Mission {
       case 'paddle': {
         this.waveZ += dt * 7.5;
         this.waveH = THREE.MathUtils.lerp(WAVE_H * 0.6, WAVE_H, THREE.MathUtils.smoothstep(this.waveZ, -22, -1));
-        this.paddleV = Math.max(0, this.paddleV - dt * 0.55);
+        this.paddleV = Math.max(0, this.paddleV - dt * 0.4);
         b.position.z += this.paddleV * 4.2 * dt;
         // Llega la ola: si va a su ritmo, la coge; si no, le pasa por debajo
         if (this.waveZ > b.position.z - 1.2) {
-          if (this.paddleV >= 0.75) {
+          if (this.paddleV >= 0.6) {
             this.state = 'pop';
             this.stT = 0;
             audio.chime(2);
@@ -241,14 +247,19 @@ class SurfMission implements Mission {
         this.waveZ += dt * 7.5;
         b.position.z = this.waveZ - 1.0;
         lift = Math.min(1, this.stT * 2);
-        if (this.stT > 1.2) this.wipe('¡SE VA LA OLA!');
+        if (this.stT > 1.5) this.wipe('¡SE VA LA OLA!');
         break;
       case 'ride': {
         this.rideT += dt;
         this.waveZ += dt * 5.5;
-        this.curlX += PEEL_V * dt;
-        // Por la pared: el joystick acelera hacia un lado u otro (con su inercia)
-        this.vx += (ax.x * 7.5 - this.vx) * Math.min(1, dt * 2.6) + 0.8 * dt;
+        // La ola no rompe siempre igual de rápido: hay tramos que «corren» (hay que ir hacia delante) y tramos que
+        // se paran (hay que frenar para no quedarse sin pared)
+        const peel = PEEL_V * (1 + 0.55 * Math.sin(this.rideT * 0.8 + 0.6) + 0.25 * Math.sin(this.rideT * 2.1));
+        this.curlX += peel * dt;
+        // La tabla va sola con la ola (a su velocidad de siempre); el joystick, a la derecha acelera y a la izquierda
+        // frena (con su inercia, sin tirones)
+        const want = PEEL_V + ax.x * 4.2;
+        this.vx += (want - this.vx) * Math.min(1, dt * 3);
         this.x += this.vx * dt;
         const gap = this.x - this.curlX;
         // Cambios de sentido con velocidad: giros (para el estilo)
@@ -262,11 +273,11 @@ class SurfMission implements Mission {
           this.lastDir = dir;
         }
         // Muy cerca de la espuma: el tubo (bonus); dentro, revolcón; muy lejos, la ola se muere
-        if (gap < 0.6) this.wipe('¡REVOLCÓN!');
+        if (gap < 0.35) this.wipe('¡REVOLCÓN!');
         else if (gap < 2.4) {
           this.tubeT += dt;
           if (this.tubeT > 1.2 && this.tubeT - dt <= 1.2) this.show.call('¡AL TUBO!', true, 1.0);
-        } else if (gap > 16) {
+        } else if (gap > 13) {
           this.state = 'down';
           this.stT = 0;
           if (this.rideT >= RIDE_NEED) this.goodWave();
@@ -337,10 +348,10 @@ class SurfMission implements Mission {
     const cam = this.ctx.camera;
     const tall = cam.aspect < 1;
     // (de lado: se ve la ola llegando por la izquierda; de pie, desde delante de la pared, con la espuma detrás)
-    if (ride) this.camAt.set(this.x + (tall ? 4.5 : 5.5), 3.6, b.position.z + (tall ? 9.5 : 8));
+    if (ride) this.camAt.set(this.x + (tall ? 2.2 : 4.5), 3.3, b.position.z + (tall ? 8.5 : 8));
     else this.camAt.set(b.position.x + (tall ? 5.5 : 6.5), 2.8, b.position.z + (tall ? 5.5 : 4.5));
     cam.position.lerp(this.camAt, Math.min(1, dtRaw * 2.4));
-    this.look.lerp(ride ? new THREE.Vector3(this.x - 1.2, 1.1 + by * 0.5, b.position.z - 0.5) : new THREE.Vector3(b.position.x + 0.8, 0.7, b.position.z - 4), Math.min(1, dtRaw * 3));
+    this.look.lerp(ride ? new THREE.Vector3(this.x - (tall ? 0.6 : 1.2), 1.1 + by * 0.5, b.position.z - 0.5) : new THREE.Vector3(b.position.x + 0.8, 0.7, b.position.z - 4), Math.min(1, dtRaw * 3));
     cam.lookAt(this.look);
     this.hud.setAction(this.state === 'paddle' ? '🏄 Remar' : this.state === 'pop' ? '🏄 De pie' : null);
     this.sky.update(cam, dtRaw);
