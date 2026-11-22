@@ -1029,6 +1029,8 @@ export class Level2 implements Level {
       if (ax < -0.5 && this.prevAx >= -0.5) this.steer(-1);
     }
     this.prevAx = ax;
+    // (el botón fijo: «Parar» en la carretera; ✋ en lo demás)
+    this.hud.setIcon(['drive1', 'drive2', 'cow', 'marcial', 'fuel', 'arriveSV'].includes(this.phase) ? STOP_LABEL : this.phase === 'grill' || this.phase === 'zambDone' ? '' : '✋');
     const acted = this.input.consumeAction();
     this.input.consumeCam();
 
@@ -1036,7 +1038,7 @@ export class Level2 implements Level {
     this.turboT -= dt;
     const turbo = drive && this.turboT > 0 && this.hitT <= 0;
     // (volviendo al último punto bueno: frena en seco, antes de llegar a la vaca)
-    const target = this.phase === 'fuel' ? Math.max(-4, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : this.phase === 'marcial' ? Math.max(0, Math.min(11, (MARCIAL_Z - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
+    const target = this.cineTalk ? MAX_SPEED * 0.5 : this.phase === 'fuel' ? Math.max(-4, Math.min(11, (GAS_Z + 1 - this.carZ) * 0.9)) : this.phase === 'marcial' ? Math.max(0, Math.min(11, (MARCIAL_Z - this.carZ) * 0.9)) : drive && !this.rewinding ? (this.hitT > 0 ? MAX_SPEED * 0.4 : MAX_SPEED * (turbo ? TURBO : 1)) : 0;
     this.speed += (target - this.speed) * Math.min(1, dt * (this.rewinding ? 5 : this.phase === 'cow' ? 6 : drive ? (turbo ? 2.5 : 1.2) : 2.5));
     this.hitT -= dt;
     if (drive) this.driveTime += dt;
@@ -1914,18 +1916,66 @@ export class Level2 implements Level {
    * que parar. Si se la pasa, vuelta al último punto bueno.
    */
   private updateGasStop(acted: boolean) {
-    const lines = ROAD.gasTalk;
-    while (this.gasTalkIdx < lines.length && this.carZ >= lines[this.gasTalkIdx].at) {
-      const l = lines[this.gasTalkIdx++];
-      const her = l.who === 'Margaux';
-      bark(her ? 'Margaux' : this.him(), l.text, her ? 'r' : 'l');
-    }
+    // (4.4.4) La conversación del gas, como escena de cine: el coche sigue solo, la carretera despejada y la cámara
+    // va de uno a otro; en la última frase, un plano general con la gasolinera al fondo
+    if (this.gasTalkIdx === 0 && !this.busy && !this.rewinding && this.carZ >= ROAD.gasTalk[0].at) this.startGasTalk();
     const d = GAS_Z - this.carZ;
     if (d < 70 && d > -6) {
       this.hud.setAction(STOP_LABEL, false);
       if (acted) this.stopFuel();
     }
     if (!this.rewinding && this.carZ > GAS_Z + 8) this.rewind(ROAD.missedGas);
+  }
+
+  /** La conversación del gas (¿lo llevas? ¿y si no tienen?), en escena de cine, plano a plano. */
+  private cineTalk = false;
+  private startGasTalk() {
+    this.gasTalkIdx = 99;
+    this.cineTalk = true;
+    this.busy = true;
+    this.input.reset();
+    this.input.enabled = false;
+    this.hud.setAction(null);
+    // Nada en la carretera mientras hablan (y lo siguiente, bastante más adelante)
+    for (const th of this.things) if (th.alive && th.z > this.carZ - 5 && th.z < this.carZ + 320) {
+      th.alive = false;
+      th.obj.visible = false;
+    }
+    this.nextSpawn = Math.max(this.nextSpawn, this.carZ + 330);
+    audio.whoosh();
+    const at = (x: number, y: number, z: number) => () => this.car.body.localToWorld(new THREE.Vector3(x, y, z));
+    const herHead = at(-0.4, 1.45, -0.25), himHead = at(0.4, 1.5, -0.25), mid = at(0, 1.42, -0.25);
+    const shots = {
+      // (por el parabrisas, los dos)
+      both: () => cinema.play([{ dur: Infinity, move: 5, pos: at(0, 1.6, 4.4), pos2: at(0, 1.52, 3.3), look: mid, fov: 40, fov2: 34, focus: mid }]),
+      her: () => cinema.play([{ dur: Infinity, move: 6, pos: at(-2.3, 1.5, 0.9), pos2: at(-1.75, 1.47, 0.35), look: herHead, fov: 34, fov2: 30, focus: herHead }]),
+      him: () => cinema.play([{ dur: Infinity, move: 6, pos: at(2.3, 1.55, 0.9), pos2: at(1.75, 1.5, 0.35), look: himHead, fov: 34, fov2: 30, focus: himHead }]),
+      // (y arriba: la carretera por delante y, al fondo, la gasolinera)
+      wide: () => {
+        const look = () => new THREE.Vector3(0, 2, Math.min(GAS_Z, this.carZ + 140));
+        cinema.play([{ dur: Infinity, move: 5, pos: () => new THREE.Vector3(this.carX + 7, 6.5, this.carZ - 9), pos2: () => new THREE.Vector3(this.carX + 4, 9, this.carZ - 4), look, fov: 46, fov2: 52, focus: look }]);
+      },
+    };
+    const lines = ROAD.gasTalk;
+    const step = (i: number) => {
+      if (i >= lines.length) {
+        cinema.stop();
+        this.cineTalk = false;
+        this.busy = false;
+        this.input.enabled = true;
+        this.input.reset();
+        this.nextSpawn = Math.max(this.carZ + 60, Math.min(this.nextSpawn, GAS_Z - 120));
+        return;
+      }
+      const l = lines[i];
+      const her = l.who === 'Margaux';
+      if (i === 0) shots.both();
+      else if (i === lines.length - 1) shots.wide();
+      else (her ? shots.her : shots.him)();
+      if (i === lines.length - 1) audio.chime(2);
+      dialogue([{ who: her ? 'Margaux' : this.him(), text: l.text }], () => step(i + 1));
+    };
+    later(() => step(0), 400);
   }
 
   /** Para en la gasolinera: se mete bajo la marquesina, Gas baja, entra en la tienda y vuelve sin cartucho. */
@@ -2087,13 +2137,8 @@ export class Level2 implements Level {
 
     this.hitsSinceCp = 0;
     this.updateHud();
-    // Las reglas de la carretera, una sola vez, al empezar el capítulo (luego ya lo dicen los contadores de arriba)
-    if (!this.rulesSaid && need > 0) {
-      this.rulesSaid = true;
-      later(() => bark(this.him(), ROAD.rules(CRASH_MAX), 'l'), 900);
-    }
+    // (sin explicar las reglas en un globo: lo dicen los contadores de arriba)
   }
-  private rulesSaid = false;
 
   private stopMarcial() {
     if (!this.tramoOk()) return;

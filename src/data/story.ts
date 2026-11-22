@@ -563,7 +563,7 @@ export const NIGHT = {
     { who: 'Marc', text: '…y donde me baste con levantar la cabeza para ver unas estrellas como estas.' },
     { who: 'Margaux', text: 'Suena a muy buen plan.' },
   ] as Line[],
-  lie: [{ who: 'Narrador', text: 'Toca las estrellas, empezando por la que parpadea.' }] as Line[],
+  lie: [{ who: 'Narrador', text: 'Une estrellas tocándolas una detrás de otra y cierra la figura volviendo a la primera. Entre todas, hay un corazón.' }] as Line[],
   lightOn: '💡 Se ha encendido una luz arriba… ¡quieta!',
   caught: [{ who: 'Narrador', text: 'Se enciende una ventana. Quietos… y se apaga. Otra vez, despacito.' }] as Line[],
   /** En el agua: se enciende la luz de arriba y hay que quedarse quieta. */
@@ -1185,16 +1185,16 @@ export const FAIL = {
   crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
   burntMax: 4,
   grill: { title: 'Así no', text: 'Tres fallos: ni crudas ni quemadas. Al plato cuando brillen, ni antes ni después.' },
-  rhythmMin: 0.9, // (4.4.2, mucho más difícil: antes el 85 %)
+  rhythmMin: 0.92, // (4.4.4, mucho más difícil: antes el 90 %)
   skillMin: 0.75,
   /** Grabar a Fito: el 60 % del vídeo con él en plano. */
   filmMin: 0.6,
   /** El baño: el 85 % dentro de la taza. */
-  peeMin: 0.9,
+  peeMin: 0.93,
   suitcase: { title: '¡Maletazo!', text: 'Te ha dado una maleta. Otra vez desde la entrada: mira bien de qué tienda sale cada una.' },
-  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta el 90 % para que Fito te lo perdone (y sin tocar a lo loco): otra vez.` },
+  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta el 92 % para que Fito te lo perdone (y sin tocar a lo loco): otra vez.` },
   film: { title: 'Movidísimo', text: (p: number) => `Fito solo ha salido en plano el ${p} % del vídeo. Hace falta el 60 %: otra vez, con pulso.` },
-  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta el 90 %: otra vez, apuntando bien.` },
+  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta el 93 %: otra vez, apuntando bien.` },
   pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
   windSecs: 3,
   lean: { title: '¡Patapam!', text: 'En las curvas, inclínate con Gas hacia el mismo lado. Si no, la moto se cae: otra vez desde el principio de este tramo.' },
@@ -1206,7 +1206,7 @@ export const FAIL = {
   alarm: { title: 'Os han pillado', text: 'Si llegan a ser tus padres… Platos y sartén fuera de la vista antes de que el coche llegue a la puerta.' },
   wall: { title: '¡Clonc!', text: 'Has tocado el muro. Otra vez desde la calle: despacio, que Azul te guía.' },
   eclipse: { title: 'Te lo has perdido', text: 'El eclipse no espera. Aparca a tiempo y sin tocar nada.' },
-  starsReset: 'Uy, se ha borrado. Desde la primera, que es un corazón 😉',
+  starsReset: 'Eso no es un corazón… Otra vez 😉',
 };
 
 /**

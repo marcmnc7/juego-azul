@@ -1469,7 +1469,7 @@ function sticker(src: string, cls: string) {
 /** Al acabar un capítulo: sus fotos caen sobre la mesa y pasan al álbum. */
 
 /** Confeti de papel por CSS sobre la interfaz. */
-function cssConfetti(parent: HTMLElement, n = 70) {
+export function cssConfetti(parent: HTMLElement, n = 70) {
   const colors = ['#d7263d', '#f4d35e', '#1b998b', '#2e86ab', '#ffffff', '#e2547a'];
   for (let i = 0; i < n; i++) {
     const c = el('i', 'confetto');
@@ -2250,15 +2250,6 @@ export interface DebugItem {
   run: () => void;
 }
 
-const EMOJI = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/u;
-/** El icono de una acción: el emoji de su texto (o uno según lo que diga, si no lleva). */
-function actionIcon(label: string) {
-  const m = label.match(EMOJI);
-  if (m) return m[0];
-  if (/hablar|decir|saludar/i.test(label)) return '💬';
-  if (/buu/i.test(label)) return '👻';
-  return '✋';
-}
 
 /** Fases del capítulo en marcha (modo prueba): se saltan desde la pausa. */
 let debugList: HTMLElement | null = null;
@@ -2320,6 +2311,10 @@ export interface Hud {
   setArrow(angle: number | null): void;
   setCounters(html: string): void;
   setAction(label: string | null, pulse?: boolean): void;
+  /** La cara del botón de acción (fija mientras dure ese tipo de juego; por defecto, ✋). */
+  setIcon(face: string): void;
+  /** Botones de acción de más, cuando hay varias cosas distintas que hacer a la vez (cada uno, la suya). */
+  setExtra(buttons: { icon: string; press: () => void }[]): void;
   remove(): void;
 }
 
@@ -2447,16 +2442,28 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     root.append(menuBtn);
   }
 
-  const act = el('button', 'action-btn hidden' + (mission ? ' m-hud' : ''));
+  // (4.4.4) El botón de acción: siempre azul y siempre ahí (no aparece al acercarse ni cambia de cara según lo que
+  // haya cerca: no da pistas). Su cara depende del tipo de juego (✋ para interactuar, «Parar» conduciendo…)
+  const act = el('button', 'action-btn' + (mission ? ' m-hud' : ''), '✋');
+  let face = '✋';
   act.onpointerdown = (e) => {
     e.stopPropagation();
     e.preventDefault();
     onAction();
+    act.classList.remove('tap');
+    void act.offsetWidth;
+    act.classList.add('tap');
   };
+  const extras = el('div', 'action-extra' + (mission ? ' m-hud' : ''));
+  let extraKey = '';
   // (la ayuda de los controles ya la dan los primeros pasos y «Cómo se juega»)
   void hintText;
   const hint = el('div', 'hint-move');
-  root.append(top, act);
+  root.append(top, act, extras);
+  const paintFace = (f: string) => {
+    act.classList.toggle('word', !/^\p{Extended_Pictographic}/u.test(f) && f !== '✋');
+    act.textContent = f === STOP_LABEL ? 'Parar' : f;
+  };
   return {
     root: top,
     setObjective: (t) => {
@@ -2490,16 +2497,46 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     setCounters: (h) => {
       if (counters.innerHTML !== h) counters.innerHTML = h;
     },
-    setAction: (label, pulse) => {
-      act.classList.toggle('hidden', !label);
-      act.classList.toggle('pulse', !!pulse);
-      // Solo el icono: el texto queda para la accesibilidad. «Parar» (el coche del cap. 3), botón azul con su palabra
-      if (label && act.title !== label) {
-        act.title = label;
-        act.setAttribute('aria-label', label);
-        act.classList.toggle('stop', label === STOP_LABEL);
-        act.textContent = label === STOP_LABEL ? 'Parar' : actionIcon(label);
+    setAction: (label) => {
+      // (lo que se puede hacer ahora solo queda para la accesibilidad: el botón no cambia ni se enciende)
+      const t = label ?? '';
+      if (act.title !== t) {
+        act.title = t;
+        act.setAttribute('aria-label', t || 'Acción');
       }
+    },
+    setIcon: (f) => {
+      if (f === face) return;
+      face = f;
+      paintFace(f);
+    },
+    setExtra: (buttons) => {
+      const key = buttons.map((b) => b.icon).join('|');
+      if (key !== extraKey) {
+        extraKey = key;
+        extras.replaceChildren(
+          ...buttons.map(() => {
+            const b = el('button', 'action-btn');
+            b.onpointerdown = (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              b.classList.remove('tap');
+              void b.offsetWidth;
+              b.classList.add('tap');
+            };
+            return b;
+          }),
+        );
+      }
+      buttons.forEach((def, i) => {
+        const b = extras.children[i] as HTMLButtonElement;
+        b.textContent = def.icon;
+        b.onclick = null;
+        b.onpointerup = (e) => {
+          e.stopPropagation();
+          def.press();
+        };
+      });
     },
     remove: () => {
       clearTimeout(objTimer);
@@ -2509,6 +2546,7 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       top.remove();
       counters.remove();
       act.remove();
+      extras.remove();
       hint.remove();
       menuBtn.remove();
     },

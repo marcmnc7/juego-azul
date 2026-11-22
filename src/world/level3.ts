@@ -501,7 +501,7 @@ const RIFF_A: [number, number][] = [[0, -17], [2, -17], [3, -14], [4, -12], [6, 
 const RIFF_B: [number, number][] = [[0, -12], [2, -12], [3, -10], [4, -7], [6, -10], [8, -12], [10, -14], [12, -17], [14, -17]];
 const SONG = [RIFF_A, RIFF_A, RIFF_B, RIFF_A, RIFF_B, RIFF_B, RIFF_A];
 const EIGHTH = 0.25;
-const TRAVEL = 1.2; // segundos que tarda una nota en bajar (más rápido: más difícil de leer)
+const TRAVEL = 0.95; // segundos que tarda una nota en bajar (muy rápido: más difícil de leer)
 
 /** Minijuego de ritmo en un canvas 2D sobre la escena. */
 class Rhythm {
@@ -560,7 +560,11 @@ class Rhythm {
     const hits = audio.trackHits((SONG.length * 16 + 8) * EIGHTH, 2.2);
     if (hits && hits.length > 12) {
       this.onSong = true;
-      for (const h of hits) this.notes.push({ t: h.t, lane: h.lane, semi: 0, done: false, scheduled: true });
+      hits.forEach((h, i) => {
+        this.notes.push({ t: h.t, lane: h.lane, semi: 0, done: false, scheduled: true });
+        // (4.4.4, mucho más difícil: cada pocos golpes, un acorde: dos carriles a la vez)
+        if (i % 3 === 2) this.notes.push({ t: h.t, lane: (h.lane + 1 + (i % 2)) % 3, semi: 0, done: false, scheduled: true });
+      });
       this.total = this.notes.length;
       this.end = hits[hits.length - 1].t + 0.6;
       return;
@@ -583,8 +587,8 @@ class Rhythm {
     const now = audio.time();
     this.flash[lane] = 1;
     let best: RNote | null = null;
-    // (4.4.2, mucho más difícil: ventana de acierto estrecha; antes 0,17 s)
-    let bd = 0.11;
+    // (4.4.4, mucho más difícil: ventana de acierto muy estrecha; antes 0,11 s)
+    let bd = 0.08;
     for (const n of this.notes) {
       if (n.done || n.lane !== lane) continue;
       const d = Math.abs(n.t - now);
@@ -605,7 +609,7 @@ class Rhythm {
     this.hits++;
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    const perfect = bd < 0.05;
+    const perfect = bd < 0.035;
     if (perfect) this.perfects++;
     this.label = perfect ? '¡Perfecto!' : '¡Bien!';
     if (this.combo > 0 && this.combo % 10 === 0) this.label = `¡${this.combo} seguidas! 🔥`;
@@ -3982,7 +3986,7 @@ export class Level3 implements Level {
 
   private enterCabin(hard: number, i: number, next: () => void) {
     // (4.4.2, más difícil todavía: se desvía bastante más y pide el 90 % dentro de la taza)
-    this.side = new PeeAim3D(this.cabin, this.camera, hard + 1.2, (q) => {
+    this.side = new PeeAim3D(this.cabin, this.camera, hard + 2.2, (q) => {
       this.side = null;
       if (q < FAIL.peeMin) {
         failCard(FAIL.pee.title, FAIL.pee.text(Math.round(q * 100)), () => this.enterCabin(hard, i, next));

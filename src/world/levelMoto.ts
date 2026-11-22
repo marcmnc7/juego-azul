@@ -1502,29 +1502,37 @@ export class LevelMoto implements Level {
     leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);
     for (const w of this.moto.wheels) w.rotation.x += (this.speed * dt) / 0.33;
 
-    // Botón: la foto en los miradores, el saludo a lo que viene de frente, la foto del faro
+    // (4.4.4) Botones fijos, sin pistas: en marcha, ✌️ saludar (a lo que venga de frente: hay que fijarse si es moto),
+    // 📷 la foto y 📣 el brrruuum del túnel, cada uno el suyo y siempre a la vista; ante la valla, 📷 la foto del faro
     let label: string | null = null;
     let act: (() => void) | null = null;
     if (riding) {
-      if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) {
-        const i = this.bayStop;
-        label = MOTO.photoHint;
-        act = () => this.takePhoto(i);
+      this.hud.setIcon('✌️');
+      const o = this.waveTarget();
+      label = o ? MOTO.wave.btn : null;
+      act = () => (o ? this.wave(o) : (this.azulWaveT = 1.1));
+      this.hud.setExtra([
+        {
+          icon: '📷',
+          press: () => {
+            if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) this.takePhoto(this.bayStop);
+          },
+        },
+        {
+          icon: '📣',
+          press: () => {
+            if (!this.tunnelDone && !this.tunnelBack && this.inTunnel(this.s * this.len)) this.brum();
+          },
+        },
+      ]);
+    } else {
+      this.hud.setExtra([]);
+      const faro = this.phase === 'creus';
+      this.hud.setIcon(faro ? '📷' : '✋');
+      if (faro && this.faroReady && !this.faroOpen && !this.faroDone && !document.querySelector('.dialogue')) {
+        label = MOTO.faroPhoto.btn;
+        act = () => this.faroPhoto();
       }
-      // En el túnel: ¡brrruuum!
-      if (!label && !this.tunnelDone && !this.tunnelBack && this.inTunnel(this.s * this.len)) {
-        label = MOTO.tunnel.btn;
-        act = () => this.brum();
-      }
-      // Viene alguien de frente: el botón de saludar sale igual para motos y coches (hay que fijarse)
-      const o = label ? null : this.waveTarget();
-      if (o) {
-        label = MOTO.wave.btn;
-        act = () => this.wave(o);
-      }
-    } else if (this.phase === 'creus' && this.faroReady && !this.faroOpen && !this.faroDone && !document.querySelector('.dialogue')) {
-      label = MOTO.faroPhoto.btn;
-      act = () => this.faroPhoto();
     }
     this.hud.setAction(label, !!label);
     const pressed = this.input.consumeAction();

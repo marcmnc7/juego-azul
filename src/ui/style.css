@@ -2539,3 +2539,54 @@ html, body { background: #000; }
 .action-btn.stop { background: #1a73e8; color: #fff; font: 800 17px/1 var(--font); letter-spacing: .02em; border-color: #0d4fb0; box-shadow: 0 6px 16px rgba(26,115,232,.45); }
 /* 4.4.2 Grabando a Fito y en la sesión de fotos: nada del visor coge el dedo (si no, el joystick no respondía) */
 .cam, .cam *, .rose-phone, .rose-phone * { pointer-events: none !important; }
+
+/* 4.4.4 · El botón de acción, igual en todo el juego: azul, redondo, siempre a la vista y sin encenderse ni latir
+   según lo que haya cerca (no da pistas). Si hay varias acciones a la vez, varios botones iguales en fila */
+.action-btn, .action-btn.pulse, .action-btn.stop {
+  background: radial-gradient(circle at 35% 30%, #5aa2ff, #1a73e8 62%, #0f4fb3) !important;
+  border: 2px solid rgba(255, 255, 255, .8); color: #fff;
+  box-shadow: 0 8px 22px -6px rgba(10, 40, 90, .6); animation: none !important;
+}
+.action-btn.hidden { display: grid; }
+.action-btn.word { font: 800 17px/1 var(--font); letter-spacing: .02em; }
+.action-btn.tap { animation: actTap .22s ease-out !important; }
+@keyframes actTap { 40% { transform: scale(.88); } 100% { transform: scale(1); } }
+.action-extra { position: fixed; z-index: 5; right: calc(max(18px, env(safe-area-inset-right)) + 86px); bottom: max(22px, calc(env(safe-area-inset-bottom) + 8px)); display: flex; flex-direction: row-reverse; gap: 10px; pointer-events: none; }
+.action-extra:empty { display: none; }
+.action-extra .action-btn { position: static; pointer-events: auto; }
+#ui:has(.dialogue, .phone-overlay) .action-extra, #ui.filming .action-extra, #ui:has(.ll) .action-extra, #ui:has(.pee-game, .gh-game, .vf, .pk, .hp-screen) .action-extra { visibility: hidden; }
+#ui.mission > .action-extra:not(.m-hud) { display: none !important; }
+/* (cara vacía: en esa parte no hay acción; y en los minijuegos con sus propios mandos, fuera) */
+.action-btn:empty { display: none !important; }
+#ui:has(.rhythm, .cam, .gauge, .side-panel, .table-shelf, .trick-bar) .action-btn:not(.m-hud) { display: none !important; }
+
+/* 4.4.4 · Los juegos del final: rótulos de retransmisión */
+.sw-board { position: fixed; z-index: 7; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 22px -8px rgba(0,0,0,.6); font: 800 15px/1 var(--font); color: #fff; pointer-events: none; white-space: nowrap; }
+.sw-board:empty { display: none; }
+.sw-board .t { background: #1a73e8; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+.sw-board .t.g { background: #e0533a; }
+.sw-board .n { background: #0f1b33; padding: 8px 12px; font-size: 20px; min-width: 22px; text-align: center; }
+.sw-board .k { background: rgba(15,27,51,.86); padding: 8px 10px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.sw-board .hp { font-style: normal; color: rgba(255,255,255,.25); font-size: 15px; }
+.sw-board .hp.on { color: #ff4d5e; }
+.sw-intro { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: radial-gradient(circle at 50% 45%, rgba(26,115,232,.55), rgba(8,16,36,.82)); color: #fff; text-align: center; padding: 24px; pointer-events: none; animation: swIn .5s cubic-bezier(.2,1.2,.3,1) both; }
+.sw-intro small { font: 800 12px/1 var(--font); letter-spacing: .2em; text-transform: uppercase; opacity: .8; }
+.sw-intro b { font: 64px/0.95 Bangers, 'Arial Black', sans-serif; letter-spacing: .03em; text-shadow: 0 4px 0 #0f1b33, 0 0 30px rgba(90,162,255,.7); }
+.sw-intro i { font: 800 18px/1 var(--font); font-style: normal; background: #e0533a; padding: 7px 14px; border-radius: 999px; transform: rotate(-2deg); }
+.sw-intro p { font: 600 14px/1.35 var(--font); max-width: 300px; opacity: .92; margin: 6px 0 0; }
+.sw-intro.out { animation: swOut .6s ease forwards; }
+@keyframes swIn { from { opacity: 0; transform: scale(1.15); } to { opacity: 1; transform: none; } }
+@keyframes swOut { to { opacity: 0; transform: scale(.94); } }
+.sw-call { position: fixed; z-index: 8; left: 50%; top: 30%; transform: translate(-50%, -50%); pointer-events: none; animation: swCall 1.1s cubic-bezier(.2,1.4,.3,1) both; }
+.sw-call span { display: block; font: 46px/1 Bangers, 'Arial Black', sans-serif; letter-spacing: .04em; color: #fff; padding: 6px 18px 4px; border-radius: 10px; transform: rotate(-4deg); text-shadow: 0 3px 0 rgba(0,0,0,.35); white-space: nowrap; }
+.sw-call.good span { background: linear-gradient(#ffd23f, #f4a300); color: #3a1a00; box-shadow: 0 6px 0 #a35f00; }
+.sw-call.bad span { background: linear-gradient(#ff6b6b, #d7263d); box-shadow: 0 6px 0 #8a1020; }
+@keyframes swCall { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60%) scale(.96); } }
+.sw-win { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; pointer-events: none; overflow: hidden; }
+.sw-win span { font: 58px/1 Bangers, 'Arial Black', sans-serif; color: #ffd23f; text-shadow: 0 4px 0 #0f1b33, 0 0 26px rgba(255,210,63,.6); animation: swCall 3.4s cubic-bezier(.2,1.4,.3,1) both; text-align: center; padding: 0 20px; }
+#ui.mission:has(.sw-board) > .counters, #ui:has(.sw-intro) .action-btn, #ui:has(.sw-intro) .hud-top { visibility: hidden; }
+/* 4.4.4 Hípica: los trancos que faltan hasta la siguiente valla */
+.rd-dots { position: fixed; z-index: 7; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 120px); transform: translateX(-50%); display: flex; gap: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.rd-dots.show { opacity: 1; }
+.rd-dots i { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.35); box-shadow: 0 0 0 2px rgba(15,27,51,.6); }
+.rd-dots i.on { background: #ffd23f; }

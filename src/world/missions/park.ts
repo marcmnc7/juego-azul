@@ -7,7 +7,9 @@ import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, makeDog, animatePerson, type Person, type Dog } from '../../entities/models';
 import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
+import { Show } from './show';
 import { disposeScene } from '../level';
+import { canvasTex } from '../deco';
 
 // Misión del capítulo 9 (octubre): Joy, campeona de agility. Primero, en el césped del parque, Gas da las
 // órdenes y Azul hace el gesto correcto (Joy obedece… o no); luego el circuito: Joy corre sola y hay que
@@ -16,16 +18,19 @@ import { disposeScene } from '../level';
 // tebeo; hierba dibujada. Sin toast (no se ven): los fallos, onomatopeyas; las órdenes y el paso al circuito, en
 // el bocadillo de Gas; el resultado, en la tarjeta.
 
-type Kind = 'valla' | 'rueda' | 'tunel';
-const COURSE: Kind[] = ['valla', 'valla', 'rueda', 'tunel', 'valla', 'valla', 'rueda', 'valla', 'tunel', 'valla'];
+type Kind = 'valla' | 'doble' | 'rueda' | 'tunel' | 'slalom' | 'pasarela' | 'mesa';
+/** (4.4.4) Un recorrido de agility de verdad: vallas, doble, rueda, túnel, slalom, pasarela y mesa. Cada uno, en su
+ * lado de la pista (z): hay que llevar a Joy hasta él. */
+const COURSE: [Kind, number][] = [
+  ['valla', 0], ['valla', -1.3], ['tunel', 1.2], ['rueda', 0], ['slalom', 0], ['doble', -1.2], ['pasarela', 0],
+  ['valla', 1.3], ['mesa', 0], ['tunel', -1.2], ['rueda', 1.2], ['valla', 0], ['doble', 0], ['valla', -1.3],
+];
+/** Lo largo que es cada obstáculo (m), para repartirlos por la pista. */
+const LEN: Record<Kind, number> = { valla: 0.2, doble: 1.1, rueda: 0.2, tunel: 2.4, slalom: 6, pasarela: 6, mesa: 1.2 };
 const START_X = 4;
-const GAP = 6;
 const RUN_V = 4.6;
-
-/** De qué lado de la pista va cada obstáculo (z): hay que llevar a Joy hasta él. */
-const LANES = [0, -1.3, 1.3, 0, 1.3, -1.3, 0, 1.3, -1.3, 0];
-/** Cuántos hay que hacer bien para acabar (si no, otra vuelta). */
-const COURSE_NEED = 7;
+/** Faltas que se pueden hacer (con una más, eliminada: otra vez el recorrido). */
+const FAULTS = 3;
 /** Los trucos, en el césped de al lado de la pista (antes estaban encima de la arena roja). */
 const TRICK_Z = 4.7;
 
@@ -34,6 +39,8 @@ interface Obstacle {
   z: number;
   kind: Kind;
   done: boolean;
+  /** Para los que se hacen por tramos (slalom, pasarela, mesa): cómo va. */
+  prog: number;
   bar?: THREE.Object3D;
 }
 
@@ -60,6 +67,15 @@ class ParkMission implements Mission {
   private obs: Obstacle[] = [];
   private jumpT = -1;
   private hits = 0;
+  private faults = 0;
+  private show = new Show('Lo que nos gusta · octubre');
+  private slow = 1;
+  private speedV = RUN_V;
+  private stopT = 0;
+  private crowd: Person[] = [];
+  private cheerT = 0;
+  private callAt = -1;
+  private courseEnd = 0;
   private walkers: { p: Person; mode: string; dog: Dog | null; x0: number; z: number; dir: number }[] = [];
   private endT = -1;
   private again = false;
@@ -78,46 +94,113 @@ class ParkMission implements Mission {
     grass.userData.noCast = true;
     sc.add(grass);
     const m = new Merger();
-    // Pista del circuito (franja de césped más clara) y los obstáculos
-    // (4.3) El circuito de verdad: pista ancha de arena roja con su cuerda blanca, arco de salida y de meta con
-    // banderines, y los obstáculos a un lado u otro de la pista (hay que llevar a Joy hasta cada uno)
-    m.add(G.box, 0xc8794a, 36, 0.006, 0, 0, 0, 0, 72, 0.012, 4.6);
-    for (const z of [-2.35, 2.35]) m.add(G.box, 0xf6f1e4, 36, 0.016, z, 0, 0, 0, 72, 0.01, 0.08);
-    for (const [ax, c] of [[START_X + 2, 0x2f6fd0], [START_X + 8 + COURSE.length * GAP, 0xd7263d]] as const) {
+    // (4.4.4) La pista de agility: arena roja con su cuerda, arco de salida y de meta, y los obstáculos repartidos
+    // según lo largo que es cada uno, numerados (con su banderín) como en una prueba de verdad
+    let x = START_X + 8;
+    const plan = COURSE.map(([kind, z]) => {
+      const at = x;
+      x += LEN[kind] + 5.2;
+      return { kind, z, at };
+    });
+    this.courseEnd = x + 2;
+    const L = this.courseEnd + 6, mid = L / 2;
+    // (la arena, con su superficie de arena: con el Merger salía dibujada como ladrillos)
+    const track = new THREE.Mesh(new THREE.PlaneGeometry(L, 4.6).rotateX(-Math.PI / 2), toon({ color: 0xc8794a, surf: Surf.Sand }));
+    track.position.set(mid, 0.008, 0);
+    track.userData.noCast = true;
+    sc.add(track);
+    for (const z of [-2.35, 2.35]) m.add(G.box, 0xf6f1e4, mid, 0.016, z, 0, 0, 0, L, 0.01, 0.08);
+    for (const [ax, c] of [[START_X + 2, 0x2f6fd0], [this.courseEnd, 0xd7263d]] as const) {
       for (const z of [-2.6, 2.6]) m.add(G.box, c, ax, 1.4, z, 0, 0, 0, 0.16, 2.8, 0.16);
       m.add(G.box, c, ax, 2.85, 0, 0, 0, 0, 0.2, 0.3, 5.4);
       for (let k = 0; k < 9; k++) m.add(G.cone, [0xd7263d, 0xf2c94c, 0x2f6fd0][k % 3], ax, 2.55, -2.2 + k * 0.55, Math.PI, 0, 0, 0.18, 0.3, 0.05);
     }
-    COURSE.forEach((kind, i) => {
-      const x = START_X + 8 + i * GAP;
-      const z = LANES[i];
-      const o: Obstacle = { x, z, kind, done: false };
-      if (kind === 'valla') {
-        for (const dz of [-0.7, 0.7]) {
-          m.add(G.box, 0xf2f2ee, x, 0.45, z + dz, 0, 0, 0, 0.07, 0.9, 0.07);
-          m.add(G.box, 0xf2f2ee, x, 0.03, z + dz, 0, 0, 0, 0.5, 0.06, 0.1);
+    // Gradas a los dos lados, con su gente (que aplaude los limpios)
+    for (const sz of [-1, 1]) {
+      m.add(G.box, 0x8a6a44, mid, 0.25, sz * 5.6, 0, 0, 0, L * 0.8, 0.5, 1.4);
+      m.add(G.box, 0x9a7a54, mid, 0.65, sz * 6.5, 0, 0, 0, L * 0.8, 1.3, 1.2);
+    }
+    const LOOKS_C = [
+      { skin: 0xe8b894, shirt: 0x2f6fd0, pants: 0x2a2a2a, hair: 0x2b1d14, hairStyle: 'short', male: true },
+      { skin: 0xf0c8a6, shirt: 0xd7263d, pants: 0x3b4a6b, hair: 0x6b3f22, hairStyle: 'straight' },
+      { skin: 0xd9a27c, shirt: 0xf2c94c, pants: 0x3a5a3a, hair: 0x1f1610, hairStyle: 'short', male: true },
+      { skin: 0xf3d2b6, shirt: 0x3fa27a, pants: 0x222222, hair: 0x9a6a3a, hairStyle: 'straight' },
+    ] as const;
+    for (let i = 0; i < 10; i++) {
+      const p = makePerson(LOOKS_C[i % 4]);
+      const sz = i % 2 ? 1 : -1;
+      p.root.position.set(START_X + 10 + i * ((L - 20) / 10), sz > 0 ? 1.3 : 0.5, sz * (sz > 0 ? 6.5 : 5.6));
+      p.root.rotation.y = sz > 0 ? Math.PI : 0;
+      sc.add(p.root);
+      this.crowd.push(p);
+    }
+    const NUM = (n: number) =>
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(0.5, 0.5),
+        new THREE.MeshBasicMaterial({
+          map: canvasTex((c, w, h) => {
+            c.fillStyle = '#fffbf0';
+            c.fillRect(0, 0, w, h);
+            c.strokeStyle = '#141018';
+            c.lineWidth = 8;
+            c.strokeRect(4, 4, w - 8, h - 8);
+            c.fillStyle = '#141018';
+            c.font = 'bold 80px sans-serif';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText(String(n), w / 2, h / 2 + 4);
+          }, 128, 128),
+          side: THREE.DoubleSide,
+        }),
+      );
+    plan.forEach(({ kind, z, at }, i) => {
+      const o: Obstacle = { x: at, z, kind, done: false, prog: 0 };
+      const x0 = at;
+      if (kind === 'valla' || kind === 'doble') {
+        for (const dx of kind === 'doble' ? [0, LEN.doble] : [0]) {
+          for (const dz of [-0.7, 0.7]) {
+            m.add(G.box, 0xf2f2ee, x0 + dx, 0.45, z + dz, 0, 0, 0, 0.07, 0.9, 0.07);
+            m.add(G.box, 0xf2f2ee, x0 + dx, 0.03, z + dz, 0, 0, 0, 0.5, 0.06, 0.1);
+          }
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 10).rotateX(Math.PI / 2), toon({ color: i % 2 ? 0x2f6fd0 : 0xd7263d }));
+          bar.position.set(x0 + dx, kind === 'doble' ? 0.5 : 0.55, z);
+          bar.castShadow = true;
+          sc.add(bar);
+          if (!dx) o.bar = bar;
         }
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 10).rotateX(Math.PI / 2), toon({ color: i % 2 ? 0x2f6fd0 : 0xd7263d }));
-        bar.position.set(x, 0.55, z);
-        bar.castShadow = true;
-        sc.add(bar);
-        o.bar = bar;
       } else if (kind === 'rueda') {
-        for (const dz of [-0.8, 0.8]) m.add(G.box, 0x2f6fd0, x, 0.65, z + dz, 0, 0, 0, 0.07, 1.3, 0.07);
-        m.add(G.box, 0x2f6fd0, x, 1.3, z, 0, 0, 0, 0.07, 0.07, 1.67);
+        for (const dz of [-0.8, 0.8]) m.add(G.box, 0x2f6fd0, x0, 0.65, z + dz, 0, 0, 0, 0.07, 1.3, 0.07);
+        m.add(G.box, 0x2f6fd0, x0, 1.3, z, 0, 0, 0, 0.07, 0.07, 1.67);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.07, 12, 28).rotateY(Math.PI / 2), toon({ color: 0xf2c94c }));
-        ring.position.set(x, 0.72, z);
+        ring.position.set(x0, 0.72, z);
         ring.castShadow = true;
         sc.add(ring);
-      } else {
+      } else if (kind === 'tunel') {
         const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 2.4, 20, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), toon({ color: 0x1b8a6a, side: THREE.DoubleSide }));
-        tunnel.position.set(x, 0.02, z);
+        tunnel.position.set(x0 + 1.2, 0.02, z);
         tunnel.castShadow = true;
         sc.add(tunnel);
-        for (const dx of [-1.2, 1.2]) m.add(new THREE.TorusGeometry(0.47, 0.04, 6, 20, Math.PI).rotateY(Math.PI / 2), 0x14684f, x + dx, 0.02, z, 0, 0, 0, 1, 1, 1);
+        for (const dx of [0, 2.4]) m.add(new THREE.TorusGeometry(0.47, 0.04, 6, 20, Math.PI).rotateY(Math.PI / 2), 0x14684f, x0 + dx, 0.02, z, 0, 0, 0, 1, 1, 1);
+      } else if (kind === 'slalom') {
+        for (let k = 0; k < 6; k++) m.add(G.cyl, k % 2 ? 0xf2f2ee : 0xd7263d, x0 + k * 1.1, 0.5, z, 0, 0, 0, 0.05, 1.0, 0.05);
+      } else if (kind === 'pasarela') {
+        // Rampa de subida, tabla arriba y rampa de bajada (con sus zonas de contacto amarillas)
+        m.add(G.box, 0xd9a35a, x0 + 1, 0.3, z, 0, 0, 0.55, 2.2, 0.06, 0.32);
+        m.add(G.box, 0xd9a35a, x0 + 3, 0.62, z, 0, 0, 0, 2.0, 0.06, 0.32);
+        m.add(G.box, 0xd9a35a, x0 + 5, 0.3, z, 0, 0, -0.55, 2.2, 0.06, 0.32);
+        for (const dx of [0.35, 5.65]) m.add(G.box, 0xf2c94c, x0 + dx, dx < 1 ? 0.12 : 0.12, z, 0, 0, dx < 1 ? 0.55 : -0.55, 0.7, 0.07, 0.33);
+        for (const dx of [2.1, 3.9]) m.add(G.box, 0x8a6a44, x0 + dx, 0.3, z, 0, 0, 0, 0.06, 0.6, 0.06);
+      } else {
+        // La mesa: Joy tiene que quedarse quieta encima un momento
+        m.add(G.box, 0x2f6fd0, x0 + 0.6, 0.35, z, 0, 0, 0, 1.0, 0.08, 1.0);
+        for (const [dx, dz] of [[0.15, -0.4], [1.05, -0.4], [0.15, 0.4], [1.05, 0.4]]) m.add(G.box, 0x8a8a8a, x0 + dx, 0.17, z + dz, 0, 0, 0, 0.06, 0.34, 0.06);
       }
-      // Un banderín junto a cada obstáculo, del color de su lado
-      m.add(G.cyl, 0xf6f1e4, x, 0.6, z + (z > 0 ? 1.1 : -1.1) * (z ? 1 : 1), 0, 0, 0, 0.03, 1.2, 0.03);
+      // El número del obstáculo, en su banderín
+      m.add(G.cyl, 0xf6f1e4, x0 - 0.3, 0.6, z + (z >= 0 ? 1.15 : -1.15), 0, 0, 0, 0.03, 1.2, 0.03);
+      const num = NUM(i + 1);
+      num.position.set(x0 - 0.3, 1.3, z + (z >= 0 ? 1.15 : -1.15));
+      num.rotation.y = -Math.PI / 2;
+      sc.add(num);
       this.obs.push(o);
     });
     // Árboles, banco y valla del parque
@@ -137,7 +220,8 @@ class ParkMission implements Mission {
         m.add(G.bush, i % 2 ? 0x3f6a32 : 0x557f3c, x, 4, z, 0, i, 0, 4.2, 3.2, 4.2);
       }
     }
-    for (const [x, z] of [[-6, -5], [8, 6], [20, -6], [34, 6]] as const) {
+    // (los parterres, solo al principio: más allá están las gradas)
+    for (const [x, z] of [[-6, -5], [8, 6]] as const) {
       m.add(G.cyl, 0x8a6a44, x, 0.12, z, 0, 0, 0, 3.2, 0.24, 3.2);
       for (let k = 0; k < 9; k++) m.add(G.sphere, [0xe0533a, 0xf2c94c, 0xf6f1e4, 0xc85aa0][k % 4], x + Math.cos(k * 0.7) * (0.4 + (k % 3) * 0.4), 0.34, z + Math.sin(k * 0.7) * (0.4 + (k % 3) * 0.4), 0, 0, 0, 0.32, 0.26, 0.32);
     }
@@ -204,6 +288,8 @@ class ParkMission implements Mission {
     root.append(this.bar, this.bubble);
 
     this.hud = hud(() => ctx.input.queueAction(), () => {}, T.hint, true);
+    // (en los trucos mandan los botones de las órdenes; en el circuito, 🐕 para saltar)
+    this.hud.setIcon('');
     this.hud.setObjective('🐕');
     ctx.camera.position.set(4.2, 1.5, 3.6 + TRICK_Z);
     ctx.camera.lookAt(0.5, 0.55, 0.7 + TRICK_Z);
@@ -213,9 +299,18 @@ class ParkMission implements Mission {
   }
 
   private updateHud() {
-    if (this.phase === 'tricks') this.hud.setCounters(`<span class="chip">🐕 ${this.ok}/${this.order.length}</span>`);
-    else this.hud.setCounters(`<span class="chip${this.hits >= COURSE_NEED ? ' ok' : ''}">🏁 ${this.hits}/${COURSE_NEED}</span>`);
+    if (this.phase === 'tricks') {
+      this.show.score('');
+      this.hud.setCounters(`<span class="chip">🐕 ${this.ok}/${this.order.length}</span>`);
+      return;
+    }
+    this.hud.setCounters('');
+    const left = FAULTS - this.faults;
+    const hearts = '<i class="hp on">♥</i>'.repeat(Math.max(0, left)) + '<i class="hp">♥</i>'.repeat(Math.min(FAULTS, this.faults));
+    const passed = this.obs.filter((o) => o.done).length;
+    this.show.score(`<span class="t">JOY</span><span class="n">${passed}/${this.obs.length}</span><span class="k">${hearts}</span>`);
   }
+
 
   // ---------- Trucos ----------
 
@@ -235,11 +330,12 @@ class ParkMission implements Mission {
   }
 
   /** Lo que dice Gas, en su bocadillo de abajo. */
-  private say(text: string) {
+  private say(text: string, name = 'Gas') {
     // (como un bocadillo de tebeo: el nombre arriba y la frase, sin comillas)
     this.bubble.innerHTML = '';
+    this.bubble.style.display = '';
     const who = document.createElement('b');
-    who.textContent = 'Gas';
+    who.textContent = name;
     const say = document.createElement('span');
     say.textContent = text;
     this.bubble.append(who, say);
@@ -304,12 +400,18 @@ class ParkMission implements Mission {
 
   private startCourse() {
     this.phase = 'course';
+    this.hud.setIcon('🐕');
     this.bar.remove();
     this.hud.setObjective('🏁');
     this.hits = 0;
+    this.faults = 0;
     this.jumpT = -1;
+    this.stopT = 0;
+    this.callAt = -1;
+    this.speedV = RUN_V;
     for (const o of this.obs) {
       o.done = false;
+      o.prog = 0;
       if (o.bar) o.bar.rotation.x = 0;
     }
     this.joy.root.position.set(START_X, 0, 0);
@@ -319,21 +421,70 @@ class ParkMission implements Mission {
     this.me.root.rotation.y = Math.PI / 2;
     this.gas.root.position.set(START_X - 3, 0, 3.8);
     this.gas.root.rotation.y = Math.PI / 2;
-    missionCard(MINIS.agility.title, MINIS.agility.hint);
+    this.show.intro('Agility', 'Joy & Azul · prueba de grado 1', 'Lleva a Joy con el joystick (arriba, más rápido; abajo, más despacio). 🐕 para saltar vallas y rueda, y en la mesa, para que se quede quieta. Tres faltas y eliminada.', 4.2);
+    this.stopT = -4.3; // (quieta en la salida mientras sale el rótulo)
     this.updateHud();
-    // (el bocadillo de los trucos no se queda tapando el circuito)
-    window.setTimeout(() => (this.bubble.style.display = 'none'), 2600);
+    this.bubble.style.display = 'none';
+  }
+
+  /** Una falta en el obstáculo (o un acierto): rótulo, sonido y el público. */
+  private judge(o: Obstacle, good: boolean, why: string) {
+    o.done = true;
+    if (good) {
+      this.hits++;
+      audio.pickup();
+      this.show.call(why, true, 0.8);
+      this.cheerT = 1.2;
+      if (Math.random() < 0.5) audio.cheer(0.25);
+    } else {
+      this.faults++;
+      audio.boo();
+      vibrate(40);
+      this.show.call(why, false, 0.9);
+      if (o.bar) o.bar.rotation.x = 0.9;
+      if (this.faults > FAULTS - 1 + 0.5 && this.phase === 'course') {
+        // Eliminada: otra vez desde la salida
+        this.phase = 'end';
+        this.endT = -99;
+        this.show.call('¡ELIMINADA!', false, 1.6);
+        window.setTimeout(() => this.startCourse(), 1900);
+      }
+    }
+    this.updateHud();
   }
 
   private updateCourse(dt: number, pressed: boolean, ax: { x: number; y: number }) {
     const r = this.joy.root;
-    if (pressed && this.jumpT < 0) {
+    // Quieta en la salida (rótulo) o en la mesa
+    if (this.stopT < 0) {
+      this.stopT += dt;
+      if (this.stopT >= 0) {
+        this.stopT = 0;
+        audio.knock(0.5, 1400, 0.06);
+      }
+      animatePerson(this.me, dt, 'idle');
+      return;
+    }
+    // Velocidad: arriba, más rápido; abajo, más despacio
+    this.speedV += (THREE.MathUtils.clamp(RUN_V + ax.y * 1.6, 3.0, 6.4) - this.speedV) * Math.min(1, dt * 3);
+    const onTable = this.obs.find((o) => o.kind === 'mesa' && !o.done && r.position.x > o.x + 0.2 && r.position.x < o.x + 1.1);
+    if (pressed && this.jumpT < 0 && !onTable) {
       this.jumpT = 0;
       audio.knock(0.25, 900, 0.04);
     }
-    r.position.x += RUN_V * dt;
+    // En la mesa: 🐕 para que se quede quieta (sentada) un momento; si pasa de largo, falta
+    if (onTable && pressed && onTable.prog === 0) {
+      onTable.prog = 1;
+      this.stopT = -1.2;
+      r.position.y = 0.42;
+      audio.knock(0.4, 700, 0.05);
+      this.show.call('¡QUIETA!', true, 0.8);
+      window.setTimeout(() => this.phase === 'course' && !onTable.done && this.judge(onTable, true, '¡MESA!'), 1200);
+      return;
+    }
+    r.position.x += this.speedV * dt;
     // Con el joystick, Joy va a un lado u otro de la pista (con la cámara detrás: derecha es +z)
-    r.position.z = THREE.MathUtils.clamp(r.position.z + ax.x * 3.2 * dt, -2.0, 2.0);
+    r.position.z = THREE.MathUtils.clamp(r.position.z + ax.x * 3.4 * dt, -2.0, 2.0);
     r.rotation.y = Math.PI / 2 - ax.x * 0.35;
     if (this.jumpT >= 0) {
       this.jumpT += dt / 0.55;
@@ -343,48 +494,102 @@ class ParkMission implements Mission {
         r.position.y = 0;
       }
     }
+    // Azul, por delante, va cantando el siguiente obstáculo (como en las pruebas de verdad)
+    const next = this.obs.find((o) => !o.done);
+    if (next && next !== this.obs[this.callAt] && next.x - r.position.x < 7) {
+      this.callAt = this.obs.indexOf(next);
+      this.say(({ valla: '¡Hop!', doble: '¡Hop, hop!', rueda: '¡Rueda!', tunel: '¡Túnel!', slalom: '¡Slalom!', pasarela: '¡Arriba!', mesa: '¡Mesa!' } as Record<Kind, string>)[next.kind], 'Azul');
+    }
     for (const o of this.obs) {
-      if (o.done || r.position.x < o.x) continue;
-      o.done = true;
-      const lined = Math.abs(r.position.z - o.z) < 0.55;
+      if (o.done) continue;
+      const lined = (tol: number) => Math.abs(r.position.z - o.z) < tol;
       const air = r.position.y > 0.28;
-      const good = lined && (o.kind === 'tunel' ? !air : air);
-      if (good) {
-        this.hits++;
-        audio.pickup();
-        comicWord('¡BIEN!', 'perfect');
-      } else {
-        audio.boo();
-        comicWord(!lined ? MINIS.agility.missed : o.kind === 'tunel' ? MINIS.agility.overTunnel : MINIS.agility.knock, 'hit');
-        if (o.bar && lined) o.bar.rotation.x = 0.9; // la barra, tirada
+      switch (o.kind) {
+        case 'valla':
+        case 'rueda':
+          if (r.position.x >= o.x) {
+            if (!lined(o.kind === 'rueda' ? 0.4 : 0.6)) this.judge(o, false, '¡SE LO SALTA!');
+            else if (!air) this.judge(o, false, '¡DERRIBO!');
+            else {
+              this.judge(o, true, o.kind === 'rueda' ? '¡POR EL ARO!' : '¡LIMPIO!');
+              this.slow = 0.45;
+            }
+          }
+          break;
+        case 'doble':
+          // Dos barras seguidas: hay que ir por el aire en las dos (saltar algo antes)
+          if (r.position.x >= o.x && o.prog === 0) {
+            if (!lined(0.6) || !air) return void this.judge(o, false, !lined(0.6) ? '¡SE LO SALTA!' : '¡DERRIBO!');
+            o.prog = 1;
+          }
+          if (o.prog === 1 && r.position.x >= o.x + LEN.doble) {
+            if (!air) this.judge(o, false, '¡DERRIBO!');
+            else {
+              this.judge(o, true, '¡DOBLE!');
+              this.slow = 0.45;
+            }
+          }
+          break;
+        case 'tunel':
+          if (r.position.x >= o.x && o.prog === 0) {
+            if (!lined(0.5) || air) return void this.judge(o, false, air ? '¡POR ENCIMA!' : '¡SE LO SALTA!');
+            o.prog = 1;
+          }
+          if (o.prog === 1 && r.position.x >= o.x + LEN.tunel) this.judge(o, true, '¡TÚNEL!');
+          break;
+        case 'slalom': {
+          // Seis palos: entre ellos, en zigzag (el primero por la derecha, el siguiente por la izquierda…)
+          if (r.position.x < o.x - 0.3) break;
+          if (!lined(1.2) && o.prog === 0) return void this.judge(o, false, '¡SE LO SALTA!');
+          const k = Math.floor((r.position.x - o.x + 0.55) / 1.1);
+          if (k >= 1 && k <= 6 && k > o.prog) {
+            const side = (r.position.z - o.z) * (k % 2 ? 1 : -1);
+            if (side < 0.12) return void this.judge(o, false, '¡FALLA EL SLALOM!');
+            o.prog = k;
+            audio.knock(0.2, 1100 + k * 80, 0.03);
+          }
+          if (o.prog >= 6) this.judge(o, true, '¡SLALOM!');
+          break;
+        }
+        case 'pasarela':
+          // Por la tabla (estrecha): centrada todo el rato
+          if (r.position.x >= o.x && r.position.x <= o.x + LEN.pasarela) {
+            if (!lined(0.28)) return void this.judge(o, false, o.prog === 0 ? '¡SE LO SALTA!' : '¡SE CAE!');
+            o.prog = 1;
+            const u = (r.position.x - o.x) / LEN.pasarela;
+            r.position.y = Math.max(r.position.y, u < 0.33 ? u * 3 * 0.62 : u > 0.67 ? (1 - u) * 3 * 0.62 : 0.62);
+          }
+          if (r.position.x > o.x + LEN.pasarela) this.judge(o, true, '¡PASARELA!');
+          break;
+        case 'mesa':
+          if (r.position.x >= o.x + 1.15 && o.prog === 0) this.judge(o, false, !lined(0.6) ? '¡SE LO SALTA!' : '¡SIN PARAR!');
+          break;
       }
-      this.updateHud();
     }
     // En el túnel, por dentro (agachada)
-    const inTunnel = this.obs.some((o) => o.kind === 'tunel' && Math.abs(r.position.x - o.x) < 1.2 && Math.abs(r.position.z - o.z) < 0.55);
+    const inTunnel = this.obs.some((o) => o.kind === 'tunel' && r.position.x > o.x && r.position.x < o.x + LEN.tunel && Math.abs(r.position.z - o.z) < 0.5);
     r.scale.y = inTunnel && r.position.y < 0.1 ? 0.8 : 1;
+    if (this.jumpT < 0 && !this.obs.some((o) => o.kind === 'pasarela' && r.position.x >= o.x && r.position.x <= o.x + LEN.pasarela)) r.position.y = Math.max(0, r.position.y - dt * 3);
     // Azul, corriendo a su lado por fuera de la pista
     const mp = this.me.root.position;
     mp.x += (r.position.x - 0.5 - mp.x) * Math.min(1, dt * 6);
     mp.z += (Math.max(2.9, r.position.z + 1.4) - mp.z) * Math.min(1, dt * 4);
     animatePerson(this.me, dt, 'walk', 1.4);
     this.me.root.rotation.y = Math.PI / 2;
-    if (r.position.x > this.obs[this.obs.length - 1].x + 4 && this.phase === 'course') {
-      this.hud.setAction(null);
-      if (this.hits >= COURSE_NEED) {
-        this.phase = 'end';
-        this.endT = 0;
-        missionCard(MINIS.agility.title, MINIS.agility.done(this.hits), true);
-      } else {
-        // Pocos bien: otra vuelta
-        comicWord(MINIS.agility.again(this.hits, COURSE_NEED), 'hit');
-        this.startCourse();
-      }
+    if (r.position.x > this.courseEnd && this.phase === 'course') {
+      this.phase = 'end';
+      this.endT = 0;
+      this.show.win(this.faults === 0 ? '¡RECORRIDO LIMPIO!' : '¡CLASIFICADAS!');
     }
   }
 
-  update(dt: number) {
+  update(dtRaw: number) {
+    // (cámara lenta en los saltos limpios)
+    this.slow += (1 - this.slow) * Math.min(1, dtRaw * 2.5);
+    const dt = dtRaw * this.slow;
     this.t += dt;
+    this.cheerT -= dt;
+    this.crowd.forEach((p, i) => animatePerson(p, dt, this.cheerT > 0 || this.phase === 'end' ? 'cheer' : i % 3 ? 'idle' : 'talk', 0, this.t * 2 + i));
     // La gente del fondo: los de los paseos van y vienen con su perro delante; los otros, de charla
     for (const w of this.walkers) {
       if (w.mode !== 'walk') {
@@ -433,7 +638,7 @@ class ParkMission implements Mission {
       camera.lookAt(x + 3, 0.4, z * 0.4);
       if (this.endT >= 0) {
         this.endT += dt;
-        if (this.endT > 2.6) {
+        if (this.endT > 3.6) {
           const done = this.onDone;
           stage.end();
           done();
@@ -450,6 +655,7 @@ class ParkMission implements Mission {
   }
 
   dispose() {
+    this.show.dispose();
     this.hud.remove();
     this.bar.remove();
     this.bubble.remove();

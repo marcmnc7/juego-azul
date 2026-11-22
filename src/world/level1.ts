@@ -1330,6 +1330,7 @@ export class Level1 implements Level {
         }
       }
     }
+    this.hud.setIcon(this.stage === 'water' ? '💦' : '✋');
     this.hud.setAction(label, pulse);
     if (this.input.consumeAction() && this.pendingAction) this.pendingAction();
 

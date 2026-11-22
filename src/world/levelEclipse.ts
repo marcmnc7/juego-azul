@@ -2100,6 +2100,8 @@ export class LevelEclipse implements Level {
   update(dt: number) {
     this.t += dt;
     this.fx.update(dt);
+    // (el botón fijo de cada parte: remar en el kayak, saltar en las rocas, las gafas en el eclipse; si no, ✋)
+    this.hud.setIcon(this.phase === 'kayak' || this.phase === 'ferry' ? '🛶' : this.phase === 'hop' ? '🪨' : this.phase === 'eclipse' ? '🕶️' : '✋');
     // El reloj del eclipse no se para (ni mientras buscas sitio)
     if ((this.phase === 'toCar' || this.phase === 'park') && !this.busy) {
       const before = Math.ceil(this.clockMin);

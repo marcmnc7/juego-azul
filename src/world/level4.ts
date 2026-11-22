@@ -232,12 +232,14 @@ export class Level4 implements Level {
   private playTime = 0;
   // Constelación
   private starPts: THREE.Vector3[] = [];
+  /** Todas las estrellas que se pueden tocar (las 10 primeras, el corazón) y las que van uniéndose. */
+  private allStars: THREE.Vector3[] = [];
+  private starPath: number[] = [];
+  private starDir = new THREE.Vector3();
   private starSprites: THREE.Sprite[] = [];
   private starLine!: THREE.Mesh;
-  private nextStar = 0;
   private misses = 0;
   /** Fallos seguidos en la estrella que toca: a los dos parpadea; a los cuatro, el dibujo se borra. */
-  private missRun = 0;
   private shooting: { s: THREE.Sprite; v: THREE.Vector3; life: number }[] = [];
   private starCamPos = new THREE.Vector3();
   private starCamLook = new THREE.Vector3();
@@ -845,10 +847,31 @@ export class Level4 implements Level {
       const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
       this.starPts.push(center.clone().addScaledVector(right, hx * 1.05).addScaledVector(up, hy * 1.05 + 2));
     }
+    // (4.4.4) Además del corazón, muchas estrellas sueltas alrededor: se pueden unir las que quieras, pero solo vale si
+    // la figura cerrada es el corazón. Las sueltas, lejos del contorno del corazón (que se pueda adivinar)
+    this.starDir.copy(dir);
+    const all = this.starPts.slice();
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const segDist = (p: THREE.Vector3) => {
+      let best = Infinity;
+      for (let i = 0; i < n; i++) {
+        const a = this.starPts[i], b = this.starPts[(i + 1) % n];
+        const ab = b.clone().sub(a), t = THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / ab.lengthSq(), 0, 1);
+        best = Math.min(best, a.clone().addScaledVector(ab, t).distanceTo(p));
+      }
+      return best;
+    };
+    for (let tries = 0; all.length < n + 16 && tries < 600; tries++) {
+      const p = center.clone().addScaledVector(right, (rnd() - 0.5) * 50).addScaledVector(up, (rnd() - 0.5) * 40 + 1);
+      if (segDist(p) < 3.6 || all.some((q) => q.distanceTo(p) < 4.5)) continue;
+      all.push(p);
+    }
+    this.allStars = all;
     // Estrellas de cinco puntas dibujadas, con su contorno de tinta (comicGlow: el cómic no las toca)
     const mat = new THREE.SpriteMaterial({ map: comicStarTexture(), color: 0xfff4c0, fog: false, transparent: true, alphaTest: 0.4, depthWrite: false });
     mat.userData.comicGlow = true;
-    for (const p of this.starPts) {
+    for (const p of all) {
       const s = new THREE.Sprite(mat.clone());
       s.position.copy(p);
       s.scale.setScalar(5);
@@ -856,24 +879,30 @@ export class Level4 implements Level {
       this.scene.add(s);
       this.starSprites.push(s);
     }
-    // La línea del corazón: un trazo gordo rosa (una cinta en el plano de las estrellas) que escribe profundidad,
-    // así la pasada de tinta le pone su contorno
-    const pts = this.starPts.concat([this.starPts[0]]);
+    // La línea: un trazo gordo rosa (una cinta en el plano de las estrellas) que se rehace con cada estrella unida
+    this.starLine = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xff8fc0, fog: false, side: THREE.DoubleSide }));
+    this.starLine.frustumCulled = false;
+    this.scene.add(this.starLine);
+    this.drawPath([]);
+  }
+
+  /** Rehace la cinta rosa por las estrellas unidas (closed: cierra la figura). */
+  private drawPath(idx: number[], closed = false) {
+    const pts = idx.map((i) => this.allStars[i]);
+    if (closed && pts.length) pts.push(pts[0]);
     const pos: number[] = [];
     const half = 0.45;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
       const along = b.clone().sub(a).normalize();
-      const side = new THREE.Vector3().crossVectors(along, dir).normalize().multiplyScalar(half);
+      const side = new THREE.Vector3().crossVectors(along, this.starDir).normalize().multiplyScalar(half);
       const a0 = a.clone().sub(side), a1 = a.clone().add(side), b0 = b.clone().sub(side), b1 = b.clone().add(side);
       pos.push(...a0.toArray(), ...b0.toArray(), ...b1.toArray(), ...a0.toArray(), ...b1.toArray(), ...a1.toArray());
     }
-    const g = new THREE.BufferGeometry();
+    const g = this.starLine.geometry;
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setDrawRange(0, 0);
-    this.starLine = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff8fc0, fog: false, side: THREE.DoubleSide }));
-    this.starLine.frustumCulled = false;
-    this.scene.add(this.starLine);
+    g.setDrawRange(0, Infinity);
+    g.computeBoundingSphere();
   }
 
   // ---------------- HUD ----------------
@@ -1091,6 +1120,7 @@ export class Level4 implements Level {
       label = '💙 A su lado';
       action = () => this.makeLove();
     }
+    this.hud.setIcon(this.mp ? '🗣️' : '✋');
     this.hud.setAction(label, !!label);
     if (this.input.consumeAction() && action) action();
 
@@ -2280,43 +2310,74 @@ export class Level4 implements Level {
     });
   }
 
-  /** Toque en pantalla: ¿está cerca de la estrella que toca? */
+  /** Toque en pantalla: une la estrella tocada (cualquiera); tocar otra vez la primera cierra la figura. */
   private tapStar(x: number, y: number, target?: HTMLElement) {
     if (this.phase !== 'stars' || this.busy) return;
     if (target?.closest?.('button, .dialogue')) return;
-    const s = this.starPts[this.nextStar];
-    const v = this.v1.copy(s).project(this.camera);
-    const sx = ((v.x + 1) / 2) * window.innerWidth;
-    const sy = ((1 - v.y) / 2) * window.innerHeight;
-    // (4.4.2, más difícil: hay que tocar más justo)
-    if (Math.hypot(sx - x, sy - y) < Math.max(32, window.innerWidth * 0.036)) this.hitStar();
-    else {
-      this.misses++;
-      this.missRun++;
-      audio.knock(0.2, 260, 0.08);
-      if (this.missRun >= 3 && this.nextStar > 0) {
-        // El corazón se borra: otra vez desde la primera
-        this.missRun = 0;
-        this.nextStar = 0;
-        this.starLine.geometry.setDrawRange(0, 0);
-        bark('Gas', FAIL.starsReset);
-      }
-    }
+    let best = -1, bd = Math.max(30, window.innerWidth * 0.034);
+    this.allStars.forEach((p, i) => {
+      const v = this.v1.copy(p).project(this.camera);
+      const d = Math.hypot(((v.x + 1) / 2) * window.innerWidth - x, ((1 - v.y) / 2) * window.innerHeight - y);
+      if (d < bd) (bd = d), (best = i);
+    });
+    if (best < 0) return;
+    this.joinStar(best);
   }
 
-  /** Para el modo prueba: unir la siguiente estrella. */
+  private joinStar(i: number) {
+    const path = this.starPath;
+    if (path.length >= 3 && i === path[0]) return this.closeShape();
+    // (tocar la última otra vez la quita: para corregir)
+    if (path.length && i === path[path.length - 1]) {
+      path.pop();
+      audio.knock(0.15, 300, 0.05);
+      this.drawPath(path);
+      return;
+    }
+    if (path.includes(i)) return;
+    path.push(i);
+    audio.chime(path.length % 8);
+    vibrate(12);
+    this.drawPath(path);
+  }
+
+  /** ¿La figura cerrada es el corazón? (sus 10 estrellas, una detrás de otra, en un sentido o en el otro) */
+  private closeShape() {
+    const p = this.starPath;
+    const n = this.starPts.length;
+    let ok = p.length === n && p.every((i) => i < n);
+    if (ok) {
+      const dir = (p[1] - p[0] + n) % n === 1 ? 1 : (p[0] - p[1] + n) % n === 1 ? -1 : 0;
+      ok = dir !== 0 && p.every((v, k) => k === 0 || (v - p[k - 1] + n * 2) % n === (dir === 1 ? 1 : n - 1));
+    }
+    if (ok) {
+      this.starPath = Array.from({ length: n }, (_, k) => k);
+      this.drawPath(this.starPath, true);
+      this.finishStars();
+      return;
+    }
+    // No es el corazón: la figura se borra
+    this.misses++;
+    this.drawPath(p, true);
+    audio.boo();
+    vibrate(40);
+    bark('Gas', FAIL.starsReset);
+    this.busy = true;
+    later(() => {
+      this.starPath = [];
+      this.drawPath([]);
+      this.busy = false;
+    }, 900);
+  }
+
+  /** Para el modo prueba: unir la siguiente estrella del corazón. */
   hitStar() {
     if (this.phase !== 'stars') return;
-    audio.chime(this.nextStar);
-    vibrate(15);
-    this.missRun = 0;
-    this.nextStar++;
-    // (6 vértices por tramo: con n estrellas unidas, n - 1 tramos; al cerrar, todos)
-    this.starLine.geometry.setDrawRange(0, Math.max(0, this.nextStar - 1) * 6);
-    if (this.nextStar >= this.starPts.length) {
-      this.starLine.geometry.setDrawRange(0, this.starPts.length * 6);
-      this.finishStars();
-    }
+    const k = this.starPath.length;
+    if (k >= this.starPts.length) return this.closeShape();
+    this.starPath = this.starPath.filter((i) => i < this.starPts.length).slice(0, k);
+    this.joinStar(k);
+    if (this.starPath.length >= this.starPts.length) this.closeShape();
   }
 
   private finishStars() {
@@ -2348,9 +2409,9 @@ export class Level4 implements Level {
     this.camera.lookAt(this.v1);
     const done = this.phase !== 'stars';
     this.starSprites.forEach((s, i) => {
-      // (solo se marca la primera: el resto del corazón lo tiene que adivinar ella)
-      const next = i === this.nextStar && !done && this.nextStar === 0;
-      const lit = i < this.nextStar || done;
+      // (ninguna marcada: el corazón, entre todas, lo tiene que encontrar ella)
+      const next = false;
+      const lit = this.starPath.includes(i) || (done && i < this.starPts.length);
       const base = lit ? 6.5 : next ? 5 + Math.abs(Math.sin(this.t * 5)) * 4 : 4;
       s.scale.setScalar(base + (done ? Math.sin(this.t * 3 + i) * 1.2 : 0));
       (s.material as THREE.SpriteMaterial).color.set(lit ? (done ? 0xffa3c8 : 0xfff4c0) : next ? 0xffffff : 0xc8d0ff);
@@ -2431,9 +2492,8 @@ export class Level4 implements Level {
       this.hugT = 0;
       this.hugE?.stop();
       this.hugE = null;
-      this.nextStar = 0;
-      this.missRun = 0;
-      this.starLine.geometry.setDrawRange(0, 0);
+      this.starPath = [];
+      this.drawPath([]);
       this.lost.reset();
     };
     return [
@@ -2538,7 +2598,7 @@ export class Level4 implements Level {
         run: () => {
           reset();
           this.setNude(true);
-          this.nextStar = 0;
+          this.starPath = [];
           this.startStars();
         },
       },

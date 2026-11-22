@@ -36,7 +36,10 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
       // Con un diálogo abierto la tecla solo sirve para avanzarlo (si no, se reabría al cerrarlo)
-      if ((e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') && !document.querySelector('.dialogue')) this.actionQueued = true;
+      if ((e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') && !document.querySelector('.dialogue')) {
+        this.actionQueued = true;
+        this.actionAt = performance.now();
+      }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     // Si el móvil se va a segundo plano con el dedo en el joystick, el "soltar" no llega nunca
@@ -134,13 +137,16 @@ export class Input {
     return this.keys.has(code);
   }
 
+  /** Cuándo se pulsó (el botón está siempre: un toque sin nada que hacer caduca y no se dispara después solo). */
+  private actionAt = 0;
   queueAction() {
     this.actionQueued = true;
+    this.actionAt = performance.now();
     this.usage.action++;
   }
 
   consumeAction() {
-    const a = this.actionQueued;
+    const a = this.actionQueued && performance.now() - this.actionAt < 450;
     this.actionQueued = false;
     return a && this.enabled;
   }

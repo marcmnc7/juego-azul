@@ -5,15 +5,17 @@ import { Surf } from '../../core/surfaces';
 import { beachBallTexture } from '../../core/physics';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { MARGAUX_LOOK, MARC_LOOK, castLook } from '../../data/characters';
-import { MINIS } from '../../data/story';
 import { G, Merger, makePerson, animatePerson, type Person } from '../../entities/models';
-import { hud, comicWord, missionCard, type Hud } from '../../ui/ui';
+import { hud, type Hud } from '../../ui/ui';
+import { Particles } from '../../entities/fx';
+import { Show } from './show';
 import { canvasTex } from '../deco';
 import { disposeScene } from '../level';
 
-// Misión del capítulo 9 (lo que vino después): septiembre, vóley playa «nivel 6» con Gas. Ella a un lado
-// de la red y él al otro; la pelota va y viene y hay que darle justo cuando llega. Tres al suelo y se
-// acaba (y si aguantáis doce pases, también: nivel 6 de verdad).
+// Lo que nos gusta · septiembre: vóley playa «nivel 6», Azul contra Gas, un partido de verdad (4.4.4). Recibir
+// (ponerse bajo la pelota y darle a tiempo), colocársela una misma y rematar arriba del todo, apuntando con el
+// joystick a donde no está Gas; si llega, la devuelve y ataca él, cada vez más rápido. Quien gana el punto, saca
+// (el saque: lanzar la pelota y saltar a pegarle arriba). A 5 puntos. Presentado como una retransmisión.
 // Con la receta del capítulo 1: cielo pintado (mismos azules y horizonte crema), luz de las 11 con el reparto de
 // ambiente de Ferreries (hemisférica 1,0 × 0,35 y sol con su tope de tebeo), mar de tebeo y arena dibujada.
 // Nada de toast (no se ven en el cómic): los aciertos y fallos, onomatopeyas; el resultado, en la tarjeta.
@@ -21,37 +23,54 @@ import { disposeScene } from '../level';
 const ME = new THREE.Vector3(-3.6, 0, 0);
 const GAS = new THREE.Vector3(3.6, 0, 0);
 const HANDS = 0.95; // altura a la que se le da (antebrazos)
-const LAUNCH = 1.9;
-/** Puntos que hay que hacer, y a cuántos se juega el partido. */
-const NEED = 4;
-const GAME = 7;
+/** A cuántos puntos se juega (gana quien llega antes). */
+const NEED = 5;
 
 class BeachMission implements Mission {
   readonly scene = new THREE.Scene();
   private hud: Hud;
+  private show = new Show('Lo que nos gusta · septiembre');
   private me: Person;
   private gas: Person;
   private ball: THREE.Mesh;
   private shadow: THREE.Mesh;
+  private ring!: THREE.Mesh;
+  private trail: THREE.Mesh[] = [];
+  private hist: THREE.Vector3[] = [];
+  private fx: Particles;
   private sky: Sky;
   private sun: Sun;
+  private extras: Person[] = [];
+  private cheerT = 0;
   private t = 0;
-  private flight = 0;
-  private dur = 1.35;
-  private toMe = true;
-  private tapped = false;
-  private dropT = -1;
-  private hitT = new Map<Person, number>();
+  // La pelota: de dónde a dónde, cuánto tarda, lo alta que va y por dónde va (0-1)
   private from = new THREE.Vector3();
   private to = new THREE.Vector3();
-  private endT = -1;
-  private cool = 0;
-  private extras: Person[] = [];
+  private dur = 1;
+  private arc = 2.4;
+  private k = 0;
+  private state: 'intro' | 'toMe' | 'set' | 'toGas' | 'gasSet' | 'dead' | 'toss' = 'intro';
+  private stT = 0;
+  private mine = 0;
+  private his = 0;
+  private rally = 0;
+  private serverMe = false;
+  private hitWin = false;
+  private reach = 1.4;
+  private pressedDone = false;
+  private jumpMe = 0;
+  private jumpGas = 0;
+  private bumpMe = 0;
+  private bumpGas = 0;
+  private slow = 1;
+  private cut = 0;
+  private cutWho: Person | null = null;
+  private over = false;
   private camAt = new THREE.Vector3();
+  private camLook = new THREE.Vector3(0, 1.2, 0);
 
   constructor(private ctx: MissionCtx, private onDone: () => void) {
     const sc = this.scene;
-    const T = MINIS.voley;
     // (sol alto y de lado: la sombra de la pelota se ve en la arena)
     const sunDir = new THREE.Vector3(-0.3, 0.75, 0.6);
     sc.fog = new THREE.Fog(0xcfe0ee, 70, 220);
@@ -155,194 +174,363 @@ class BeachMission implements Mission {
     this.shadow.visible = !quality.shadows;
     sc.add(this.shadow);
 
-    this.hud = hud(() => ctx.input.queueAction(), () => {}, 'Muévete hasta la sombra de la pelota y dale cuando llegue', true);
-    this.hud.setObjective('🏐 4 puntos');
-    this.updateHud();
-    // A su espalda y un poco de lado: ella delante, la red, Gas y la playa con gente detrás; el mar a la izquierda
-    ctx.camera.position.set(-9.6, 3.4, -2.2);
-    ctx.camera.lookAt(0.5, 1.0, 0.4);
-    missionCard(T.title, T.hint);
-    this.mark = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85, depthWrite: false }));
-    this.mark.position.y = 0.02;
-    this.mark.renderOrder = 3;
-    sc.add(this.mark);
-    this.serve();
+    this.fx = new Particles(sc);
+    // El aro de cuándo darle: alrededor de la sombra, se cierra a medida que baja la pelota
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false }));
+    this.ring.position.y = 0.025;
+    this.ring.visible = false;
+    sc.add(this.ring);
+    // La estela de la pelota (bolitas que se apagan)
+    for (let i = 0; i < 7; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.12 - i * 0.012, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 - i * 0.045, depthWrite: false }));
+      m.visible = false;
+      sc.add(m);
+      this.trail.push(m);
+    }
+
+    this.hud = hud(() => ctx.input.queueAction(), () => {}, '', true);
+    this.hud.setIcon('🏐');
+    this.hud.setObjective(`🏐 A ${NEED} puntos`);
+    this.paint();
+    // Entrada: desde el mar, volando hasta detrás de ella, con el rótulo del partido
+    ctx.camera.position.set(-6, 14, 34);
+    ctx.camera.lookAt(0, 1, 0);
+    this.camAt.copy(ctx.camera.position);
+    this.show.intro('Vóley playa', 'Azul vs Gas · nivel 6', `Muévete con el joystick y dale con 🏐: recibe, colócatela y remata arriba del todo, apuntando adonde no esté Gas. A ${NEED} puntos.`);
+    this.ball.position.set(GAS.x, HANDS, 0);
   }
 
-  // (4.3) Un partido de verdad: Gas la manda a un sitio distinto de tu campo (el aro amarillo dice dónde cae);
-  // corres hasta allí con el joystick y le das cuando llega. Si se la devuelves, a veces Gas falla: punto tuyo.
-  // Si se te cae, punto de Gas. A 7 puntos; hay que hacer al menos 4, y si no, otra vez.
-  private mark: THREE.Mesh;
-  private mine = 0;
-  private his = 0;
-  private rally = 0;
-  private gasMiss = false;
-
-  private updateHud() {
-    // (un marcador de partido: gana quien llega antes a 4)
-    this.hud.setCounters(`<span class="chip${this.mine >= NEED ? ' ok' : ''}">🏐 Tú ${this.mine} · ${this.his} Gas <small>a ${NEED}</small></span>`);
+  private paint() {
+    this.show.score(`<span class="t">AZUL</span><span class="n">${this.mine}</span><span class="n">${this.his}</span><span class="t g">GAS</span><span class="k">a ${NEED}</span>`);
   }
 
-  /** Gas saca o devuelve: a un punto al azar de tu campo. */
-  private serve() {
-    this.rally++;
-    const tz = (Math.random() * 2 - 1) * 3.2, tx = -1.8 - Math.random() * 4.6;
-    this.launchTo(GAS, new THREE.Vector3(tx, HANDS, tz));
-  }
-
-  private launchTo(a: THREE.Vector3, b: THREE.Vector3) {
-    this.dur = Math.max(1.05, 1.5 - this.rally * 0.03);
-    this.from.set(a.x * 0.95, LAUNCH, a.z);
-    this.to.copy(b);
-    this.flight = 0;
-    this.tapped = false;
-    this.toMe = b.x < 0;
-    this.mark.visible = this.toMe;
-    if (this.toMe) this.mark.position.set(b.x, 0.02, b.z);
+  private fly(from: THREE.Vector3, to: THREE.Vector3, dur: number, arc: number) {
+    this.from.copy(from);
+    this.to.copy(to);
+    this.dur = dur;
+    this.arc = arc;
+    this.k = 0;
+    this.pressedDone = false;
   }
 
   private ballAt(k: number, out: THREE.Vector3) {
-    // Parábola alta por encima de la red
     out.lerpVectors(this.from, this.to, k);
-    out.y += Math.sin(k * Math.PI) * 2.4;
+    out.y += Math.sin(Math.min(1, k) * Math.PI) * this.arc;
     return out;
   }
 
-  private bump(p: Person) {
-    this.hitT.set(p, 0.35);
-    audio.knock(0.4, 520, 0.05);
+  /** Lo que tarda en cruzar: cada vez más deprisa cuanto más larga es la jugada. */
+  private speedK() {
+    return Math.max(0.7, 1 - this.rally * 0.05);
   }
 
-  private point(mine: boolean) {
+  private gasServe() {
+    this.serverMe = false;
+    this.state = 'toMe';
+    this.rally = 0;
+    this.jumpGas = 0.5;
+    audio.knock(0.4, 520, 0.05);
+    const target = new THREE.Vector3(-1.8 - Math.random() * 5, HANDS, (Math.random() * 2 - 1) * 3.4);
+    this.fly(new THREE.Vector3(GAS.x + 2.5, 2.2, this.gas.root.position.z), target, 1.55, 2.9);
+  }
+
+  /** Gas ataca a su campo (remate): bajo y rápido. */
+  private gasAttack() {
+    this.state = 'toMe';
+    this.rally++;
+    this.jumpGas = 0.55;
+    audio.knock(0.5, 300, 0.06);
+    // A veces falla él: a la red o fuera (más cuanto más larga es la jugada)
+    if (Math.random() < 0.08 + Math.min(0.12, this.rally * 0.02)) {
+      const out = Math.random() < 0.5;
+      this.fly(new THREE.Vector3(this.gas.root.position.x, 2.9, this.gas.root.position.z), out ? new THREE.Vector3(-9.5, 0.2, (Math.random() < 0.5 ? -1 : 1) * 5.5) : new THREE.Vector3(0.3, 1.2, this.gas.root.position.z), 0.8, out ? 0.8 : 0.1);
+      this.state = 'dead';
+      this.stT = -0.8;
+      window.setTimeout(() => !this.over && this.point(true, out ? '¡FUERA!' : '¡A LA RED!'), 800);
+      return;
+    }
+    const target = new THREE.Vector3(-1.6 - Math.random() * 5.4, HANDS, (Math.random() * 2 - 1) * 3.6);
+    this.fly(new THREE.Vector3(this.gas.root.position.x, 2.9, this.gas.root.position.z), target, 1.05 * this.speedK(), 1.0);
+  }
+
+  /** Su remate (o su saque): adonde apunta el joystick en el campo de Gas. perfect: más rápido y más difícil de coger. */
+  private herAttack(perfect: boolean, serve = false) {
+    const ax = this.ctx.input.axes();
+    const tz = THREE.MathUtils.clamp(ax.x * 3.8 + (Math.random() - 0.5) * 0.8, -3.8, 3.8);
+    const tx = 2.2 + Math.max(0, -ax.y) * 3 + Math.random() * 2.5;
+    this.state = 'toGas';
+    this.jumpMe = 0.55;
+    this.slow = 0.3;
+    vibrate(25);
+    audio.hit();
+    this.reach = perfect ? 0.95 : serve ? 1.6 : 1.35;
+    const m = this.me.root.position;
+    this.fly(new THREE.Vector3(m.x + 0.4, 2.9, m.z), new THREE.Vector3(tx, HANDS * 0.6, tz), (perfect ? 0.42 : 0.55) * (serve ? 1.6 : 1), serve ? 1.6 : 0.35);
+    if (perfect) this.show.call(serve ? '¡SAQUE BOMBA!' : '¡REMATE!', true, 0.9);
+  }
+
+  private point(mine: boolean, why: string) {
+    if (this.over) return;
     if (mine) this.mine++;
     else this.his++;
-    this.updateHud();
-    this.dropT = 0;
-    this.mark.visible = false;
+    this.paint();
+    this.state = 'dead';
+    this.stT = 0;
+    this.ring.visible = false;
+    this.fx.burst(this.ball.position.clone().setY(0.1), 'dust', 10, 1.2, 0.6);
+    this.show.call(why, mine, 1.2);
+    // Plano corto de quien gana el punto
+    this.cut = 1.5;
+    this.cutWho = mine ? this.me : this.gas;
     if (mine) {
-      audio.chime(1);
-      comicWord('¡PUNTO!', 'perfect');
-    } else {
-      audio.boo();
-      comicWord(MINIS.voley.miss, 'hit');
+      audio.cheer(0.45);
+      audio.chime(2);
+      this.cheerT = 2.2;
+    } else audio.boo();
+    if (this.mine >= NEED || this.his >= NEED) {
+      this.over = true;
+      const won = this.mine >= NEED;
+      window.setTimeout(() => {
+        if (won) {
+          this.show.win('¡NIVEL 6!');
+          window.setTimeout(() => {
+            const done = this.onDone;
+            stage.end();
+            done();
+          }, 3400);
+        } else {
+          this.show.call('¡REVANCHA!', false, 1.6);
+          window.setTimeout(() => {
+            this.mine = this.his = 0;
+            this.over = false;
+            this.paint();
+            this.gasServe();
+          }, 1800);
+        }
+      }, 1300);
     }
   }
 
-  update(dt: number) {
+  update(dtRaw: number) {
+    // (cámara lenta en los remates)
+    this.slow += (1 - this.slow) * Math.min(1, dtRaw * 2.2);
+    const dt = dtRaw * this.slow;
     this.t += dt;
-    this.extras.forEach((p, i) => animatePerson(p, dt, i % 2 ? 'talk' : 'idle', 0, this.t * 3 + i));
+    this.fx.update(dt);
+    this.cheerT -= dt;
+    this.extras.forEach((p, i) => animatePerson(p, dt, this.cheerT > 0 ? 'cheer' : i % 2 ? 'talk' : 'idle', 0, this.t * 3 + i));
     const { input, camera } = this.ctx;
-    const T = MINIS.voley;
     const pressed = input.consumeAction();
-    this.cool -= dt;
-    // Ella se mueve por su campo con el joystick (de espaldas a la cámara: arriba, hacia la red)
     const ax = input.axes();
+    const mp = this.me.root.position;
     let moving = 0;
-    if (this.endT < 0) {
-      const sp = 4.6;
-      const mp = this.me.root.position;
-      mp.x = THREE.MathUtils.clamp(mp.x + ax.y * sp * dt, -7.4, -1.1);
-      mp.z = THREE.MathUtils.clamp(mp.z + ax.x * sp * dt, -3.9, 3.9);
+    // Ella, por su campo (de espaldas a la cámara: arriba, hacia la red)
+    if (this.state !== 'intro' && this.state !== 'toss') {
+      const sp = 5.2;
+      mp.x = THREE.MathUtils.clamp(mp.x + ax.y * sp * dt, -7.8, -0.9);
+      mp.z = THREE.MathUtils.clamp(mp.z + ax.x * sp * dt, -4, 4);
       moving = Math.min(1, Math.hypot(ax.x, ax.y));
     }
-    if (this.endT >= 0) {
-      this.endT += dt;
-      if (this.endT > 2.8) {
-        const won = this.mine >= NEED;
-        if (won) {
-          const done = this.onDone;
-          stage.end();
-          done();
+    this.stT += dt;
+    const b = this.ball.position;
+    switch (this.state) {
+      case 'intro':
+        if (this.stT > 3.4) this.gasServe();
+        break;
+      case 'toMe': {
+        this.k += dt / this.dur;
+        this.ballAt(Math.min(1.25, this.k), b);
+        if (this.k > 1) b.y = Math.max(0.17, HANDS - (this.k - 1) * 5);
+        // El aro: dónde cae y cuándo (se cierra hasta el tamaño de ella)
+        this.ring.visible = this.k < 1.05;
+        this.ring.position.set(this.to.x, 0.025, this.to.z);
+        this.ring.scale.setScalar(Math.max(0.5, 1.6 - this.k * 1.15));
+        const near = Math.hypot(mp.x - this.to.x, mp.z - this.to.z) < 1.05;
+        (this.ring.material as THREE.MeshBasicMaterial).color.set(near ? 0x7dffa0 : 0xffffff);
+        if (pressed && !this.pressedDone) {
+          this.pressedDone = true;
+          const off = Math.abs(this.k - 0.96);
+          if (near && off < 0.12) {
+            const perfect = off < 0.04;
+            this.bumpMe = 0.4;
+            audio.knock(0.45, 560, 0.05);
+            if (perfect) this.show.call('¡PERFECTA!', true, 0.8);
+            // Se la coloca: arriba, un poco hacia la red
+            this.state = 'set';
+            this.stT = 0;
+            this.hitWin = perfect;
+            this.ring.visible = false;
+            this.fly(b.clone(), new THREE.Vector3(Math.min(-1.2, mp.x + 1.2), HANDS + 0.6, mp.z), perfect ? 1.25 : 1.05, 2.6);
+            break;
+          }
+          this.show.call(!near ? '¡LEJOS!' : this.k < 0.84 ? '¡PRONTO!' : '¡TARDE!', false, 0.7);
+        }
+        if (this.k > 1.15) this.point(false, '¡AL SUELO!');
+        break;
+      }
+      case 'set': {
+        this.k += dt / this.dur;
+        this.ballAt(Math.min(1.2, this.k), b);
+        // Remate: arriba del todo (alrededor de la mitad del vuelo), más margen si la recepción fue perfecta
+        const win = this.hitWin ? 0.2 : 0.14;
+        if (pressed && !this.pressedDone) {
+          this.pressedDone = true;
+          const off = Math.abs(this.k - 0.5);
+          if (off < win) this.herAttack(off < 0.06);
+          else {
+            this.show.call(this.k < 0.5 ? '¡PRONTO!' : '¡TARDE!', false, 0.7);
+            // Sin remate: la pasa como puede, fácil para él
+            this.state = 'toGas';
+            this.reach = 9;
+            this.fly(b.clone(), new THREE.Vector3(3.6, HANDS, (Math.random() - 0.5) * 2), 1.2, 1.6);
+          }
+        }
+        if (this.state === 'set' && this.k > 0.9 && !this.pressedDone) {
+          // No ha rematado: se la pasa por encima como puede
+          this.state = 'toGas';
+          this.reach = 9;
+          this.fly(b.clone(), new THREE.Vector3(3.6, HANDS, (Math.random() - 0.5) * 2), 1.2, 1.6);
+        }
+        break;
+      }
+      case 'toGas': {
+        this.k += dt / this.dur;
+        this.ballAt(Math.min(1, this.k), b);
+        // Gas corre hacia donde cae (con un poco de reacción)
+        if (this.k > 0.12) {
+          const g = this.gas.root.position;
+          const dz = this.to.z - g.z, dx = this.to.x - g.x;
+          const d = Math.hypot(dx, dz);
+          const v = 5.4 * dt;
+          if (d > 0.05) {
+            g.z += (dz / d) * Math.min(v, d);
+            g.x = THREE.MathUtils.clamp(g.x + (dx / d) * Math.min(v, d) * 0.6, 1.5, 7.6);
+          }
+        }
+        if (this.k >= 1) {
+          const g = this.gas.root.position;
+          if (Math.hypot(g.x - this.to.x, g.z - this.to.z) <= this.reach) {
+            // La saca: se la coloca y ataca
+            this.bumpGas = 0.4;
+            audio.knock(0.45, 520, 0.05);
+            this.state = 'gasSet';
+            this.stT = 0;
+            this.fly(b.clone(), new THREE.Vector3(g.x - 0.8, 3.0, g.z), 0.85, 1.4);
+          } else this.point(true, this.serverMe && this.rally === 0 ? '¡ACE!' : '¡PUNTO!');
+        }
+        break;
+      }
+      case 'gasSet':
+        this.k += dt / this.dur;
+        this.ballAt(Math.min(1, this.k), b);
+        if (this.k >= 1) this.gasAttack();
+        break;
+      case 'toss': {
+        // Su saque: primer toque, la lanza; el segundo, arriba del todo, salta y le pega
+        mp.x += (-7.6 - mp.x) * Math.min(1, dt * 6);
+        if (this.stT < 0) {
+          b.set(mp.x + 0.3, HANDS, mp.z);
+          if (pressed) {
+            this.stT = 0;
+            this.fly(b.clone(), b.clone().setY(HANDS + 0.1), 1.2, 3);
+            audio.whoosh();
+          }
         } else {
-          // No llega a 4: otra vez el partido
-          this.endT = -1;
-          this.mine = this.his = 0;
-          this.rally = 0;
-          this.updateHud();
-          missionCard(T.title, T.again, false);
-          this.serve();
+          this.k += dt / this.dur;
+          this.ballAt(Math.min(1.2, this.k), b);
+          if (pressed && !this.pressedDone) {
+            this.pressedDone = true;
+            const off = Math.abs(this.k - 0.5);
+            if (off < 0.16) {
+              this.rally = 0;
+              this.herAttack(off < 0.05, true);
+            } else this.point(false, '¡FALTA!');
+          }
+          if (this.state === 'toss' && this.k > 1.05) this.point(false, '¡FALTA!');
         }
-        return;
+        break;
       }
-    } else if (this.dropT >= 0) {
-      // Al suelo: rebota en la arena y se vuelve a sacar
-      this.dropT += dt;
-      const k = Math.min(1, this.dropT / 0.6);
-      this.ball.position.y = Math.max(0.17, 0.17 + Math.abs(Math.sin(k * Math.PI * 2)) * 0.4 * (1 - k));
-      if (this.dropT > 1.2) {
-        this.dropT = -1;
-        if (this.mine >= NEED || this.his >= GAME - NEED + 1) this.finishMatch();
-        else this.serve();
-      }
-    } else {
-      this.flight += dt / this.dur;
-      const k = Math.min(1.25, this.flight);
-      this.ballAt(Math.min(1, k), this.ball.position);
-      if (k > 1) this.ball.position.y = Math.max(0.17, HANDS - (k - 1) * 4);
-      const mp = this.me.root.position;
-      const near = Math.hypot(mp.x - this.to.x, mp.z - this.to.z) < 0.95;
-      const window = this.toMe && this.flight > 0.78 && this.flight < 1.1;
-      (this.mark.material as THREE.MeshBasicMaterial).color.set(near ? 0x5cff8a : 0xffd23f);
-      this.hud.setAction(T.btn, window && near);
-      if (this.toMe && pressed && !this.tapped && this.cool <= 0) {
-        if (window && near) {
-          this.tapped = true;
-          this.bump(this.me);
-          vibrate(15);
-          // A veces Gas no llega: punto tuyo (más a menudo cuanto más larga es la jugada)
-          this.gasMiss = Math.random() < 0.38 + Math.min(0.3, this.rally * 0.04);
-          const tz = (Math.random() * 2 - 1) * 3.4;
-          this.launchTo(ME, new THREE.Vector3(this.gasMiss ? 5.2 + Math.random() * 1.6 : GAS.x, HANDS, this.gasMiss ? tz : this.gas.root.position.z));
+      case 'dead':
+        if (this.stT < 0) {
+          // (fallo de Gas: la pelota se va a la red o fuera)
+          this.k += dt / this.dur;
+          this.ballAt(Math.min(1, this.k), b);
         } else {
-          this.cool = 0.4;
-          comicWord(!near ? T.far : this.flight < 0.78 ? T.early : T.late, 'hit');
+          b.y = Math.max(0.17, b.y - dt * 6);
+          if (this.stT > 1.7 && !this.over) {
+            if (this.mine > 0 && this.cutWho === this.me) {
+              this.serverMe = true;
+              this.state = 'toss';
+              this.stT = -1;
+              this.hud.setAction('🏐 Sacar');
+            } else this.gasServe();
+          }
         }
-      }
-      if (this.flight >= 1 && !this.toMe) {
-        if (this.gasMiss) this.point(true);
-        else {
-          this.bump(this.gas);
-          this.serve();
-        }
-      } else if (this.flight >= 1.2 && this.toMe && !this.tapped) this.point(false);
+        break;
     }
-    // Gas se mueve hacia donde va a caer lo que le mandas
-    if (!this.toMe && !this.gasMiss) this.gas.root.position.z += (this.to.z - this.gas.root.position.z) * Math.min(1, dt * 3);
-    // Brazos: listos para recibir; al darle, extendidos y un salto de rodillas
-    for (const p of [this.me, this.gas]) {
-      const h = (this.hitT.get(p) ?? 0) - dt;
-      this.hitT.set(p, h);
-      const run = p === this.me && moving > 0.1 && this.endT < 0;
-      animatePerson(p, dt, this.endT >= 0 && p === this.me && this.mine >= NEED ? 'cheer' : run ? 'walk' : 'idle', run ? moving : 0);
-      if (this.endT < 0 && !run) {
-        const k = h > 0 ? 1 : 0.4;
+    // Gas vuelve poco a poco al centro de su campo cuando no va a por la pelota
+    if (this.state === 'toMe' || this.state === 'dead') {
+      const g = this.gas.root.position;
+      g.x += (4.2 - g.x) * Math.min(1, dt * 1.5);
+      g.z += (0 - g.z) * Math.min(1, dt * 1.2);
+    }
+    // Saltos y brazos (recibir abajo, rematar arriba)
+    this.jumpMe = Math.max(0, this.jumpMe - dt);
+    this.jumpGas = Math.max(0, this.jumpGas - dt);
+    this.bumpMe -= dt;
+    this.bumpGas -= dt;
+    for (const [p, jump, bump] of [[this.me, this.jumpMe, this.bumpMe], [this.gas, this.jumpGas, this.bumpGas]] as const) {
+      const run = p === this.me && moving > 0.1 && jump <= 0;
+      animatePerson(p, dt, this.over && p === (this.mine >= NEED ? this.me : this.gas) ? 'cheer' : run ? 'walk' : 'idle', run ? moving : 0);
+      p.root.position.y = jump > 0 ? Math.sin((jump / 0.55) * Math.PI) * 0.75 : 0;
+      if (jump > 0) {
+        p.armR.rotation.set(-2.9, 0, -0.2);
+        p.armL.rotation.set(-2.2, 0, 0.3);
+      } else if (!run) {
+        const k = bump > 0 ? 1 : 0.4;
         p.armL.rotation.set(-0.9 * k - 0.2, 0, 0.25);
         p.armR.rotation.set(-0.9 * k - 0.2, 0, -0.25);
-        p.elbowL.rotation.x = p.elbowR.rotation.x = h > 0 ? 0 : -0.5;
-        p.kneeL.rotation.x = p.kneeR.rotation.x = h > 0 ? 0.5 : 0.25;
+        p.elbowL.rotation.x = p.elbowR.rotation.x = bump > 0 ? 0 : -0.5;
+        p.kneeL.rotation.x = p.kneeR.rotation.x = bump > 0 ? 0.5 : 0.25;
       }
     }
-    this.shadow.position.set(this.ball.position.x, 0.01, this.ball.position.z);
-    this.ball.rotation.x += dt * 6;
-    // A su espalda, más alta y algo más lejos para ver todo su campo, siguiéndola un poco
-    this.camAt.set(-9.6 + (this.me.root.position.x + 3.6) * 0.3, 3.4, -2.2 + this.me.root.position.z * 0.35);
-    camera.position.lerp(this.camAt, Math.min(1, dt * 2));
-    camera.lookAt(0.5 + this.ball.position.x * 0.12, 1.0, this.me.root.position.z * 0.3 + 0.4);
-    this.sky.update(camera, dt);
+    // Estela
+    this.hist.unshift(b.clone());
+    if (this.hist.length > 16) this.hist.pop();
+    const fast = this.state === 'toGas' || (this.state === 'toMe' && this.dur < 1.1);
+    this.trail.forEach((m, i) => {
+      const h = this.hist[(i + 1) * 2];
+      m.visible = fast && !!h;
+      if (h) m.position.copy(h);
+    });
+    this.shadow.position.set(b.x, 0.01, b.z);
+    this.ball.rotation.x += dt * 8;
+    // Cámara: detrás de ella; en el remate, más baja y cerca; tras un punto, plano corto de quien lo gana
+    this.cut -= dtRaw;
+    if (this.state === 'intro') {
+      this.camAt.set(-10.5, 3.8, -2);
+      camera.position.lerp(this.camAt, Math.min(1, dtRaw * 0.9));
+      this.camLook.lerp(new THREE.Vector3(0.5, 1, 0), Math.min(1, dtRaw * 1.2));
+    } else if (this.cut > 0 && this.cutWho) {
+      const w = this.cutWho.root.position;
+      const side = this.cutWho === this.me ? 1 : -1;
+      this.camAt.set(w.x + side * 3.2, 1.7, w.z + 2.2);
+      camera.position.lerp(this.camAt, Math.min(1, dtRaw * 5));
+      this.camLook.lerp(new THREE.Vector3(w.x, 1.3, w.z), Math.min(1, dtRaw * 6));
+    } else {
+      const attack = this.state === 'set' || (this.state === 'toss' && this.stT >= 0);
+      this.camAt.set(attack ? mp.x - 5.2 : -10.2 + (mp.x + 3.6) * 0.3, attack ? 2.4 : 3.8, (attack ? mp.z * 0.8 : mp.z * 0.35) - (attack ? 1.6 : 2));
+      camera.position.lerp(this.camAt, Math.min(1, dtRaw * 2.2));
+      this.camLook.lerp(new THREE.Vector3(attack ? b.x * 0.5 : 0.5 + b.x * 0.12, attack ? Math.max(1.5, b.y * 0.7) : 1.0, attack ? b.z * 0.6 : mp.z * 0.3 + 0.4), Math.min(1, dtRaw * 3));
+    }
+    camera.lookAt(this.camLook);
+    this.sky.update(camera, dtRaw);
     this.sun.follow(new THREE.Vector3());
-  }
-
-  private finishMatch() {
-    this.endT = 0;
-    this.hud.setAction(null);
-    this.mark.visible = false;
-    const T = MINIS.voley;
-    if (this.mine >= NEED) missionCard(T.title, T.done, true);
-    else comicWord(T.short(this.mine), 'hit');
   }
 
   dispose() {
     this.hud.remove();
+    this.show.dispose();
     disposeScene(this.scene);
   }
 }

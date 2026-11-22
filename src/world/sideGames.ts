@@ -3203,7 +3203,9 @@ export class RoseShoot {
       const x = ((v.x + 1) / 2) * window.innerWidth, y = ((1 - v.y) / 2) * window.innerHeight;
       this.box.classList.toggle('in', v.z < 1 && x > r.left && x < r.right && y > r.top && y < r.bottom);
     }
-    // El botón de disparar
+    // El botón de disparar (fijo: 📸)
+    this.ctl.hud.setIcon('📸');
+    this.ctl.hud.setExtra([]);
     const can = this.started && this.state !== 'done';
     this.ctl.hud.setAction(can ? SIDE.roses.btn : null, can);
     if (input.consumeAction() && can) this.shoot();

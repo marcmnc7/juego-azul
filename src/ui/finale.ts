@@ -58,6 +58,8 @@ export function hobbiesFinale(onDone: () => void, onExit: () => void = onDone) {
     '',
   );
   h.root.style.display = 'none';
+  // (el del final no tiene acción propia: cada juego trae la suya)
+  h.setIcon('');
   // Cada paso, con su «siguiente». En modo prueba, «Saltar a una fase» (en la pausa) lleva a cualquiera de ellos,
   // también al circuito de agility sin pasar por los trucos
   const steps: ((next: () => void) => void)[] = [
