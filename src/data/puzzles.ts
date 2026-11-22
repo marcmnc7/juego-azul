@@ -28,10 +28,10 @@ export const PUZZLES: PuzzleInfo[] = [
   { id: 'emojis', kind: 'emojis', after: 8, day: [2026, 11, 23], icon: '😍', title: 'En emojis', sub: 'Momentos de nuestro chat: ¿cuál es?' },
   // (4.4.5) Lo que nos gusta hacer juntos: tres bolitas, una detrás de otra, en el camino hasta «Continuará…» (se
   // abren al terminar el capítulo 9, y cada una con la anterior hecha). Al acabar la última (el surf), los créditos.
-  { id: 'voley', kind: 'voley', after: 9, day: [2026, 11, 25], icon: '🏖️', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4' },
-  { id: 'agility', kind: 'agility', after: 9, day: [2026, 11, 25], icon: '🐕', title: 'Agility con Joy', sub: 'Lo que nos gusta · 2 de 4' },
-  { id: 'hipica', kind: 'hipica', after: 9, day: [2026, 11, 25], icon: '🐎', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4' },
-  { id: 'surf', kind: 'surf', after: 9, day: [2026, 11, 25], icon: '🏄', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4' },
+  { id: 'voley', kind: 'voley', after: 9, day: [2026, 11, 26], icon: '🏖️', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4' },
+  { id: 'agility', kind: 'agility', after: 9, day: [2026, 11, 27], icon: '🐕', title: 'Agility con Joy', sub: 'Lo que nos gusta · 2 de 4' },
+  { id: 'hipica', kind: 'hipica', after: 9, day: [2026, 11, 28], icon: '🐎', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4' },
+  { id: 'surf', kind: 'surf', after: 9, day: [2026, 11, 29], icon: '🏄', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4' },
 ];
 
 /**
