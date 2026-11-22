@@ -7,7 +7,6 @@ import { FINALE } from '../data/story';
 import { setCastChapter, setGasNamed, clearScreens, phoneChat, hud, closeDialogue, pauseState, debugPanel, isTestMode } from './ui';
 import { parkMission } from '../world/missions/park';
 import { stage } from '../core/stage';
-import { CHATS } from '../data/chats';
 import { beachMission } from '../world/missions/beach';
 import { ridingMission } from '../world/missions/riding';
 import { surfMission } from '../world/missions/surf';
@@ -91,7 +90,8 @@ export function hobbyGame(which: Hobby, onDone: () => void, onExit: () => void =
     hipica: { kicker: 'Noviembre', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', how: 'Doce obstáculos. Lleva el galope y bate en su punto: ni muy pronto ni muy tarde. Tres faltas y eliminada.' },
     surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', how: 'Cuando llegue la ola, rema y ponte de pie a tiempo. Luego, delante de la espuma, sin que te pille. Tres olas buenas.' },
   }[which];
-  const CHAT = { voley: CHATS.voley, agility: CHATS.agility, hipica: CHATS.caballos, surf: null }[which];
+  // (4.4.9: sin chats: del rótulo, directo al juego)
+  const CHAT = null as Parameters<typeof phoneChat>[0] | null;
   let token = 0;
   const finish = (my: number) => () => {
     if (gone || my !== token) return;
