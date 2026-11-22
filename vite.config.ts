@@ -24,6 +24,9 @@ function swVersion() {
       if (!existsSync(f)) return;
       const dir = resolve(__dirname, 'dist/assets');
       const assets = existsSync(dir) ? readdirSync(dir).map((n) => './assets/' + n) : [];
+      // (y las fotos de satélite del vuelo del principio de cada capítulo: dist/map/z/x/y.jpg)
+      const mapDir = resolve(__dirname, 'dist/map');
+      if (existsSync(mapDir)) for (const f of readdirSync(mapDir, { recursive: true }) as string[]) if (f.endsWith('.jpg')) assets.push('./map/' + f.split('\\').join('/'));
       // Lo que mira el juego (siempre a internet, sin caché) para saber si hay una versión más nueva
       writeFileSync(resolve(__dirname, 'dist/version.json'), JSON.stringify({ version: STAMP }));
       writeFileSync(f, readFileSync(f, 'utf8').replace('__VERSION__', STAMP).replace("'__ASSETS__'", JSON.stringify(assets).slice(1, -1)));

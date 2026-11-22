@@ -21,7 +21,7 @@ self.addEventListener('install', (e) => {
         const fresh = [];
         for (const f of FILES) {
           let hit = null;
-          if (f.includes('assets/')) for (const k of old) if ((hit = await (await caches.open(k)).match(f))) break;
+          if (f.includes('assets/') || f.includes('map/')) for (const k of old) if ((hit = await (await caches.open(k)).match(f))) break;
           if (hit) await c.put(f, hit);
           else fresh.push(f);
         }

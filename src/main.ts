@@ -38,6 +38,7 @@ import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
 import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
+import { mapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
 import { LEVELS } from './data/story';
@@ -564,6 +565,9 @@ async function buildLevel(n: number, card: ChapterLoading) {
   crumb(`cap ${n}: gente lista`);
   card.progress(0.2, 'Preparando la canción');
   const song = SONG_OF[n] ? audio.preloadTrack(SONG_OF[n]) : Promise.resolve();
+  // Las fotos de satélite del vuelo del principio (se bajan mientras se monta el resto)
+  const NOMAP = new URLSearchParams(location.search).has('nomap');
+  const mapReady = NOMAP ? Promise.resolve() : preloadMap(n);
   await Promise.race([song, pause(5000)]);
   if (stale()) return;
   crumb(`cap ${n}: montando el escenario`);
@@ -625,11 +629,22 @@ async function buildLevel(n: number, card: ChapterLoading) {
   card.progress(0.86, 'Últimos retoques');
   await settle(MOBILE ? 7000 : 4000);
   if (level !== me) return;
-  loadingLevel = false;
-  levelAt = performance.now();
+  await Promise.race([mapReady, pause(6000)]);
+  if (level !== me) return;
   if (SONG_OF[n]) audio.playTrack(SONG_OF[n]);
   crumb(`cap ${n}: listo`);
+  const start = () => {
+    loadingLevel = false;
+    levelAt = performance.now();
+  };
+  if (NOMAP || !hasMapIntro(n)) {
+    start();
+    card.done();
+    return;
+  }
+  // El vuelo de satélite hasta el sitio, debajo del rótulo que se va; el capítulo espera (en pausa) hasta el fundido
   card.done();
+  mapIntro(n, () => level === me && start(), () => {});
 }
 let buildEpoch = 0;
 

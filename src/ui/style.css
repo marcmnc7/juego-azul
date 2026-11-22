@@ -2503,3 +2503,26 @@ html, body { background: #000; }
 .pc-art:not(:has(.pc-cover)) { background: linear-gradient(160deg, #2b1840, #1d3a6b); min-height: 120px; }
 /* 4.3.3 Sin el botón ✦ del objetivo (era ayuda): arriba solo los contadores x/N y la pausa */
 .hud-top .objective { display: none !important; }
+
+/* 4.4 · Vuelo de satélite al empezar cada capítulo (como la app de mapas del móvil) */
+.map-intro { position: fixed; inset: 0; z-index: 59; background: #0b2a3d; overflow: hidden; touch-action: none; }
+.map-intro.diving { pointer-events: none; }
+.map-intro .mi-search, .map-intro .mi-scale, .map-intro .mi-credit { transition: opacity .5s ease, transform .5s ease; }
+.map-intro.diving .mi-search { opacity: 0; transform: translateY(-16px); }
+.map-intro.diving .mi-scale, .map-intro.diving .mi-credit { opacity: 0; }
+.map-intro canvas { position: absolute; inset: 0; display: block; }
+.mi-search { position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 10px); height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 24px; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2); font: 400 16px/1 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Roboto, Arial, sans-serif; color: #202124; }
+.mi-lens { width: 18px; height: 18px; flex: none; border: 2.5px solid #5f6368; border-radius: 50%; position: relative; box-sizing: border-box; }
+.mi-lens::after { content: ''; position: absolute; width: 7px; height: 2.5px; background: #5f6368; right: -6px; bottom: -3px; transform: rotate(45deg); border-radius: 2px; }
+.mi-q { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi-caret { width: 2px; height: 20px; background: #1a73e8; margin-left: -10px; animation: miBlink .9s steps(1) infinite; }
+.mi-search.done .mi-caret { display: none; }
+@keyframes miBlink { 50% { opacity: 0; } }
+.mi-pin { position: absolute; left: 50%; top: 50%; width: 40px; height: 54px; margin: -54px 0 0 -20px; opacity: 0; transform: translateY(-120px); filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.mi-pin.on { animation: miDrop .6s cubic-bezier(.3,1.6,.5,1) forwards; }
+.mi-pin i { position: absolute; left: 50%; bottom: -6px; width: 22px; height: 8px; margin-left: -11px; border-radius: 50%; background: rgba(0,0,0,.35); }
+@keyframes miDrop { 0% { opacity: 0; transform: translateY(-120px); } 60% { opacity: 1; transform: translateY(4px); } 100% { opacity: 1; transform: translateY(0); } }
+.mi-scale { position: absolute; left: 14px; bottom: calc(env(safe-area-inset-bottom) + 30px); display: flex; align-items: center; gap: 6px; font: 600 11px/1 -apple-system, Roboto, Arial, sans-serif; color: #fff; text-shadow: 0 0 3px #000; }
+.mi-scale span { display: block; height: 5px; border: 2px solid #fff; border-top: 0; box-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.mi-credit { position: absolute; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 8px); font: 10px/1 -apple-system, Roboto, Arial, sans-serif; color: rgba(255,255,255,.85); text-shadow: 0 0 2px #000; }
+#ui:has(.map-intro) .pause-fab { display: none; }
