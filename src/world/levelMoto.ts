@@ -978,6 +978,8 @@ export class LevelMoto implements Level {
     this.failing = true;
     this.fallT = 0.001;
     this.fallSide = want >= 0 ? 1 : -1;
+    // (el comentario que estuviera en pantalla, fuera: tapaba a los dos en el suelo)
+    document.querySelectorAll('#ui .bark').forEach((n) => n.remove());
     audio.hit();
     vibrate([120, 60, 200]);
     comicWord('¡PATAPAM!', 'hit');
@@ -1398,7 +1400,7 @@ export class LevelMoto implements Level {
       this.clearTransient();
       this.phase = 'cala';
       this.updateHud();
-      this.stones = new RoseShoot(() => this.endCala(), { azul: AZUL_MOTO }, { input: this.input, hud: this.hud });
+      this.stones = new RoseShoot(() => this.endCala(), { azul: AZUL_MOTO, gas: GAS_MOTO }, { input: this.input, hud: this.hud });
     });
   }
 
@@ -1461,7 +1463,7 @@ export class LevelMoto implements Level {
     const want = moving ? THREE.MathUtils.clamp(-Math.atan((this.speed * this.yawRate) / 9.8), -0.6, 0.6) : 0;
     this.lean += (want * (1 - this.footK) - 0.08 * this.footK - this.lean) * Math.min(1, dt * 4);
     this.azulLean += (ax * 0.45 - this.azulLean) * Math.min(1, dt * 6);
-    if (riding && Math.abs(want) > 0.03 && !this.windOn) {
+    if (riding && this.fallT <= 0 && Math.abs(want) > 0.03 && !this.windOn) {
       // En curva: acompañar hacia el mismo lado; en recta: ir derechita
       const strong = Math.abs(want) > 0.12;
       const ok = strong ? Math.sign(ax) === Math.sign(want) && Math.abs(ax) > 0.25 : Math.abs(ax) < 0.6 || Math.sign(ax) === Math.sign(want);
@@ -1479,7 +1481,10 @@ export class LevelMoto implements Level {
       if (Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
     }
     if (this.wobbleT > 0) this.wobbleT -= dt;
-    const wob = this.wobbleT > 0 ? Math.sin(this.t * 22) * 0.06 * this.wobbleT : 0;
+    // (y cuanto más cerca de caerse, más se tambalea: se nota antes de irse al suelo)
+    const risk = this.fallT > 0 ? 0 : Math.min(1, this.badLean / LEAN_FAIL);
+    const wob = (this.wobbleT > 0 ? Math.sin(this.t * 22) * 0.06 * this.wobbleT : 0) + Math.sin(this.t * 17) * 0.09 * risk * risk;
+    if (risk > 0.5 && Math.floor(this.t * 3) !== Math.floor((this.t - dt) * 3)) vibrate(25);
     this.moto.root.rotation.z = this.fallT > 0 ? this.fallSide * Math.min(1.3, this.fallT * 2.6) : this.lean + wob + this.windK * Math.sin(this.t * 6) * 0.025;
     // Se inclina de cintura para arriba: la cadera sigue en el asiento y las piernas no se mueven
     leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);

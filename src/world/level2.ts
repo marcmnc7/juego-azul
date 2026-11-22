@@ -1384,6 +1384,10 @@ export class Level2 implements Level {
     }
     // Si no se para a tiempo, hasta chocar de verdad con ella (con el morro), y vuelta al último punto bueno
     if (d < 2.6) {
+      // (el morro se queda contra la vaca: antes, a toda velocidad, el coche se metía dentro antes de volver)
+      this.carZ = z - 2.6;
+      this.speed = 0;
+      this.car.root.position.z = this.carZ;
       if (!this.rewinding) {
         audio.hit();
         vibrate([60, 40, 60]);
@@ -1676,8 +1680,9 @@ export class Level2 implements Level {
             const fov = aspect < 1 ? 60 : 50;
             const dist = Math.max(2.6, 1.3 / (Math.tan(THREE.MathUtils.degToRad(fov / 2)) * aspect));
             cinema.play([{ dur: Infinity, pos: new THREE.Vector3(0, 1.55 + dist * 0.28, -19.42 + dist), look: new THREE.Vector3(0, 1.25, -19.7), fov }]);
-            dialogue(SIDE.pinchos.intro, () =>
-              l.startPinchos(() => {
+            // (la barra, el camarero y ellos dos delante, ya desde la presentación: antes se veía la calle vacía y
+            // ellos dos se quedaban en la puerta)
+            const afterPinchos = () => {
                 cinema.stop();
                 cinema.play([{ dur: Infinity, move: 7, pos: new THREE.Vector3(-1.9, 1.5, -2.4), pos2: new THREE.Vector3(-2.3, 1.55, 1.6), look: l.mid, fov: 44, focus: l.mid }]);
                 later(() =>
@@ -1688,8 +1693,9 @@ export class Level2 implements Level {
                     phoneChat(CHATS.findes, () => this.finish());
                   }),
                 4200);
-              }),
-            );
+              };
+            l.startPinchos(afterPinchos, true);
+            dialogue(SIDE.pinchos.intro, () => l.startPinchos(afterPinchos));
             });
           }),
         1200);

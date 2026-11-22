@@ -455,7 +455,7 @@ export class PinchoGame {
   private done = false;
   errors = 0;
 
-  constructor(sc: THREE.Scene, z: number, private onDone: () => void) {
+  constructor(sc: THREE.Scene, z: number, private onDone: () => void, defer = false) {
     // Una caseta de las fiestas de San Mateo en plena calle: barra de madera, el camarero detrás, la trasera con
     // estantes de botellas y jamones, el toldo de rayas, el rótulo y una tira de bombillas. Los pinchos, en fila.
     const m = new Merger();
@@ -551,6 +551,14 @@ export class PinchoGame {
     this.box.append(this.info);
     uiRoot().append(this.box);
     this.showButtons(false);
+    // (defer: la barra y el camarero ya están, pero la ronda empieza cuando acaba la presentación)
+    if (defer) this.box.hidden = true;
+    else this.startRound();
+  }
+
+  /** Empieza la primera ronda (si se creó con `defer`). */
+  begin() {
+    this.box.hidden = false;
     this.startRound();
   }
 
@@ -2901,6 +2909,8 @@ export class RoseShoot {
   private sky: Sky;
   private sun: Sun;
   private azul: Person;
+  /** Gas, con el móvil: se le ve en el plano de antes de empezar (habla él); luego la cámara es su móvil. */
+  private gas: Person;
   private t = 0;
   private yaw = 0;
   private pitch = -0.02;
@@ -2923,7 +2933,7 @@ export class RoseShoot {
   private tmp = new THREE.Vector3();
   private readonly eye = new THREE.Vector3(0, 1.6, -7.5);
 
-  constructor(private onDone: () => void, looks: { azul?: PersonLook }, private ctl: { input: Input; hud: Hud }) {
+  constructor(private onDone: () => void, looks: { azul?: PersonLook; gas?: PersonLook }, private ctl: { input: Input; hud: Hud }) {
     const sc = this.scene;
     sc.userData.hemiScale = 0.35;
     const sunDir = new THREE.Vector3(-0.4, 0.7, -0.55).normalize();
@@ -2985,6 +2995,11 @@ export class RoseShoot {
     this.azul.root.position.set(0, 0, 4);
     this.azul.root.rotation.y = Math.PI;
     sc.add(this.azul.root);
+    this.gas = makePerson(looks.gas ?? MARC_LOOK);
+    // (antes de empezar, a unos pasos de ella entre las rosas, con el móvil; luego, la cámara es su móvil)
+    this.gas.root.position.set(0.8, 0, 0.5);
+    this.gas.root.rotation.y = Math.atan2(-this.gas.root.position.x, 4 - this.gas.root.position.z);
+    sc.add(this.gas.root);
     // La rosa que coge para una pose (en la mano derecha)
     const rm = new Merger(false).add(new THREE.IcosahedronGeometry(0.06, 1), 0xd7263d, 0, 0.18, 0).add(G.cyl, 0x2f6b2a, 0, 0.06, 0, 0, 0, 0, 0.012, 0.22, 0.012);
     this.rose = rm.mesh();
@@ -3090,6 +3105,27 @@ export class RoseShoot {
       this.pitch = THREE.MathUtils.clamp(this.pitch + ax.y * 0.6 * dt, -0.25, 0.25);
     } else input.consumeCam();
     const sway = Math.sin(this.t * 1.3) * 0.006 + Math.sin(this.t * 2.9) * 0.004;
+    // Antes de empezar, un plano por detrás de Gas: se ven los dos (los globos salen pegados a cada uno)
+    this.gas.root.visible = !this.started;
+    if (!this.started) {
+      animatePerson(this.gas, dt, 'idle');
+      cam.position.set(6.5, 1.7, -3.0);
+      cam.fov += ((cam.aspect < 1 ? 62 : 44) - cam.fov) * Math.min(1, dt * 3);
+      cam.updateProjectionMatrix();
+      cam.lookAt(1.86, 1.25, 0.81);
+      cam.updateMatrixWorld();
+    }
+    if (!this.started) {
+      // (Azul mira al móvil y espera)
+      const az0 = this.azul;
+      faceTo(az0.root, Math.atan2(this.eye.x - az0.root.position.x, this.eye.z - az0.root.position.z), dt, 3);
+      animatePerson(az0, dt, 'idle');
+      this.ctl.hud.setAction(null);
+      input.consumeAction();
+      this.sun.follow(az0.root.position);
+      this.sky.update(cam, dt);
+      return;
+    }
     cam.position.copy(this.eye);
     if (this.first) {
       this.first = false;

@@ -26,6 +26,8 @@ const RUN_V = 4.6;
 const LANES = [0, -1.3, 1.3, 0, 1.3, -1.3, 0, 1.3, -1.3, 0];
 /** Cuántos hay que hacer bien para acabar (si no, otra vuelta). */
 const COURSE_NEED = 7;
+/** Los trucos, en el césped de al lado de la pista (antes estaban encima de la arena roja). */
+const TRICK_Z = 4.7;
 
 interface Obstacle {
   x: number;
@@ -154,11 +156,11 @@ class ParkMission implements Mission {
     this.me = makePerson(AZUL_DIARIO);
     this.gas = makePerson(GAS_DIARIO);
     // Los dos de pie frente a Joy, que los mira sentada en el césped; la cámara, de lado
-    this.me.root.position.set(1.5, 0, 1.6);
-    this.gas.root.position.set(-0.4, 0, 1.7);
-    for (const p of [this.me, this.gas]) p.root.rotation.y = Math.atan2(0.6 - p.root.position.x, 0 - p.root.position.z);
+    this.me.root.position.set(1.5, 0, 1.6 + TRICK_Z);
+    this.gas.root.position.set(-0.4, 0, 1.7 + TRICK_Z);
+    for (const p of [this.me, this.gas]) p.root.rotation.y = Math.atan2(0.6 - p.root.position.x, TRICK_Z - p.root.position.z);
     this.joy = makeDog();
-    this.joy.root.position.set(0.6, 0, -0.1);
+    this.joy.root.position.set(0.6, 0, -0.1 + TRICK_Z);
     this.joy.root.rotation.y = 0;
     sc.add(this.me.root, this.gas.root, this.joy.root);
     // Gente del parque: dos sentados en los bancos y dos paseando a su perro por el fondo
@@ -203,8 +205,8 @@ class ParkMission implements Mission {
 
     this.hud = hud(() => ctx.input.queueAction(), () => {}, T.hint, true);
     this.hud.setObjective('🐕');
-    ctx.camera.position.set(4.2, 1.5, 3.6);
-    ctx.camera.lookAt(0.5, 0.55, 0.7);
+    ctx.camera.position.set(4.2, 1.5, 3.6 + TRICK_Z);
+    ctx.camera.lookAt(0.5, 0.55, 0.7 + TRICK_Z);
     this.order = Array.from({ length: 6 }, (_, i) => (i + Math.floor(Math.random() * 4)) % T.commands.length);
     missionCard(T.title, T.hint);
     this.nextCmd();
@@ -412,8 +414,8 @@ class ParkMission implements Mission {
       }
       this.poseJoy(dt);
       this.hud.setAction(null);
-      camera.position.lerp(new THREE.Vector3(4.2, 1.5, 3.6), Math.min(1, dt * 2));
-      camera.lookAt(0.5, 0.55, 0.7);
+      camera.position.lerp(new THREE.Vector3(4.2, 1.5, 3.6 + TRICK_Z), Math.min(1, dt * 2));
+      camera.lookAt(0.5, 0.55, 0.7 + TRICK_Z);
     } else {
       if (this.phase === 'course') {
         this.updateCourse(dt, pressed, input.axes());

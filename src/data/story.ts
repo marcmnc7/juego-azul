@@ -220,7 +220,7 @@ export const SANTJOAN = {
   /** Al parar delante de casa: pagar (inventado). */
   pay: [
     { who: 'Taxista', text: 'Són dotze euros.' },
-    { who: 'Margaux', text: 'Toma. Bona nit.' },
+    { who: 'Margaux', text: 'Toma. Buenas noches.' },
     { who: 'Taxista', text: 'Bona nit, i que se millori es peu.' },
   ] as Line[],
   home: [{ who: 'Narrador', text: 'De madrugada, en tu casa. Los dos, muertos de sueño.' }] as Line[],
@@ -272,7 +272,7 @@ export const SANTJOAN_CHATTER: Line[][] = [
   [{ who: '*', text: 'Uf, quina calor. I encara queda tota la nit.' }],
   [
     { who: '*', text: '¿De dónde eres?' },
-    { who: 'Margaux', text: 'De Madrid. Bueno, de aquí ya un poco.' },
+    { who: 'Margaux', text: 'Italiana y francesa. Bueno, de aquí ya un poco.' },
     { who: '*', text: 'Això és el que passa amb Menorca: ja no te\'n vas.' },
   ],
 ];
@@ -993,7 +993,7 @@ export const MINIS = {
     early: '¡PRONTO!',
     late: '¡TARDE!',
     far: '¡NO LLEGAS!',
-    done: '¡Muy bieeeen! Te pondrán nivel 4 🏐',
+    done: '¡Muy bieeeen! El nivel 6 te lo has ganado 🏐',
     again: 'Otra vez: hay que hacer 4 puntos',
     short: (n: number) => `${n} PUNTOS… ¡OTRA!`,
   },

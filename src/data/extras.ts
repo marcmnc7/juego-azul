@@ -219,12 +219,12 @@ export const KEEPSAKES: Keepsake[] = [
   { id: 'r1-b', chapter: 1, phases: M1, x: 11, z: 24.5, src: dogfyCrew, caption: 'DOGFY CREW, de fiesta' },
   { id: 'r1-c', chapter: 1, phases: M1, x: 44, z: 1.9, src: corazonDedos, caption: 'Un corazón con los dedos' },
   { id: 'r1-d', chapter: 1, phases: M1, x: 23.5, z: 4.4, src: amigosCalle, caption: 'Con los amigos, de paseo' },
-  // 2 · Bar Imperi y casa de Gas
-  { id: 'r2-a', chapter: 2, phases: ['atBar'], x: -616, z: 1, src: calaCarrete, caption: 'En carrete, en la cala' },
+  // 2 · Ciutadella (Ses Voltes, Plaça Espanya, Es Bè y Pins) y casa de Gas
+  { id: 'r2-a', chapter: 2, phases: ['atBar'], x: -514, z: -1.5, src: calaCarrete, caption: 'En carrete, en la cala' },
   { id: 'r2-b', chapter: 2, phases: ['atBar'], x: -571, z: -14.8, src: arroz, caption: 'Arroz con carne, a medias' },
-  { id: 'r2-c', chapter: 2, phases: H2, x: 3.4, z: 13, src: tortilla, caption: 'La tortilla, con su cerveza' },
+  { id: 'r2-c', chapter: 2, phases: ['atBar'], x: -601.5, z: -48.5, src: tortilla, caption: 'La tortilla, con su cerveza' },
   { id: 'r2-d', chapter: 2, phases: H2, x: 3.4, z: -15.6, src: calaMayo, caption: 'Una cala para nosotros' },
-  { id: 'r2-e', chapter: 2, phases: ['arrive', 'toPool'], x: -5.1, z: -25.6, src: cenaCoreana, caption: 'Cena coreana' },
+  { id: 'r2-e', chapter: 2, phases: ['atBar'], x: -476, z: -3.5, src: cenaCoreana, caption: 'Cena coreana' },
   // 3 · La carretera (un carril concreto) y el camping
   { id: 'r3-trenes', chapter: 3, phases: ['drive1'], x: 2.6, z: 305, r: 1.9, src: trenes, caption: 'Sants–Atocha, 30 de octubre' },
   { id: 'r3-ruta', chapter: 3, phases: ['drive1'], x: -2.6, z: 1040, r: 1.9, src: ruta, caption: 'El primer planning: 1.454 km' },

@@ -36,7 +36,7 @@ import { cinema } from './core/cinema';
 import { stage } from './core/stage';
 import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
@@ -237,7 +237,7 @@ const ROLE: [RegExp, RegExp][] = [
 const NAMED = /^(Azul|Margaux|azul|Gas|Marc|Carme|Tòfol|Fito|Eric|Joy|Vaca)$/;
 const _head = new THREE.Vector3();
 const _v = new THREE.Vector3();
-const lastSpeaker = { pos: new THREE.Vector3(), at: 0 };
+const lastSpeaker = { pos: new THREE.Vector3(), at: 0, who: '' };
 /** A quién se le ha dado la voz de un extra sin nombre: se mantiene mientras siga hablando (no salta de uno a otro). */
 const stick = new Map<string, { p: Person; at: number }>();
 type PersonLike = { root?: THREE.Object3D; head?: THREE.Object3D; rig?: { bones: Map<string, THREE.Object3D> } };
@@ -289,6 +289,9 @@ setSpeakerResolver((who) => {
   const lv = (mission ?? level) as unknown as { speakerPoint?: (who: string) => THREE.Vector3 | null; speakerSide?: (who: string) => 'l' | 'r' | undefined; speakerBelow?: () => boolean };
   const hook = lv.speakerPoint?.(who);
   if (hook) {
+    lastSpeaker.pos.copy(hook);
+    lastSpeaker.at = performance.now();
+    lastSpeaker.who = who;
     const at = toScreen(hook);
     // (conduciendo, el globo sale por detrás, abajo: encima tapaba la carretera)
     return { ...at, side: lv.speakerSide?.(who), below: lv.speakerBelow?.() ?? false };
@@ -297,6 +300,7 @@ setSpeakerResolver((who) => {
     headTop(p, _head);
     lastSpeaker.pos.copy(_head);
     lastSpeaker.at = performance.now();
+    lastSpeaker.who = who;
     return toScreen(_head);
   };
   // 1) Por el campo del capítulo (azul, marc, carme…)
@@ -340,6 +344,49 @@ setSpeakerResolver((who) => {
   stick.set(who, { p: best, at: now });
   return found(best);
 });
+// Quien habla y no sale en el plano: la cámara gira (suave) hasta que su cabeza entra, para que el globo salga
+// pegado a ella y no en el borde. Se deshace al frame siguiente (el capítulo vuelve a poner su cámara)
+const talkCam = { k: 0, saved: new THREE.Quaternion(), applied: false, who: '' };
+const _tq = new THREE.Quaternion(), _tq0 = new THREE.Quaternion(), _tq2 = new THREE.Quaternion(), _tm = new THREE.Matrix4(), _tf = new THREE.Vector3(), _ts = new THREE.Vector3();
+function talkFrameUndo() {
+  if (talkCam.applied) camera.quaternion.copy(talkCam.saved);
+  talkCam.applied = false;
+}
+function talkFrame(dt: number) {
+  const who = talkingNow.who;
+  let want = 0;
+  if (who && lastSpeaker.who === who && performance.now() - lastSpeaker.at < 1500) {
+    camera.updateMatrixWorld();
+    _v.copy(lastSpeaker.pos).applyMatrix4(camera.matrixWorldInverse);
+    const ahead = _v.z < -0.6;
+    _v.copy(lastSpeaker.pos).project(camera);
+    // (fuera del plano, o pegado al borde: con el globo encima no cabe)
+    const out = !ahead || Math.abs(_v.x) > 0.8 || _v.y > 0.72 || _v.y < -1.05;
+    // (una vez buscado, se le sigue mirando mientras hable él: si no, la cámara iría y vendría)
+    if (out && camera.position.distanceTo(lastSpeaker.pos) > 0.9) (want = 1), (talkCam.who = who);
+    else if (talkCam.k > 0.05 && talkCam.who === who) want = 1;
+  }
+  talkCam.k += (want - talkCam.k) * Math.min(1, dt * 4);
+  if (want === 0 && talkCam.k < 0.01) talkCam.k = 0;
+  if (talkCam.k <= 0) return;
+  talkCam.saved.copy(camera.quaternion);
+  talkCam.applied = true;
+  // Mira hacia la cabeza de quien habla, pero sin centrarla del todo: se gira lo justo para que quede dentro del
+  // plano, a medio camino del centro y el borde por el lado de lo que se miraba (y con sitio arriba para el globo)
+  camera.getWorldDirection(_tf);
+  _ts.copy(lastSpeaker.pos).sub(camera.position);
+  _ts.y -= 0.35;
+  _ts.normalize();
+  _tq2.setFromUnitVectors(_ts, _tf);
+  const ang = 2 * Math.acos(Math.min(1, Math.abs(_tq2.w)));
+  const half = THREE.MathUtils.degToRad(camera.fov / 2) * Math.min(1, camera.aspect);
+  const t = ang > 1e-4 ? Math.min(1, (half * 0.45) / ang) : 0;
+  _tq2.slerpQuaternions(_tq0, _tq2, t);
+  _tf.copy(_ts).applyQuaternion(_tq2);
+  _tm.lookAt(camera.position, _v.copy(camera.position).add(_tf), camera.up);
+  _tq.setFromRotationMatrix(_tm);
+  camera.quaternion.slerp(_tq, talkCam.k);
+}
 const idle = new THREE.Scene();
 idle.background = new THREE.Color(0x2b1840);
 
@@ -703,6 +750,7 @@ function frame() {
   debt = Math.min(0.1, raw - dt);
   smoothDt += (dt - smoothDt) * 0.15;
   renderer.info.reset();
+  talkFrameUndo();
   // Una misión en marcha (el aparcamiento, la playa…) manda: se dibuja su escena y el capítulo espera
   const mission = stage.current;
   if (level || mission) {
@@ -725,6 +773,7 @@ function frame() {
     // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
     beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
     // Diálogos en modo cine: un leve acercamiento
+    talkFrame(frozen ? 1e-4 : dt);
     const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
     juice.apply(camera, dt, cine * 0.1);

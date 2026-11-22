@@ -1126,15 +1126,20 @@ export class LevelCena implements Level {
     this.gas.root.visible = false;
     this.moto.root.visible = false;
     this.dinnerPlates.visible = false;
-    this.player.root.visible = false;
+    // (al principio se la ve junto a la mesa, que habla ella; luego, el plano desde arriba de la mesa)
+    this.player.root.visible = true;
+    this.player.root.position.set(TABLE.x - 1.3, 0, TABLE.z);
+    this.player.root.rotation.y = Math.PI / 2;
     this.walker.stop();
     this.hud.setAction(null);
     this.hud.setArrow(null);
     beacon.at(null);
     this.setClock(T(23, 0));
     this.decor.show(null);
-    cinema.play([{ dur: Infinity, pos: new THREE.Vector3(TABLE.x, 2.2, TABLE.z - 1.05), look: new THREE.Vector3(TABLE.x, 0.8, TABLE.z + 0.04), fov: 44 }]);
+    cinema.play([{ dur: Infinity, pos: new THREE.Vector3(TABLE.x + 0.9, 1.75, TABLE.z - 2.3), look: new THREE.Vector3(TABLE.x - 0.7, 1.05, TABLE.z), fov: 52 }]);
     dialogue([...CENA.gone, ...SIDE.table.intro], () => {
+      this.player.root.visible = false;
+      cinema.play([{ dur: Infinity, pos: new THREE.Vector3(TABLE.x, 2.2, TABLE.z - 1.05), look: new THREE.Vector3(TABLE.x, 0.8, TABLE.z + 0.04), fov: 44 }]);
       this.tableGame = new TableMemory(
         this.scene,
         TABLE,
@@ -1581,7 +1586,25 @@ export class LevelCena implements Level {
       this.camera.position.lerp(this.v1, Math.min(1, dt * 3));
       this.camLook.lerp(this.v2, Math.min(1, dt * 3.5));
       this.camera.lookAt(this.camLook);
-    } else if (walking) this.walker.camera(this.camera, dt, this.colliders, 6, pp.z < 10.4 && Math.abs(pp.x) < 5.4 ? 2.3 : 3.4);
+    } else if (walking) {
+      const inYard = pp.z < 10.4 && Math.abs(pp.x) < 5.4;
+      // Dentro del patio, la cámara no sale por la cancela (se quedaba fuera, con la cancela tapando media pantalla):
+      // se acerca lo que haga falta para quedarse por dentro del muro, y un poco más alta
+      let dist = 6, h = inYard ? 2.3 : 3.4;
+      const sz = -Math.cos(this.walker.yaw);
+      if (inYard && sz > 0.05) {
+        const room = (9.75 - pp.z) / (sz * 0.7);
+        if (room < dist) {
+          dist = Math.max(1.6, room);
+          // (y gira despacio hacia un lado, donde hay patio detrás: así se aleja otra vez)
+          if (room < 4.5 && dt > 0) {
+            const sx = Math.sin(this.walker.yaw);
+            this.walker.yaw += (sx >= 0 ? -1 : 1) * Math.min(1, dt * 1.6) * 0.9;
+          }
+        }
+      }
+      this.walker.camera(this.camera, dt, this.colliders, dist, h);
+    }
     else {
       const m = this.moto.root.position;
       const [pos, look] =

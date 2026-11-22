@@ -179,7 +179,7 @@ class BeachMission implements Mission {
   private gasMiss = false;
 
   private updateHud() {
-    this.hud.setCounters(`<span class="chip${this.mine >= NEED ? ' ok' : ''}">🏐 Tú ${this.mine}/${NEED}</span><span class="chip">Gas ${this.his}</span>`);
+    this.hud.setCounters(`<span class="chip${this.mine >= NEED ? ' ok' : ''}">🏐 Tú ${this.mine}/${NEED}</span><span class="chip">Gas ${this.his}/${GAME - NEED + 1}</span>`);
   }
 
   /** Gas saca o devuelve: a un punto al azar de tu campo. */

@@ -560,7 +560,7 @@ class Builder {
     lm.userData.noCast = true;
     this.g.add(lm);
     // La explanada: tierra clara apisonada
-    const dirt = new THREE.Mesh(new THREE.PlaneGeometry(S.maxX - S.minX, S.maxZ - S.minZ).rotateX(-Math.PI / 2), toon({ color: 0xd9c49a, roughness: 1, surf: Surf.Paving }));
+    const dirt = new THREE.Mesh(new THREE.PlaneGeometry(S.maxX - S.minX, S.maxZ - S.minZ).rotateX(-Math.PI / 2), toon({ color: 0xd9c49a, roughness: 1, surf: Surf.Sand }));
     dirt.position.set((S.minX + S.maxX) / 2, 0.03, (S.minZ + S.maxZ) / 2);
     dirt.userData.noCast = true;
     this.g.add(dirt);

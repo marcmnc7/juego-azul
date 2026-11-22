@@ -1745,6 +1745,8 @@ export function later(fn: () => void, ms: number) {
 }
 
 /** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */
+/** Quién habla ahora mismo en un globo (para que la cámara le busque si no se le ve). Lo lee main.ts. */
+export const talkingNow: { who: string | null } = { who: null };
 let speakerAt: (who: string) => { x: number; y: number; side?: 'l' | 'r'; below?: boolean; off?: boolean } | null = () => null;
 export function setSpeakerResolver(fn: typeof speakerAt) {
   speakerAt = fn;
@@ -1777,16 +1779,18 @@ export function dialogue(lines: Line[], onDone: () => void) {
   // Coloca el bocadillo junto a la cabeza de quien habla, sin salirse de la pantalla. Los personajes hablan
   // SIEMPRE en globo (la caja de abajo es solo del narrador): si no se le ve, el globo se queda en el borde, de su
   // lado; si no hay nadie a quien pegarlo, arriba. Se mueve suave (sin saltos) y no cambia de tamaño al escribirse
-  let cx = NaN, cy = NaN, ct = NaN, lastT = 0, lastWho = '';
+  let cx = NaN, cy = NaN, ct = NaN, lastT = 0, lastWho = '', lineAt = 0, lateFor = -1;
   const place = () => {
     raf = requestAnimationFrame(place);
     const ln = lines[i];
     if (!ln) return;
     const speech = ln.who !== 'Narrador' && !ln.text.startsWith(WA);
     if (!speech) {
+      talkingNow.who = null;
       box.classList.remove('speech', 'tail-up', 'notail');
       return;
     }
+    talkingNow.who = ln.who;
     box.classList.add('speech');
     const at = speakerAt(ln.who);
     const W = window.innerWidth, H = window.innerHeight;
@@ -1818,6 +1822,11 @@ export function dialogue(lines: Line[], onDone: () => void) {
     // (modo prueba: quién habla y dónde ha ido su globo, para revisar todos los capítulos de una pasada)
     const logS = (window as unknown as { __speechLog?: unknown[] }).__speechLog;
     if (logS && (ln.who !== lastWho || isNaN(cx))) logS.push({ who: ln.who, text: ln.text.slice(0, 40), at: at ? (at.off ? 'off' : 'on') : 'none' });
+    // (y otra vez al segundo: la cámara ya ha tenido tiempo de buscar a quien habla)
+    if (logS && lineAt && now - lineAt > 1000 && lateFor !== i) {
+      lateFor = i;
+      logS.push({ late: 1, who: ln.who, text: ln.text.slice(0, 40), at: at ? (at.off ? 'off' : 'on') : 'none' });
+    }
     // Nuevo que habla: el globo aparece ya en su sitio; el mismo: lo sigue sin tirones
     if (ln.who !== lastWho || isNaN(cx)) {
       cx = tx;
@@ -1837,6 +1846,7 @@ export function dialogue(lines: Line[], onDone: () => void) {
   };
   const show = () => {
     const ln = lines[i];
+    lineAt = performance.now();
     const wa = ln.text.startsWith(WA);
     box.className = `dialogue ${whoClass(ln.who)}` + (wa ? ' wa' : '');
     who.textContent = wa ? `📱 ${shownName(ln.who)}` : shownName(ln.who);
@@ -1882,6 +1892,7 @@ export function dialogue(lines: Line[], onDone: () => void) {
   const cancel = () => {
     clearInterval(timer);
     cancelAnimationFrame(raf);
+    talkingNow.who = null;
     box.remove();
     catcher.remove();
     window.removeEventListener('keydown', onKey);

@@ -261,7 +261,12 @@ export class Laurel {
   readonly mid = new THREE.Vector3(0, 1.35, 0);
 
   /** La barra en plena calle: ellos dos delante y el camarero cantando la ronda. */
-  startPinchos(onDone: () => void) {
+  startPinchos(onDone: () => void, defer = false) {
+    if (this.pinchos) {
+      // (ya montada mientras el camarero se presentaba: ahora empieza la ronda)
+      this.pinchos.begin();
+      return;
+    }
     const Z = -19.5;
     this.azul.root.position.set(-1.25, 0, Z + 0.95);
     this.gas.root.position.set(1.3, 0, Z + 0.95);
@@ -274,7 +279,7 @@ export class Laurel {
       this.azul.root.rotation.y = Math.PI / 2;
       this.gas.root.rotation.y = -Math.PI / 2;
       onDone();
-    });
+    }, defer);
   }
 
   /** Azul anda por la Laurel, entre la gente, hasta la puerta del bar; al entrar, `onBar`. */

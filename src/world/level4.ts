@@ -1455,6 +1455,8 @@ export class Level4 implements Level {
 
   private placeCar(x: number, z = STREET.laneZ) {
     this.car.root.position.set(x, 0, z);
+    // (esperando a que acabe el chat de Pins, el coche no está: se veía parado al fondo de la calle)
+    this.car.root.visible = !(x === CAR_FAR_X && this.carT === 0);
     this.carBox.minZ = z - 0.95;
     this.carBox.maxZ = z + 0.95;
     this.carBox.minX = x - 2.0;

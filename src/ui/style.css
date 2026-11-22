@@ -2483,3 +2483,21 @@ html, body { background: #000; }
 .fin-screen .fin-btn { position: absolute; left: 50%; bottom: max(40px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
 /* 4.3 · La cuenta atrás, en el mismo botón de Empezar */
 .hm-btn.hm-wait { opacity: 1; cursor: default; font-variant-numeric: tabular-nums; filter: saturate(.75); }
+
+/* 4.3.1 Love Letter: el marcador en una sola línea y sin pisar la pausa (queda entre el borde y el botón) */
+.ll-top { left: max(10px, env(safe-area-inset-left)); right: calc(max(10px, env(safe-area-inset-right)) + 54px); transform: none; width: auto; max-width: none; }
+.ll-board { justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.ll-board .ll-sc { flex-direction: row; gap: 6px; min-width: 0; padding: 6px 10px; white-space: nowrap; }
+.ll-board .ll-sc i { margin-top: 0; font-size: 13px; letter-spacing: 0; }
+.ll-board .ll-round { flex-direction: row; gap: 6px; font-size: 16px; white-space: nowrap; min-width: 0; }
+.ll-board .ll-round small { margin-top: 0; font-size: 10px; }
+@media (max-width: 420px) {
+  .ll-board .ll-round { font-size: 0; gap: 0; }
+  .ll-board .ll-round small { font-size: 10px; }
+  .ll-board .ll-sc { padding: 5px 8px; font-size: 12px; }
+}
+/* 4.3.1 Grabando a Fito: el texto de ayuda por encima de las manos del público, en una píldora que se lee */
+.cam-hint { z-index: 2; left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 40px); padding: 6px 12px; border-radius: 999px; background: rgba(14, 10, 22, .72); text-shadow: none; }
+.cam-bar { z-index: 2; }
+/* 4.3.1 Pausa del final (sin portada de capítulo): fondo de noche para que se lea el título */
+.pc-art:not(:has(.pc-cover)) { background: linear-gradient(160deg, #2b1840, #1d3a6b); min-height: 120px; }
