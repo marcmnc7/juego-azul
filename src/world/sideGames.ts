@@ -454,6 +454,8 @@ export class PinchoGame {
   private info: HTMLElement;
   private done = false;
   errors = 0;
+  /** Fallos en la ronda de ahora (al cuarto, otra vez desde la primera ronda). */
+  private roundFails = 0;
 
   constructor(sc: THREE.Scene, z: number, private onDone: () => void, defer = false) {
     // Una caseta de las fiestas de San Mateo en plena calle: barra de madera, el camarero detrás, la trasera con
@@ -601,10 +603,19 @@ export class PinchoGame {
     this.items[c].k = 1;
     if (c !== this.seq[this.i]) {
       this.errors++;
+      this.roundFails++;
       this.showButtons(false);
       audio.boo();
       vibrate(40);
       this.info.textContent = '';
+      // Más de tres fallos en la misma ronda: se vuelve a empezar desde la primera
+      if (this.roundFails > 3) {
+        this.round = 0;
+        this.roundFails = 0;
+        bark('Camarero', SIDE.pinchos.restart);
+        this.wait(2400, () => this.startRound());
+        return;
+      }
       bark('Camarero', SIDE.pinchos.wrong[this.errors % SIDE.pinchos.wrong.length]);
       this.wait(1900, () => this.startRound());
       return;
@@ -616,6 +627,7 @@ export class PinchoGame {
     if (this.i >= this.seq.length) {
       this.showButtons(false);
       this.round++;
+      this.roundFails = 0;
       audio.perfect();
       if (this.round >= PINCHO_ROUNDS.length) {
         this.done = true;

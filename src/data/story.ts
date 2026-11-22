@@ -322,6 +322,8 @@ export const ROAD = {
   ] as Line[][],
   notM: (n: string) => `«${n}»… no empieza por M 😅 Aquí no era: volvemos atrás.`,
   /** Al empezar cada tramo: lo que hace falta. */
+  /** Al empezar a conducir, una vez: lo que vale en toda la carretera. */
+  rules: (max: number) => `Por el camino, fotos 📸. Y ojo: conos, coches y tabaco son golpes; más de ${max} y repetimos el tramo 😘`,
   tramoInfo: (need: number, max: number) => (need > 0 ? `Este tramo: ${need} fotos, y como mucho ${max} golpes (conos, coches o tabaco) 📸` : `Como mucho ${max} golpes en este tramo, ¿eh? 😘`),
   missedM: '¡Eh, que ese empezaba por M! Media vuelta…',
   /** Al llegar al final de un tramo sin las fotos que tocaban (21 nov). */
@@ -502,6 +504,12 @@ export const CONCERT = {
 
 // Capítulo 2: los chats de esa noche van tal cual en src/data/chats.ts (imperi, pins, cesped, meGustas).
 export const NIGHT = {
+  /** La gente suelta del centro de Ciutadella: solo saludan (Marc, 4.4.2). */
+  passerHi: (male: boolean) =>
+    [
+      { who: male ? 'Un ciutadellenc' : 'Una ciutadellenca', text: 'Hey! Tot bé?' },
+      { who: 'Margaux', text: 'Sí, gracias.' },
+    ] as Line[],
   intro: [{ who: 'Narrador', text: 'Ciutadella. 26 de agosto de 2025. Toda la tarde escribiéndoos. Él se va mañana.' }] as Line[],
   arrive: [{ who: 'Narrador', text: 'Sa Son 69 B4. Sus padres duermen.' }] as Line[],
   /** En la terraza del Imperi, antes de irse. */
@@ -522,6 +530,11 @@ export const NIGHT = {
   alertSafe: 'Uf… la han cerrado. Más despacito, que despacio no se oye.',
   /** Se ha movido con la ventana abierta: otra vez desde la entrada (o desde el último punto). */
   caughtWho: '¡Nos han visto! Otra vez, y más despacito…',
+  /** Ya en el agua, antes de nada (lo de su chat de esa tarde, casi literal). */
+  smallPool: [
+    { who: 'Gas', text: 'Muy pequeñita ella, pero sí, funciona.' },
+    { who: 'Gas', text: 'Y se le puede llamar piscina. Como tal.' },
+  ] as Line[],
   mpRules: 'Yo cierro los ojos. Digo «Marco» y tú «Polo»… y si te oigo chapotear, voy a por ti 😏',
   getOut: 'Me estoy quedando helado… ¿Nos tumbamos un rato?',
   /** En el coche, del Born a casa (bocadillos, sin parar el viaje). */
@@ -1024,6 +1037,8 @@ export const SIDE = {
     yourTurn: (i: number, n: number) => `Tu turno · ${i}/${n}`,
     /** Lo dice el camarero, en su bocadillo (y vuelve a cantar la ronda). */
     wrong: ['Ese no era, majo. Otra vez.', 'Pero bueno… Otra vez.', 'Que no, que no. Otra vez.'],
+    /** Más de tres fallos en una ronda: desde el principio. */
+    restart: 'Uf, así no hay quien trabaje. ¡Desde el principio!',
     good: '¡RONDA!',
     won: '¡Todas servidas! 🍢',
     end: [{ who: 'Camarero', text: 'Con este ritmo te contrato. ¡Hala, a bailar!' }] as Line[],
@@ -1169,20 +1184,22 @@ export const FAIL = {
   marco: { title: '¡Pillada!', text: 'Tres veces te ha cogido. Contesta «Polo» a tiempo y no chapotees cuando esté cerca.' },
   crashes: 'Tres golpes ya… Volvemos atrás y con calma, ¿eh?',
   burntMax: 4,
-  grill: { title: 'Carbón', text: 'Cuatro zamburiñas quemadas. Dales la vuelta cuando brillen, ni antes ni después.' },
-  rhythmMin: 0.85, // (más difícil: antes el 75 %)
+  grill: { title: 'Así no', text: 'Tres fallos: ni crudas ni quemadas. Al plato cuando brillen, ni antes ni después.' },
+  rhythmMin: 0.9, // (4.4.2, mucho más difícil: antes el 85 %)
   skillMin: 0.75,
   /** Grabar a Fito: el 60 % del vídeo con él en plano. */
   filmMin: 0.6,
   /** El baño: el 85 % dentro de la taza. */
-  peeMin: 0.85,
+  peeMin: 0.9,
   suitcase: { title: '¡Maletazo!', text: 'Te ha dado una maleta. Otra vez desde la entrada: mira bien de qué tienda sale cada una.' },
-  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta el 85 % para que Fito te lo perdone: otra vez.` },
+  rhythm: { title: 'Desafinada', text: (h: number, t: number) => `${h} de ${t} notas (${Math.round((h / Math.max(1, t)) * 100)} %). Hace falta el 90 % para que Fito te lo perdone (y sin tocar a lo loco): otra vez.` },
   film: { title: 'Movidísimo', text: (p: number) => `Fito solo ha salido en plano el ${p} % del vídeo. Hace falta el 60 %: otra vez, con pulso.` },
-  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta el 85 %: otra vez, apuntando bien.` },
+  pee: { title: 'Fuera de la taza', text: (p: number) => `Solo el ${p} % ha caído dentro. Hace falta el 90 %: otra vez, apuntando bien.` },
   pack: { title: 'Mochila llena de nada', text: 'Tres cosas que no estaban en la lista de Gas. En la moto no cabe nada más: otra vez.' },
   windSecs: 3,
   lean: { title: '¡Patapam!', text: 'En las curvas, inclínate con Gas hacia el mismo lado. Si no, la moto se cae: otra vez desde el principio de este tramo.' },
+  waveCar: { title: 'Eso era un coche', text: 'El saludo motero ✌️ es solo para las motos. A los coches, nada: otra vez desde este tramo.' },
+  waveMissed: { title: 'Sin saludo', text: 'Una moto te ha saludado y no has contestado. Cuando venga una de frente, ✌️: otra vez desde este tramo.' },
   wind: { title: '¡Al suelo!', text: 'La tramontana se ha llevado la moto. Échate hacia donde sopla la racha, siempre en contra.' },
   peltMax: 6,
   nuts: { title: 'Coscorrón', text: 'Te han dado seis veces. Cuando veas el círculo en el suelo, apártate.' },

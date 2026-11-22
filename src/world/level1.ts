@@ -14,7 +14,7 @@ import { makePerson, makeDonkey, animatePerson, Person, Donkey, Merger, G, type 
 import { Particles } from '../entities/fx';
 import { PhysicsWorld, Body, type Mover } from '../core/physics';
 import { MARGAUX_LOOK, MARC_LOOK, AZUL_VRM, castLook } from '../data/characters';
-import { hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord, failCard } from '../ui/ui';
+import { livesChip, hud, dialogue, phoneChat, Hud, DebugItem, later, bark, comicWord, failCard } from '../ui/ui';
 import { embrace, hugFor, twoBone, type Embrace } from '../entities/embrace';
 import { CHATS, type ChatFrag } from '../data/chats';
 import { clock, type Level, type LevelDone, disposeScene } from './level';
@@ -212,7 +212,9 @@ export class Level1 implements Level {
   private marker: THREE.Group;
   private hud: Hud;
   private stage: Stage = 'intro';
-  private kissLight: THREE.PointLight | null = null;
+  /** La luz cálida del beso: está desde el principio, apagada (añadir una luz a mitad obliga a recompilar todos los
+   * materiales, y en el iPhone eso eran ~5 s de pantalla congelada justo al darle al beso). */
+  private kissLight = new THREE.PointLight(0xffe0c0, 0, 3.2, 1.4);
   private pomadaCount = 0;
   private luckCount = 0;
   /** Caricia al burro en curso: se gira hacia él y le da unas palmaditas en el cuello; él cabecea contento. */
@@ -379,6 +381,7 @@ export class Level1 implements Level {
     this.scene.add(this.fabiolera.root);
     this.world.colliders.push({ minX: this.world.fabioleraPos.x - 0.4, maxX: this.world.fabioleraPos.x + 0.4, minZ: this.world.fabioleraPos.z - 0.4, maxZ: this.world.fabioleraPos.z + 0.4 });
     this.scene.add(this.fireworks.points);
+    this.scene.add(this.kissLight);
     // (sin confeti cayendo: Marc lo pidió fuera; queda la purpurina)
     this.scene.add(this.glitter.points);
     this.partyColors = this.world.partyLights.geometry.attributes.color.array as Float32Array;
@@ -556,7 +559,7 @@ export class Level1 implements Level {
     switch (this.stage) {
       case 'water':
         h.setObjective(SIDE.water.hint);
-        h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span><span class="chip">💧 ${this.water?.soaked ?? 0}/${FAIL.soakMax}</span>`);
+        h.setCounters(`<span class="chip">💦 ${this.water?.out ?? 0}/5</span>${livesChip('💧', FAIL.soakMax - (this.water?.soaked ?? 0), FAIL.soakMax)}`);
         break;
       case 'intro':
         h.setObjective('');
@@ -1815,9 +1818,8 @@ export class Level1 implements Level {
     const sd = room(1) >= room(-1) ? 1 : -1;
     // Una luz cálida de cara, del lado de la cámara: si no, en contraluz su piel se quedaba gris
     const m1 = mid();
-    this.kissLight = new THREE.PointLight(0xffe0c0, 2.6, 3.2, 1.4);
+    this.kissLight.intensity = 2.6;
     this.kissLight.position.copy(rel(m1, azSide(), 0, 0.85 * sd, 0.2));
-    this.scene.add(this.kissLight);
     cinema.play([
       // De perfil, de lejos a cerca: se acercan a cámara lenta
       { dur: 2.8, slow: 0.42, pos: () => rel(mid(), azSide(), 0, 1.9 * sd, -0.2), pos2: () => rel(mid(), azSide(), 0, 1.15 * sd, -0.06), look: mid, fov: 42, focus: mid, at: () => audio.whoosh() },
@@ -1843,8 +1845,7 @@ export class Level1 implements Level {
     for (const p of [this.player, this.marc]) p.eyes.scale.y = this.kissT > 1 ? 0.15 : 1; // ojos cerrados
     if (!cinema.active || this.kissT > 4.2) {
       cinema.stop();
-      if (this.kissLight) this.scene.remove(this.kissLight);
-      this.kissLight = null;
+      this.kissLight.intensity = 0;
       for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;
       this.busy = false;
       this.stage = 'ending';
@@ -1862,8 +1863,7 @@ export class Level1 implements Level {
     /** Deja todo como al empezar una fase: sin escenas a medias, sin minijuegos, sin vasos en la mano… */
     const reset = () => {
       cinema.stop();
-      if (this.kissLight) this.scene.remove(this.kissLight);
-      this.kissLight = null;
+      this.kissLight.intensity = 0;
       this.kiss?.stop();
       this.kiss = null;
       for (const p of [this.player, this.marc]) p.eyes.scale.y = 1;

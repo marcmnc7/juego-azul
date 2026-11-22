@@ -68,7 +68,7 @@ export const AZUL_VRM = { ferreries: castVrm('azul_ferreries') };
  */
 const CAST_BY_CHAPTER: Record<number, [name: string, count: number][]> = {
   1: [['azul_ferreries', 1], ['gas_ferreries', 1], ['tofol', 1], ['carme', 1], ['fabiolera', 1], ['nino_1', 1], ['nino_2', 1], ['nino_3', 1], ['extra_m1', 1], ['extra_m2', 1], ['extra_h1', 1], ['extra_h2', 1]],
-  2: [['azul_diario', 1], ['gas_diario', 1], ['azul_piscina', 1], ['gas_piscina', 1], ['amigo_imperi', 1], ['amiga_imperi_1', 1], ['amiga_imperi_2', 1]],
+  2: [['azul_diario', 1], ['gas_diario', 1], ['azul_piscina', 1], ['gas_piscina', 1], ['amigo_imperi', 1], ['amiga_imperi_1', 1], ['amiga_imperi_2', 1], ['extra_h1', 2], ['extra_m2', 2]],
   3: [['azul_diario', 4], ['gas_diario', 4], ['camarero_laurel', 1]],
   4: [['azul_diario', 1], ['gas_fito', 1], ['camarero_fito', 1], ['agente_aeropuerto_h', 1], ['agente_aeropuerto_m', 1], ['fito', 1], ['bajista', 1], ['saxofonista', 1], ['bateria', 1]],
   5: [['azul_moto', 2], ['gas_moto', 2], ['extra_h3', 1], ['extra_h4', 2], ['extra_m1', 1]],

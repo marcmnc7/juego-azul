@@ -462,6 +462,8 @@ function rollCase(color: number) {
 function giveCase(p: Person, color: number, posts: ((dt: number) => void)[]) {
   const c = rollCase(color);
   c.position.set(0.38, 0, 0.02);
+  // (el asa y las ruedas, del lado de quien la lleva: antes iba al revés, con el asa en la cara de fuera)
+  c.rotation.y = Math.PI;
   p.root.add(c);
   p.root.userData.case = c;
   p.root.userData.caseK = 0;
@@ -499,7 +501,7 @@ const RIFF_A: [number, number][] = [[0, -17], [2, -17], [3, -14], [4, -12], [6, 
 const RIFF_B: [number, number][] = [[0, -12], [2, -12], [3, -10], [4, -7], [6, -10], [8, -12], [10, -14], [12, -17], [14, -17]];
 const SONG = [RIFF_A, RIFF_A, RIFF_B, RIFF_A, RIFF_B, RIFF_B, RIFF_A];
 const EIGHTH = 0.25;
-const TRAVEL = 1.6; // segundos que tarda una nota en bajar
+const TRAVEL = 1.2; // segundos que tarda una nota en bajar (más rápido: más difícil de leer)
 
 /** Minijuego de ritmo en un canvas 2D sobre la escena. */
 class Rhythm {
@@ -581,8 +583,8 @@ class Rhythm {
     const now = audio.time();
     this.flash[lane] = 1;
     let best: RNote | null = null;
-    // (más difícil: ventana de acierto más estrecha; antes 0,24 s)
-    let bd = 0.17;
+    // (4.4.2, mucho más difícil: ventana de acierto estrecha; antes 0,17 s)
+    let bd = 0.11;
     for (const n of this.notes) {
       if (n.done || n.lane !== lane) continue;
       const d = Math.abs(n.t - now);
@@ -591,12 +593,19 @@ class Rhythm {
         best = n;
       }
     }
-    if (!best) return;
+    if (!best) {
+      // Tocar a lo loco no vale: una nota de más quita un acierto y corta la racha
+      this.hits = Math.max(0, this.hits - 1);
+      this.combo = 0;
+      this.label = '¡Fuera de ritmo!';
+      this.labelT = 0.5;
+      return;
+    }
     best.done = true;
     this.hits++;
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    const perfect = bd < 0.07;
+    const perfect = bd < 0.05;
     if (perfect) this.perfects++;
     this.label = perfect ? '¡Perfecto!' : '¡Bien!';
     if (this.combo > 0 && this.combo % 10 === 0) this.label = `¡${this.combo} seguidas! 🔥`;
@@ -2740,7 +2749,7 @@ export class Level3 implements Level {
     this.darkRate = 0.55;
     this.setDark(true);
     audio.ambience(0);
-    audio.stopTrack();
+    // (la canción de Fito, que suena desde el principio del capítulo, sigue: no se corta ni vuelve a empezar)
     this.updateHud();
     const stage = new THREE.Vector3(0, 3.2, 33);
     const gp = () => headOf(this.gas);
@@ -3972,8 +3981,8 @@ export class Level3 implements Level {
   }
 
   private enterCabin(hard: number, i: number, next: () => void) {
-    // (más difícil: se desvía más y pide el 85 % dentro de la taza)
-    this.side = new PeeAim3D(this.cabin, this.camera, hard + 0.6, (q) => {
+    // (4.4.2, más difícil todavía: se desvía bastante más y pide el 90 % dentro de la taza)
+    this.side = new PeeAim3D(this.cabin, this.camera, hard + 1.2, (q) => {
       this.side = null;
       if (q < FAIL.peeMin) {
         failCard(FAIL.pee.title, FAIL.pee.text(Math.round(q * 100)), () => this.enterCabin(hard, i, next));
@@ -4299,7 +4308,7 @@ export class Level3 implements Level {
     const h = this.hud;
     let chips = '';
     // (4.3: solo lo del objetivo de ahora, y siempre como «x/N»)
-    if (this.phase === 'toWc') chips += `<span class="chip">🚻 ${this.trip}/${TRIPS}</span>`;
+    // (sin contador del baño: ir las tres veces ya es parte de la historia)
     if (chips !== this.hudChips) h.setCounters((this.hudChips = chips));
     const setObj = (t: string) => {
       if (t !== this.hudObj) h.setObjective((this.hudObj = t));

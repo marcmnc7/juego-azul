@@ -45,7 +45,9 @@ html, body {
 }
 #game { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: block; touch-action: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
-#ui > * { pointer-events: auto; }
+/* (sin especificidad: así una capa que dice «pointer-events: none» de verdad deja pasar el dedo al juego; antes esta regla
+   ganaba siempre y capas como el visor de Fito o la sesión de fotos tapaban el joystick) */
+:where(#ui) > * { pointer-events: auto; }
 
 button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch-action: manipulation; }
 
@@ -2524,3 +2526,16 @@ html, body { background: #000; }
 #ui:has(.map-intro) .pause-fab { display: none; }
 /* (mientras vuela el mapa, lo del capítulo —diálogos, chats, HUD— espera escondido: sale cuando ya no hay mapa) */
 #ui:has(> .map-intro) > :not(.map-intro):not(.chapter-card) { visibility: hidden; }
+/* 4.4.2 Mientras el vale se descubre, el botón espera */
+.hm-btn:disabled { opacity: .55; filter: saturate(.6); pointer-events: none; }
+/* 4.4.2 Vidas (lo que no puede repetirse): corazones que se apagan */
+.chip.lives { gap: 2px; }
+.chip.lives .hp { font-style: normal; color: rgba(255,255,255,.28); font-size: 15px; line-height: 1; }
+.chip.lives .hp.on { color: #ff4d5e; text-shadow: 0 0 6px rgba(255,77,94,.55); }
+.chip.lives.warn .hp.on { animation: hpBeat .8s ease-in-out infinite; }
+@keyframes hpBeat { 50% { transform: scale(1.25); } }
+.chip small { font-size: 10px; opacity: .75; margin-left: 4px; }
+/* 4.4.2 Botón de parar el coche (cap. 3) */
+.action-btn.stop { background: #1a73e8; color: #fff; font: 800 17px/1 var(--font); letter-spacing: .02em; border-color: #0d4fb0; box-shadow: 0 6px 16px rgba(26,115,232,.45); }
+/* 4.4.2 Grabando a Fito y en la sesión de fotos: nada del visor coge el dedo (si no, el joystick no respondía) */
+.cam, .cam *, .rose-phone, .rose-phone * { pointer-events: none !important; }

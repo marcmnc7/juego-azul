@@ -27,8 +27,10 @@ const Z1 = 17;
 /** La caja (px CSS) que cubren las imágenes descargadas en cada nivel: más grande no hay foto. */
 const BOX_W = 460 / 0.7;
 const BOX_H = 1000 / 0.7;
-const TYPE_MS = 1100;
-const ZOOM_MS = 7600;
+const TYPE_MS = 2600;
+/** Escrito el sitio, un momento quieto antes de arrancar. */
+const WAIT_MS = 600;
+const ZOOM_MS = 9800;
 
 const url = (z: number, x: number, y: number) => `map/${z}/${x}/${y}.jpg`;
 
@@ -68,8 +70,8 @@ export async function preloadMap(n: number) {
   await Promise.all(Array.from({ length: 8 }, worker));
 }
 
-// El vuelo: arranca suave, va rápido por arriba y frena largo al llegar al sitio (como cuando el mapa «aterriza»)
-const fly = (t: number) => 1 - (1 - t * t * (3 - 2 * t)) ** 1.7;
+// El vuelo: arranca muy despacio desde lejos y va cogiendo velocidad hasta zambullirse en el sitio
+const fly = (t: number) => t * t;
 const easeIn = (t: number) => t * t * t;
 const easeInOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 
@@ -78,17 +80,14 @@ export function hasMapIntro(n: number) {
 }
 
 /**
- * El vuelo: `onReveal` cuando empieza el fundido (el capítulo puede ponerse en marcha) y `onDone` al acabar.
- * Tocar la pantalla lo adelanta al final.
+ * Prepara el mapa (encima de todo, quieto, con la barra vacía) en cuanto empieza a cargar el capítulo: así es
+ * imposible ver el escenario o un diálogo antes de tiempo. `play` arranca el vuelo: `onReveal` cuando empieza el
+ * fundido (el capítulo puede ponerse en marcha) y `onDone` al acabar. Tocar la pantalla adelanta el fundido.
  */
-export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
+export function prepareMapIntro(n: number) {
   const s = SPOTS[n];
   const root = document.getElementById('ui')!;
-  if (!s) {
-    onReveal();
-    onDone();
-    return;
-  }
+  if (!s) return { play: (r: () => void, d: () => void) => (r(), d()), cancel: () => {} };
   const o = document.createElement('div');
   o.className = 'map-intro';
   const cv = document.createElement('canvas');
@@ -164,32 +163,32 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
 
   want(Z0);
   want(Z0 + 1);
-  // (empieza cuando el rótulo del capítulo ya se está yendo)
-  const t0 = performance.now() + 900;
+  let t0 = Infinity;
   let raf = 0;
   let skipAt = Infinity;
   let revealed = false;
   let finished = false;
-  // Todo en un solo movimiento: el mapa baja frenando poco a poco y, sin pararse, se va deshaciendo en el capítulo
-  // (desenfoque y transparencia suaves) mientras sigue acercándose
-  const total = TYPE_MS + ZOOM_MS;
-  const FADE_AT = 0.68;
+  let onReveal = () => {};
+  let onDone = () => {};
+  // Escrito el sitio (con el mapa quieto), arranca despacio, acelera y, ya rápido, se funde suave en el capítulo
+  const startZ = TYPE_MS + WAIT_MS;
+  const FADE_AT = 0.85;
   let fadeStart = Infinity;
   let fadeLen = (1 - FADE_AT) * ZOOM_MS;
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const now = performance.now();
     const t = Math.max(0, now - t0);
-    // 1) Se escribe el sitio en la barra
+    // 1) Se escribe el sitio en la barra (el mapa, quieto)
     const typed = Math.min(1, t / TYPE_MS);
     const shown = s.label.slice(0, Math.ceil(typed * s.label.length));
     if (q.textContent !== shown) q.textContent = shown;
     bar.classList.toggle('done', typed >= 1);
-    // 2) El vuelo: de España entera a la calle, cada vez más despacio (sigue un poco más allá de Z1 mientras se funde)
-    const zt = Math.max(0, Math.min(1, (t - TYPE_MS) / ZOOM_MS));
-    const z = Z0 + (Z1 + 0.9 - Z0) * fly(zt);
+    // 2) El vuelo: de lejos y despacio a la calle y deprisa (sigue un poco más allá de Z1 mientras se funde)
+    const zt = Math.max(0, Math.min(1, (t - startZ) / ZOOM_MS));
+    const z = Z0 + (Z1 + 1.3 - Z0) * fly(zt);
     // 3) El fundido, en marcha (tocar la pantalla lo adelanta: empieza ya y dura menos)
-    if (fadeStart === Infinity && (t >= TYPE_MS + FADE_AT * ZOOM_MS || skipAt !== Infinity)) {
+    if (fadeStart === Infinity && t0 !== Infinity && (t >= startZ + FADE_AT * ZOOM_MS || skipAt !== Infinity)) {
       fadeStart = now;
       if (skipAt !== Infinity) fadeLen = 1100;
       o.classList.add('diving');
@@ -229,15 +228,29 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
   };
   o.onpointerdown = (e) => {
     e.stopPropagation();
-    if (skipAt === Infinity) skipAt = Math.max(0, performance.now() - t0);
+    if (t0 !== Infinity && skipAt === Infinity) skipAt = Math.max(0, performance.now() - t0);
   };
   raf = requestAnimationFrame(frame);
-  // (por si la pestaña está oculta y no hay fotogramas: nunca se queda colgado)
-  setTimeout(() => {
-    if (!revealed) {
-      revealed = true;
-      onReveal();
-    }
-    finish();
-  }, total + 5000);
+  return {
+    play(reveal: () => void, done: () => void) {
+      if (finished) return void (reveal(), done());
+      onReveal = reveal;
+      onDone = done;
+      // (empieza cuando el rótulo del capítulo ya se está yendo)
+      t0 = performance.now() + 900;
+      // (por si no hay fotogramas, la pestaña oculta: nunca se queda colgado)
+      setTimeout(() => {
+        if (!revealed) {
+          revealed = true;
+          onReveal();
+        }
+        finish();
+      }, 900 + startZ + ZOOM_MS + 6000);
+    },
+    /** Se sale del capítulo antes de que empiece: fuera sin más. */
+    cancel() {
+      onDone = () => {};
+      finish();
+    },
+  };
 }

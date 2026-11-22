@@ -179,7 +179,8 @@ export function countdownScreen(onOpen: () => void) {
   const tick = () => {
     if (!s.isConnected) return;
     const l = left(GATE);
-    b.innerHTML = `Se abre en ${l.d ? `${l.d} ${l.d === 1 ? 'día' : 'días'} · ` : ''}${pad(l.h)}:${pad(l.m)}:${pad(l.s)}`;
+    // (solo la cuenta atrás, sin días: las horas siguen contando por encima de 24)
+    b.innerHTML = `Se abre en ${pad(l.d * 24 + l.h)}:${pad(l.m)}:${pad(l.s)}`;
     if (l.done) return void setTimeout(onOpen, 600);
     setTimeout(tick, 1000);
   };
@@ -250,7 +251,7 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
   foot.append(dots, btn);
   o.append(bg, el('div', 'wn-shade'), sparks, stage, foot);
 
-  type Beat = { el: HTMLElement; enter?: () => void; label: () => string; next?: () => boolean };
+  type Beat = { el: HTMLElement; enter?: () => void; label: () => string; next?: () => boolean; wait?: () => boolean };
   const beats: Beat[] = [];
 
   // 1 · Superado
@@ -357,14 +358,12 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     env.onclick = open;
     beats.push({
       el: b,
-      label: () => (!giftOpen ? 'Abrir el sobre' : revealed ? 'Seguir' : 'Verlo ya'),
+      // (sin «Verlo ya»: el vale se descubre entero, de borroso a nítido, antes de poder seguir; da intriga)
+      label: () => (!giftOpen ? 'Abrir el sobre' : revealed ? 'Seguir' : 'Descubriendo…'),
+      wait: () => giftOpen && !revealed,
       next: () => {
         if (!giftOpen) return open(), false;
-        if (!revealed) {
-          b.classList.add('fast');
-          return finish(), false;
-        }
-        return true;
+        return revealed;
       },
     });
   }
@@ -447,6 +446,7 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
   });
   const refresh = () => {
     btn.textContent = beats[cur].label();
+    (btn as HTMLButtonElement).disabled = !!beats[cur].wait?.();
     [...dots.children].forEach((d, i) => d.classList.toggle('on', i === cur));
   };
   const show = (i: number) => {
@@ -757,8 +757,13 @@ function chapterState(i: number, save: SaveData, test: boolean) {
   const early = now() < day.getTime();
   // (en modo prueba todo está abierto, salvo si se está fingiendo otro día para ver el calendario)
   const open = test && !faking();
-  const unlocked = open || (!early && (i === 0 || done.has(LEVELS[i - 1].id)));
-  return { lv, day, early: early && !open, unlocked, done: done.has(lv.id) };
+  // Aunque ya sea el día, solo se juega con TODOS los capítulos de antes hechos y los juegos de palabras de entre
+  // medias también (los «conecta» que van antes de este)
+  const prevDone = LEVELS.slice(0, i).every((l) => done.has(l.id));
+  const minisDone = PUZZLES.filter((pz) => pz.after < lv.id).every((pz) => save.minis?.includes(pz.id));
+  const unlocked = open || (!early && prevDone && minisDone);
+  const missingMini = !open && !early && prevDone && !minisDone;
+  return { lv, day, early: early && !open, unlocked, done: done.has(lv.id), missingMini };
 }
 
 /** Cuenta atrás en vivo (días, horas, minutos y segundos) hasta d, dentro de el. */
@@ -811,7 +816,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     im.loading = 'lazy';
     tile.append(im, el('span', 'mp-badge', c.done ? '✓' : show ? c.lv.emoji : '🔒'));
     const tag = i === 0 ? '🎂 ' : i === LEVELS.length - 1 ? '🎄 ' : '';
-    const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : 'Termina el anterior';
+    const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : c.missingMini ? 'Antes, el juego de palabras' : 'Termina el anterior';
     const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
     n.append(tile, lab);
     if (isNext && c.early) n.append(liveCountdown(c.day));
@@ -848,7 +853,8 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   // Los «conecta»: un punto más pequeño a medio camino entre dos capítulos, con su día; se abren ese día
   const minis = PUZZLES.map((pz) => {
     // (el de después del último capítulo, además, solo con ese capítulo hecho)
-    const open = (allOpen || now() >= puzzleDate(pz).getTime()) && (pz.after < LEVELS.length || !!states[LEVELS.length - 1]?.done);
+    // (y solo con los capítulos de antes hechos: no se puede jugar un «conecta» saltándose un capítulo)
+    const open = (allOpen || now() >= puzzleDate(pz).getTime()) && (allOpen || states.slice(0, pz.after).every((c) => c.done));
     const doneIt = !!save.minis?.includes(pz.id);
     const b = el('button', 'mp-mini' + (doneIt ? ' done' : open ? ' open' : ' locked'));
     b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Sorpresa'}</b><i>${puzzleDay(pz)}</i>`));
@@ -2289,6 +2295,18 @@ export function openPause() {
   pauseOpener?.();
 }
 
+/**
+ * Contador de «vidas» (lo que NO puede pasar más veces: choques, mojarse, que te den): corazones que se van
+ * apagando; sin corazones, se repite. Los objetivos (lo que hay que conseguir) siguen como x/N.
+ */
+export function livesChip(icon: string, left: number, total: number) {
+  const l = Math.max(0, Math.min(total, left));
+  return `<span class="chip lives${l <= 1 ? ' warn' : ''}">${icon} ${'<i class="hp on">♥</i>'.repeat(l)}${'<i class="hp">♥</i>'.repeat(total - l)}</span>`;
+}
+
+/** El botón de parar el coche (cap. 3): siempre el mismo, azul y con su palabra. */
+export const STOP_LABEL = '🛑 Parar';
+
 export interface Hud {
   root: HTMLElement;
   setObjective(text: string): void;
@@ -2468,11 +2486,12 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     setAction: (label, pulse) => {
       act.classList.toggle('hidden', !label);
       act.classList.toggle('pulse', !!pulse);
-      // Solo el icono: el texto queda para la accesibilidad
+      // Solo el icono: el texto queda para la accesibilidad. «Parar» (el coche del cap. 3), botón azul con su palabra
       if (label && act.title !== label) {
         act.title = label;
         act.setAttribute('aria-label', label);
-        act.textContent = actionIcon(label);
+        act.classList.toggle('stop', label === STOP_LABEL);
+        act.textContent = label === STOP_LABEL ? 'Parar' : actionIcon(label);
       }
     },
     remove: () => {

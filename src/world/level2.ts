@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { comicFlash } from '../core/comic';
 import { Input } from '../core/input';
 import { audio } from '../core/audio';
 import { ROAD, FAIL } from '../data/story';
@@ -8,7 +9,7 @@ import { TownHD } from './hd/townHD';
 import { spring } from '../core/walker';
 import { Sky, Sun, toon, vibrate, applyShadows, makeSea, paintMat } from '../core/gfx';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard, setGasNamed } from '../ui/ui';
+import { STOP_LABEL, livesChip, hud, dialogue, fadeFlash, Hud, DebugItem, later, phoneChat, bark, comicWord, failCard, setGasNamed } from '../ui/ui';
 import { CHATS } from '../data/chats';
 import { Terrace } from './terrace';
 import { Camp } from './camp';
@@ -45,7 +46,8 @@ const LEG2 = 650; // metros de San Vicente a Logroño
  */
 /** Golpes que se pueden llevar en un tramo (conos, coches y el tabaco): uno más y se repite. */
 const CRASH_MAX = 2;
-const TRAMO_NEED = { marcial: 12, camp: 6, sv: 0, logrono: 9 } as const;
+// (4.4.2: menos cámaras por la carretera, y menos que coger en cada tramo)
+const TRAMO_NEED = { marcial: 7, camp: 4, sv: 0, logrono: 5 } as const;
 const MAX_SPEED = 21; // (21 nov: algo más lento; antes 26)
 const NEED_ZAMB = 8;
 
@@ -272,6 +274,9 @@ export class Level2 implements Level {
   private tramoNeed: number = TRAMO_NEED.marcial;
   private burnt = 0;
   private burntRun = 0;
+  /** Fallos en la plancha (cogerla cruda o dejar que se queme): al tercero, otra vez. */
+  private grillFails = 0;
+  private static readonly GRILL_FAILS = 2;
   private nearMisses = 0;
   private driveTime = 0;
   private shakeT = 0;
@@ -833,7 +838,7 @@ export class Level2 implements Level {
       h.setObjective(`${this.phase === 'drive1' ? 'San Vicente' : 'Logroño'} · ${left} km`);
       const got = this.photos - this.tramoBase;
       // Lo que pide el tramo: las fotos que hacen falta y los golpes (conos, coches, tabaco) que aún se pueden llevar
-      const crash = `<span class="chip${this.hitsSinceCp >= CRASH_MAX ? ' warn' : ''}">💥 ${this.hitsSinceCp}/${CRASH_MAX}</span>`;
+      const crash = livesChip('💥', CRASH_MAX + 1 - this.hitsSinceCp, CRASH_MAX + 1);
       h.setCounters((this.tramoNeed > 0 ? `<span class="chip${got >= this.tramoNeed ? ' ok' : ''}">📸 ${Math.max(0, got)}/${this.tramoNeed}</span>` : '') + crash);
     } else if (this.phase === 'terrace') {
       this.showLaneButtons(false);
@@ -841,7 +846,7 @@ export class Level2 implements Level {
       h.setCounters('');
     } else if (this.phase === 'grill') {
       h.setObjective('🔥');
-      h.setCounters(`<span class="chip">🐚 ${this.served}/${NEED_ZAMB}</span>`);
+      h.setCounters(`<span class="chip">🐚 ${this.served}/${NEED_ZAMB}</span>${livesChip('🔥', Level2.GRILL_FAILS + 1 - this.grillFails, Level2.GRILL_FAILS + 1)}`);
     } else {
       h.setObjective('Madrid → San Vicente → Logroño');
       h.setCounters('');
@@ -905,7 +910,8 @@ export class Level2 implements Level {
       this.scene.add(o);
       this.things.push({ obj: o, kind: 'obstacle', lane: lanes[0], z, speed: d.speed, alive: true });
     }
-    const np = Math.random() < 0.5 ? 2 : 1;
+    // (menos cámaras: muchas veces ninguna, y casi nunca dos)
+    const np = Math.random() < 0.3 ? 0 : Math.random() < 0.15 ? 2 : 1;
     for (let k = 0; k < np; k++) {
       const s = makeCameraPickup();
       const pz = z + (k ? 6 : 0);
@@ -1253,6 +1259,7 @@ export class Level2 implements Level {
     const g = this.grill.position;
     this.camera.position.set(g.x - 0.1, this.grillCamY(), g.z - this.grillCamBack());
     this.served = 0;
+    this.grillFails = 0;
     this.scallops.forEach((s, i) => {
       s.p = 0;
       s.wait = i * 0.5;
@@ -1273,6 +1280,8 @@ export class Level2 implements Level {
   /** De dónde salen los bocadillos en el coche: ella conduce (asiento izquierdo) y él va al lado. */
   speakerPoint(who: string) {
     if (who === 'Camarero' && this.phase === 'logrono') return this.laurel?.waiterHead() ?? null;
+    // (la vaca habla desde encima de ella: antes no se la encontraba y el globo salía lejos)
+    if (who === 'Vaca') return this.roadCow ? this.roadCow.root.localToWorld(new THREE.Vector3(0, 2.0, 0)) : null;
     // (también llegando a San Vicente y a Logroño, mientras se ve el coche; en la Laurel ya no: es otra escena)
     if (!['drive1', 'drive2', 'cow', 'marcial', 'arriveSV'].includes(this.phase) && !(this.phase === 'logrono' && !this.laurel)) return null;
     const her = who === 'Margaux' || who === 'Azul';
@@ -1287,7 +1296,7 @@ export class Level2 implements Level {
   }
 
   speakerSide(who: string): 'l' | 'r' | undefined {
-    if (who === 'Camarero') return undefined;
+    if (who === 'Camarero' || who === 'Vaca') return undefined;
     return who === 'Margaux' || who === 'Azul' ? 'r' : 'l';
   }
 
@@ -1322,7 +1331,28 @@ export class Level2 implements Level {
       this.updateHud();
       if (this.served >= NEED_ZAMB) this.finishGrill();
     } else if (s.p < 0.62) {
+      // (cogerla cruda también es un fallo: se tira y vuelve a empezar esa)
       bark(this.him(), ROAD.zamb.raw);
+      audio.boo();
+      s.p = 0;
+      s.wait = 0.8;
+      this.grillFail();
+    }
+  }
+
+  /** Un fallo en la plancha (cruda o quemada): más de dos, y otra vez desde el principio. */
+  private grillFail() {
+    this.grillFails++;
+    this.updateHud();
+    if (this.grillFails > Level2.GRILL_FAILS && this.phase === 'grill') {
+      this.phase = 'zambDone';
+      this.busy = true;
+      later(() => failCard(FAIL.grill.title, FAIL.grill.text, () => {
+        this.busy = false;
+        this.burntRun = 0;
+        window.removeEventListener('pointerdown', this.onTap);
+        this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
+      }), 600);
     }
   }
 
@@ -1397,7 +1427,7 @@ export class Level2 implements Level {
         this.rewind(ROAD.cowMissed);
       }
     } else if (d < COW_NEAR) {
-      this.hud.setAction(ROAD.cowBtn, false);
+      this.hud.setAction(STOP_LABEL, false);
       if (acted) this.stopForCow();
     }
   }
@@ -1627,14 +1657,27 @@ export class Level2 implements Level {
                   ),
                 600,
               );
-              phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => {
-                audio.fanfare();
-                cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 3.6);
-                later(() => {
-                  setGasNamed(true);
-                  dialogue(ROAD.named, afterName);
-                }, 3800);
-              });
+              // (4.4.2) Escena épica: plano lento acercándose a los dos a oscuras, el chat donde nace el mote y, al
+              // acabar, el destello, la fanfarria y «GAS» enorme mientras la cámara gira despacio alrededor de la mesa
+              audio.whoosh();
+              cinema.play([{ dur: Infinity, move: 4.5, pos: new THREE.Vector3(1.6, 1.25, -2.6), pos2: new THREE.Vector3(0.6, 1.2, -1.55), look: mid, fov: 44, fov2: 34, focus: mid }]);
+              later(() =>
+                phoneChat([CHATS.porQueGas, CHATS.tuNombre], () => {
+                  comicFlash(0xffffff, 1);
+                  audio.fanfare();
+                  vibrate([60, 40, 140]);
+                  cinema.play([
+                    { dur: 6.2, slow: 0.6, pos: new THREE.Vector3(2.3, 1.7, -1.1), pos2: new THREE.Vector3(-2.3, 1.55, -1.3), look: mid, fov: 42, fov2: 30, focus: mid },
+                    { dur: Infinity, move: 5, pos: new THREE.Vector3(-0.2, 1.35, -1.7), pos2: new THREE.Vector3(-0.1, 1.3, -1.35), look: mid, fov: 36, fov2: 32, focus: mid },
+                  ]);
+                  cineTitle('GAS', '«por nuestro intento fallido de camping gas»', 5.4);
+                  later(() => audio.chime(3), 1400);
+                  later(() => {
+                    setGasNamed(true);
+                    dialogue(ROAD.named, afterName);
+                  }, 6000);
+                }),
+              2600);
             }),
           900);
         }, 500),
@@ -1839,8 +1882,9 @@ export class Level2 implements Level {
       g.add(val);
     }
     const sign = makeSign(isM ? ['CAFETERÍA', 'MARCIAL'] : name.split(' ').length > 2 ? [name.split(' ')[0], name.split(' ').slice(1).join(' ')] : [name], isM ? '#b8322a' : '#5a4632');
-    // (al otro lado del aparcamiento: donde estaba, el coche aparcado quedaba debajo y la cámara se metía dentro)
-    sign.position.set(-5.2, 0, 8.2);
+    // (4.4.2: en el arcén de la derecha, del lado del local y ANTES de llegar, para verlo venir; antes estaba
+    // pasado el local, a la izquierda, y medio cartel encima de la carretera)
+    sign.position.set(9.6, 0, -11);
     g.add(sign);
     return g;
   }
@@ -1850,7 +1894,7 @@ export class Level2 implements Level {
     const near = EATERIES.find((e) => e.z - this.carZ < 55 && e.z - this.carZ > -4);
     if (near && !this.eateryTried.has(near.name)) {
       // (sin parpadear en el de la M: era chivarse del juego)
-      this.hud.setAction(`🍴 ¡Parar en ${near.name}!`, false);
+      this.hud.setAction(STOP_LABEL, false);
       if (acted) {
         this.eateryTried.add(near.name);
         if (near.m) this.stopMarcial();
@@ -1878,7 +1922,7 @@ export class Level2 implements Level {
     }
     const d = GAS_Z - this.carZ;
     if (d < 70 && d > -6) {
-      this.hud.setAction(ROAD.gasBtn, false);
+      this.hud.setAction(STOP_LABEL, false);
       if (acted) this.stopFuel();
     }
     if (!this.rewinding && this.carZ > GAS_Z + 8) this.rewind(ROAD.missedGas);
@@ -2043,9 +2087,13 @@ export class Level2 implements Level {
 
     this.hitsSinceCp = 0;
     this.updateHud();
-    // Al empezar cada tramo, Gas dice lo que hace falta (fotos y golpes que se pueden llevar)
-    later(() => bark(this.him(), ROAD.tramoInfo(need, CRASH_MAX), 'l'), 900);
+    // Las reglas de la carretera, una sola vez, al empezar el capítulo (luego ya lo dicen los contadores de arriba)
+    if (!this.rulesSaid && need > 0) {
+      this.rulesSaid = true;
+      later(() => bark(this.him(), ROAD.rules(CRASH_MAX), 'l'), 900);
+    }
   }
+  private rulesSaid = false;
 
   private stopMarcial() {
     if (!this.tramoOk()) return;
@@ -2072,7 +2120,7 @@ export class Level2 implements Level {
   private finish() {
     cinema.stop();
     this.phase = 'done';
-    const stars = 1 + (this.photos >= 30 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
+    const stars = 1 + (this.photos >= 18 ? 1 : 0) + (this.hits <= 2 && this.burnt <= 1 ? 1 : 0);
     this.onComplete({
       stars,
       stats: [
@@ -2108,16 +2156,7 @@ export class Level2 implements Level {
         this.burnt++;
         this.burntRun++;
         comicWord(ROAD.zamb.burnt, 'hit');
-        if (this.burntRun >= FAIL.burntMax && this.phase === 'grill') {
-          this.phase = 'zambDone';
-          this.busy = true;
-          later(() => failCard(FAIL.grill.title, FAIL.grill.text, () => {
-            this.busy = false;
-            this.burntRun = 0;
-            window.removeEventListener('pointerdown', this.onTap);
-            this.debug().find((d) => d.label.startsWith('4 ·'))?.run();
-          }), 600);
-        }
+        this.grillFail();
         s.p = 0;
         s.wait = 0.8;
       }

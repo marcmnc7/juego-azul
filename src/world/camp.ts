@@ -9,6 +9,7 @@ import { makeCarHD } from '../entities/vehiclesHD';
 import { Particles } from '../entities/fx';
 import { later, type Hud } from '../ui/ui';
 import { Walker } from '../core/walker';
+import { rigPost } from '../entities/rig';
 import type { Input } from '../core/input';
 import { Trail } from '../core/follow';
 import { beacon } from '../core/beacon';
@@ -479,6 +480,39 @@ export class Camp {
     this.azul.root.rotation.set(0, Math.atan2(-1.05, 0.15), 0);
     this.gas.root.position.set(p.x + 0.35, 0, p.z - 1.05);
     this.gas.root.rotation.set(0, Math.atan2(-0.35, 1.05), 0);
+    // (el pollo, ya encima de la estufa: «yo vigilo el pollo»)
+    this.pot.visible = true;
+  }
+
+  /** La botella de vino en la mano de Gas, de pie junto a la estufa, hasta que se sientan en el sofá. */
+  private bottle: THREE.Group | null = null;
+  private wineBottle(on: boolean) {
+    if (on && !this.bottle) {
+      const g = new THREE.Group();
+      const glass = toon({ color: 0x1f3b24 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.2, 12), glass);
+      body.position.y = 0.0;
+      const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.036, 0.05, 12), glass);
+      shoulder.position.y = 0.125;
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.08, 8), glass);
+      neck.position.y = 0.19;
+      const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0372, 0.0372, 0.08, 12, 1, true), toon({ color: 0xf1e6cf }));
+      label.position.y = -0.01;
+      g.add(body, shoulder, neck, label);
+      // (en la escena, no en la mano: cada fotograma, después de animar, se pone en su mano, derecha y cogida por el
+      // cuello, con el cuerpo de la botella colgando por debajo; atada a la mano salía tumbada)
+      this.gas.root.parent?.add(g);
+      const bone = this.gas.rig?.bones.get('RightHand') ?? this.gas.handR;
+      const at = new THREE.Vector3();
+      rigPost.add(() => {
+        if (!g.visible || !g.parent) return;
+        bone.getWorldPosition(at);
+        g.position.set(at.x, at.y - 0.21, at.z);
+        g.rotation.set(0, 0, 0);
+      });
+      this.bottle = g;
+    }
+    if (this.bottle) this.bottle.visible = on;
   }
 
   /** Una copa de vino (tinto) para la mano. */
@@ -506,6 +540,7 @@ export class Camp {
     this.standing = false;
     this.onSofa = true;
     this.gasStay = null;
+    this.wineBottle(false);
     for (const [p, z] of [[this.azul, -1.45], [this.gas, -0.55]] as const) {
       p.root.position.set(-4.62, seatedRootY(p, 0.58), z);
       p.root.rotation.set(0, Math.PI / 2, 0);
@@ -530,6 +565,7 @@ export class Camp {
     this.standing = false;
     this.onSofa = false;
     this.gasStay = null;
+    this.wineBottle(false);
     for (const g of this.glasses) g.visible = false;
     for (const [p, sx] of [[this.azul, -1], [this.gas, 1]] as const) {
       p.root.position.set(sx * 0.85, seatedRootY(p, 0.44), 0);
@@ -576,10 +612,11 @@ export class Camp {
       animatePerson(this.azul, dt, mag > 0.03 ? 'walk' : 'idle', mag, w.walk, w);
       this.who.length = 0;
       if (this.gasStay) {
-        // (él, dentro, junto a la estufa)
+        // (él, dentro, junto a la estufa, de pie con la botella de vino en la mano hasta que ella vuelve y van al sofá)
         this.gas.root.position.copy(this.gasStay);
         this.gas.root.rotation.y = Math.atan2(this.pellet.x - this.gasStay.x, this.pellet.z - this.gasStay.z);
         animatePerson(this.gas, dt, 'idle');
+        this.wineBottle(true);
       } else {
         const moving = this.gasTrail.step(this.gas.root, pp, 1.4, 3.8, dt, this.colliders, 0.26);
         animatePerson(this.gas, dt, moving ? 'walk' : 'idle', moving ? 0.8 : 0);

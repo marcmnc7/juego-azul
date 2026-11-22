@@ -211,6 +211,8 @@ export class Level4 implements Level {
   private lost = new Lost();
   /** Gente en la terraza del Imperi (un bar abierto un 27 de agosto no está vacío). */
   private barPeople: Person[] = [];
+  /** Gente suelta por Ses Voltes y la Plaça Espanya (de dos en dos): solo saludan. */
+  private passers: { p: Person; male: boolean }[] = [];
   /** Cuánto lleva cada uno tumbado (para asentarlo en la toalla mientras la postura termina de llegar). */
   private lieSettle = new Map<Person, number>();
   /** La sombra de contacto de cada uno, tumbado en su toalla (siempre, haya sombras reales o no). */
@@ -302,6 +304,23 @@ export class Level4 implements Level {
       p.root.rotation.y = Math.atan2(FRIENDS.x - p.root.position.x, FRIENDS.z - p.root.position.z);
       sc.add(p.root);
       this.barPeople.push(p);
+      this.colliders.push({ minX: p.root.position.x - 0.3, maxX: p.root.position.x + 0.3, minZ: p.root.position.z - 0.3, maxZ: p.root.position.z + 0.3, round: true });
+    }
+    // (4.4.2) Un poco más de gente por el centro, de noche, de dos en dos y charlando: si les hablas, solo saludan
+    for (const [lx, lz, male, ry] of [
+      [40.5, 0.5, true, Math.PI],
+      [40.5, -0.4, false, 0],
+      [79.2, -6.2, false, -Math.PI / 2],
+      [78.3, -6.0, true, Math.PI / 2],
+    ] as [number, number, boolean, number][]) {
+      const look: PersonLook = male
+        ? { skin: 0xe2b48c, shirt: 0x2f5d8a, pants: 0x2a2a2a, hair: 0x2b1d14, hairStyle: 'short', male: true }
+        : { skin: 0xf0c8a6, shirt: 0xe8d8c0, pants: 0x3b4a6b, hair: 0x6b3f22, hairStyle: 'long' };
+      const p = makePerson(castLook(look, male ? 'extra_h1' : 'extra_m2'));
+      p.root.position.set(B.x + lx, 0, B.z + lz);
+      p.root.rotation.y = ry;
+      sc.add(p.root);
+      this.passers.push({ p, male });
       this.colliders.push({ minX: p.root.position.x - 0.3, maxX: p.root.position.x + 0.3, minZ: p.root.position.z - 0.3, maxZ: p.root.position.z + 0.3, round: true });
     }
     this.colliders.push(...street.colliders, this.carBox);
@@ -952,6 +971,7 @@ export class Level4 implements Level {
 
     // La tertulia del Imperi: uno habla y los otros escuchan (solo mientras se está por el Born)
     if (pp.x < -500) this.barPeople.forEach((p, i) => animatePerson(p, dt, (Math.floor(this.t / 4) % 3) === i ? 'talk' : 'idle'));
+    if (pp.x < -450) this.passers.forEach((w, i) => animatePerson(w.p, dt, (Math.floor(this.t / 3.5 + (i >> 1)) % 2) === (i & 1) ? 'talk' : 'idle'));
     if (this.phase === 'diving') this.updateDive(dt);
     else if (this.phase === 'climbing') this.updateClimb(dt);
     else if (this.phase === 'drive') this.updateDrive(dt);
@@ -1041,6 +1061,17 @@ export class Level4 implements Level {
     if (!this.busy && this.phase === 'atBar' && !this.saidBye && Math.hypot(pp.x - FRIENDS.x, pp.z - FRIENDS.z) < 2.4) {
       label = '👋 Despedirte';
       action = () => this.sayBye();
+    } else if (!this.busy && this.phase === 'atBar' && this.passers.some((w) => Math.hypot(pp.x - w.p.root.position.x, pp.z - w.p.root.position.z) < 1.8)) {
+      // (la gente suelta del centro: un saludo y ya)
+      const w = this.passers.reduce((a, b) => (Math.hypot(pp.x - a.p.root.position.x, pp.z - a.p.root.position.z) < Math.hypot(pp.x - b.p.root.position.x, pp.z - b.p.root.position.z) ? a : b));
+      label = '💬 Saludar';
+      action = () => {
+        this.busy = true;
+        this.walker.stop();
+        this.input.reset();
+        this.player.root.rotation.y = this.walker.facing = Math.atan2(w.p.root.position.x - pp.x, w.p.root.position.z - pp.z);
+        dialogue(NIGHT.passerHi(w.male), () => (this.busy = false));
+      };
     } else if (!this.busy && this.phase === 'atBar' && this.pickedUp && pp.distanceTo(this.carDoor()) < 1.5) {
       label = '🚗 Subir al coche';
       action = () => this.boardCar();
@@ -1740,8 +1771,13 @@ export class Level4 implements Level {
       this.input.reset();
       this.phase = 'swim';
       this.swimT = 0;
-      this.busy = false;
       this.updateHud();
+      // Primero lo de la piscina (pequeñita, pero piscina), hablado y sin nada encima; luego la luz y Marco Polo
+      this.busy = true;
+      dialogue(NIGHT.smallPool, () => {
+        this.busy = false;
+        this.swimT = 0;
+      });
     }
   }
 
@@ -1843,10 +1879,11 @@ export class Level4 implements Level {
   // ---------------- Marco Polo ----------------
 
   private startMarcoPolo() {
-    this.mp = { calls: 0, next: 7.5, ask: 0, target: null, fast: false, noise: 0, cool: 0, caught: 0, caughtAt: -1 };
+    // (mientras explica las reglas no «oye» nada: si no, sus frases se pisaban)
+    this.mp = { calls: 0, next: 9.5, ask: 0, target: null, fast: false, noise: 0, cool: 8, caught: 0, caughtAt: -1 };
     this.gas.eyes.scale.y = 0.12;
     bark('Gas', MP.start());
-    later(() => this.mp && bark('Gas', NIGHT.mpRules), 3200);
+    later(() => this.mp && bark('Gas', NIGHT.mpRules), 4200);
     this.updateHud();
   }
 
@@ -2251,12 +2288,13 @@ export class Level4 implements Level {
     const v = this.v1.copy(s).project(this.camera);
     const sx = ((v.x + 1) / 2) * window.innerWidth;
     const sy = ((1 - v.y) / 2) * window.innerHeight;
-    if (Math.hypot(sx - x, sy - y) < Math.max(44, window.innerWidth * 0.05)) this.hitStar();
+    // (4.4.2, más difícil: hay que tocar más justo)
+    if (Math.hypot(sx - x, sy - y) < Math.max(32, window.innerWidth * 0.036)) this.hitStar();
     else {
       this.misses++;
       this.missRun++;
       audio.knock(0.2, 260, 0.08);
-      if (this.missRun >= 4 && this.nextStar > 0) {
+      if (this.missRun >= 3 && this.nextStar > 0) {
         // El corazón se borra: otra vez desde la primera
         this.missRun = 0;
         this.nextStar = 0;
@@ -2306,12 +2344,12 @@ export class Level4 implements Level {
   private updateStars(dt: number) {
     // La cámara mira al cielo desde las toallas, con un vaivén suave
     this.camera.position.copy(this.starCamPos);
-    this.v1.copy(this.starCamLook).add(this.v2.set(Math.sin(this.t * 0.2) * 1.5, Math.sin(this.t * 0.15) * 1, 0));
+    this.v1.copy(this.starCamLook).add(this.v2.set(Math.sin(this.t * 0.2) * 2.4, Math.sin(this.t * 0.15) * 1.6, 0));
     this.camera.lookAt(this.v1);
     const done = this.phase !== 'stars';
     this.starSprites.forEach((s, i) => {
-      // (la que toca solo se marca si se ha equivocado dos veces seguidas: el dibujo hay que verlo; la primera, siempre)
-      const next = i === this.nextStar && !done && (this.nextStar === 0 || this.missRun >= 2);
+      // (solo se marca la primera: el resto del corazón lo tiene que adivinar ella)
+      const next = i === this.nextStar && !done && this.nextStar === 0;
       const lit = i < this.nextStar || done;
       const base = lit ? 6.5 : next ? 5 + Math.abs(Math.sin(this.t * 5)) * 4 : 4;
       s.scale.setScalar(base + (done ? Math.sin(this.t * 3 + i) * 1.2 : 0));

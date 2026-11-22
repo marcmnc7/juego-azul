@@ -38,6 +38,7 @@ type Phase = 'intro' | 'pack' | 'ride' | 'creus' | 'uturn' | 'back' | 'cala' | '
 const SPEED = 14;
 /** Ya en marcha al empezar (arrancar desde parado se hacía eterno), y acelera fuerte a su velocidad. */
 /** Segundos (acumulados) inclinándose mal en curvas fuertes antes de que la moto se caiga. */
+/** Segundos sin acompañar la curva hasta caerse (inclinarse al lado contrario o en recta cuenta triple: ~0,45 s). */
 const LEAN_FAIL = 1.4;
 const START_V = 4;
 const ACCEL = 4.5;
@@ -983,18 +984,24 @@ export class LevelMoto implements Level {
     audio.hit();
     vibrate([120, 60, 200]);
     comicWord('¡PATAPAM!', 'hit');
+    this.failRide(FAIL.lean.title, FAIL.lean.text, 1000);
+  }
+
+  /** Un fallo en marcha (caerse, saludar a un coche, no devolver el saludo a una moto): otra vez desde el tramo. */
+  private failRide(title: string, text: string, delay = 900) {
+    this.failing = true;
     const at = this.s;
     const L = this.len;
     const cps = [0.02, PHOTO_AT[0] - 60 / L, TUNNEL_AT - 70 / L, WIND_AT - 40 / L, CLOSED_AT - 90 / L].filter((c) => c <= at);
     const cp = cps[cps.length - 1] ?? 0.02;
     later(() => {
-      failCard(FAIL.lean.title, FAIL.lean.text, () => {
+      failCard(title, text, () => {
         this.failing = false;
         this.fallT = 0;
         this.badLean = 0;
         this.startRide(cp, cp > 0.02 ? SPEED : START_V);
       });
-    }, 1000);
+    }, delay);
   }
 
   private startRide(at = 0.02, v = START_V) {
@@ -1139,7 +1146,7 @@ export class LevelMoto implements Level {
     // (de día no hay flash: el clic, un destello de pantalla y la onomatopeya)
     comicFlash(0xffffff, 0.5);
     comicWord('¡CLIC!', 'perfect');
-    this.say('Margaux', MOTO.photoOk[(this.photos - 1) % MOTO.photoOk.length]);
+    // (un solo globo al parar a hacer la foto: el «Qué bonito… ¡Vámonos!» de después)
     this.fx.burst(this.v1.copy(this.moto.root.position).setY(2.4), '📷', 4, 1.2, 0.6);
     this.updateHud();
     // Y antes de arrancar, ella: «Qué bonito… ¡Vámonos!»
@@ -1153,7 +1160,7 @@ export class LevelMoto implements Level {
           this.bayStop = -1;
           this.updateHud();
         }, barkTime(MOTO.bayGo) * 1000 * 0.7);
-      }, 1500);
+      }, 900);
     }
   }
 
@@ -1463,21 +1470,26 @@ export class LevelMoto implements Level {
     const want = moving ? THREE.MathUtils.clamp(-Math.atan((this.speed * this.yawRate) / 9.8), -0.6, 0.6) : 0;
     this.lean += (want * (1 - this.footK) - 0.08 * this.footK - this.lean) * Math.min(1, dt * 4);
     this.azulLean += (ax * 0.45 - this.azulLean) * Math.min(1, dt * 6);
-    if (riding && this.fallT <= 0 && Math.abs(want) > 0.03 && !this.windOn) {
-      // En curva: acompañar hacia el mismo lado; en recta: ir derechita
+    if (riding && this.fallT <= 0 && moving && !this.windOn) {
+      // En curva fuerte: acompañar hacia el mismo lado; en curva suave: no ir en contra; en recta: ir derechita.
+      // Inclinarse al lado equivocado, o cuando no toca, tumba la moto (y se repite el tramo)
       const strong = Math.abs(want) > 0.12;
-      const ok = strong ? Math.sign(ax) === Math.sign(want) && Math.abs(ax) > 0.25 : Math.abs(ax) < 0.6 || Math.sign(ax) === Math.sign(want);
-      this.total += dt;
-      if (ok) this.good += dt;
-      else if (strong && this.wobbleT <= 0) {
+      const mild = !strong && Math.abs(want) > 0.03;
+      const ok = strong ? Math.sign(ax) === Math.sign(want) && Math.abs(ax) > 0.25 : mild ? Math.abs(ax) < 0.6 || Math.sign(ax) === Math.sign(want) : Math.abs(ax) < 0.6;
+      if (strong || mild) {
+        this.total += dt;
+        if (ok) this.good += dt;
+      }
+      if (!ok && this.wobbleT <= 0) {
         this.wobbleT = 1.2;
         this.react('Gas', MOTO.lean.bad[Math.floor(Math.random() * MOTO.lean.bad.length)], 7);
         vibrate(40);
       }
-      // Inclinarse mal en las curvas fuertes tumba la moto (y se repite el tramo)
-      if (strong && !ok) this.badLean += dt;
-      else if (ok) this.badLean = Math.max(0, this.badLean - dt * 1.5);
-      if (this.badLean > LEAN_FAIL && this.fallT <= 0 && !this.failing) this.fall(want);
+      // (inclinarse al lado contrario de la curva, o en plena recta, cuenta triple: se cae casi al momento)
+      const wrongWay = (strong || mild) ? Math.abs(ax) > 0.25 && Math.sign(ax) !== Math.sign(want) : Math.abs(ax) >= 0.6;
+      if (!ok) this.badLean += dt * (wrongWay ? 3.1 : 1);
+      else this.badLean = Math.max(0, this.badLean - dt * 1.5);
+      if (this.badLean > LEAN_FAIL && this.fallT <= 0 && !this.failing) this.fall(want || ax);
       if (Math.floor(this.t * 2) !== Math.floor((this.t - dt) * 2)) this.updateHud();
     }
     if (this.wobbleT > 0) this.wobbleT -= dt;
@@ -1693,7 +1705,11 @@ export class LevelMoto implements Level {
         o.passed = true;
         if (o.kind === 'moto') {
           this.motosMet++;
-          if (!o.greeted) this.say('Gas', MOTO.wave.missed);
+          if (!o.greeted && !this.failing) {
+            // (no devolver el saludo a una moto: otra vez desde el tramo)
+            this.say('Gas', MOTO.wave.missed);
+            this.failRide(FAIL.waveMissed.title, FAIL.waveMissed.text, 1200);
+          }
           this.updateHud();
         }
       }
@@ -1725,6 +1741,8 @@ export class LevelMoto implements Level {
       this.wrongWaves++;
       this.say('Gas', MOTO.wave.car[(this.wrongWaves - 1) % MOTO.wave.car.length]);
       audio.boo();
+      // (saludar a un coche: otra vez desde el tramo)
+      if (!this.failing) this.failRide(FAIL.waveCar.title, FAIL.waveCar.text, 1200);
     }
     this.updateHud();
   }

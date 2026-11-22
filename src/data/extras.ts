@@ -73,7 +73,7 @@ export const BARKS: Record<number, Record<string, Bark[]>> = {
     // (Gas no está en el bar: viene en coche; lo suyo son mensajes, no un bocadillo flotando por el Born)
     atBar: [b('Gas', '(WhatsApp) Arranco!')],
     toPool: [b('Gas', 'Silencio full, eh.'), b('Gas', 'Ni respires, eh.'), b('Gas', 'Molaría mazo que no se enteraran.')],
-    swim: [b('Gas', 'Muy pequeñita ella, pero sí, funciona.'), b('Gas', 'Y se le puede llamar piscina. Como tal.')],
+    // (lo de la piscina pequeñita ya no va suelto: es un diálogo al meterse, antes de Marco Polo)
     toTowels: [b('Gas', 'Mira qué cielo.'), b('Margaux', 'Soy una mujer con muchas sorpresas.')],
   },
   3: {

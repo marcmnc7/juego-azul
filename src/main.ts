@@ -38,7 +38,7 @@ import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
 import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
-import { mapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
+import { prepareMapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
 import { TEASERS } from './data/extras';
 import { SONG_OF } from './core/songs';
 import { LEVELS } from './data/story';
@@ -436,6 +436,8 @@ const mapOpts = {
 /** Cierra el capítulo en marcha (si lo hay) y todo lo que tenga encima: diálogo y panel de prueba. */
 function leaveLevel() {
   pauseState.on = false;
+  mapIntroNow?.cancel();
+  mapIntroNow = null;
   stage.end();
   audio.stopTrack();
   // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
@@ -524,6 +526,8 @@ function startLevel(n: number) {
     console.warn('[juego] montar capítulo', e);
     crumb(`montar: error ${e instanceof Error ? e.message : String(e)}`);
     loadingLevel = false;
+    mapIntroNow?.cancel();
+    mapIntroNow = null;
     card.done();
   });
 }
@@ -542,6 +546,13 @@ async function settle(maxMs: number) {
 
 async function buildLevel(n: number, card: ChapterLoading) {
   loadingLevel = true;
+  // El vuelo de satélite del principio: el mapa ya tapa la pantalla (debajo del rótulo) desde ahora, así nunca se ve
+  // el escenario ni una frase antes de tiempo; sus fotos se bajan mientras se monta el resto
+  const NOMAP = new URLSearchParams(location.search).has('nomap') || !hasMapIntro(n);
+  mapIntroNow?.cancel();
+  const intro = NOMAP ? null : prepareMapIntro(n);
+  mapIntroNow = intro;
+  const mapReady = NOMAP ? Promise.resolve() : preloadMap(n);
   const epochAt = ++buildEpoch;
   const stale = () => epochAt !== buildEpoch;
   // Personajes glTF y texturas (suele estar desde la portada)
@@ -565,9 +576,6 @@ async function buildLevel(n: number, card: ChapterLoading) {
   crumb(`cap ${n}: gente lista`);
   card.progress(0.2, 'Preparando la canción');
   const song = SONG_OF[n] ? audio.preloadTrack(SONG_OF[n]) : Promise.resolve();
-  // Las fotos de satélite del vuelo del principio (se bajan mientras se monta el resto)
-  const NOMAP = new URLSearchParams(location.search).has('nomap');
-  const mapReady = NOMAP ? Promise.resolve() : preloadMap(n);
   await Promise.race([song, pause(5000)]);
   if (stale()) return;
   crumb(`cap ${n}: montando el escenario`);
@@ -637,15 +645,21 @@ async function buildLevel(n: number, card: ChapterLoading) {
     loadingLevel = false;
     levelAt = performance.now();
   };
-  if (NOMAP || !hasMapIntro(n)) {
+  if (!intro) {
     start();
     card.done();
     return;
   }
-  // El vuelo de satélite hasta el sitio, debajo del rótulo que se va; el capítulo espera (en pausa) hasta el fundido
+  // El vuelo hasta el sitio, debajo del rótulo que se va; el capítulo espera (en pausa) hasta el fundido
   card.done();
-  mapIntro(n, () => level === me && start(), () => {});
+  intro.play(
+    () => level === me && start(),
+    () => {
+      if (mapIntroNow === intro) mapIntroNow = null;
+    },
+  );
 }
+let mapIntroNow: ReturnType<typeof prepareMapIntro> | null = null;
 let buildEpoch = 0;
 
 function tryFullscreen() {

@@ -13,7 +13,7 @@ import { AZUL_SANTJOAN, GAS_SANTJOAN } from '../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, vertexMat, makeCrowd, type CrowdLike, crowdPose, newCrowdPose, type Person, type Donkey, type PersonLook } from '../entities/models';
 import type { Behave } from '../entities/crowdRig';
 import { Particles } from '../entities/fx';
-import { hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue, failCard, viewfinder } from '../ui/ui';
+import { livesChip, hud, dialogue, Hud, DebugItem, later, phoneChat, fadeFlash, bark, comicWord, closeDialogue, failCard, viewfinder } from '../ui/ui';
 import { hugFor } from '../entities/embrace';
 import { horsePrint, shirtPrint } from '../entities/print';
 import { buildAzulHouse, STREET_Z, DOOR, UP_DOOR, GARLAND_OFF, STAIR_PATH, TERRACE, TERRACE_Y, stairY, stairAt, pathLen } from './levelCena';
@@ -780,7 +780,7 @@ export class LevelSantJoan implements Level {
 
   private updateHud() {
     const h = this.hud;
-    h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span><span class="chip">🤕 ${this.nuts?.pelted ?? 0}/${FAIL.peltMax}</span>` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : ''); // (las avellanes y los toques sueltos son opcionales: al resumen)
+    h.setCounters(this.phase === 'nuts' ? `<span class="chip">🌰 ${this.nuts?.hits ?? 0}/${NUTS_NEED}</span>${livesChip('🤕', FAIL.peltMax - (this.nuts?.pelted ?? 0), FAIL.peltMax)}` : this.phase === 'be' ? `<span class="chip">${SANTJOAN.beCount(this.beTouched, BE_NEED)}</span>` : this.phase === 'home' || this.phase === 'taxi' || this.phase === 'ride' ? '' : ''); // (las avellanes y los toques sueltos son opcionales: al resumen)
     // Objetivos mínimos: un emoji o dos palabras, sin decir qué hacer
     if (this.phase === 'nuts') h.setObjective(SIDE.nuts.hint);
     else if (this.phase === 'cross') h.setObjective(SANTJOAN.cross.hint);
