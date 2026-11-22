@@ -19,6 +19,8 @@ import { Show } from './show';
 type Kind = 'vertical' | 'oxer' | 'ria';
 interface Fence {
   z: number;
+  /** (4.4.11) De lado a lado: cada valla, a la izquierda, en medio o a la derecha del picadero. */
+  x: number;
   kind: Kind;
   depth: number;
   h: number;
@@ -49,6 +51,9 @@ class RidingMission implements Mission {
   private sun: Sun;
   private fences: Fence[] = [];
   private z = START_Z;
+  /** El caballo, de lado a lado (joystick a izquierda y derecha) y hacia dónde mira. */
+  private x = 0;
+  private yaw = 0;
   private y = 0;
   private vy = 0;
   private v = 8;
@@ -196,15 +201,18 @@ class RidingMission implements Mission {
       rail.position.set(0, h, depth);
       rail.visible = kind !== 'ria';
       g.add(rail);
-      g.position.z = z;
+      const fx = [0, -4.5, 4, -3, 4.5, 0, -4.5, 3.5, -4, 0, 4.5, -3][i % 12];
+      g.position.set(fx, 0, z);
       this.scene.add(g);
-      this.fences.push({ z, kind, depth, h, group: g, rail, state: 'up', fall: 0 });
+      this.fences.push({ z, x: fx, kind, depth, h, group: g, rail, state: 'up', fall: 0 });
       z += gap;
     });
   }
 
   private reset() {
     this.z = START_Z;
+    this.x = 0;
+    this.yaw = 0;
     this.y = this.vy = 0;
     this.v = 8;
     this.t = 0;
@@ -259,7 +267,7 @@ class RidingMission implements Mission {
     }
     this.vy = lift;
     audio.whoosh();
-    this.fx.burst(new THREE.Vector3(0, 0.1, this.z), 'dust', 6, 0.8, 0.4);
+    this.fx.burst(new THREE.Vector3(this.x, 0.1, this.z), 'dust', 6, 0.8, 0.4);
   }
 
   private fault(f: Fence, why: string) {
@@ -279,16 +287,16 @@ class RidingMission implements Mission {
   }
 
   private camTarget() {
-    // De lado y un poco por detrás; en el salto, más de lado (se ve el arco)
+    // Detrás del caballo y algo alta (se ve hacia qué lado está la siguiente valla); en el salto, un poco de lado
     const tall = this.ctx.camera.aspect < 1;
     const air = this.y > 0.3 ? 1 : 0;
-    return tall ? new THREE.Vector3(6.5 + air * 1.5, 3.0 - air * 0.6, this.z - 8 + air * 4) : new THREE.Vector3(8 + air, 2.6, this.z - 3 + air * 2);
+    return new THREE.Vector3(this.x * 0.6 + air * 2.5, (tall ? 4.2 : 3.6) - air * 0.5, this.z - (tall ? 9 : 8) + air * 2);
   }
 
   private place(dt: number) {
     const r = this.horse.root;
-    r.position.set(0, this.y, this.z);
-    r.rotation.y = this.refuseT > 0 ? Math.sin((1 - this.refuseT / 1.4) * Math.PI) * 1.2 : 0;
+    r.position.set(this.x, this.y, this.z);
+    r.rotation.y = this.yaw + (this.refuseT > 0 ? Math.sin((1 - this.refuseT / 1.4) * Math.PI) * 1.2 : 0);
     const tilt = this.y > 0.02 ? THREE.MathUtils.clamp(-this.vy * 0.06, -0.3, 0.3) : 0;
     this.horse.pivot.rotation.x += (tilt - this.horse.pivot.rotation.x) * Math.min(1, dt * 10);
   }
@@ -311,7 +319,10 @@ class RidingMission implements Mission {
     } else if (this.started && !this.over && this.stopT <= 0) {
       this.t += dt;
       this.v += (THREE.MathUtils.clamp(8.5 + ax.y * 2.6, 5.5, 11.5) - this.v) * Math.min(1, dt * 2.5);
-      this.z += this.v * dt;
+      // Guiarlo: el joystick a los lados lo lleva a izquierda o derecha (en el aire no se gira)
+      if (this.y < 0.05) this.yaw += (THREE.MathUtils.clamp(-ax.x * 0.55, -0.55, 0.55) - this.yaw) * Math.min(1, dt * 4);
+      this.z += this.v * Math.cos(this.yaw) * dt;
+      this.x = THREE.MathUtils.clamp(this.x + this.v * Math.sin(this.yaw) * dt, -9.5, 9.5);
     }
     if (this.y > 0 || this.vy > 0) {
       this.vy -= GRAV * dt;
@@ -319,7 +330,7 @@ class RidingMission implements Mission {
       if (this.y === 0) {
         this.vy = 0;
         audio.knock(0.3, 220, 0.06);
-        this.fx.burst(new THREE.Vector3(0, 0.1, this.z + 0.8), 'dust', 8, 1, 0.4);
+        this.fx.burst(new THREE.Vector3(this.x, 0.1, this.z + 0.8), 'dust', 8, 1, 0.4);
       }
     }
     // El galope suena (cada tranco) y los puntos de los trancos que faltan hasta la siguiente valla
@@ -347,6 +358,13 @@ class RidingMission implements Mission {
         continue;
       }
       const front = this.z + 1.1, back = this.z - 1.1;
+      // Se escapa: pasa la línea de la valla por el lado (sin ir hacia ella)
+      if (front > fe.z && front < fe.z + 0.5 && Math.abs(this.x - fe.x) > 1.7 && this.refuseT <= 0 && !this.over) {
+        fe.state = 'down';
+        fe.rail.visible = fe.kind !== 'ria';
+        this.fault(fe, '¡SE ESCAPA!');
+        continue;
+      }
       // Se niega: llega a la valla sin haber saltado
       if (this.y < 0.05 && this.vy <= 0 && front > fe.z - 0.4 && front < fe.z + 0.3 && this.refuseT <= 0 && !this.over) {
         this.refuseT = 1.4;
@@ -357,7 +375,7 @@ class RidingMission implements Mission {
         // La ría: si cae dentro del agua, falta
         if (this.y === 0 && back > fe.z && front < fe.z + fe.depth + 1.5 && this.z > fe.z + 0.5 && this.z < fe.z + fe.depth) {
           fe.state = 'down';
-          this.fx.burst(new THREE.Vector3(0, 0.2, this.z), 'spray', 14, 1.4, 1.2);
+          this.fx.burst(new THREE.Vector3(this.x, 0.2, this.z), 'spray', 14, 1.4, 1.2);
           this.fault(fe, '¡AL AGUA!');
         } else if (back > fe.z + fe.depth) {
           fe.state = 'clear';
@@ -380,7 +398,7 @@ class RidingMission implements Mission {
     const cam = this.ctx.camera;
     this.camAt.lerp(this.camTarget(), Math.min(1, dtRaw * 3));
     cam.position.copy(this.camAt);
-    this.look.set(0, 1.1 + this.y * 0.4, this.z + (cam.aspect < 1 ? 3.5 : 4));
+    this.look.set(this.x * 0.8, 1.0 + this.y * 0.4, this.z + (cam.aspect < 1 ? 7 : 8));
     cam.lookAt(this.look);
     this.hud.setAction(this.started ? '🐎 ¡Salta!' : '🐎 ¡Al galope!');
     this.sky.update(cam, dtRaw);

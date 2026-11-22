@@ -20,9 +20,21 @@ const NEED = 3;
 const LIVES = 3;
 /** La ola: dónde rompe (x de la espuma) y lo rápido que «abre» hacia la derecha. */
 const PEEL_V = 4.2;
-const WAVE_H = 2.1;
+const WAVE_H = 3.0;
 /** Lo que hay que aguantar de pie en una ola para que cuente. */
 const RIDE_NEED = 7;
+
+/** La malla de la ola: columnas a lo largo (cada ~0,7 m) y puntos de su perfil. */
+const NX = 112;
+const NP = 26;
+const SPAN = 80;
+const UP = new THREE.Vector3(0, 1, 0);
+const C_DEEP = new THREE.Color(0x0f5486);
+const C_MID = new THREE.Color(0x2386c2);
+const C_TURQ = new THREE.Color(0x4fd0cf);
+const C_SEA = new THREE.Color(0x1f7fb8);
+const C_WHITE = new THREE.Color(0xf4fbff);
+const _c = new THREE.Color();
 
 type State = 'intro' | 'wait' | 'paddle' | 'pop' | 'ride' | 'down';
 
@@ -35,7 +47,15 @@ class SurfMission implements Mission {
   private board: THREE.Mesh;
   private gasBoard: THREE.Mesh;
   private wave: THREE.Mesh;
-  private foam: THREE.Mesh;
+  private wpos: Float32Array;
+  private wcol: Float32Array;
+  /** Ya ha roto (de pie): hay espuma a la izquierda de curlX y el labio se tira justo delante. */
+  private broken = false;
+  private faceY = 0;
+  private _n = new THREE.Vector3();
+  private _no = new THREE.Vector3();
+  private _q = new THREE.Quaternion();
+  private _q2 = new THREE.Quaternion();
   private fx: Particles;
   private sky: Sky;
   private sun: Sun;
@@ -53,9 +73,12 @@ class SurfMission implements Mission {
   private vx = 0;
   private rideT = 0;
   private tubeT = 0;
-  private lastDir = 0;
-  private turns = 0;
   private slow = 1;
+  /** (4.4.11) De pie: la altura en la pared (0 abajo, 1 en el labio), el aéreo y los que hay en la ola. */
+  private h = 0.5;
+  private air = 0;
+  private tricks = 0;
+  private obs: { x: number; h: number; mesh: THREE.Object3D; passed: boolean }[] = [];
   private camAt = new THREE.Vector3();
   private look = new THREE.Vector3();
   /** (para que los bocadillos de Azul salgan de su cabeza) */
@@ -65,7 +88,8 @@ class SurfMission implements Mission {
   private onTap = (e: PointerEvent) => {
     if ((e.target as HTMLElement).closest('button, .pause, .ap-sheet')) return;
     // (remar y ponerse de pie: tocando en cualquier sitio; de pie, la pantalla es del joystick)
-    if (this.state !== 'paddle' && this.state !== 'pop') return;
+    if (this.state === 'ride' && e.clientX < window.innerWidth * 0.45) return; // (de pie, a la izquierda va el joystick)
+    if (this.state !== 'paddle' && this.state !== 'pop' && this.state !== 'ride') return;
     this.press();
   };
 
@@ -94,24 +118,38 @@ class SurfMission implements Mission {
     }
     for (let i = 0; i < 8; i++) m.add(G.bush, 0x5f8a46, -150 + i * 45, 6, 160, 0, i, 0, 40, 16, 20);
     sc.add(m.mesh());
-    // La ola: una pared curvada (de perfil, una sola malla larga) que avanza hacia la playa y crece; y la espuma, la
-    // parte que ya ha roto, a la izquierda de donde rompe
-    const prof = new THREE.Shape();
-    prof.moveTo(-4, 0);
-    prof.quadraticCurveTo(-1.2, 0.2, -0.2, 0.85);
-    prof.quadraticCurveTo(0.35, 1.05, 0.25, 0.75);
-    prof.quadraticCurveTo(0.6, 0.35, 2.6, 0);
-    prof.lineTo(-4, 0);
-    const wg = new THREE.ExtrudeGeometry(prof, { depth: 140, bevelEnabled: false, curveSegments: 10 });
-    wg.translate(0, 0, -70);
-    wg.rotateY(-Math.PI / 2); // (el perfil, en el plano z-y: la pared mira a la playa, +z; la ola, a lo largo de x)
-    this.wave = new THREE.Mesh(wg, toon({ color: 0x2a8fc8, emissive: 0x0a2a44 }));
+    // La ola (4.4.11): una malla viva, columna a columna a lo largo de la ola. Cada columna es su perfil: la espalda,
+    // la cresta, el labio (que delante de donde rompe se tira hacia delante y hace el tubo) y la pared cóncava hasta
+    // el seno. Va bajando hacia el hombro y, a la izquierda de donde rompe, ya es espuma blanca.
+    const wg = new THREE.BufferGeometry();
+    this.wpos = new Float32Array(NX * NP * 3);
+    this.wcol = new Float32Array(NX * NP * 3);
+    wg.setAttribute('position', new THREE.BufferAttribute(this.wpos, 3).setUsage(THREE.DynamicDrawUsage));
+    wg.setAttribute('color', new THREE.BufferAttribute(this.wcol, 3).setUsage(THREE.DynamicDrawUsage));
+    const idx: number[] = [];
+    for (let i = 0; i < NX - 1; i++)
+      for (let k = 0; k < NP - 1; k++) {
+        const a = i * NP + k, b2 = (i + 1) * NP + k;
+        idx.push(a, b2, a + 1, b2, b2 + 1, a + 1);
+      }
+    wg.setIndex(idx);
+    this.wave = new THREE.Mesh(wg, toon({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.55 }));
+    this.wave.frustumCulled = false;
     this.wave.userData.noCast = true;
     sc.add(this.wave);
-    this.foam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 1, 14).rotateZ(Math.PI / 2), toon({ color: 0xffffff }));
-    sc.add(this.foam);
+    // Los que también cogen la ola (bodyboards con su surfista): hay que esquivarlos subiendo o bajando
+    for (let i = 0; i < 3; i++) {
+      const g = new Merger();
+      g.add(G.box, [0xe0533a, 0x2f6fd0, 0x3fa27a][i], 0, 0.05, 0, 0, 0, 0, 1.1, 0.08, 0.5);
+      g.add(G.sphere, 0x2b1d14, 0.2, 0.32, 0, 0, 0, 0, 0.26, 0.26, 0.26);
+      g.add(G.box, [0x222222, 0xd7263d, 0x1f4fa8][i], -0.15, 0.2, 0, 0, 0, 0, 0.6, 0.22, 0.32);
+      const mesh = g.mesh();
+      mesh.visible = false;
+      sc.add(mesh);
+      this.obs.push({ x: 0, h: 0.5, mesh, passed: false });
+    }
     // Las tablas y ellos dos (con el bañador del capítulo de la playa)
-    const boardGeo = new THREE.CapsuleGeometry(0.28, 1.5, 6, 14).rotateX(Math.PI / 2);
+    const boardGeo = new THREE.CapsuleGeometry(0.25, 1.45, 6, 14).rotateX(Math.PI / 2);
     boardGeo.scale(1, 0.16, 1);
     this.board = new THREE.Mesh(boardGeo, toon({ color: 0xf2c94c }));
     this.gasBoard = new THREE.Mesh(boardGeo, toon({ color: 0xe0533a }));
@@ -129,7 +167,87 @@ class SurfMission implements Mission {
     this.paint();
     ctx.camera.position.set(6, 2.8, 5);
     this.camAt.copy(ctx.camera.position);
-    this.show.intro('Surf', 'Azul & Gas · mar adentro', 'Cuando llegue la ola, rema (🏄 seguido) hasta ir a su ritmo; cuando te levante, 🏄 para ponerte de pie. Luego, con el joystick, delante de la espuma sin que te pille. Tres olas buenas.', 4.2);
+    this.show.intro('Surf', 'Azul & Gas · mar adentro', 'Rema (🏄 seguido) cuando llegue la ola y 🏄 para ponerte de pie. De pie: joystick arriba/abajo por la pared y a los lados para ir más o menos rápido; esquiva a los demás y, arriba del todo, 🏄 para un aéreo. Tres olas buenas.', 4.2);
+  }
+
+  /** La altura de la ola en x: baja hacia el hombro; donde ya ha roto, se hunde en espuma. */
+  private hAt(x: number) {
+    if (!this.broken) return this.waveH * (0.9 + 0.1 * Math.cos(x * 0.06));
+    const d = x - this.curlX;
+    return this.waveH * (d < 0 ? 0.42 + 0.58 * Math.exp(d / 2.5) : 1 - 0.6 * THREE.MathUtils.smoothstep(d, 7, 36));
+  }
+  /** Cuánto se tira el labio (1: el tubo, justo delante de donde rompe). */
+  private pitchAt(x: number) {
+    if (!this.broken) return 0;
+    const d = x - this.curlX;
+    return d < 0 ? THREE.MathUtils.clamp(1 + d / 3, 0, 1) : Math.exp(-((d / 2.4) ** 2));
+  }
+  /** La pared: z (desde la cresta) a la altura y; cóncava, vertical arriba y tendida abajo. */
+  private zFace(y: number, H: number) {
+    const zt = 0.4 + 1.5 * H;
+    const f = H > 0.01 ? 1 - THREE.MathUtils.clamp(y / H, 0, 1) : 1;
+    return 0.25 + (zt - 0.25) * f ** 1.8;
+  }
+  /** Lo contrario: la altura de la pared a dz (desde la cresta) por delante; 0 si aún no llega. */
+  private yOnFace(dz: number, H: number) {
+    const zt = 0.4 + 1.5 * H;
+    if (dz >= zt || H < 0.05) return 0;
+    const f = THREE.MathUtils.clamp((dz - 0.25) / (zt - 0.25), 0, 1);
+    return H * (1 - f ** (1 / 1.8));
+  }
+  /** La normal de la pared a la altura y (hacia fuera: la playa y arriba). */
+  private faceNormal(y: number, H: number, out: THREE.Vector3) {
+    const dy = Math.max(0.02, 0.06 * H);
+    const z1 = this.zFace(y, H), z2 = this.zFace(Math.max(0, y - dy), H);
+    return out.set(0, Math.max(0.001, z2 - z1), dy).normalize();
+  }
+  /** Rehace la ola alrededor de x (lo que ve la cámara). */
+  private buildWave(cx: number) {
+    const pos = this.wpos, col = this.wcol;
+    const x0 = cx - SPAN / 2;
+    let v = 0;
+    const put = (x: number, y: number, z: number, c: THREE.Color) => {
+      pos[v] = x;
+      pos[v + 1] = y;
+      pos[v + 2] = z;
+      col[v] = c.r;
+      col[v + 1] = c.g;
+      col[v + 2] = c.b;
+      v += 3;
+    };
+    for (let i = 0; i < NX; i++) {
+      const x = x0 + (i / (NX - 1)) * SPAN;
+      const H = this.hAt(x);
+      const p = this.pitchAt(x);
+      const d = x - this.curlX;
+      // (la espuma de lo ya roto, con su grumo; y el blanco de la cresta que se tira)
+      const ww = this.broken ? THREE.MathUtils.clamp(0.25 - d / 1.4, 0, 1) : 0;
+      const grain = 0.9 + 0.1 * Math.sin(x * 3.3 + this.t * 6) * Math.sin(x * 1.7 - this.t * 3);
+      const zt = 0.4 + 1.5 * H;
+      for (let k = 0; k < 8; k++) {
+        const s = k / 7;
+        _c.copy(C_DEEP).lerp(C_MID, s).lerp(C_WHITE, ww * grain);
+        put(x, H * s * s * (3 - 2 * s), -7 + 7 * s, _c);
+      }
+      for (let k = 0; k < 4; k++) {
+        const t = (k + 1) / 4;
+        _c.copy(C_TURQ).lerp(C_WHITE, Math.min(1, 0.4 + 0.6 * p + ww) * grain);
+        put(x, H + Math.sin(t * Math.PI) * 0.1 * H - p * t * t * 0.62 * H, 0.15 * t + p * t * 0.95 * H, _c);
+      }
+      for (let k = 0; k < 12; k++) {
+        const s = k / 11;
+        const y = H * (1 - s);
+        _c.copy(C_TURQ).lerp(C_DEEP, s ** 0.6).lerp(C_WHITE, Math.max(ww * grain, k === 0 ? 0.35 : 0));
+        put(x, y, this.zFace(y, H), _c);
+      }
+      _c.copy(C_DEEP).lerp(C_SEA, 0.5).lerp(C_WHITE, ww * 0.6 * grain);
+      put(x, 0, zt + 3, _c);
+      put(x, -0.02, zt + 10, C_SEA);
+    }
+    const g = this.wave.geometry;
+    g.attributes.position.needsUpdate = true;
+    g.attributes.color.needsUpdate = true;
+    g.computeVertexNormals();
   }
 
   private paint() {
@@ -143,6 +261,17 @@ class SurfMission implements Mission {
       this.stroke = 1;
       audio.knock(0.15, 500, 0.04);
       this.fx.burst(this.board.position.clone().setY(0.1), 'spray', 2, 0.5, 0.3);
+    } else if (this.state === 'ride') {
+      // Arriba, en el labio: un aéreo (salta por encima de la cresta, gira y vuelve a la pared)
+      if (this.h > 0.78 && this.air <= 0) {
+        this.air = 1.0;
+        this.tricks++;
+        this.slow = 0.45;
+        audio.whoosh();
+        vibrate(20);
+        this.fx.burst(this.board.position.clone().setY(this.board.position.y + 0.3), 'spray', 12, 1.2, 1.4);
+        this.show.call(this.tricks === 1 ? '¡AÉREO!' : '¡OTRO AÉREO!', true, 0.9);
+      }
     } else if (this.state === 'pop') {
       // De pie: en su momento (con la tabla ya cayendo por la pared, ni antes ni cuando ya ha pasado)
       const k = this.stT;
@@ -151,11 +280,19 @@ class SurfMission implements Mission {
       else {
         this.state = 'ride';
         this.stT = 0;
-        this.rideT = this.tubeT = this.turns = 0;
-        this.lastDir = 0;
+        this.rideT = this.tubeT = this.tricks = 0;
         this.vx = PEEL_V;
         // (la ola rompe a unos metros a su izquierda: empieza en el bolsillo)
         this.curlX = this.x - 4.5;
+        this.broken = true;
+        this.h = 0.45;
+        this.air = 0;
+        this.obs.forEach((o, i) => {
+          o.x = this.x + 18 + i * 17 + Math.random() * 4;
+          o.h = 0.2 + Math.random() * 0.55;
+          o.passed = false;
+          o.mesh.visible = true;
+        });
         this.slow = 0.35;
         audio.whoosh();
         vibrate(25);
@@ -189,6 +326,8 @@ class SurfMission implements Mission {
     this.curlX = -26;
     this.paddleV = 0;
     this.x = 0;
+    this.broken = false;
+    this.faceY = 0;
   }
 
   update(dtRaw: number) {
@@ -234,7 +373,9 @@ class SurfMission implements Mission {
         this.paddleV = Math.max(0, this.paddleV - dt * 0.4);
         b.position.z += this.paddleV * 4.2 * dt;
         // Llega la ola: si va a su ritmo, la coge; si no, le pasa por debajo
-        if (this.waveZ > b.position.z - 1.2) {
+        // (la pared ya la levanta: sube por ella mientras rema)
+        this.faceY = this.yOnFace(b.position.z - this.waveZ, this.hAt(b.position.x));
+        if (this.faceY > 0.2 * this.waveH) {
           if (this.paddleV >= 0.6) {
             this.state = 'pop';
             this.stT = 0;
@@ -245,53 +386,77 @@ class SurfMission implements Mission {
       }
       case 'pop':
         this.waveZ += dt * 7.5;
-        b.position.z = this.waveZ - 1.0;
         lift = Math.min(1, this.stT * 2);
+        {
+          const H = this.hAt(b.position.x), y = (0.2 + 0.3 * lift) * H;
+          b.position.y = y + 0.1;
+          b.position.z = this.waveZ + this.zFace(y, H) + 0.15;
+        }
         if (this.stT > 1.5) this.wipe('¡SE VA LA OLA!');
         break;
       case 'ride': {
         this.rideT += dt;
-        this.waveZ += dt * 5.5;
-        // La ola no rompe siempre igual de rápido: hay tramos que «corren» (hay que ir hacia delante) y tramos que
-        // se paran (hay que frenar para no quedarse sin pared)
-        const peel = PEEL_V * (1 + 0.55 * Math.sin(this.rideT * 0.8 + 0.6) + 0.25 * Math.sin(this.rideT * 2.1));
+        // (de pie, la ola avanza despacio: se queda mar adentro, con la playa lejos)
+        this.waveZ += dt * 1.2;
+        // La ola no rompe siempre igual de rápido: tramos que corren y tramos que se paran
+        const peel = PEEL_V * (1 + 0.45 * Math.sin(this.rideT * 0.8 + 0.6) + 0.2 * Math.sin(this.rideT * 2.1));
         this.curlX += peel * dt;
-        // La tabla va sola con la ola (a su velocidad de siempre); el joystick, a la derecha acelera y a la izquierda
-        // frena (con su inercia, sin tirones)
-        const want = PEEL_V + ax.x * 4.2;
-        this.vx += (want - this.vx) * Math.min(1, dt * 3);
+        // Joystick: arriba/abajo, subir o bajar por la pared; derecha/izquierda, acelerar o frenar. Bajando se coge
+        // velocidad; subiendo se pierde (como de verdad)
+        if (this.air <= 0) this.h = THREE.MathUtils.clamp(this.h + ax.y * 1.5 * dt, 0.05, 0.95);
+        const want = PEEL_V + (0.55 - this.h) * 3.4 + ax.x * 3.2;
+        this.vx += (want - this.vx) * Math.min(1, dt * 2.6);
         this.x += this.vx * dt;
+        const dir = 1;
         const gap = this.x - this.curlX;
-        // Cambios de sentido con velocidad: giros (para el estilo)
-        const dir = Math.sign(this.vx);
-        if (dir && dir !== this.lastDir && Math.abs(this.vx) > 2.5) {
-          if (this.lastDir) {
-            this.turns++;
-            this.fx.burst(b.position.clone().setY(0.6), 'spray', 8, 1.0, 1.0);
-            audio.knock(0.2, 900, 0.03);
+        if (this.air > 0) {
+          this.air -= dt;
+          if (this.air <= 0) {
+            this.h = 0.7;
+            this.fx.burst(b.position.clone(), 'spray', 10, 1.0, 0.8);
+            audio.knock(0.25, 400, 0.05);
           }
-          this.lastDir = dir;
         }
-        // Muy cerca de la espuma: el tubo (bonus); dentro, revolcón; muy lejos, la ola se muere
+        // Los bodyboards: chocar con uno (a su altura y sin ir por el aire) es revolcón; pasarlo, bien
+        for (const o of this.obs) {
+          if (!o.mesh.visible) continue;
+          o.x += PEEL_V * 0.55 * dt;
+          if (!o.passed && Math.abs(this.x - o.x) < 0.9 && Math.abs(this.h - o.h) < 0.17 && this.air <= 0) {
+            o.mesh.visible = false;
+            this.wipe('¡CHOQUE!');
+            break;
+          }
+          if (!o.passed && this.x > o.x + 1) {
+            o.passed = true;
+            audio.chime(1);
+          }
+        }
+        if (this.state !== 'ride') break;
+        // Pillada por la espuma: revolcón; muy por delante: la ola se muere; aguantando, ola buena
         if (gap < 0.35) this.wipe('¡REVOLCÓN!');
-        else if (gap < 2.4) {
+        else if (gap < 2.2) {
           this.tubeT += dt;
           if (this.tubeT > 1.2 && this.tubeT - dt <= 1.2) this.show.call('¡AL TUBO!', true, 1.0);
-        } else if (gap > 13) {
+        } else if (gap > 14) {
           this.state = 'down';
           this.stT = 0;
           if (this.rideT >= RIDE_NEED) this.goodWave();
           else this.wipe('¡SE MUERE LA OLA!');
         }
-        if (this.state === 'ride' && this.rideT >= RIDE_NEED + 3) {
+        if (this.state === 'ride' && this.rideT >= RIDE_NEED + 5) {
           this.state = 'down';
           this.stT = 0;
           this.goodWave();
         }
-        // (en la pared de la ola, por delante de la cresta: a media altura)
-        b.position.set(this.x, 0, this.waveZ + 1.2);
+        // En la pared: abajo, cerca del agua y delante; arriba, junto al labio (en el aéreo, por encima)
+        {
+          const H = this.hAt(this.x), fy = this.h * H * 0.92;
+          this.faceNormal(fy, H, this._n);
+          const up = this.air > 0 ? Math.sin((1 - this.air) * Math.PI) * 1.6 : 0;
+          b.position.set(this.x, fy + up, this.waveZ + this.zFace(fy, H)).addScaledVector(this._n, 0.1);
+        }
         lift = 1;
-        if (Math.random() < dt * 8) this.fx.burst(b.position.clone().setY(0.3).setX(this.x - 0.6 * dir), 'spray', 1, 0.5, 0.4);
+        if (Math.random() < dt * 10) this.fx.burst(b.position.clone().setX(this.x - 0.7 * dir), 'spray', 1, 0.5, 0.4);
         break;
       }
       case 'down':
@@ -304,24 +469,40 @@ class SurfMission implements Mission {
         }
         break;
     }
-    // La ola y la espuma
-    this.wave.position.set(0, 0, this.waveZ);
-    this.wave.scale.set(1, this.waveH, 1 + this.waveH * 0.3);
-    const foamLen = Math.max(0.1, this.curlX + 70);
-    this.foam.visible = this.state === 'ride' || this.state === 'down';
-    this.foam.scale.set(foamLen, Math.max(0.2, this.waveH * 0.6), Math.max(0.2, this.waveH * 0.6));
-    this.foam.position.set(this.curlX - foamLen / 2, this.waveH * 0.55, this.waveZ - 0.2);
-    if (this.foam.visible && Math.random() < dt * 14) this.fx.burst(new THREE.Vector3(this.curlX, this.waveH * 0.8, this.waveZ), 'spray', 2, 1.2, 1.4);
-    // Ella: tumbada remando, o de pie, en postura de surf, inclinada hacia donde va
     const ride = this.state === 'ride';
+    // La ola (alrededor de lo que se ve) y la espuma que salta donde rompe
+    this.buildWave(ride ? this.x + 4 : b.position.x);
+    this.wave.position.set(0, 0, this.waveZ);
+    if (this.broken && this.waveH > 0.5 && Math.random() < dt * 16) {
+      const H = this.hAt(this.curlX);
+      this.fx.burst(new THREE.Vector3(this.curlX + Math.random() * 1.5, H * 0.8, this.waveZ + this.zFace(H * 0.5, H)), 'spray', 2, 1.4, 1.6);
+    }
+    for (const o of this.obs) {
+      if (!o.mesh.visible) continue;
+      if (this.state !== 'ride') {
+        o.mesh.visible = false;
+        continue;
+      }
+      const H = this.hAt(o.x), y = o.h * H * 0.92;
+      this.faceNormal(y, H, this._no);
+      o.mesh.position.set(o.x, y, this.waveZ + this.zFace(y, H)).addScaledVector(this._no, 0.08);
+      o.mesh.quaternion.setFromUnitVectors(UP, this._no);
+    }
+    // Ella: tumbada remando, o de pie, en postura de surf, inclinada hacia donde va
     const lying = this.state === 'wait' || this.state === 'paddle' || this.state === 'intro' || (this.state === 'pop' && false);
     if (this.state !== 'ride') {
       if (this.state !== 'pop' && this.state !== 'paddle') b.position.set(this.x, 0, b.position.z);
     }
     const by = lift ? Math.sin(Math.min(1, lift) * Math.PI * 0.5) * this.waveH * 0.55 : Math.sin(this.t * 1.6) * 0.06;
-    b.position.y = 0.06 + by;
+    if (!ride && this.state !== 'pop') b.position.y = 0.06 + by + (this.state === 'paddle' ? this.faceY : 0);
     // (de pie, la tabla de lado, a lo largo de la ola, hacia donde va; inclinada hacia la pared)
-    b.rotation.set(ride ? 0.35 : lift ? -0.25 * lift : Math.sin(this.t * 1.2) * 0.04, ride ? (this.vx >= 0 ? Math.PI / 2 : -Math.PI / 2) : 0, ride ? -this.vx * 0.03 : 0);
+    const spin = ride && this.air > 0 ? (1 - this.air) * Math.PI * 2 : 0;
+    if (ride) {
+      // (pegada a la pared: su normal; a lo largo de la ola, hacia donde va)
+      this._q.setFromUnitVectors(UP, this._n);
+      this._q2.setFromAxisAngle(UP, Math.PI / 2 + spin);
+      b.quaternion.copy(this._q).multiply(this._q2);
+    } else b.rotation.set(lift ? -0.35 * lift : Math.sin(this.t * 1.2) * 0.04, 0, 0);
     if (lying || this.state === 'pop') {
       // Tumbada boca abajo, remando con los brazos
       me.root.position.set(b.position.x, b.position.y + 0.12, b.position.z - 0.2);
@@ -334,24 +515,30 @@ class SurfMission implements Mission {
     } else {
       // De pie, de lado sobre la tabla, rodillas flexionadas y brazos abiertos
       me.root.position.set(b.position.x, b.position.y + 0.08, b.position.z);
-      // (de lado sobre la tabla: el pecho hacia la playa, los pies a lo largo de la tabla)
-      me.root.rotation.set(0, 0, 0);
+      // (de lado sobre la tabla: el pecho hacia la playa, los pies a lo largo de la tabla; medio inclinada con la
+      // pared; en el aéreo, gira con ella)
+      if (ride) {
+        this._q.setFromUnitVectors(UP, this._n);
+        this._q2.identity().slerp(this._q, 0.5);
+        me.root.quaternion.copy(this._q2).multiply(this._q.setFromAxisAngle(UP, spin));
+      } else me.root.rotation.set(0, 0, 0);
       animatePerson(me, dt, this.state === 'down' && this.good >= NEED ? 'cheer' : 'idle');
       if (this.state === 'ride' || (this.state === 'down' && this.good > 0)) {
         me.kneeL.rotation.x = me.kneeR.rotation.x = -0.6;
         me.armL.rotation.set(-0.2, 0, 1.2 + Math.sin(this.t * 3) * 0.1);
         me.armR.rotation.set(-0.2, 0, -1.2 - Math.sin(this.t * 3) * 0.1);
-        me.root.rotation.z = -this.vx * 0.03;
       }
     }
     // Cámara: detrás de ella y algo de lado; en el paseo por la ola, de lado y baja, con la pared detrás
     const cam = this.ctx.camera;
     const tall = cam.aspect < 1;
     // (de lado: se ve la ola llegando por la izquierda; de pie, desde delante de la pared, con la espuma detrás)
-    if (ride) this.camAt.set(this.x + (tall ? 2.2 : 4.5), 3.3, b.position.z + (tall ? 8.5 : 8));
+    // (de pie: desde la playa y algo por detrás de ella, mirando a lo largo de la ola: lo que viene, delante)
+    const Hc = this.hAt(this.x);
+    if (ride) this.camAt.set(this.x + (tall ? 5.5 : 7.5), Hc * 0.35 + 0.9, this.waveZ + 0.4 + 1.5 * Hc + (tall ? 4.2 : 5));
     else this.camAt.set(b.position.x + (tall ? 5.5 : 6.5), 2.8, b.position.z + (tall ? 5.5 : 4.5));
     cam.position.lerp(this.camAt, Math.min(1, dtRaw * 2.4));
-    this.look.lerp(ride ? new THREE.Vector3(this.x - (tall ? 0.6 : 1.2), 1.1 + by * 0.5, b.position.z - 0.5) : new THREE.Vector3(b.position.x + 0.8, 0.7, b.position.z - 4), Math.min(1, dtRaw * 3));
+    this.look.lerp(ride ? new THREE.Vector3(this.x - 1, this.h * Hc * 0.55 + 1.0, this.waveZ + 1.2) : new THREE.Vector3(b.position.x + 0.8, 0.7, b.position.z - 4), Math.min(1, dtRaw * 3));
     cam.lookAt(this.look);
     this.hud.setAction(this.state === 'paddle' ? '🏄 Remar' : this.state === 'pop' ? '🏄 De pie' : null);
     this.sky.update(cam, dtRaw);
@@ -362,7 +549,7 @@ class SurfMission implements Mission {
     this.good++;
     audio.chime(3);
     audio.cheer(0.4);
-    this.show.call(this.tubeT > 1.2 ? '¡OLA DE TUBO!' : this.turns >= 3 ? '¡CON ESTILO!' : '¡OLA!', true, 1.2);
+    this.show.call(this.tricks ? '¡OLA CON AÉREO!' : this.tubeT > 1.2 ? '¡OLA DE TUBO!' : '¡OLA!', true, 1.2);
     this.paint();
   }
 

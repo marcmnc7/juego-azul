@@ -36,6 +36,7 @@ import { cinema } from './core/cinema';
 import { stage } from './core/stage';
 import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
+import { surfMission } from './world/missions/surf';
 import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { prepareMapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
@@ -730,6 +731,7 @@ if (TEST)
         hobbiesFinale(() => goMap());
       },
       hipica: () => ridingMission(() => {}),
+      surf: () => surfMission(() => {}),
       credits: () => credits(() => goMap()),
       /** Anima a los personajes un paso (con la página oculta el bucle casi no corre). */
       rig: (dt = 0.033) => updateRigPeople(dt),

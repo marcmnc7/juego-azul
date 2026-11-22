@@ -87,8 +87,8 @@ export function hobbyGame(which: Hobby, onDone: () => void, onExit: () => void =
   const CARD = {
     voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4', icon: '🏐', how: 'Un partido contra Gas, a 5 puntos. Ponte bajo la pelota y dale a tiempo; luego remata arriba del todo, apuntando adonde no esté él.' },
     agility: { kicker: 'Octubre', title: 'Agility con Joy', sub: 'Lo que nos gusta · 2 de 4', icon: '🐕', how: 'Primero, las órdenes de Gas en el césped. Luego, el recorrido: lleva a Joy por cada obstáculo. Tres faltas y eliminada.' },
-    hipica: { kicker: 'Noviembre', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', how: 'Doce obstáculos. Lleva el galope y bate en su punto: ni muy pronto ni muy tarde. Tres faltas y eliminada.' },
-    surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', how: 'Cuando llegue la ola, rema y ponte de pie a tiempo. Luego, delante de la espuma, sin que te pille. Tres olas buenas.' },
+    hipica: { kicker: 'Noviembre', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', how: 'Doce obstáculos repartidos por la pista: gira con el joystick hacia cada uno, lleva el galope y bate en su punto. Tres faltas y eliminada.' },
+    surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', how: 'Cuando llegue la ola, rema y ponte de pie a tiempo. Luego, con el joystick, sube y baja por la pared delante de la espuma, esquiva a los del bodyboard y, arriba del todo, 🏄 para un aéreo. Tres olas buenas.' },
   }[which];
   // (4.4.9: sin chats: del rótulo, directo al juego)
   const CHAT = null as Parameters<typeof phoneChat>[0] | null;
