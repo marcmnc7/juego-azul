@@ -903,7 +903,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       const pad = tileH * 0.9 + 10;
       track.style.setProperty('--tile', `${tileH}px`);
       // (antes de «Continuará…», un tramo más largo: ahí van las tres bolitas de «Lo que nos gusta»)
-      const extra = tileH * 1.3;
+      const extra = tileH * 1.7;
       nodes.forEach((n, i) => {
         const x = W * SWAY[i], y = pad + i * gap + (i === nodes.length - 1 ? extra : 0);
         n.style.left = `${x}px`;
@@ -958,20 +958,19 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
           len.push(len[k - 1] + Math.hypot(q[0] - pt[k - 1][0], q[1] - pt[k - 1][1]));
           pt.push(q);
         }
+        // Justo a mitad del tramo, por longitud (si hay varias, juntas alrededor de la mitad, a unos 52 px una de otra)
         let k = 1;
         let f: number;
+        const off = (mn.j - (mn.n - 1) / 2) * 52;
         if (tall) {
-          // En vertical, en el hueco libre entre el rótulo del capítulo de arriba (fecha, nombre y estado, debajo de
-          // su baldosa) y la baldosa siguiente: a mitad de longitud caía encima del nombre del capítulo
-          const yTop = y0 + tl * 0.5 + tl * 0.82, yBot = y1 - tl * 0.5;
-          // (si hay varias en el mismo tramo, repartidas por el hueco)
-          const want = yTop + ((yBot - yTop) * (mn.j + 1)) / (mn.n + 1);
+          // En vertical, a la vista: a mitad entre el pie de una baldosa y la cabeza de la siguiente
+          const want = (y0 + tl * 0.5 + (y1 - tl * 0.5)) / 2 + off;
           while (k < N && pt[k][1] < want) k++;
           f = (want - pt[k - 1][1]) / Math.max(1e-6, pt[k][1] - pt[k - 1][1]);
         } else {
-          const half = (len[N] * (mn.j + 1)) / (mn.n + 1);
-          while (k < N && len[k] < half) k++;
-          f = (half - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
+          const want = len[N] / 2 + off;
+          while (k < N && len[k] < want) k++;
+          f = (want - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
         }
         // (en vertical, el rótulo al lado libre del punto: debajo le pasaba la línea que baja)
         mn.b.classList.toggle('side-r', tall && x1 >= x0);

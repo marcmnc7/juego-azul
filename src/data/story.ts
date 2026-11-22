@@ -1224,6 +1224,11 @@ export const FINALE = {
     { who: 'Narrador', text: 'Y los caballos: ella, desde siempre; él, aprendiendo a su lado.' },
     { who: 'Gas', text: 'Tú delante, que yo te sigo. Salto a salto.' },
   ] as Line[],
+  // (inventadas: Marc, cámbialas si quieres) El surf: lo de él («Yo caballo y surf»), y ahora también lo de ella
+  surf: [
+    { who: 'Narrador', text: 'Y el surf: lo suyo de siempre. Ahora, también lo de ella.' },
+    { who: 'Gas', text: 'Tú rema fuerte, que la ola te la busco yo.' },
+  ] as Line[],
   end: [{ who: 'Narrador', text: 'Y así se acaba este año. Solo este.' }] as Line[],
   credits: [
     ['Azul', 'Margaux'],

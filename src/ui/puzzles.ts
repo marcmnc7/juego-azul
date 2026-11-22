@@ -64,7 +64,7 @@ function done(f: ReturnType<typeof frame>, line: string, onDone: () => void) {
 export function runPuzzle(id: string, onDone: () => void, onBack: () => void) {
   const p = PUZZLES.find((x) => x.id === id)!;
   if (p.kind === 'crucigrama') return crossword(onDone, onBack, '¡Hecho! 💙');
-  if (p.kind === 'voley' || p.kind === 'agility' || p.kind === 'hipica') return hobbyGame(p.kind, onDone, onBack);
+  if (p.kind === 'voley' || p.kind === 'agility' || p.kind === 'hipica' || p.kind === 'surf') return hobbyGame(p.kind, onDone, onBack);
   const f = frame(p, onBack);
   ({ quien, sopa, orden, parejas, completa, ahorcado, emojis } as Record<string, (f: ReturnType<typeof frame>, end: (l: string) => void) => void>)[p.kind](f, (l) => done(f, l, onDone));
 }

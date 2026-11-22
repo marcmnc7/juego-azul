@@ -9,6 +9,7 @@ import { CHATS } from '../data/chats';
 import { beachMission } from '../world/missions/beach';
 import type { Line } from '../data/story';
 import { ridingMission } from '../world/missions/riding';
+import { surfMission } from '../world/missions/surf';
 
 const root = () => document.getElementById('ui')!;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string) {
@@ -70,7 +71,7 @@ function storyCard(o: { kicker: string; title: string; sub: string; icon: string
   return scr;
 }
 
-export type Hobby = 'voley' | 'agility' | 'hipica';
+export type Hobby = 'voley' | 'agility' | 'hipica' | 'surf';
 
 /**
  * Uno de los tres juegos del final (cada uno, su bolita en el mapa): su rótulo (con lo que se cuenta), el chat de esos
@@ -105,30 +106,34 @@ export function hobbyGame(which: Hobby, onDone: () => void, onExit: () => void =
   h.root.style.display = 'none';
   h.setIcon('');
   const CARD = {
-    voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 3', icon: '🏐', lines: [...FINALE.barcelona, ...ANIVERSARIO.september] },
-    agility: { kicker: 'Octubre', title: 'Joy, campeón', sub: 'Lo que nos gusta · 2 de 3', icon: '🐕', lines: ANIVERSARIO.october },
-    hipica: { kicker: 'Noviembre', title: 'A caballo', sub: 'Lo que nos gusta · 3 de 3', icon: '🐎', lines: FINALE.horses },
+    voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 4', icon: '🏐', lines: [...FINALE.barcelona, ...ANIVERSARIO.september] },
+    agility: { kicker: 'Octubre', title: 'Joy, campeón', sub: 'Lo que nos gusta · 2 de 4', icon: '🐕', lines: ANIVERSARIO.october },
+    hipica: { kicker: 'Noviembre', title: 'A caballo', sub: 'Lo que nos gusta · 3 de 4', icon: '🐎', lines: FINALE.horses },
+    surf: { kicker: 'Y lo que viene', title: 'Surf', sub: 'Lo que nos gusta · 4 de 4', icon: '🏄', lines: FINALE.surf },
   }[which];
-  const CHAT = { voley: CHATS.voley, agility: CHATS.agility, hipica: CHATS.caballos }[which];
+  const CHAT = { voley: CHATS.voley, agility: CHATS.agility, hipica: CHATS.caballos, surf: null }[which];
   let token = 0;
   const finish = (my: number) => () => {
     if (gone || my !== token) return;
     end();
-    if (which !== 'hipica') return onDone();
+    if (which !== 'surf') return onDone();
     // (el último: el final del año y los créditos)
     storyCard({ kicker: 'Y ahora', title: 'Fin de este año', sub: 'Lo que nos gusta', icon: '💙', lines: FINALE.end, go: 'Seguir' }, (c) => (c.remove(), credits(onDone)), onDone);
   };
-  const game = (done: () => void, course = false) => (which === 'voley' ? beachMission(done) : which === 'agility' ? parkMission(done, course) : ridingMission(done));
+  const game = (done: () => void, course = false) => (which === 'voley' ? beachMission(done) : which === 'agility' ? parkMission(done, course) : which === 'hipica' ? ridingMission(done) : surfMission(done));
   const play = (direct = false, course = false) => {
     const my = ++token;
     if (direct) return game(finish(my), course);
     storyCard(
       CARD,
-      (c) =>
-        phoneChat(CHAT, () => {
+      (c) => {
+        const go = () => {
           c.remove();
           if (my === token && !gone) game(finish(my));
-        }),
+        };
+        if (CHAT) phoneChat(CHAT, go);
+        else go();
+      },
       leave,
     );
   };
