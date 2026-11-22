@@ -813,7 +813,8 @@ export class LevelSantJoan implements Level {
   update(dt: number) {
     this.t += dt;
     // (el botón fijo: 📷 en la foto exacta, 🌰 con las avellanes; si no, ✋)
-    this.hud.setIcon(this.phase === 'exact' ? '📷' : this.phase === 'nuts' ? '🌰' : '✋');
+    // (4.4.12) Fijo mientras duran las avellanas y la foto exacta; si no, según el contexto
+    this.hud.setIcon(this.phase === 'exact' ? '📷' : this.phase === 'nuts' ? '🌰' : null);
     if (this.home) {
       this.updateHome(dt);
       return;

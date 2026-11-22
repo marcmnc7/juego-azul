@@ -1552,7 +1552,8 @@ export class LevelCena implements Level {
       label = '👋 Adiós';
       action = () => this.giveHelmet();
     }
-    this.hud.setIcon(this.phase === 'alarm' ? '💡' : '✋');
+    // (4.4.12) Según el contexto; durante la alarma, 💡 fijo
+    this.hud.setIcon(this.phase === 'alarm' ? '💡' : null);
     this.hud.setAction(label, !!label && this.phase !== 'wait');
     if (this.input.consumeAction() && action && (!this.busy || this.phase === 'wait')) action();
     if (this.phase === 'wait' && this.busy) this.hud.setAction(null);

@@ -36,7 +36,8 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
       // Con un diálogo abierto la tecla solo sirve para avanzarlo (si no, se reabría al cerrarlo)
-      if ((e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') && !document.querySelector('.dialogue')) {
+      // (4.4.12) y sin botón a la vista (nada cerca), la tecla tampoco hace nada
+      if ((e.code === 'Space' || e.code === 'KeyE' || e.code === 'Enter') && !document.querySelector('.dialogue') && !(document.querySelector('#ui .action-btn') && !document.querySelector('#ui .action-btn:not(.idle)'))) {
         this.actionQueued = true;
         this.actionAt = performance.now();
       }

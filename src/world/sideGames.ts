@@ -3205,7 +3205,6 @@ export class RoseShoot {
     }
     // El botón de disparar (fijo: 📸)
     this.ctl.hud.setIcon('📸');
-    this.ctl.hud.setExtra([]);
     const can = this.started && this.state !== 'done';
     this.ctl.hud.setAction(can ? SIDE.roses.btn : null, can);
     if (input.consumeAction() && can) this.shoot();
@@ -3227,6 +3226,7 @@ export class RoseShoot {
 
   dispose() {
     this.ui.remove();
+    this.ctl.hud.setIcon(null);
     this.ctl.hud.setAction(null);
     disposeScene(this.scene);
   }

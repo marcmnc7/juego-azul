@@ -77,6 +77,8 @@ class SurfMission implements Mission {
   /** (4.4.11) De pie: la altura en la pared (0 abajo, 1 en el labio), el aéreo y los que hay en la ola. */
   private h = 0.5;
   private air = 0;
+  /** (4.4.12) Pulsar 🏄 fuera del labio: una flexión corta (baja y sube) con su salpicadura. */
+  private flex = 0;
   private tricks = 0;
   private obs: { x: number; h: number; mesh: THREE.Object3D; passed: boolean }[] = [];
   private camAt = new THREE.Vector3();
@@ -271,6 +273,10 @@ class SurfMission implements Mission {
         vibrate(20);
         this.fx.burst(this.board.position.clone().setY(this.board.position.y + 0.3), 'spray', 12, 1.2, 1.4);
         this.show.call(this.tricks === 1 ? '¡AÉREO!' : '¡OTRO AÉREO!', true, 0.9);
+      } else if (this.air <= 0 && this.flex <= 0) {
+        this.flex = 0.35;
+        audio.knock(0.12, 420, 0.04);
+        this.fx.burst(this.board.position.clone().setY(this.board.position.y + 0.1), 'spray', 5, 0.7, 0.6);
       }
     } else if (this.state === 'pop') {
       // De pie: en su momento (con la tabla ya cayendo por la pared, ni antes ni cuando ya ha pasado)
@@ -524,7 +530,10 @@ class SurfMission implements Mission {
       } else me.root.rotation.set(0, 0, 0);
       animatePerson(me, dt, this.state === 'down' && this.good >= NEED ? 'cheer' : 'idle');
       if (this.state === 'ride' || (this.state === 'down' && this.good > 0)) {
-        me.kneeL.rotation.x = me.kneeR.rotation.x = -0.6;
+        this.flex = Math.max(0, this.flex - dt);
+        const fk = Math.sin((this.flex / 0.35) * Math.PI);
+        me.kneeL.rotation.x = me.kneeR.rotation.x = -0.6 - fk * 0.5;
+        me.root.position.y -= fk * 0.12;
         me.armL.rotation.set(-0.2, 0, 1.2 + Math.sin(this.t * 3) * 0.1);
         me.armR.rotation.set(-0.2, 0, -1.2 - Math.sin(this.t * 3) * 0.1);
       }

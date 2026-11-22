@@ -1330,7 +1330,8 @@ export class Level1 implements Level {
         }
       }
     }
-    this.hud.setIcon(this.stage === 'water' ? '💦' : '✋');
+    // (4.4.12) Según el contexto (💬 la gente, 🪑 las sillas…); en la pistola de agua, 💦 fijo
+    this.hud.setIcon(this.stage === 'water' ? '💦' : null);
     this.hud.setAction(label, pulse);
     if (this.input.consumeAction() && this.pendingAction) this.pendingAction();
 

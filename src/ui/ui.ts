@@ -2316,19 +2316,40 @@ export function livesChip(icon: string, left: number, total: number) {
   return `<span class="chip lives${l <= 1 ? ' warn' : ''}">${icon} ${'<i class="hp on">♥</i>'.repeat(l)}${'<i class="hp">♥</i>'.repeat(total - l)}</span>`;
 }
 
-/** El botón de parar el coche (cap. 3): siempre el mismo, azul y con su palabra. */
+/** El botón de parar el coche (cap. 3): 🛑. */
 export const STOP_LABEL = '🛑 Parar';
+
+const EMOJI = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/u;
+/** La cara del botón según lo que se puede hacer: el emoji de su texto; si no lleva, 💬 hablar, 🪑 sentarse, ✋ lo demás. */
+export function actionIcon(label: string) {
+  const m = label.match(EMOJI);
+  if (m) return m[0];
+  if (/hablar|decir|saludar|preguntar|charlar/i.test(label)) return '💬';
+  if (/sent(ar|ad)/i.test(label)) return '🪑';
+  return '✋';
+}
+
+const FIRST_ACT_KEY = 'margaux-act1';
+/** La primera vez en todo el juego que sale el botón (entra con rebote y sonido, solo esa vez). */
+function firstActionEver() {
+  try {
+    if (localStorage.getItem(FIRST_ACT_KEY) === '1') return false;
+    localStorage.setItem(FIRST_ACT_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface Hud {
   root: HTMLElement;
   setObjective(text: string): void;
   setArrow(angle: number | null): void;
   setCounters(html: string): void;
+  /** Lo que se puede hacer ahora (null: nada cerca). En el modo según el contexto, el botón sale solo con esto. */
   setAction(label: string | null, pulse?: boolean): void;
-  /** La cara del botón de acción (fija mientras dure ese tipo de juego; por defecto, ✋). */
-  setIcon(face: string): void;
-  /** Botones de acción de más, cuando hay varias cosas distintas que hacer a la vez (cada uno, la suya). */
-  setExtra(buttons: { icon: string; press: () => void }[]): void;
+  /** El modo del botón: null, según el contexto (por defecto); un emoji, fijo con esa cara (minijuegos); '', sin botón. */
+  setIcon(face: string | null): void;
   remove(): void;
 }
 
@@ -2456,27 +2477,79 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     root.append(menuBtn);
   }
 
-  // (4.4.4) El botón de acción: siempre azul y siempre ahí (no aparece al acercarse ni cambia de cara según lo que
-  // haya cerca: no da pistas). Su cara depende del tipo de juego (✋ para interactuar, «Parar» conduciendo…)
-  const act = el('button', 'action-btn' + (mission ? ' m-hud' : ''), '✋');
-  let face = '✋';
+  // (4.4.12) El botón de acción aparece donde se PUEDE hacer algo (nunca solo donde se debe). Dos modos:
+  // · según el contexto (al pasear, conducir…): oculto, y sale cuando el capítulo dice que hay algo cerca (setAction);
+  //   su cara es el verbo: el emoji de la acción (💬 hablar, 🪑 sentarse; si no lleva, ✋).
+  // · fijo (minijuegos): siempre a la vista con su cara (setIcon('🛶')…) mientras dure el juego.
+  // Sin parpadeos: al irse se queda ~300 ms y se desvanece; al llegar entra suave (la primera vez, con rebote y sonido).
+  const act = el('button', 'action-btn hidden idle' + (mission ? ' m-hud' : ''), '✋');
+  act.setAttribute('aria-label', 'Acción');
+  /** null: según el contexto; '': sin botón; un emoji: fijo con esa cara. */
+  let fixed: string | null = null;
+  let label: string | null = null;
+  let shownFace = '';
+  let visible = false;
+  let leaveT = 0;
+  let goneT = 0;
   act.onpointerdown = (e) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!visible && !act.classList.contains('leaving')) return;
     onAction();
     act.classList.remove('tap');
     void act.offsetWidth;
     act.classList.add('tap');
   };
-  const extras = el('div', 'action-extra' + (mission ? ' m-hud' : ''));
-  let extraKey = '';
   // (la ayuda de los controles ya la dan los primeros pasos y «Cómo se juega»)
   void hintText;
   const hint = el('div', 'hint-move');
-  root.append(top, act, extras);
+  root.append(top, act);
   const paintFace = (f: string) => {
-    act.classList.toggle('word', !/^\p{Extended_Pictographic}/u.test(f) && f !== '✋');
-    act.textContent = f === STOP_LABEL ? 'Parar' : f;
+    if (f === shownFace) return;
+    shownFace = f;
+    act.textContent = f;
+  };
+  // (los capítulos pueden poner y quitar la acción varias veces en un mismo fotograma: cuenta lo último)
+  let queued = false;
+  const schedule = () => {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      refresh();
+    });
+  };
+  const refresh = () => {
+    if (!act.isConnected) return;
+    const want = fixed !== null ? fixed !== '' : !!label;
+    if (want) {
+      paintFace(fixed || actionIcon(label!));
+      clearTimeout(leaveT);
+      clearTimeout(goneT);
+      leaveT = goneT = 0;
+      act.classList.remove('idle', 'leaving', 'out');
+      if (!visible) {
+        visible = true;
+        act.classList.remove('hidden', 'in', 'first');
+        void act.offsetWidth;
+        if (firstActionEver()) {
+          act.classList.add('first');
+          audio.chime(1);
+          vibrate(12);
+        } else act.classList.add('in');
+      }
+    } else if (visible) {
+      // Se queda un momento (por si vuelve: nada de parpadeos) y luego se desvanece
+      visible = false;
+      act.classList.add('leaving');
+      leaveT = window.setTimeout(() => {
+        act.classList.add('out');
+        goneT = window.setTimeout(() => {
+          act.classList.remove('leaving', 'out', 'in', 'first');
+          act.classList.add('hidden', 'idle');
+        }, 220);
+      }, 300);
+    }
   };
   return {
     root: top,
@@ -2511,46 +2584,20 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     setCounters: (h) => {
       if (counters.innerHTML !== h) counters.innerHTML = h;
     },
-    setAction: (label) => {
-      // (lo que se puede hacer ahora solo queda para la accesibilidad: el botón no cambia ni se enciende)
-      const t = label ?? '';
+    setAction: (l) => {
+      const t = l ?? '';
       if (act.title !== t) {
         act.title = t;
         act.setAttribute('aria-label', t || 'Acción');
       }
+      if (l === label) return;
+      label = l;
+      schedule();
     },
     setIcon: (f) => {
-      if (f === face) return;
-      face = f;
-      paintFace(f);
-    },
-    setExtra: (buttons) => {
-      const key = buttons.map((b) => b.icon).join('|');
-      if (key !== extraKey) {
-        extraKey = key;
-        extras.replaceChildren(
-          ...buttons.map(() => {
-            const b = el('button', 'action-btn');
-            b.onpointerdown = (e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              b.classList.remove('tap');
-              void b.offsetWidth;
-              b.classList.add('tap');
-            };
-            return b;
-          }),
-        );
-      }
-      buttons.forEach((def, i) => {
-        const b = extras.children[i] as HTMLButtonElement;
-        b.textContent = def.icon;
-        b.onclick = null;
-        b.onpointerup = (e) => {
-          e.stopPropagation();
-          def.press();
-        };
-      });
+      if (f === fixed) return;
+      fixed = f;
+      schedule();
     },
     remove: () => {
       clearTimeout(objTimer);
@@ -2559,8 +2606,9 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
       if (mission) missionObj = '';
       top.remove();
       counters.remove();
+      clearTimeout(leaveT);
+      clearTimeout(goneT);
       act.remove();
-      extras.remove();
       hint.remove();
       menuBtn.remove();
     },

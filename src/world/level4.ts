@@ -1120,7 +1120,8 @@ export class Level4 implements Level {
       label = '💙 A su lado';
       action = () => this.makeLove();
     }
-    this.hud.setIcon(this.mp ? '🗣️' : '✋');
+    // (4.4.12) Según el contexto: también el «¡Polo!», solo cuando le toca contestar
+    this.hud.setIcon(null);
     this.hud.setAction(label, !!label);
     if (this.input.consumeAction() && action) action();
 

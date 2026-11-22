@@ -1029,8 +1029,10 @@ export class Level2 implements Level {
       if (ax < -0.5 && this.prevAx >= -0.5) this.steer(-1);
     }
     this.prevAx = ax;
-    // (el botón fijo: «Parar» en la carretera; ✋ en lo demás)
-    this.hud.setIcon(['drive1', 'drive2', 'cow', 'marcial', 'fuel', 'arriveSV'].includes(this.phase) ? STOP_LABEL : this.phase === 'grill' || this.phase === 'zambDone' ? '' : '✋');
+    // (4.4.12) Según el contexto: 🛑 solo delante de las cafeterías, la vaca, la gasolinera y la llegada (sin paradas
+    // falsas); cada fotograma se empieza sin nada y lo pone quien toque
+    this.hud.setIcon(null);
+    this.hud.setAction(null);
     const acted = this.input.consumeAction();
     this.input.consumeCam();
 
@@ -1235,6 +1237,21 @@ export class Level2 implements Level {
     if (this.phase === 'drive1' && this.marcialDone && !this.gasDone) this.updateGasStop(acted);
     if (this.phase === 'fuel') this.updateFuel(dt);
     if (this.phase === 'drive1' && this.gasDone && !this.campDone && this.carZ >= CAMP_Z && !this.rewinding && this.tramoOk()) this.arriveCamp();
+    // La llegada (el camping, San Vicente, Logroño): el 🛑 sale al acercarse y para ahí mismo (si no, se para sola)
+    if (drive && !this.rewinding && !this.busy) {
+      const toCamp = this.phase === 'drive1' && this.gasDone && !this.campDone ? CAMP_Z - this.carZ : Infinity;
+      const toSV = this.phase === 'drive1' && this.campDone ? LEG1 - 25 - this.dist : Infinity;
+      const toLog = this.phase === 'drive2' ? LEG2 - this.dist : Infinity;
+      const near = Math.min(toCamp, toSV, toLog);
+      if (near < 35 && near > 0 && this.photos - this.tramoBase >= this.tramoNeed) {
+        this.hud.setAction(STOP_LABEL, false);
+        if (acted) {
+          if (near === toCamp) this.arriveCamp();
+          else if (near === toSV) this.arriveSV();
+          else this.arriveLogrono();
+        }
+      }
+    }
     this.updateCows(dt, acted);
     if (this.phase === 'grill' || this.phase === 'zambDone') this.updateGrill(dt);
     this.updateRoute();

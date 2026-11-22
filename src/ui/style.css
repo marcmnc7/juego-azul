@@ -2540,24 +2540,25 @@ html, body { background: #000; }
 /* 4.4.2 Grabando a Fito y en la sesión de fotos: nada del visor coge el dedo (si no, el joystick no respondía) */
 .cam, .cam *, .rose-phone, .rose-phone * { pointer-events: none !important; }
 
-/* 4.4.4 · El botón de acción, igual en todo el juego: azul, redondo, siempre a la vista y sin encenderse ni latir
-   según lo que haya cerca (no da pistas). Si hay varias acciones a la vez, varios botones iguales en fila */
+/* 4.4.12 · El botón de acción: azul y redondo en todo el juego. Sale donde se puede hacer algo (o fijo en los
+   minijuegos), entra suave, se queda un momento al irse y se desvanece; la primera vez, con un rebote */
 .action-btn, .action-btn.pulse, .action-btn.stop {
   background: radial-gradient(circle at 35% 30%, #5aa2ff, #1a73e8 62%, #0f4fb3) !important;
   border: 2px solid rgba(255, 255, 255, .8); color: #fff;
-  box-shadow: 0 8px 22px -6px rgba(10, 40, 90, .6); animation: none !important;
+  box-shadow: 0 8px 22px -6px rgba(10, 40, 90, .6); animation: none;
+  transition: opacity .2s ease, transform .2s ease;
 }
-.action-btn.hidden { display: grid; }
-.action-btn.word { font: 800 17px/1 var(--font); letter-spacing: .02em; }
+.action-btn.hidden { display: none !important; }
+.action-btn.in { animation: actIn .26s cubic-bezier(.2,.9,.3,1.2); }
+.action-btn.first { animation: actFirst .75s cubic-bezier(.2,.9,.3,1); }
+.action-btn.out { opacity: 0; transform: scale(.8); pointer-events: none; }
 .action-btn.tap { animation: actTap .22s ease-out !important; }
+@keyframes actIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes actFirst { 0% { opacity: 0; transform: scale(.3); } 45% { opacity: 1; transform: scale(1.22); } 65% { transform: scale(.9); } 82% { transform: scale(1.06); } 100% { transform: scale(1); } }
 @keyframes actTap { 40% { transform: scale(.88); } 100% { transform: scale(1); } }
-.action-extra { position: fixed; z-index: 5; right: calc(max(18px, env(safe-area-inset-right)) + 86px); bottom: max(22px, calc(env(safe-area-inset-bottom) + 8px)); display: flex; flex-direction: row-reverse; gap: 10px; pointer-events: none; }
-.action-extra:empty { display: none; }
-.action-extra .action-btn { position: static; pointer-events: auto; }
-#ui:has(.dialogue, .phone-overlay) .action-extra, #ui.filming .action-extra, #ui:has(.ll) .action-extra, #ui:has(.pee-game, .gh-game, .vf, .pk, .hp-screen) .action-extra { visibility: hidden; }
-#ui.mission > .action-extra:not(.m-hud) { display: none !important; }
-/* (cara vacía: en esa parte no hay acción; y en los minijuegos con sus propios mandos, fuera) */
-.action-btn:empty { display: none !important; }
+/* (con los botones de carril del coche, encima de ellos y con su emoji del mismo tamaño) */
+#ui:has(.lane-btn.right:not([hidden])) .action-btn { font-size: 32px; }
+/* (en los minijuegos con sus propios mandos, fuera) */
 #ui:has(.rhythm, .cam, .gauge, .side-panel, .table-shelf, .trick-bar) .action-btn:not(.m-hud) { display: none !important; }
 
 /* 4.4.4 · Los juegos del final: rótulos de retransmisión */

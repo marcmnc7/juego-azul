@@ -1502,37 +1502,29 @@ export class LevelMoto implements Level {
     leanTorso(this.azul, this.azul.rig ? 0 : 0.2, 0, this.azulLean - this.lean * 0.3);
     for (const w of this.moto.wheels) w.rotation.x += (this.speed * dt) / 0.33;
 
-    // (4.4.4) Botones fijos, sin pistas: en marcha, ✌️ saludar (a lo que venga de frente: hay que fijarse si es moto),
-    // 📷 la foto y 📣 el brrruuum del túnel, cada uno el suyo y siempre a la vista; ante la valla, 📷 la foto del faro
+    // (4.4.12) Según el contexto, un solo botón: 📷 en las bahías de foto, 📣 en el túnel y ✌️ con lo que venga de
+    // frente (motos y coches por igual: hay que fijarse; saludar a un coche es fallo); ante la valla, 📷 el faro
     let label: string | null = null;
     let act: (() => void) | null = null;
+    this.hud.setIcon(null);
     if (riding) {
-      this.hud.setIcon('✌️');
-      const o = this.waveTarget();
-      label = o ? MOTO.wave.btn : null;
-      act = () => (o ? this.wave(o) : (this.azulWaveT = 1.1));
-      this.hud.setExtra([
-        {
-          icon: '📷',
-          press: () => {
-            if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) this.takePhoto(this.bayStop);
-          },
-        },
-        {
-          icon: '📣',
-          press: () => {
-            if (!this.tunnelDone && !this.tunnelBack && this.inTunnel(this.s * this.len)) this.brum();
-          },
-        },
-      ]);
-    } else {
-      this.hud.setExtra([]);
-      const faro = this.phase === 'creus';
-      this.hud.setIcon(faro ? '📷' : '✋');
-      if (faro && this.faroReady && !this.faroOpen && !this.faroDone && !document.querySelector('.dialogue')) {
-        label = MOTO.faroPhoto.btn;
-        act = () => this.faroPhoto();
+      if (this.bayStop >= 0 && !this.photoTaken[this.bayStop]) {
+        const i = this.bayStop;
+        label = '📷 ' + MOTO.photoHint.replace(/^\p{Extended_Pictographic}\uFE0F?\s*/u, '');
+        act = () => this.takePhoto(i);
+      } else if (!this.tunnelDone && !this.tunnelBack && this.inTunnel(this.s * this.len)) {
+        label = '📣 ¡Brrruuum!';
+        act = () => this.brum();
+      } else {
+        const o = this.waveTarget();
+        if (o) {
+          label = MOTO.wave.btn;
+          act = () => this.wave(o);
+        }
       }
+    } else if (this.phase === 'creus' && this.faroReady && !this.faroOpen && !this.faroDone && !document.querySelector('.dialogue')) {
+      label = MOTO.faroPhoto.btn;
+      act = () => this.faroPhoto();
     }
     this.hud.setAction(label, !!label);
     const pressed = this.input.consumeAction();
