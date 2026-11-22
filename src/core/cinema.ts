@@ -29,6 +29,8 @@ export interface Shot {
   handheld?: number;
   /** Se llama al empezar el plano. */
   at?: () => void;
+  /** Plano compuesto a mano (varios personajes a la vez): el encuadre automático de los diálogos no lo gira. */
+  lock?: boolean;
 }
 
 const val = (a: At | undefined, out: THREE.Vector3) => (a === undefined ? null : out.copy(typeof a === 'function' ? a() : a));
@@ -47,6 +49,10 @@ class Cinema {
   private l1 = new THREE.Vector3();
   /** Velocidad del mundo (la lee el bucle principal). Vuelve a 1 con suavidad al acabar. */
   timeScale = 1;
+  /** ¿El plano actual no se deja girar hacia quien habla? */
+  get locked() {
+    return !!this.shots[this.i]?.lock;
+  }
   /** Punto enfocado del plano actual, o null. */
   readonly focus = new THREE.Vector3();
   hasFocus = false;

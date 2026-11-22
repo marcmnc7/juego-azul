@@ -434,5 +434,5 @@ class RidingMission implements Mission {
 
 /** La hípica de saltos, en el picadero (misión 3D). */
 export function ridingMission(onDone: () => void) {
-  stage.start((ctx) => new RidingMission(ctx, onDone), false);
+  stage.start((ctx) => new RidingMission(ctx, onDone), true);
 }

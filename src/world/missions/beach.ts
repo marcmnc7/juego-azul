@@ -542,5 +542,5 @@ class BeachMission implements Mission {
 
 /** Septiembre: vóley playa con Gas. */
 export function beachMission(onDone: () => void) {
-  stage.start((ctx) => new BeachMission(ctx, onDone), false);
+  stage.start((ctx) => new BeachMission(ctx, onDone), true);
 }

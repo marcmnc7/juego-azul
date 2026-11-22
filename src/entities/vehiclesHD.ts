@@ -105,14 +105,16 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
   // Carrocería hasta la línea de cintura: portón trasero casi vertical, capó corto y en pendiente
   add(
     profile(
-      [[-2.12, 0.3], [2.1, 0.3], [2.19, 0.46], [2.17, 0.68], [2.02, 0.82], [1.2, 0.98], [0.98, 1.02], [-1.9, 1.06], [-2.12, 0.98], [-2.19, 0.62]],
+      // (la línea de cintura, a 0,95 m como en un Focus de verdad: antes, a 1,06 y maciza, tapaba a los de dentro
+      // hasta la nariz y en los primeros planos salían decapitados)
+      [[-2.12, 0.3], [2.1, 0.3], [2.19, 0.46], [2.17, 0.68], [2.02, 0.82], [1.2, 0.93], [0.98, 0.95], [-1.9, 0.98], [-2.12, 0.94], [-2.19, 0.62]],
       1.82,
       0.07,
     ),
     lacquer,
-  );
+  ).userData.carShell = true; // (maciza: en las escenas rodadas desde dentro se esconde, ver Level2.buildCabin)
   // Habitáculo de cristal, algo más estrecho, con el techo pintado encima
-  add(profile([[-1.98, 1.02], [-1.78, 1.36], [-1.45, 1.44], [0.1, 1.43], [1.0, 1.0]], 1.58, 0.05), glass);
+  add(profile([[-1.98, 0.96], [-1.78, 1.36], [-1.45, 1.44], [0.1, 1.43], [1.0, 0.93]], 1.58, 0.05), glass);
   add(profile([[-1.74, 1.38], [-1.45, 1.475], [0.12, 1.465], [0.32, 1.38]], 1.5, 0.04), lacquer);
   // Pilares B y C (los del parabrisas los marca el propio techo)
   for (const sx of [-0.8, 0.8]) {
@@ -162,10 +164,10 @@ export function makeCarHD(color: number, opts: { empty?: boolean; azul?: PersonL
   const joy = new THREE.Group();
   if (!opts.empty) {
     const gas = seated(opts.gas ?? MARC_LOOK, 0.95, 0.9);
-    gas.root.position.set(0.4, 0.62 - gas.rig!.hipsHeight * 0.95, -0.25);
+    gas.root.position.set(0.4, 0.65 - gas.rig!.hipsHeight * 0.95, -0.25);
     body.add(gas.root);
     const az = seated(opts.azul ?? MARGAUX_LOOK, 0.95, 0.35);
-    az.root.position.set(-0.4, 0.62 - az.rig!.hipsHeight * 0.95, -0.25);
+    az.root.position.set(-0.4, 0.65 - az.rig!.hipsHeight * 0.95, -0.25);
     azul.add(az.root);
     body.add(azul);
   }

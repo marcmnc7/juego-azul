@@ -77,25 +77,31 @@ function testTaps(target: HTMLElement) {
  * barras y sin conexión). Con el modo prueba se puede seguir en el navegador.
  */
 const SHARE_SVG = '<svg width="15" height="18" viewBox="0 0 15 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M7.5 1.5v10M4 5l3.5-3.5L11 5"/><path d="M5 8H2.5v8.5h10V8H10"/></svg>';
-export function installGate(ios: boolean) {
-  // (con la misma portada que la cuenta atrás y la de Empezar: antes era una pantalla del estilo antiguo)
+export function installGate() {
+  // (con la misma portada que la cuenta atrás y la de Empezar; los pasos valen para cualquier navegador: Safari,
+  // Chrome, Firefox… en iPhone o en Android)
   const { s, slot } = cover('ig-screen');
-  const steps = ios
-    ? [
-        // (el icono de Compartir de verdad, un cuadrado con la flecha hacia arriba; en iOS 26 está dentro de «⋯»)
-        ['1', `En Safari, toca <b>Compartir</b> <span class="ig-icon">${SHARE_SVG}</span> (si no lo ves, está dentro de <b>⋯</b>)`],
-        ['2', 'Baja un poco y elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span>'],
-        ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
-      ]
-    : [
-        ['1', 'Abre el menú <b>⋮</b> del navegador'],
-        ['2', 'Elige <b>Añadir a pantalla de inicio</b> o <b>Instalar</b>'],
-        ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
-      ];
+  const steps = [
+    ['1', `Abre el menú del navegador: el botón <b>Compartir</b> <span class="ig-icon">${SHARE_SVG}</span> o los tres puntos <b>⋯</b> <b>⋮</b>`],
+    ['2', 'Elige <b>Añadir a pantalla de inicio</b> <span class="ig-icon">＋</span> (en algunos pone <b>Instalar</b>)'],
+    ['3', 'Ábrelo desde su icono en la pantalla de inicio'],
+  ];
   const list = el('div', 'ig-steps');
   for (const [n, t] of steps) list.append(el('div', 'ig-step', `<span class="ig-n">${n}</span><span>${t}</span>`));
   slot.append(list);
   s.append(el('p', 'hm-fine', 'Se abre desde la pantalla de inicio. Solo hay que hacerlo una vez.'));
+  root.append(s);
+}
+
+/** En el ordenador no se juega: es un regalo para el móvil. Se dice dónde abrirlo. */
+export function phoneOnlyGate() {
+  const { s, slot } = cover('ig-screen');
+  const list = el('div', 'ig-steps');
+  list.append(
+    el('div', 'ig-step', `<span class="ig-n">📱</span><span>Este regalo se juega en el <b>móvil</b>. Abre <b>${location.host}${location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')}</b> en el navegador del móvil.</span>`),
+  );
+  slot.append(list);
+  s.append(el('p', 'hm-fine', 'Allí te dirá cómo ponerlo en la pantalla de inicio.'));
   root.append(s);
 }
 

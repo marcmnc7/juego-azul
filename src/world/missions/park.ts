@@ -675,5 +675,5 @@ export function parkMission(onDone: () => void, course = false) {
     // (modo prueba: directo al circuito de agility)
     if (course) m.skipToCourse();
     return m;
-  }, false);
+  }, true);
 }

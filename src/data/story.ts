@@ -58,6 +58,22 @@ export const FERRERIES = {
   ] as Line[],
   tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés a Sa Font!' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ja era hora! Vina, balla!' }] as Line[],
+  /** (4.4.13) Antes de bailar, Carme le pide una pistola de agua: la vende un hombre al final del carrer. */
+  gunAsk: [
+    { who: 'Carme', text: 'Ja era hora! Escolta, m’han robat sa pistola i aquí tothom me banya.' },
+    { who: 'Carme', text: 'Me’n compres una? Al final des carrer hi ha un home que en ven.' },
+    { who: 'Margaux', text: '¡Voy!' },
+  ] as Line[],
+  gunWait: [{ who: 'Carme', text: 'Sa pistola! Que me deixen xopa.' }] as Line[],
+  gunBuy: [
+    { who: 'Venedor', text: 'Pistoles, galledes, pilotes… Què vols, al·lota?' },
+    { who: 'Margaux', text: 'Una pistola de agua, por favor.' },
+    { who: 'Venedor', text: 'Té, sa més grossa. Que no te mullin!' },
+  ] as Line[],
+  gunGive: [
+    { who: 'Margaux', text: 'Toma: la más grande que había.' },
+    { who: 'Carme', text: 'Ets la millor! Ara sí: vina, balla!' },
+  ] as Line[],
   marcMeet: [
     { who: 'Marc', text: 'Carme! Què fas per aquí?' },
     { who: 'Carme', text: 'Res, aquí amb una amiga.' },
@@ -532,8 +548,8 @@ export const NIGHT = {
   caughtWho: '¡Nos han visto! Otra vez, y más despacito…',
   /** Ya en el agua, antes de nada (lo de su chat de esa tarde, casi literal). */
   smallPool: [
-    { who: 'Gas', text: 'Muy pequeñita ella, pero sí, funciona.' },
-    { who: 'Gas', text: 'Y se le puede llamar piscina. Como tal.' },
+    { who: 'Gas', text: 'Y sí, esa es mi piscina… si es que se le puede llamar como tal.' },
+    { who: 'Gas', text: 'Es muy pequeñita.' },
   ] as Line[],
   mpRules: 'Yo cierro los ojos. Digo «Marco» y tú «Polo»… y si te oigo chapotear, voy a por ti 😏',
   getOut: 'Me estoy quedando helado… ¿Nos tumbamos un rato?',
@@ -1179,6 +1195,9 @@ export const SIDE = {
 export const FAIL = {
   soakMax: 6,
   water: { title: 'Empapada', text: 'Los críos te han ganado. Que no te den tanto: muévete cuando te apunten.' },
+  /** (4.4.13) Cap. 1: tres embestidas de ase y se repite esa parte. */
+  donkeyMax: 3,
+  donkeys: { title: '¡Embestida!', text: 'Los ases te han embestido tres veces. Otra vez desde aquí.' },
   pomadas: { title: 'Sin pomadas', text: 'Se han caído las tres. Otra vez desde la barra, y cuidado con los ases.' },
   lateAse: 'Uy, a destiempo… Cuando se ponga de manos.',
   marco: { title: '¡Pillada!', text: 'Tres veces te ha cogido. Contesta «Polo» a tiempo y no chapotees cuando esté cerca.' },

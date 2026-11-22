@@ -70,6 +70,62 @@ const MARCIAL_Z = 770;
 /** Donde paráis a hacer noche: entre Marcial y San Vicente. */
 /** La gasolinera de la carretera, antes de la cabaña: a por el cartucho del hornillo (no tenían). */
 const GAS_Z = 1255;
+/**
+ * El interior del coche (en el espacio de su carrocería: +z hacia delante; él conduce a +x): salpicadero con su
+ * cuadro, volante con su columna, consola central, puertas por dentro, asientos con reposacabezas, banco de atrás,
+ * techo y retrovisor. La carrocería es maciza por fuera: desde dentro sus caras no se ven, y esto hace de habitáculo.
+ */
+function buildCabin() {
+  const g = new THREE.Group();
+  const m = new Merger();
+  const DASH = 0x55575e, SEAT = 0x7a7f8a, TRIM = 0x9a9ca3, LINER = 0xe6e1d6;
+  // Salpicadero: el bloque de abajo y la parte de arriba, más clara; el cuadro de relojes delante del volante
+  m.add(G.box, DASH, 0, 0.84, 0.78, 0, 0, 0, 1.56, 0.24, 0.42);
+  m.add(G.box, 0x3a3b40, 0, 0.98, 0.72, -0.12, 0, 0, 1.56, 0.06, 0.36);
+  m.add(G.box, 0x1a1a1d, 0.4, 1.04, 0.6, -0.3, 0, 0, 0.42, 0.09, 0.14);
+  m.add(G.box, 0x9fd3e8, 0.4, 1.045, 0.53, -0.3, 0, 0, 0.32, 0.05, 0.01);
+  // Rejillas del aire y la pantalla del centro
+  for (const x of [-0.62, 0.62]) m.add(G.box, 0x111214, x, 0.95, 0.57, 0, 0, 0, 0.14, 0.06, 0.02);
+  // Consola central con la palanca
+  m.add(G.box, DASH, 0, 0.62, 0.22, 0, 0, 0, 0.24, 0.3, 0.78);
+  m.add(G.cyl, 0x1a1a1d, 0, 0.82, 0.24, -0.3, 0, 0, 0.04, 0.16, 0.04);
+  m.add(G.sphere, 0x1a1a1d, 0, 0.9, 0.22, 0, 0, 0, 0.07, 0.07, 0.07);
+  // Volante delante de él, inclinado hacia el conductor, y su columna
+  m.add(new THREE.TorusGeometry(0.17, 0.022, 10, 28), 0x1a1a1d, 0.4, 0.99, 0.34, -0.45, 0, 0);
+  m.add(G.box, 0x1a1a1d, 0.4, 0.99, 0.34, -0.45, 0, 0, 0.3, 0.035, 0.02);
+  m.add(G.cyl, 0x1a1a1d, 0.4, 0.96, 0.46, Math.PI / 2 - 0.45, 0, 0, 0.06, 0.26, 0.06);
+  // Puertas por dentro, con su apoyabrazos
+  for (const sx of [-1, 1]) {
+    m.add(G.box, TRIM, sx * 0.8, 0.72, -0.35, 0, 0, 0, 0.05, 0.5, 2.4);
+    m.add(G.box, SEAT, sx * 0.77, 0.8, -0.1, 0, 0, 0, 0.06, 0.05, 0.5);
+  }
+  // Asientos de delante: respaldo inclinado y reposacabezas (detrás de cada uno)
+  for (const x of [-0.4, 0.4]) {
+    m.add(G.rbox, SEAT, x, 0.94, -0.56, -0.16, 0, 0, 0.5, 0.66, 0.13);
+    m.add(G.rbox, SEAT, x, 1.37, -0.64, -0.16, 0, 0, 0.26, 0.17, 0.09);
+    m.add(G.cyl, 0x9aa0a8, x - 0.07, 1.27, -0.62, -0.16, 0, 0, 0.012, 0.12, 0.012);
+    m.add(G.cyl, 0x9aa0a8, x + 0.07, 1.27, -0.62, -0.16, 0, 0, 0.012, 0.12, 0.012);
+  }
+  // Banco de atrás (respaldo y asiento) y la bandeja
+  m.add(G.rbox, SEAT, 0, 0.92, -1.42, -0.2, 0, 0, 1.4, 0.6, 0.14);
+  m.add(G.rbox, SEAT, 0, 0.62, -1.15, 0, 0, 0, 1.4, 0.14, 0.5);
+  m.add(G.box, 0x232428, 0, 1.08, -1.72, 0, 0, 0, 1.4, 0.03, 0.3);
+  // Techo por dentro y retrovisor
+  m.add(G.box, LINER, 0, 1.36, -0.75, 0, 0, 0, 1.5, 0.02, 2.0);
+  m.add(G.box, 0x6a6c72, 0, 1.31, 0.42, 0, 0, 0, 0.2, 0.05, 0.03);
+  m.add(G.box, 0x6a6c72, 0, 1.345, 0.42, 0, 0, 0, 0.02, 0.03, 0.02);
+  // Los pilares del parabrisas (sin cristal, el marco: si no, el techo flotaba)
+  for (const sx of [-1, 1]) m.add(G.box, TRIM, sx * 0.72, 1.2, 0.56, 0.93, 0, 0, 0.06, 0.55, 0.05);
+  // (sin sombras: bajo el techo todo salía negro; de día, dentro de un coche hay luz de sobra)
+  const mesh = m.mesh();
+  mesh.castShadow = mesh.receiveShadow = false;
+  g.add(mesh);
+  g.userData.comicBent = true;
+  return g;
+}
+
+/** De qué lado de la carretera está la gasolinera (la marquesina y la tienda, a la izquierda). */
+const GAS_STATION_X = -8.5;
 const CAMP_Z = 1320;
 /** Las vacas de la carretera. */
 const COW_Z = [1110, 1420, LEG1 + 40 + 340];
@@ -381,6 +437,9 @@ export class Level2 implements Level {
     this.obstacleGeos = this.buildObstacles();
 
     sc.add(this.car.root);
+    this.cabin = buildCabin();
+    this.cabin.visible = false;
+    this.car.body.add(this.cabin);
     this.fx = new Particles(sc);
 
     // San Vicente: puente de arcos, castillo y la iglesia en lo alto
@@ -1305,13 +1364,14 @@ export class Level2 implements Level {
     if (!['drive1', 'drive2', 'cow', 'marcial', 'arriveSV'].includes(this.phase) && !(this.phase === 'logrono' && !this.laurel)) return null;
     const her = who === 'Margaux' || who === 'Azul';
     if (!her && !['Gas', 'Marc'].includes(who)) return null;
-    // (conduce él, a la izquierda: ella va de copiloto, a la derecha)
-    return this.car.body.localToWorld(new THREE.Vector3(her ? -0.4 : 0.4, 1.6, -0.25));
+    // (conduce él, a la izquierda: ella va de copiloto, a la derecha; en la escena del gas, a la altura de la cara: el
+    // punto de encima de la cabeza quedaba fuera de los primeros planos y el encuadre automático giraba la cámara)
+    return this.car.body.localToWorld(new THREE.Vector3(her ? -0.4 : 0.4, this.cineTalk ? 1.42 : 1.6, -0.25));
   }
 
   /** Conduciendo, los globos salen por detrás del coche (abajo), no encima de la carretera. */
   speakerBelow() {
-    return this.phase === 'drive1' || this.phase === 'drive2' || this.phase === 'cow';
+    return !this.cineTalk && (this.phase === 'drive1' || this.phase === 'drive2' || this.phase === 'cow');
   }
 
   speakerSide(who: string): 'l' | 'r' | undefined {
@@ -1946,6 +2006,10 @@ export class Level2 implements Level {
 
   /** La conversación del gas (¿lo llevas? ¿y si no tienen?), en escena de cine, plano a plano. */
   private cineTalk = false;
+  /** Devuelve los cristales a su tinte al acabar la escena. */
+  private clearGlass: (() => void) | null = null;
+  /** El interior del coche (salpicadero, volante, asientos, techo): solo se ve en la escena del gas, rodada desde dentro. */
+  private cabin!: THREE.Group;
   private startGasTalk() {
     this.gasTalkIdx = 99;
     this.cineTalk = true;
@@ -1961,22 +2025,45 @@ export class Level2 implements Level {
     this.nextSpawn = Math.max(this.nextSpawn, this.carZ + 330);
     audio.whoosh();
     const at = (x: number, y: number, z: number) => () => this.car.body.localToWorld(new THREE.Vector3(x, y, z));
-    const herHead = at(-0.4, 1.45, -0.25), himHead = at(0.4, 1.5, -0.25), mid = at(0, 1.42, -0.25);
+    // (las caras de verdad: la base de la cabeza está a 1,1 m en el asiento; antes se apuntaba 30 cm por encima y en
+    // los primeros planos solo salía el pelo, cortado por el capó o el pilar)
+    const herFace = at(-0.4, 1.19, -0.22), himFace = at(0.4, 1.23, -0.22), mid = at(0, 1.17, -0.2);
+    // Durante la escena, sin el cristal del habitáculo: tintado, eran dos sombras; y aclarado, tapaba los ojos (las
+    // transparencias se pisan entre ellas). De día y de cerca, un cristal limpio no se ve
+    const glass: THREE.Object3D[] = [];
+    this.car.body.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m && !Array.isArray(m) && m.transparent && m.opacity > 0.6 && m.opacity < 0.95 && o.visible) glass.push(o);
+      // (y la carrocería maciza, que por dentro era un suelo a la altura del pecho: solo se veían cabezas y cuellos)
+      else if (o.userData.carShell && o.visible) glass.push(o);
+    });
+    for (const o of glass) o.visible = false;
+    this.cabin.visible = true;
+    this.clearGlass = () => {
+      for (const o of glass) o.visible = true;
+      this.cabin.visible = false;
+      this.clearGlass = null;
+    };
     const shots = {
-      // (por el parabrisas, los dos)
-      both: () => cinema.play([{ dur: Infinity, move: 5, pos: at(0, 1.6, 4.4), pos2: at(0, 1.52, 3.3), look: mid, fov: 40, fov2: 34, focus: mid }]),
-      her: () => cinema.play([{ dur: Infinity, move: 6, pos: at(-2.3, 1.5, 0.9), pos2: at(-1.75, 1.47, 0.35), look: herHead, fov: 34, fov2: 30, focus: herHead }]),
-      him: () => cinema.play([{ dur: Infinity, move: 6, pos: at(2.3, 1.55, 0.9), pos2: at(1.75, 1.5, 0.35), look: himHead, fov: 34, fov2: 30, focus: himHead }]),
-      // (y arriba: la carretera por delante y, al fondo, la gasolinera)
+      // Desde el salpicadero, de frente: los dos en sus asientos, él con las manos en el volante (en vertical hace
+      // falta mucho ángulo para que quepan los dos)
+      both: () => cinema.play([{ lock: true, dur: Infinity, move: 7, pos: at(0, 1.25, 1.6), pos2: at(0, 1.23, 1.42), look: at(0, 1.1, -0.35), fov: 78, fov2: 76, focus: mid }]),
+      // Primeros planos desde el salpicadero, cada uno en su asiento (detrás, el reposacabezas y la luneta)
+      her: () => cinema.play([{ lock: true, dur: Infinity, move: 6, pos: at(-0.2, 1.25, 1.35), pos2: at(-0.24, 1.23, 1.15), look: herFace, fov: 36, fov2: 33, focus: herFace }]),
+      him: () => cinema.play([{ lock: true, dur: Infinity, move: 6, pos: at(0.18, 1.28, 1.35), pos2: at(0.22, 1.26, 1.15), look: himFace, fov: 36, fov2: 33, focus: himFace }]),
+      // Y, para acabar, desde atrás y arriba: el coche abajo y, al fondo a la izquierda, la gasolinera («ahí hay una»);
+      // ya de lejos, con su cristal otra vez
       wide: () => {
-        const look = () => new THREE.Vector3(0, 2, Math.min(GAS_Z, this.carZ + 140));
-        cinema.play([{ dur: Infinity, move: 5, pos: () => new THREE.Vector3(this.carX + 7, 6.5, this.carZ - 9), pos2: () => new THREE.Vector3(this.carX + 4, 9, this.carZ - 4), look, fov: 46, fov2: 52, focus: look }]);
+        this.clearGlass?.();
+        const look = () => new THREE.Vector3((this.carX + GAS_STATION_X) / 2, 1.2, Math.min(GAS_Z, this.carZ + 32));
+        cinema.play([{ lock: true, dur: Infinity, move: 5, pos: () => new THREE.Vector3(this.carX + 3, 5.6, this.carZ - 16), pos2: () => new THREE.Vector3(this.carX + 2, 6.4, this.carZ - 14), look, fov: 50, fov2: 54, focus: () => this.car.root.position }]);
       },
     };
     const lines = ROAD.gasTalk;
     const step = (i: number) => {
       if (i >= lines.length) {
         cinema.stop();
+        this.clearGlass?.();
         this.cineTalk = false;
         this.busy = false;
         this.input.enabled = true;
@@ -2280,6 +2367,8 @@ export class Level2 implements Level {
       this.tramoBase = this.photos;
       for (const sc of this.scatters) sc.mesh.visible = true;
       cinema.stop();
+      this.clearGlass?.();
+      this.cineTalk = false;
       this.route.style.display = '';
       this.eating = false;
       this.busy = false;

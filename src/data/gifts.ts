@@ -80,12 +80,12 @@ export const GIFTS: Gift[] = [
     howToRedeem: 'Enséñale este vale a Gas.',
   },
   {
-    id: 'spa',
+    id: 'casco',
     level: 9,
-    icon: '🛁',
-    title: 'Una sesión de SPA… ¡para 2!',
-    description: 'Agua caliente, albornoz y nada más que hacer. Los dos.',
-    howToRedeem: 'Enséñale este vale a Gas y elegid el día.',
+    icon: '🏍️',
+    title: 'Un casco de moto nuevo… ¡para ti!',
+    description: 'El de ahora está viejo y roto: te toca uno nuevo, a tu medida, para todos los viajes que nos quedan.',
+    howToRedeem: 'Enséñale este vale a Gas.',
   },
 ];
 

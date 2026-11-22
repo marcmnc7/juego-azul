@@ -162,6 +162,21 @@ export class WaterFight {
     });
   }
 
+  /** Un crío no se mete dentro de Azul: si se le echa encima, se queda pegado por fuera. */
+  private keepOff(r: THREE.Object3D) {
+    const pp = this.player.root.position;
+    const dx = r.position.x - pp.x, dz = r.position.z - pp.z, d = Math.hypot(dx, dz), min = 0.62;
+    if (d < min && d > 1e-4) {
+      r.position.x = pp.x + (dx / d) * min;
+      r.position.z = pp.z + (dz / d) * min;
+    }
+  }
+
+  /** Los críos como bultos redondos (no se les atraviesa). */
+  circles(out: { x: number; z: number; r: number }[]) {
+    for (const k of this.kids) if (k.p.root.visible) out.push({ x: k.p.root.position.x, z: k.p.root.position.z, r: 0.32 });
+  }
+
   /** El crío que hay que perseguir. */
   nearest() {
     const pp = this.player.root.position;
@@ -281,6 +296,7 @@ export class WaterFight {
       }
       const run = d < 2.5 ? 3.6 : 2.8;
       steerTo(r, k.st, k.goal.x, k.goal.z, run, dt, this.people as never, 6, 0.26, undefined, this.colliders as Box2[]);
+      this.keepOff(r);
       animatePerson(k.p, dt, 'walk', 0.95);
     }
   }
@@ -363,6 +379,7 @@ export class WaterFight {
       k.dodge -= dt;
       const run = k.dodge > 0 ? 5.2 : d < 4.5 ? (k.wet ? 4.3 : 3.8) : 3.1;
       steerTo(r, k.st, k.goal.x, k.goal.z, run, dt, this.people as never, k.dodge > 0 ? 12 : 6, 0.26, undefined, this.colliders as Box2[]);
+      this.keepOff(r);
       animatePerson(k.p, dt, 'walk', run > 3.5 ? 1 : 0.9);
     }
   }

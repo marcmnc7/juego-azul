@@ -85,6 +85,33 @@ export const FERRERIES_VARIANT: JaleoVariant = {
 /** Lo que dura la caricia al burro (s). */
 const PET = 0.9;
 
+/** (4.4.13) El puesto de juguetes y pistolas de agua, al final de la calle (lado este, contra las casas del sur). */
+const STALL = new THREE.Vector3(39.5, 0, -3.3);
+
+/** Una pistola de agua de plástico (cuerpo, empuñadura, depósito y cañón). */
+function waterGun(col: number) {
+  const plastic = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: 0.35 });
+  const gun = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.24), plastic);
+  body.position.z = 0.06;
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05), plastic);
+  grip.position.set(0, -0.07, -0.01);
+  grip.rotation.x = -0.25;
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 14), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xa9dcf5), roughness: 0.1 }));
+  tank.rotation.x = Math.PI / 2;
+  tank.position.set(0, 0.07, 0.04);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.1, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xffffff), roughness: 0.4 }));
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.z = 0.22;
+  gun.add(body, grip, tank, barrel);
+  // (en la mano: rampa de persona y sin tinta por dentro; el depósito, opaco, que transparente no tenía tinta)
+  gun.traverse((o) => {
+    o.castShadow = true;
+    o.userData.person = true;
+  });
+  return gun;
+}
+
 type Stage = 'intro' | 'water' | 'talkTofol' | 'collect' | 'returnTofol' | 'findMarc' | 'toFont' | 'barDance' | 'meet' | 'eyes' | 'pairDance' | 'kiss' | 'kissing' | 'ending' | 'done';
 
 const WARN = 0.8;
@@ -245,6 +272,16 @@ export class Level1 implements Level {
   // Es jaleo: confeti en el aire, purpurina y pistolas de agua entre la gente
   private glitter = new Glitter(130);
   private shooters: { p: Person; gun: THREE.Group; yaw: number; aim: number; fireT: number; turnT: number }[] = [];
+  /**
+   * (4.4.13, solo cap. 1) El encargo de Carme antes de bailar: 0, aún no se lo ha pedido; 1, a comprarla; 2, con la
+   * pistola en la mano; 3, ya se la ha dado.
+   */
+  private gunQuest = 0;
+  /** El puesto de juguetes y pistolas de agua del final de la calle, su vendedor y la pistola que se compra. */
+  private vendor: Person | null = null;
+  private boughtGun: THREE.Group | null = null;
+  /** (4.4.13, solo cap. 1) Embestidas de ase desde el último punto de control: a la tercera, otra vez. */
+  private asHits = 0;
   private noteT = 0;
   private partyColors: Float32Array;
   private hue = 0;
@@ -294,6 +331,7 @@ export class Level1 implements Level {
     this.walker = new Walker(this.player.root.position);
     this.walker.facing = this.walker.yaw = Math.PI / 2;
     this.buildShooters();
+    if (!V.findFirst) this.buildStall();
     this.solids.push(...this.world.people);
 
     this.tofol = V.horses
@@ -471,6 +509,12 @@ export class Level1 implements Level {
         this.inHand[i].position.x += ox;
         this.inHand[i].position.y += oy;
       }
+      if (this.boughtGun?.visible) {
+        const who = this.gunQuest >= 3 ? this.carme : this.player;
+        who.handR.getWorldPosition(this.boughtGun.position);
+        this.boughtGun.position.y -= 0.02;
+        this.boughtGun.rotation.set(-0.15, who.root.rotation.y, 0, 'YXZ');
+      }
       if (this.tofolCup) {
         this.tofol.handR.getWorldPosition(this.tofolCup.position);
         this.tofolCup.position.y -= 0.06;
@@ -555,7 +599,8 @@ export class Level1 implements Level {
   private updateHud() {
     // (objetivos mínimos, un emoji o dos palabras: lo que hay que hacer se descubre hablando con la gente)
     const h = this.hud;
-    const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>`;
+    const lives = this.V.findFirst ? '' : livesChip('🫏', FAIL.donkeyMax - this.asHits, FAIL.donkeyMax);
+    const counters = `<span class="chip">${this.V.item} ${this.pomadaCount}/3</span><span class="chip">🍀 ${this.luckCount}/3</span>${lives}`;
     switch (this.stage) {
       case 'water':
         h.setObjective(SIDE.water.hint);
@@ -580,8 +625,8 @@ export class Level1 implements Level {
         h.setCounters(counters);
         break;
       case 'findMarc':
-        h.setObjective(this.V.hud.find);
-        h.setCounters('');
+        h.setObjective(this.gunQuest === 1 ? '🔫 Pistola' : this.gunQuest === 2 ? '🔫 Carme' : this.V.hud.find);
+        h.setCounters(lives);
         break;
       case 'toFont':
         h.setObjective('💃 Sa Font');
@@ -764,6 +809,12 @@ export class Level1 implements Level {
         this.blinkT = 1.5;
         this.hits++;
         audio.hit();
+        // (cap. 1: tres embestidas y se repite esa parte)
+        if (!this.V.findFirst && (this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc')) {
+          this.asHits++;
+          this.updateHud();
+          if (this.asHits >= FAIL.donkeyMax) this.fail(FAIL.donkeys, this.stage === 'collect' ? '2 ·' : this.stage === 'returnTofol' ? '3 ·' : this.gunQuest >= 1 ? '4b' : '4 ·');
+        }
         vibrate(90);
         this.fx.burst(this.v2.copy(pp).setY(0.1), 'dust', 5, 1.5, 0.3);
         if (fast && (this.stage === 'collect' || this.stage === 'returnTofol') && this.pomadaCount > 0) {
@@ -1079,6 +1130,9 @@ export class Level1 implements Level {
       const fz = Math.cos(r.rotation.y);
       for (const o of [0.55, -0.5]) this.solids[k++] = { x: r.position.x + fx * o, z: r.position.z + fz * o, r: 0.5 };
     }
+    // Los críos de las pistolas tampoco se atraviesan
+    this.solids.length = k;
+    this.water?.circles(this.solids);
     const move = this.walker.move(dt, ax, this.world.colliders, this.world.bounds, this.solids);
     if (this.walker.bump) audio.knock(Math.min(0.45, this.walker.bump * 0.07), 200, 0.07); // choque sordo contra alguien
     this.stepCups(dt);
@@ -1304,10 +1358,24 @@ export class Level1 implements Level {
         label = this.V.hud.give;
         pulse = true;
         this.pendingAction = () => this.startPairDance();
+      } else if (this.stage === 'findMarc' && !this.V.findFirst && this.gunQuest === 1 && this.vendor && Math.hypot(pp.x - STALL.x, pp.z - (STALL.z + 1.4)) < 2.2) {
+        label = '🛒 Comprar';
+        this.pendingAction = () => this.buyGun();
       } else if (dM < 3.5 && this.stage === 'findMarc' && !this.V.findFirst) {
-        label = this.V.hud.give;
-        pulse = true;
-        this.pendingAction = () => this.startBarDance();
+        // (4.4.13) Antes de bailar, Carme le pide una pistola de agua; con ella en la mano, se la da y a bailar
+        if (this.gunQuest === 0) {
+          label = '💬 Hablar';
+          this.pendingAction = () => this.askGun();
+        } else if (this.gunQuest === 1) {
+          label = '💬 Hablar';
+          this.pendingAction = () => {
+            this.busy = true;
+            dialogue(FERRERIES.gunWait, () => (this.busy = false));
+          };
+        } else {
+          label = '🔫 Dársela';
+          this.pendingAction = () => this.giveGun();
+        }
       } else if (dM < 3.5 && this.stage !== 'barDance' && this.stage !== 'meet' && this.stage !== 'eyes' && this.stage !== 'pairDance' && this.stage !== 'kissing') {
         label = 'Hablar';
         this.pendingAction = () => {
@@ -1316,17 +1384,11 @@ export class Level1 implements Level {
         };
       } else if (this.stage !== 'water' && !this.sit) {
         // Con cualquiera de la gente: una charla corta (y, a veces, una pista de lo que toca)
+        // (4.4.13: sin «Sentarse» en las sillas)
         const who = this.nearestLocal(pp);
-        const chair = this.world.chairs.find((c) => Math.hypot(c.x - pp.x, c.z - pp.z) < 0.85);
         if (who) {
           label = 'Hablar';
           this.pendingAction = () => this.chatWith(who);
-        } else if (chair) {
-          label = 'Sentarse';
-          this.pendingAction = () => {
-            this.sit = { ...chair, fx: pp.x, fz: pp.z };
-            this.input.reset();
-          };
         }
       }
     }
@@ -1694,29 +1756,115 @@ export class Level1 implements Level {
       const yaw = Math.atan2(c.x - x, c.z - z);
       p.root.rotation.y = yaw;
       this.scene.add(p.root);
-      const col = gunCols[i % gunCols.length];
-      const plastic = new THREE.MeshStandardMaterial({ color: new THREE.Color(col), roughness: 0.35 });
-      const gun = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.24), plastic);
-      body.position.z = 0.06;
-      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05), plastic);
-      grip.position.set(0, -0.07, -0.01);
-      grip.rotation.x = -0.25;
-      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.1, 14), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xa9dcf5), roughness: 0.1 }));
-      tank.rotation.x = Math.PI / 2;
-      tank.position.set(0, 0.07, 0.04);
-      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.1, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xffffff), roughness: 0.4 }));
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position.z = 0.22;
-      gun.add(body, grip, tank, barrel);
-      // (en la mano: rampa de persona y sin tinta por dentro; el depósito, opaco, que transparente no tenía tinta)
-      gun.traverse((o) => {
-        o.castShadow = true;
-        o.userData.person = true;
-      });
+      const gun = waterGun(gunCols[i % gunCols.length]);
       this.scene.add(gun);
       this.shooters.push({ p, gun, yaw, aim: yaw, fireT: 0.5 + i * 0.6, turnT: 1 + Math.random() * 2 });
       this.world.people.push({ x, z, r: 0.35 });
+    });
+  }
+
+  /**
+   * (4.4.13) El puesto del final de la calle, como los de feria: carrito con faldón y toldo a rayas azules y blancas,
+   * cubos rosas colgando, juguetes y pistolas de agua en el mostrador, y el vendedor de pie al lado.
+   */
+  private buildStall() {
+    const S = STALL;
+    const m = new Merger();
+    const BLUE = 0x2f5fb3, WHITE = 0xf4f2ec;
+    // Carrito: faldón a rayas verticales, mostrador blanco y ruedas
+    for (let i = 0; i < 12; i++) m.add(G.box, i % 2 ? WHITE : BLUE, S.x - 1.1 + i * 0.2 + 0.1, 0.5, S.z + 0.5, 0, 0, 0, 0.2, 0.72, 0.03);
+    m.add(G.box, WHITE, S.x, 0.5, S.z, 0, 0, 0, 2.4, 0.72, 0.98);
+    m.add(G.box, 0xffffff, S.x, 0.9, S.z, 0, 0, 0, 2.55, 0.08, 1.1);
+    for (const sx of [-1, 1]) m.add(G.cyl, 0x9aa0a8, S.x + sx * 0.9, 0.18, S.z - 0.52, Math.PI / 2, 0, 0, 0.34, 0.05, 0.34);
+    // Postes y toldo a rayas (a lo largo de la calle), con su faldón delante
+    for (const [px, pz] of [[-1.2, -0.45], [1.2, -0.45], [-1.2, 0.45], [1.2, 0.45]]) m.add(G.cyl, 0xd8d8d8, S.x + px, 1.55, S.z + pz, 0, 0, 0, 0.05, 1.3, 0.05);
+    for (let i = 0; i < 9; i++) m.add(G.box, i % 2 ? WHITE : BLUE, S.x - 1.4 + i * 0.35 + 0.175, 2.24, S.z, -0.12, 0, 0, 0.35, 0.04, 1.35);
+    for (let i = 0; i < 14; i++) m.add(G.box, i % 2 ? WHITE : BLUE, S.x - 1.4 + i * 0.2 + 0.1, 2.08, S.z + 0.7, 0, 0, 0, 0.2, 0.22, 0.03);
+    // Cubos rosas colgando del toldo, por delante y por los lados
+    const PINK = [0xff8fb8, 0xff6fa3, 0xffb3cf];
+    for (let i = 0; i < 9; i++) {
+      const x = S.x - 1.2 + i * 0.3, y = 1.8 - (i % 2) * 0.12;
+      m.add(new THREE.CylinderGeometry(0.1, 0.075, 0.18, 12), PINK[i % 3], x, y, S.z + 0.62);
+      m.add(G.box, 0x777777, x, y + 0.14, S.z + 0.62, 0, 0, 0, 0.01, 0.12, 0.01);
+    }
+    for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) m.add(new THREE.CylinderGeometry(0.1, 0.075, 0.18, 12), PINK[k], S.x + sx * 1.3, 1.25 + k * 0.28, S.z - 0.2 + k * 0.2);
+    // Detrás, un panel con juguetes colgados (pelotas, flotadores, molinillos)
+    m.add(G.box, 0xf0e8d8, S.x, 1.45, S.z - 0.45, 0, 0, 0, 2.3, 1.0, 0.04);
+    const TOYS = [0xff3b3b, 0xffd21a, 0x2bc4ff, 0x7ed321, 0xff7a1a, 0xff3fa4, 0x9b59ff];
+    for (let i = 0; i < 14; i++) m.add(G.sphere, TOYS[i % TOYS.length], S.x - 1.0 + (i % 7) * 0.33, 1.25 + Math.floor(i / 7) * 0.38, S.z - 0.4, 0, 0, 0, 0.2, 0.2, 0.12);
+    // En el mostrador: cajitas de colores y paquetes
+    for (let i = 0; i < 8; i++) m.add(G.box, TOYS[(i + 2) % TOYS.length], S.x - 1.05 + i * 0.3, 1.0, S.z - 0.2 + (i % 2) * 0.1, 0, i * 0.3, 0, 0.18, 0.12, 0.14);
+    const mesh = m.mesh();
+    mesh.userData.comicBent = true;
+    this.scene.add(mesh);
+    // Las pistolas de agua, en fila en la parte de delante del mostrador
+    [0xff7a1a, 0x2bc4ff, 0x7ed321, 0xff3fa4, 0xffd21a].forEach((c, i) => {
+      const g = waterGun(c);
+      g.scale.setScalar(1.4);
+      g.position.set(S.x - 0.8 + i * 0.4, 0.99, S.z + 0.3);
+      g.rotation.set(0, Math.PI / 2 + 0.2, Math.PI / 2);
+      this.scene.add(g);
+    });
+    this.world.colliders.push({ minX: S.x - 1.45, maxX: S.x + 1.45, minZ: S.z - 0.7, maxZ: S.z + 0.75 });
+    // El vendedor, de pie a un lado del carrito, mirando a la calle
+    this.vendor = makePerson(castLook({ skin: 0xd9a27c, shirt: 0xffffff, pants: 0x2a2a2e, hair: 0x2b1d14, hairStyle: 'short', male: true }, 'extra_h2'));
+    this.vendor.root.position.set(S.x + 1.85, 0, S.z + 0.2);
+    this.vendor.root.rotation.y = -0.6;
+    this.scene.add(this.vendor.root);
+    this.world.people.push({ x: S.x + 1.85, z: S.z + 0.2, r: 0.35 });
+    // La que compra: la más grande, azul (en la mano de Azul y luego en la de Carme)
+    this.boughtGun = waterGun(0x2bc4ff);
+    this.boughtGun.scale.setScalar(1.25);
+    this.boughtGun.visible = false;
+    this.scene.add(this.boughtGun);
+  }
+
+  /** Carme le pide la pistola. */
+  private askGun() {
+    this.busy = true;
+    this.walker.stop();
+    this.input.reset();
+    const pp = this.player.root.position, c = this.carme.root.position;
+    this.walker.facing = Math.atan2(c.x - pp.x, c.z - pp.z);
+    this.carme.root.rotation.y = Math.atan2(pp.x - c.x, pp.z - c.z);
+    dialogue(FERRERIES.gunAsk, () => {
+      this.busy = false;
+      this.gunQuest = 1;
+      this.updateHud();
+    });
+  }
+
+  /** Se la compra al vendedor del final de la calle. */
+  private buyGun() {
+    this.busy = true;
+    this.walker.stop();
+    this.input.reset();
+    const pp = this.player.root.position, v = this.vendor!.root.position;
+    this.walker.facing = Math.atan2(v.x - pp.x, v.z - pp.z);
+    this.vendor!.root.rotation.y = Math.atan2(pp.x - v.x, pp.z - v.z);
+    dialogue(FERRERIES.gunBuy, () => {
+      this.busy = false;
+      this.gunQuest = 2;
+      this.boughtGun!.visible = true;
+      audio.pickup();
+      vibrate(20);
+      this.updateHud();
+    });
+  }
+
+  /** Se la da a Carme y, ahora sí, a bailar. */
+  private giveGun() {
+    this.busy = true;
+    this.walker.stop();
+    this.input.reset();
+    const pp = this.player.root.position, c = this.carme.root.position;
+    this.walker.facing = Math.atan2(c.x - pp.x, c.z - pp.z);
+    this.carme.root.rotation.y = Math.atan2(pp.x - c.x, pp.z - c.z);
+    this.gunQuest = 3;
+    audio.pickup();
+    dialogue(FERRERIES.gunGive, () => {
+      this.busy = false;
+      this.startBarDance();
     });
   }
 
@@ -1880,6 +2028,9 @@ export class Level1 implements Level {
       if (this.petPost) rigPost.delete(this.petPost);
       this.petPost = null;
       this.sit = null;
+      this.asHits = 0;
+      this.gunQuest = 0;
+      if (this.boughtGun) this.boughtGun.visible = false;
       this.player.body.position.y = 0;
       this.spilled = 0;
       this.invuln = 0;
@@ -1984,9 +2135,20 @@ export class Level1 implements Level {
       items.push(
         { label: '4 · Ir al bar', run: go('findMarc', () => { cups(true); collect(true); this.marc.root.position.copy(this.gasHome); fontSpot(); }) },
         {
+          label: '4b · La pistola de Carme',
+          run: go('findMarc', () => {
+            cups(true);
+            collect(true);
+            this.marc.root.position.copy(this.gasHome);
+            this.gunQuest = 1;
+            tp(STALL.x - 3, STALL.z + 3);
+          }),
+        },
+        {
           label: '5 · Ver el final',
           run: () => {
             go('findMarc', () => { cups(true); collect(true); this.marc.root.position.copy(this.gasHome); fontSpot(); })();
+            this.gunQuest = 3;
             this.startBarDance();
           },
         },

@@ -37,7 +37,7 @@ import { stage } from './core/stage';
 import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
 import { surfMission } from './world/missions/surf';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, installGate, phoneOnlyGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { prepareMapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
 import { TEASERS } from './data/extras';
@@ -821,7 +821,7 @@ function frame() {
     // La columna de luz del objetivo: no en las escenas de cine ni mientras alguien habla
     beacon.update(dt, filming || !!document.querySelector('.dialogue, .phone-overlay'), camera);
     // Diálogos en modo cine: un leve acercamiento
-    talkFrame(frozen ? 1e-4 : dt);
+    if (!(filming && cinema.locked)) talkFrame(frozen ? 1e-4 : dt);
     const talking = !!document.querySelector('.dialogue') || filming;
     cine += ((talking ? 1 : 0) - cine) * Math.min(1, dt * 3.5);
     juice.apply(camera, dt, cine * 0.1);
@@ -934,10 +934,14 @@ initUpdater({
   toast: (m) => toast(m),
 });
 // En el navegador del móvil no se juega: hay que abrirlo desde la pantalla de inicio (pantalla completa, sin
-// barras, sin conexión). Dentro del artifact, en el ordenador y en modo prueba sí se puede
+// barras, sin conexión). Dentro del artifact y en modo prueba sí se puede
 const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 initClock(TEST);
-if (topLevel && !standalone && phone && !TEST) installGate(/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+// (y en el ordenador, tampoco: es un regalo para el móvil; el modo prueba sigue pudiendo jugarse en cualquier sitio)
+if (topLevel && !standalone && !TEST) {
+  if (phone) installGate();
+  else phoneOnlyGate();
+}
 // Hasta el 26 de noviembre, solo la cuenta atrás (en modo prueba se ve fingiendo el día con ?hoy=2026-11-25)
 else if (beforeGate() && (!TEST || faking())) countdownScreen(() => location.reload());
 else
