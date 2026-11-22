@@ -2071,6 +2071,8 @@ html, body { background: #000; }
 .screen.hm-title { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
 .screen.hm-title > .hm-eyebrow { margin-top: auto; }
 .screen.hm-title > .hm-fine { margin-bottom: auto; max-width: 300px; }
+/* (sin línea pequeña debajo, como en instalar o en el ordenador, el contrapeso lo hace el bloque central: centrado igual) */
+.screen.hm-title:not(:has(> .hm-fine)) > .hm-slot { margin-bottom: auto; }
 .hm-title .hm-glow { top: 45%; }
 .hm-slot .ig-steps { width: 100%; }
 .hm-title .ig-step {
