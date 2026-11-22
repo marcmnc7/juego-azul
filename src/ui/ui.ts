@@ -89,7 +89,6 @@ export function installGate() {
   const list = el('div', 'ig-steps');
   for (const [n, t] of steps) list.append(el('div', 'ig-step', `<span class="ig-n">${n}</span><span>${t}</span>`));
   slot.append(list);
-  s.append(el('p', 'hm-fine', 'Se abre desde la pantalla de inicio. Solo hay que hacerlo una vez.'));
   root.append(s);
 }
 
@@ -97,11 +96,9 @@ export function installGate() {
 export function phoneOnlyGate() {
   const { s, slot } = cover('ig-screen');
   const list = el('div', 'ig-steps');
-  list.append(
-    el('div', 'ig-step', `<span class="ig-n">📱</span><span>Este regalo se juega en el <b>móvil</b>. Abre <b>${location.host}${location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')}</b> en el navegador del móvil.</span>`),
-  );
+  const where = `${location.host}${location.pathname.replace(/index\.html$/, '').replace(/\/$/, '')}`;
+  list.append(el('div', 'ig-step', `<span class="ig-n">📱</span><span>Abre <b>${where}</b> en el móvil</span>`));
   slot.append(list);
-  s.append(el('p', 'hm-fine', 'Allí te dirá cómo ponerlo en la pantalla de inicio.'));
   root.append(s);
 }
 
@@ -441,6 +438,12 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
       txt.append(ct);
     }
     txt.append(el('p', 'wn-quote', quote));
+    // Lo que se abre antes (los juegos de palabras de entre medias): sin hacerlos, el capítulo no se abre
+    const before = PUZZLES.filter((pz) => pz.after === n && pz.after < nextTeaser);
+    if (before.length) {
+      const days = before.map((pz) => `el ${pz.day[2]} de ${MONTHS[pz.day[1]]}`);
+      txt.append(el('p', 'wn-before', `Antes, ${days.join(' y ')}: ${before.length === 1 ? 'un juego' : 'unos juegos'} de palabras. Hazlo${before.length === 1 ? '' : 's'} para que se abra el capítulo ${nextTeaser}.`));
+    }
     b.append(card, txt);
     beats.push({ el: b, label: () => 'Volver al menú' });
   }
@@ -822,7 +825,8 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
     im.loading = 'lazy';
     tile.append(im, el('span', 'mp-badge', c.done ? '✓' : show ? c.lv.emoji : '🔒'));
     const tag = i === 0 ? '🎂 ' : i === LEVELS.length - 1 ? '🎄 ' : '';
-    const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? (daysUntil(c.day) === 1 ? 'Se abre mañana' : `Faltan ${daysUntil(c.day)} días`) : c.missingMini ? 'Antes, el juego de palabras' : 'Termina el anterior';
+    // (cerrado por fecha, solo la cuenta atrás del que toca: «Faltan 2 días» al lado de «1 día 13 h» confundía)
+    const sub = c.done ? 'Completado' : show ? 'Listo para jugar' : c.early ? '' : c.missingMini ? 'Antes, el juego de palabras' : 'Termina el anterior';
     const lab = el('div', 'mp-label', `<small>${tag}${c.day.getDate()} ${MONTHS[c.day.getMonth()].slice(0, 3)} · Cap. ${c.lv.id}</small><b>${c.lv.name}</b><i>${sub}</i>`);
     n.append(tile, lab);
     if (isNext && c.early) n.append(liveCountdown(c.day));
@@ -891,6 +895,21 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   });
   wrap.append(track);
   body.append(wrap);
+  // A las 00:00 de un día de apertura (un capítulo o un juego), el mapa se vuelve a dibujar solo: si estaba mirándolo
+  // esperando a medianoche, se abre ahí mismo (antes la cuenta llegaba a cero y seguía cerrado hasta salir y volver)
+  {
+    const t = now();
+    const next = [...LEVELS.map((_, i) => openDay(i).getTime()), ...PUZZLES.map((pz) => puzzleDate(pz).getTime())].filter((d) => d > t).sort((a, b) => a - b)[0];
+    if (next !== undefined) {
+      const iv = window.setInterval(() => {
+        if (!wrap.isConnected) return void clearInterval(iv);
+        if (now() < next) return;
+        clearInterval(iv);
+        if (!root.querySelector('.ap-sheet-back, .ap-light')) mapScreen(save, opts, 'story');
+        else setTimeout(() => wrap.isConnected && mapScreen(save, opts, 'story'), 1500);
+      }, 1000);
+    }
+  }
 
   // Dónde va cada parada. Con el móvil en vertical, el camino baja haciendo eses (de arriba abajo, deslizando hacia
   // abajo); en horizontal, va de lado subiendo y bajando. El camino de puntos pasa por sus centros.
@@ -1124,8 +1143,9 @@ function albumTab(body: HTMLElement, save: SaveData, test: boolean) {
 /** «3 fotos», «3 fotos y un vídeo», «1 foto»… (lo del álbum de cada capítulo). */
 function shotsLabel(list: Shot[]) {
   const v = list.filter((m) => m.video).length, f = list.length - v;
-  const fs = f === 1 ? '1 foto' : `${f} fotos`, vs = v === 1 ? 'un vídeo' : `${v} vídeos`;
-  return f && v ? `${fs} y ${vs}` : v ? (v === 1 ? '1 vídeo' : vs) : fs;
+  // (en palabras cuando es uno: «una foto y un vídeo»; antes mezclaba «1 foto y un vídeo»)
+  const fs = f === 1 ? 'una foto' : `${f} fotos`, vs = v === 1 ? 'un vídeo' : `${v} vídeos`;
+  return f && v ? `${fs} y ${vs}` : v ? vs : fs;
 }
 
 function thumb(m: Shot) {
@@ -1202,16 +1222,17 @@ export function howToPlay() {
     const rows: [string, string, string][] = [
       ['👈', 'Andar', 'Pon el pulgar en la mitad izquierda y deslízalo. No hace falta llegar al borde para correr.'],
       ['👉', 'Mirar', 'Arrastra en la mitad derecha para girar la cámara.'],
-      ['🔴', 'Acción', 'Cuando hay algo que hacer, aparece un botón abajo a la derecha.'],
+      ['🔵', 'Acción', 'Cuando hay algo que hacer, aparece un botón azul abajo a la derecha.'],
       ['✦', 'Qué hacer', 'Mira alrededor y escucha a la gente: lo irás descubriendo.'],
       ['✨', 'Recuerdos escondidos', 'En cada capítulo hay polaroids escondidas que brillan: acércate y van a tu álbum.'],
-      ['☰', 'Pausa', 'El botón de arriba a la derecha para el juego.'],
+      ['❚❚', 'Pausa', 'El botón de arriba a la derecha para el juego.'],
     ];
     const l = el('div', 'ap-help');
     for (const [i, t, d] of rows) l.append(el('div', 'ap-help-row', `<span class="ap-help-i">${i}</span><div><b>${t}</b><span>${d}</span></div>`));
     b.append(l);
   });
 }
+
 
 /** Quita tildes y espacios para comparar respuestas (la Ñ se respeta). */
 function norm(t: string) {

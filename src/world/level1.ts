@@ -217,7 +217,10 @@ export class Level1 implements Level {
   private marcSteer: SteerState = {};
   private readonly clear = { x: 0, z: 0, r: 0 };
   /** La gente se aparta un poco al paso de la jugadora. */
-  private readonly near = [{ x: 0, z: 0, r: 0.95 }];
+  /** Lo que esquiva el público: Azul, la cámara y el punto medio entre las dos (que nadie se pare delante del plano). */
+  /** Quien quede a menos de un metro de la cámara se esconde (si no, un brazo o una cabeza tapaban el plano). */
+  private readonly camHide = { x: 0, z: 0, r: 0.9 };
+  private readonly near = [{ x: 0, z: 0, r: 0.95 }, { x: 0, z: 0, r: 1.3 }, { x: 0, z: 0, r: 0.9 }];
   private donkeys: DonkeyState[] = [];
   // Vasos de plástico de pomada por el suelo: se patean, se vuelcan, ruedan y los ases los arrollan
   private phys = new PhysicsWorld();
@@ -1082,7 +1085,13 @@ export class Level1 implements Level {
     const pp0 = this.player.root.position;
     this.near[0].x = pp0.x;
     this.near[0].z = pp0.z;
-    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear, dt, this.near);
+    const cp = this.camera.position;
+    this.near[1].x = cp.x;
+    this.near[1].z = cp.z;
+    this.near[2].x = (cp.x + pp0.x) / 2;
+    this.near[2].z = (cp.z + pp0.z) / 2;
+    Object.assign(this.camHide, { x: cp.x, z: cp.z });
+    animateCrowd(this.world.crowds, this.t, ending ? 1.7 : 1, this.clear, dt, this.near, this.camHide);
     this.updateShooters(dt);
     this.jaleoFx(dt);
     this.fx.update(dt);
@@ -1300,6 +1309,18 @@ export class Level1 implements Level {
     }
 
     const rearingNear = this.updateDonkeys(dt);
+    // (en las escenas de la pareja, un ase que cruza entre la cámara y ellos se esconde: antes los tapaba entera)
+    {
+      const scene = this.stage === 'barDance' || close0 || this.stage === 'pairDance' || ending;
+      const a = this.camera.position, b = this.player.root.position;
+      const abx = b.x - a.x, abz = b.z - a.z, L2 = abx * abx + abz * abz || 1;
+      for (const s of this.donkeys) {
+        const q = s.d.root.position;
+        const t = Math.max(0, Math.min(1, ((q.x - a.x) * abx + (q.z - a.z) * abz) / L2));
+        const d = Math.hypot(a.x + abx * t - q.x, a.z + abz * t - q.z);
+        s.d.root.visible = !(scene && d < 1.6);
+      }
+    }
     if (this.pet) {
       // (después de mover a los burros: si no, su paso le borraba el cabeceo)
       // Él, a gusto: baja la cabeza y la inclina hacia ella, despacio

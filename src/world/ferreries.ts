@@ -846,7 +846,9 @@ const tq = new THREE.Quaternion();
 const up = new THREE.Vector3(0, 1, 0);
 const pose = newCrowdPose();
 const _all: { x: number; z: number; w: boolean }[] = [];
-export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }, dt = 1 / 60, avoid: readonly { x: number; z: number; r: number }[] = []) {
+export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x: number; z: number; r: number }, dt = 1 / 60, avoid: readonly { x: number; z: number; r: number }[] = [], hideNear?: { x: number; z: number; r: number }) {
+  // (quien quede pegado a la cámara se esconde bajo el suelo: apartarse no basta cuando la cámara va deprisa)
+  const hy = (x: number, z: number) => (hideNear && Math.hypot(x - hideNear.x, z - hideNear.z) < hideNear.r ? -60 : undefined);
   const k = Math.min(1, dt * 5);
   // dónde está cada uno ahora: los que pasean esquivan a los demás (antes se atravesaban)
   _all.length = 0;
@@ -899,7 +901,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
         b.ry += Math.atan2(Math.sin(want - b.ry), Math.cos(want - b.ry)) * Math.min(1, dt * 5);
         pose.sway = pose.twist = pose.shift = 0;
         tq.setFromAxisAngle(up, b.ry);
-        c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose);
+        c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose, hy(b.x + bb.ox, b.z + bb.oz));
         return;
       }
       // De pie, gesticulando; los bailarines con más energía y girando un poco sobre sí mismos
@@ -909,7 +911,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
         pose.shift = Math.sin(t * b.speed * 0.5 + b.phase) * 0.07;
       }
       tq.setFromAxisAngle(up, b.ry + (c.dance ? Math.sin(t * 0.8 + b.phase) * 0.6 : Math.sin(t * 0.4 + b.phase) * 0.2));
-      c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose);
+      c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose, hy(b.x + bb.ox, b.z + bb.oz));
     });
     c.people.commit();
   }

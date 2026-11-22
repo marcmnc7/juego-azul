@@ -1032,7 +1032,7 @@ export const MINIS = {
 export const SIDE = {
   water: {
     intro: [
-      { who: 'Narrador', text: 'Pistolas de agua por todas partes. Unos críos te cortan el paso.' },
+      { who: 'Narrador', text: 'Unos críos te cortan el paso.' },
       { who: 'Un crío', text: 'D\'aquí no passes si no mus banyes!' },
       // (inventado: antes lo contaba el narrador; ahora la regla la dice el crío)
       { who: 'Un crío', text: 'Té, una pistola. Som cinc: mus has de banyar dues vegades a cadascú!' },
