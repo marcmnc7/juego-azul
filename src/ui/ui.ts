@@ -954,10 +954,20 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
           len.push(len[k - 1] + Math.hypot(q[0] - pt[k - 1][0], q[1] - pt[k - 1][1]));
           pt.push(q);
         }
-        const half = len[N] / 2;
         let k = 1;
-        while (k < N && len[k] < half) k++;
-        const f = (half - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
+        let f: number;
+        if (tall) {
+          // En vertical, en el hueco libre entre el rótulo del capítulo de arriba (fecha, nombre y estado, debajo de
+          // su baldosa) y la baldosa siguiente: a mitad de longitud caía encima del nombre del capítulo
+          const yTop = y0 + tl * 0.5 + tl * 0.82, yBot = y1 - tl * 0.5;
+          const want = (yTop + yBot) / 2;
+          while (k < N && pt[k][1] < want) k++;
+          f = (want - pt[k - 1][1]) / Math.max(1e-6, pt[k][1] - pt[k - 1][1]);
+        } else {
+          const half = len[N] / 2;
+          while (k < N && len[k] < half) k++;
+          f = (half - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
+        }
         // (en vertical, el rótulo al lado libre del punto: debajo le pasaba la línea que baja)
         mn.b.classList.toggle('side-r', tall && x1 >= x0);
         mn.b.classList.toggle('side-l', tall && x1 < x0);

@@ -28,7 +28,7 @@ export const PUZZLES: PuzzleInfo[] = [
   { id: 'emojis', kind: 'emojis', after: 8, day: [2026, 11, 23], icon: '😍', title: 'En emojis', sub: 'Momentos de nuestro chat: ¿cuál es?' },
   // (4.3) Lo que nos gusta hacer juntos: el vóley, Joy en el agility y la hípica, con sus chats; al acabar, los créditos.
   // Se abre al terminar el capítulo 9, antes de «Continuará…»
-  { id: 'aficiones', kind: 'aficiones', after: 9, day: [2026, 11, 25], icon: '🏐', title: 'Lo que nos gusta', sub: 'Vóley, Joy y caballos' },
+  { id: 'aficiones', kind: 'aficiones', after: 9, day: [2026, 11, 25], icon: '💞', title: 'Lo que nos gusta', sub: 'Vóley, Joy y caballos' },
 ];
 
 /**
