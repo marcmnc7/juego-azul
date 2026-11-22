@@ -28,11 +28,7 @@ const Z1 = 17;
 const BOX_W = 460 / 0.7;
 const BOX_H = 1000 / 0.7;
 const TYPE_MS = 1100;
-const ZOOM_MS = 6600;
-const PIN_MS = 600;
-const HOLD_MS = 800;
-/** El final: el mapa sigue entrando hacia la chincheta mientras se desenfoca y se deshace en la escena. */
-const DIVE_MS = 1700;
+const ZOOM_MS = 7600;
 
 const url = (z: number, x: number, y: number) => `map/${z}/${x}/${y}.jpg`;
 
@@ -99,17 +95,13 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
   const bar = document.createElement('div');
   bar.className = 'mi-search';
   bar.innerHTML = '<span class="mi-lens"></span><span class="mi-q"></span><span class="mi-caret"></span>';
-  const pin = document.createElement('div');
-  pin.className = 'mi-pin';
-  pin.innerHTML =
-    '<svg viewBox="0 0 40 54" width="40" height="54"><path d="M20 2C10.6 2 3 9.6 3 19c0 12.6 17 33 17 33s17-20.4 17-33C37 9.6 29.4 2 20 2z" fill="#e8453c" stroke="#a52714" stroke-width="2"/><circle cx="20" cy="19" r="6.5" fill="#a52714"/></svg><i></i>';
   const scale = document.createElement('div');
   scale.className = 'mi-scale';
   scale.innerHTML = '<span></span><b></b>';
   const credit = document.createElement('div');
   credit.className = 'mi-credit';
   credit.textContent = 'Imágenes © Esri, Maxar, Earthstar Geographics';
-  o.append(cv, bar, pin, scale, credit);
+  o.append(cv, bar, scale, credit);
   root.append(o);
   const q = bar.querySelector('.mi-q') as HTMLElement;
   const scaleBar = scale.querySelector('span') as HTMLElement;
@@ -178,25 +170,28 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
   let skipAt = Infinity;
   let revealed = false;
   let finished = false;
-  const total = TYPE_MS + ZOOM_MS + PIN_MS + HOLD_MS;
-  let diveAt = Infinity;
-  let zStop = Z1;
+  // Todo en un solo movimiento: el mapa baja frenando poco a poco y, sin pararse, se va deshaciendo en el capítulo
+  // (desenfoque y transparencia suaves) mientras sigue acercándose
+  const total = TYPE_MS + ZOOM_MS;
+  const FADE_AT = 0.68;
+  let fadeStart = Infinity;
+  let fadeLen = (1 - FADE_AT) * ZOOM_MS;
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const now = performance.now();
-    const t = Math.max(0, Math.min(now - t0, skipAt));
+    const t = Math.max(0, now - t0);
     // 1) Se escribe el sitio en la barra
     const typed = Math.min(1, t / TYPE_MS);
     const shown = s.label.slice(0, Math.ceil(typed * s.label.length));
     if (q.textContent !== shown) q.textContent = shown;
     bar.classList.toggle('done', typed >= 1);
-    // 2) El vuelo: de España entera a la calle, frenando al llegar
+    // 2) El vuelo: de España entera a la calle, cada vez más despacio (sigue un poco más allá de Z1 mientras se funde)
     const zt = Math.max(0, Math.min(1, (t - TYPE_MS) / ZOOM_MS));
-    let z = Z0 + (Z1 - Z0) * fly(zt);
-    // 4) El final: sigue entrando un poco hacia la chincheta, se desenfoca y se deshace en el capítulo
-    if (diveAt === Infinity && (now - t0 >= total || skipAt !== Infinity)) {
-      diveAt = now;
-      zStop = z;
+    const z = Z0 + (Z1 + 0.9 - Z0) * fly(zt);
+    // 3) El fundido, en marcha (tocar la pantalla lo adelanta: empieza ya y dura menos)
+    if (fadeStart === Infinity && (t >= TYPE_MS + FADE_AT * ZOOM_MS || skipAt !== Infinity)) {
+      fadeStart = now;
+      if (skipAt !== Infinity) fadeLen = 1100;
       o.classList.add('diving');
       if (!revealed) {
         revealed = true;
@@ -204,15 +199,12 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
       }
     }
     let p = 0;
-    if (diveAt !== Infinity) {
-      p = Math.min(1, (now - diveAt) / DIVE_MS);
-      z = zStop + 1.5 * easeIn(p);
+    if (fadeStart !== Infinity) {
+      p = Math.min(1, (now - fadeStart) / fadeLen);
       const a = 1 - easeInOut(p);
       cv.style.opacity = a.toFixed(3);
-      cv.style.filter = `blur(${(easeIn(p) * 10).toFixed(1)}px) saturate(${(1 + p * 0.4).toFixed(2)})`;
-      // (la animación de caída manda sobre su opacidad: se apaga con el filtro)
-      pin.style.filter = `drop-shadow(0 3px 3px rgba(0,0,0,.35)) opacity(${Math.max(0, 1 - p * 2.2).toFixed(3)})`;
-      o.style.backgroundColor = `rgba(11,42,61,${(a * a).toFixed(3)})`;
+      cv.style.filter = `blur(${(easeIn(p) * 8).toFixed(1)}px)`;
+      o.style.backgroundColor = `rgba(11,42,61,${(a * a * a).toFixed(3)})`;
       if (p >= 1) finish();
     }
     const L = Math.max(Z0, Math.min(Z1, Math.floor(z + 0.5)));
@@ -224,8 +216,6 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
     if (L - 1 >= Z0) drawLevel(L - 1, z);
     drawLevel(L, z);
     if (p === 0) paintScale(z);
-    // 3) La chincheta cae en el sitio
-    pin.classList.toggle('on', t >= TYPE_MS + ZOOM_MS - 250);
   };
   const finish = () => {
     if (finished) return;
@@ -249,5 +239,5 @@ export function mapIntro(n: number, onReveal: () => void, onDone: () => void) {
       onReveal();
     }
     finish();
-  }, total + DIVE_MS + 5000);
+  }, total + 5000);
 }
