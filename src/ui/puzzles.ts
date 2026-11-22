@@ -3,7 +3,7 @@
 import { audio } from '../core/audio';
 import { vibrate } from '../core/gfx';
 import { MEMORIES } from '../data/memories';
-import { hobbiesFinale } from './finale';
+import { hobbyGame } from './finale';
 import { PUZZLES, WHO_SAID, SOUP_WORDS, TIMELINE, FILL, HANGMAN, EMOJI_ROUNDS, type PuzzleInfo } from '../data/puzzles';
 import { crossword, clearScreens, shareWithMarc } from './ui';
 
@@ -64,7 +64,7 @@ function done(f: ReturnType<typeof frame>, line: string, onDone: () => void) {
 export function runPuzzle(id: string, onDone: () => void, onBack: () => void) {
   const p = PUZZLES.find((x) => x.id === id)!;
   if (p.kind === 'crucigrama') return crossword(onDone, onBack, '¡Hecho! 💙');
-  if (p.kind === 'aficiones') return hobbiesFinale(onDone, onBack);
+  if (p.kind === 'voley' || p.kind === 'agility' || p.kind === 'hipica') return hobbyGame(p.kind, onDone, onBack);
   const f = frame(p, onBack);
   ({ quien, sopa, orden, parejas, completa, ahorcado, emojis } as Record<string, (f: ReturnType<typeof frame>, end: (l: string) => void) => void>)[p.kind](f, (l) => done(f, l, onDone));
 }

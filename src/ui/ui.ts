@@ -854,7 +854,9 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
   const minis = PUZZLES.map((pz) => {
     // (el de después del último capítulo, además, solo con ese capítulo hecho)
     // (y solo con los capítulos de antes hechos: no se puede jugar un «conecta» saltándose un capítulo)
-    const open = (allOpen || now() >= puzzleDate(pz).getTime()) && (allOpen || states.slice(0, pz.after).every((c) => c.done));
+    // (las del mismo tramo, una detrás de otra: la siguiente, con la anterior hecha)
+    const before = PUZZLES.filter((q) => q.after === pz.after && PUZZLES.indexOf(q) < PUZZLES.indexOf(pz));
+    const open = (allOpen || now() >= puzzleDate(pz).getTime()) && (allOpen || (states.slice(0, pz.after).every((c) => c.done) && before.every((q) => save.minis?.includes(q.id))));
     const doneIt = !!save.minis?.includes(pz.id);
     const b = el('button', 'mp-mini' + (doneIt ? ' done' : open ? ' open' : ' locked'));
     b.append(el('span', 'mp-mini-dot', doneIt ? '✓' : open ? pz.icon : '🔒'), el('span', 'mp-mini-lab', `<b>${open || doneIt ? pz.title : 'Sorpresa'}</b><i>${puzzleDay(pz)}</i>`));
@@ -879,7 +881,7 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       );
     };
     track.append(b);
-    return { b, after: pz.after };
+    return { b, after: pz.after, j: PUZZLES.filter((q) => q.after === pz.after).indexOf(pz), n: PUZZLES.filter((q) => q.after === pz.after).length };
   });
   wrap.append(track);
   body.append(wrap);
@@ -900,14 +902,16 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       const gap = tileH * 2.25;
       const pad = tileH * 0.9 + 10;
       track.style.setProperty('--tile', `${tileH}px`);
+      // (antes de «Continuará…», un tramo más largo: ahí van las tres bolitas de «Lo que nos gusta»)
+      const extra = tileH * 1.3;
       nodes.forEach((n, i) => {
-        const x = W * SWAY[i], y = pad + i * gap;
+        const x = W * SWAY[i], y = pad + i * gap + (i === nodes.length - 1 ? extra : 0);
         n.style.left = `${x}px`;
         n.style.top = `${y}px`;
         pts.push([x, y]);
       });
       TW = W;
-      TH = pad * 2 + (nodes.length - 1) * gap + tileH;
+      TH = pad * 2 + (nodes.length - 1) * gap + tileH + extra;
       track.style.width = '';
       track.style.height = `${TH}px`;
     } else {
@@ -916,13 +920,13 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
       const pad = Math.max(90, W * 0.18);
       track.style.setProperty('--tile', `${tileH}px`);
       nodes.forEach((n, i) => {
-        const x = pad + i * gap;
+        const x = pad + i * gap + (i === nodes.length - 1 ? tileH * 1.4 : 0);
         const y = 20 + (H - 40 - tileH * 1.9) * WAVE[i] + tileH / 2;
         n.style.left = `${x}px`;
         n.style.top = `${y}px`;
         pts.push([x, y]);
       });
-      TW = pad * 2 + (nodes.length - 1) * gap;
+      TW = pad * 2 + (nodes.length - 1) * gap + tileH * 1.4;
       TH = H;
       track.style.width = `${TW}px`;
       track.style.height = '';
@@ -960,11 +964,12 @@ function storyTab(body: HTMLElement, save: SaveData, opts: MapOptions) {
           // En vertical, en el hueco libre entre el rótulo del capítulo de arriba (fecha, nombre y estado, debajo de
           // su baldosa) y la baldosa siguiente: a mitad de longitud caía encima del nombre del capítulo
           const yTop = y0 + tl * 0.5 + tl * 0.82, yBot = y1 - tl * 0.5;
-          const want = (yTop + yBot) / 2;
+          // (si hay varias en el mismo tramo, repartidas por el hueco)
+          const want = yTop + ((yBot - yTop) * (mn.j + 1)) / (mn.n + 1);
           while (k < N && pt[k][1] < want) k++;
           f = (want - pt[k - 1][1]) / Math.max(1e-6, pt[k][1] - pt[k - 1][1]);
         } else {
-          const half = len[N] / 2;
+          const half = (len[N] * (mn.j + 1)) / (mn.n + 1);
           while (k < N && len[k] < half) k++;
           f = (half - len[k - 1]) / Math.max(1e-6, len[k] - len[k - 1]);
         }

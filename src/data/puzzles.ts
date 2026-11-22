@@ -2,7 +2,7 @@
 // une). Todo lo que sale aquí está sacado de nuestro chat: las frases son literales (quién las escribió y cuándo,
 // tal cual) y las palabras, las que más usamos o las que solo entendemos nosotros.
 
-export type PuzzleKind = 'quien' | 'sopa' | 'orden' | 'crucigrama' | 'parejas' | 'completa' | 'ahorcado' | 'emojis' | 'aficiones';
+export type PuzzleKind = 'quien' | 'sopa' | 'orden' | 'crucigrama' | 'parejas' | 'completa' | 'ahorcado' | 'emojis' | 'voley' | 'agility' | 'hipica';
 
 export interface PuzzleInfo {
   id: string;
@@ -26,9 +26,11 @@ export const PUZZLES: PuzzleInfo[] = [
   { id: 'completa', kind: 'completa', after: 6, day: [2026, 11, 17], icon: '🧩', title: 'Completa la frase', sub: 'Nos las dijimos tal cual' },
   { id: 'ahorcado', kind: 'ahorcado', after: 7, day: [2026, 11, 20], icon: '🪢', title: 'El ahorcado', sub: 'Frases que solo entendemos nosotros' },
   { id: 'emojis', kind: 'emojis', after: 8, day: [2026, 11, 23], icon: '😍', title: 'En emojis', sub: 'Momentos de nuestro chat: ¿cuál es?' },
-  // (4.3) Lo que nos gusta hacer juntos: el vóley, Joy en el agility y la hípica, con sus chats; al acabar, los créditos.
-  // Se abre al terminar el capítulo 9, antes de «Continuará…»
-  { id: 'aficiones', kind: 'aficiones', after: 9, day: [2026, 11, 25], icon: '💞', title: 'Lo que nos gusta', sub: 'Vóley, Joy y caballos' },
+  // (4.4.5) Lo que nos gusta hacer juntos: tres bolitas, una detrás de otra, en el camino hasta «Continuará…» (se
+  // abren al terminar el capítulo 9, y cada una con la anterior hecha). Al acabar la última, los créditos.
+  { id: 'voley', kind: 'voley', after: 9, day: [2026, 11, 25], icon: '🏖️', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 3' },
+  { id: 'agility', kind: 'agility', after: 9, day: [2026, 11, 25], icon: '🐕', title: 'Agility con Joy', sub: 'Lo que nos gusta · 2 de 3' },
+  { id: 'hipica', kind: 'hipica', after: 9, day: [2026, 11, 25], icon: '🐎', title: 'Salto a caballo', sub: 'Lo que nos gusta · 3 de 3' },
 ];
 
 /**

@@ -70,28 +70,14 @@ function storyCard(o: { kicker: string; title: string; sub: string; icon: string
   return scr;
 }
 
-const STEP_KEY = 'azul-finale-step';
-const getStep = () => {
-  try {
-    return Number(localStorage.getItem(STEP_KEY)) || 0;
-  } catch {
-    return 0;
-  }
-};
-const setStep = (n: number) => {
-  try {
-    if (n) localStorage.setItem(STEP_KEY, String(n));
-    else localStorage.removeItem(STEP_KEY);
-  } catch {
-    /* sin almacenamiento: se empieza desde el principio */
-  }
-};
+export type Hobby = 'voley' | 'agility' | 'hipica';
 
 /**
- * Los hobbies compartidos, uno detrás de otro, y el final con créditos. Hay un botón de pausa (como en los
- * capítulos) para salir a medias: al volver se sigue por el juego en el que estaba.
+ * Uno de los tres juegos del final (cada uno, su bolita en el mapa): su rótulo (con lo que se cuenta), el chat de esos
+ * días y el juego. Al acabar el último (la hípica), el rótulo del final y los créditos. Con pausa para salir a medias
+ * y, en modo prueba, «Saltar a una fase» (con rótulo y chat, el juego directo y, en el agility, el circuito).
  */
-export function hobbiesFinale(onDone: () => void, onExit: () => void = onDone) {
+export function hobbyGame(which: Hobby, onDone: () => void, onExit: () => void = onDone) {
   clearScreens();
   // (ya es después del cap. 9: Gas y Azul, también en los chats)
   setCastChapter(9);
@@ -100,84 +86,64 @@ export function hobbiesFinale(onDone: () => void, onExit: () => void = onDone) {
   pauseState.on = false;
   pauseState.n = 0;
   pauseState.title = 'Lo que nos gusta';
-  // (el HUD solo pone el botón de pausa: la barra de arriba la lleva cada misión)
+  let closeDebug: (() => void) | null = null;
+  const end = () => {
+    closeDebug?.();
+    closeDebug = null;
+    h.remove();
+  };
   const leave = () => {
     gone = true;
     closeDialogue();
     stage.end();
     root().querySelectorAll('.phone-overlay, .fin-screen, .fn-screen').forEach((n) => n.remove());
-    h.remove();
+    end();
     onExit();
   };
+  // (el HUD solo pone el botón de pausa: la barra de arriba y el botón de acción los lleva cada juego)
   const h = hud(() => {}, () => leave(), '');
   h.root.style.display = 'none';
-  // (el del final no tiene acción propia: cada juego trae la suya)
   h.setIcon('');
-  // Cada paso, con su «siguiente». En modo prueba, «Saltar a una fase» (en la pausa) lleva a cualquiera de ellos,
-  // también al circuito de agility sin pasar por los trucos
-  // (cada juego, con su rótulo; el chat de esos días sale encima del rótulo y el juego empieza al cerrarlo)
-  const withCard = (card: Parameters<typeof storyCard>[0], chat: Parameters<typeof phoneChat>[0] | null, game: (done: () => void) => void) => (next: () => void) =>
+  const CARD = {
+    voley: { kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 3', icon: '🏐', lines: [...FINALE.barcelona, ...ANIVERSARIO.september] },
+    agility: { kicker: 'Octubre', title: 'Joy, campeón', sub: 'Lo que nos gusta · 2 de 3', icon: '🐕', lines: ANIVERSARIO.october },
+    hipica: { kicker: 'Noviembre', title: 'A caballo', sub: 'Lo que nos gusta · 3 de 3', icon: '🐎', lines: FINALE.horses },
+  }[which];
+  const CHAT = { voley: CHATS.voley, agility: CHATS.agility, hipica: CHATS.caballos }[which];
+  let token = 0;
+  const finish = (my: number) => () => {
+    if (gone || my !== token) return;
+    end();
+    if (which !== 'hipica') return onDone();
+    // (el último: el final del año y los créditos)
+    storyCard({ kicker: 'Y ahora', title: 'Fin de este año', sub: 'Lo que nos gusta', icon: '💙', lines: FINALE.end, go: 'Seguir' }, (c) => (c.remove(), credits(onDone)), onDone);
+  };
+  const game = (done: () => void, course = false) => (which === 'voley' ? beachMission(done) : which === 'agility' ? parkMission(done, course) : ridingMission(done));
+  const play = (direct = false, course = false) => {
+    const my = ++token;
+    if (direct) return game(finish(my), course);
     storyCard(
-      card,
-      (c) => {
-        const play = () => {
+      CARD,
+      (c) =>
+        phoneChat(CHAT, () => {
           c.remove();
-          game(next);
-        };
-        if (chat) phoneChat(chat, play);
-        else play();
-      },
+          if (my === token && !gone) game(finish(my));
+        }),
       leave,
     );
-  const steps: ((next: () => void) => void)[] = [
-    (next) => storyCard({ kicker: 'Después de Ferreries', title: 'Barcelona', sub: 'Lo que nos gusta', icon: '🏙️', lines: FINALE.barcelona, go: 'Seguir' }, (c) => (c.remove(), next()), leave),
-    withCard({ kicker: 'Septiembre', title: 'Vóley playa', sub: 'Lo que nos gusta · 1 de 3', icon: '🏐', lines: ANIVERSARIO.september }, CHATS.voley, beachMission),
-    withCard({ kicker: 'Octubre', title: 'Joy, campeón', sub: 'Lo que nos gusta · 2 de 3', icon: '🐕', lines: ANIVERSARIO.october }, CHATS.agility, (d) => parkMission(d)),
-    withCard({ kicker: 'Noviembre', title: 'A caballo', sub: 'Lo que nos gusta · 3 de 3', icon: '🐎', lines: FINALE.horses }, CHATS.caballos, ridingMission),
-  ];
-  let token = 0;
-  let closeDebug: (() => void) | null = null;
-  const end = () => {
-    closeDebug?.();
-    closeDebug = null;
-  };
-  const exit0 = onExit;
-  onExit = () => {
-    end();
-    exit0();
-  };
-  const run = (i: number) => {
-    if (gone) return;
-    const my = ++token;
-    setStep(i);
-    if (i >= steps.length) {
-      setStep(0);
-      end();
-      h.remove();
-      storyCard({ kicker: 'Y ahora', title: 'Fin de este año', sub: 'Lo que nos gusta', icon: '💙', lines: FINALE.end, go: 'Seguir' }, (c) => (c.remove(), credits(onDone)), leave);
-      return;
-    }
-    steps[i](() => my === token && run(i + 1));
   };
   if (isTestMode())
     closeDebug = debugPanel([
-      { label: '1 · Barcelona', run: () => run(0) },
-      { label: '2 · Vóley playa', run: () => run(1) },
-      { label: '2b · Vóley, directo', run: () => { const my = ++token; setStep(1); beachMission(() => my === token && run(2)); } },
-      { label: '3 · Joy: los trucos', run: () => run(2) },
-      {
-        label: '3b · Joy: el circuito de agility',
-        run: () => {
-          const my = ++token;
-          setStep(2);
-          parkMission(() => my === token && run(3), true);
-        },
-      },
-      { label: '4 · A caballo (chat e hípica)', run: () => run(3) },
-      { label: '5 · Hípica, directa', run: () => { const my = ++token; setStep(3); ridingMission(() => my === token && run(4)); } },
-      { label: '6 · Final y créditos', run: () => run(4) },
+      { label: '1 · Rótulo y chat', run: () => play() },
+      { label: '2 · El juego, directo', run: () => play(true) },
+      ...(which === 'agility' ? [{ label: '3 · El circuito, directo', run: () => play(true, true) }] : []),
     ]);
-  run(Math.min(getStep(), steps.length - 1));
+  play();
+}
+
+/** (modo prueba) El primero de los tres. */
+export function hobbiesFinale(onDone: () => void) {
+  hobbyGame('voley', onDone);
 }
 
 /** Créditos que suben despacio y, al final, «Gracias por este año» con el corazón azul (sin escena post-créditos). */
