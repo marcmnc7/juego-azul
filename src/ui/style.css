@@ -2501,3 +2501,5 @@ html, body { background: #000; }
 .cam-bar { z-index: 2; }
 /* 4.3.1 Pausa del final (sin portada de capítulo): fondo de noche para que se lea el título */
 .pc-art:not(:has(.pc-cover)) { background: linear-gradient(160deg, #2b1840, #1d3a6b); min-height: 120px; }
+/* 4.3.3 Sin el botón ✦ del objetivo (era ayuda): arriba solo los contadores x/N y la pausa */
+.hud-top .objective { display: none !important; }

@@ -7,14 +7,9 @@
  *
  *   const tgt = this.lost.tick(`${this.phase}|${this.cosas}`, dt, this.busy) ? this.target() : null;
  */
-/** Veces que ha pedido pista tocando la estrella del objetivo (la flecha sale ya, hasta el siguiente avance). */
-let helpSeq = 0;
-export const askHelp = () => void helpSeq++;
-
 export class Lost {
   private key = '';
   private t = 0;
-  private help = 0;
   constructor(readonly after = 40) {}
 
   /** true si lleva `after` s con la misma clave (sin contar el tiempo `paused`: diálogos, escenas). */
@@ -22,16 +17,16 @@ export class Lost {
     if (key !== this.key) {
       this.key = key;
       this.t = 0;
-      this.help = helpSeq;
     }
     if (!paused) this.t += dt;
-    return this.t > this.after || this.help !== helpSeq;
+    // (4.3.3: sin pistas. Marc: «quita las dos». Ni la flecha y la luz a los 40 s ni la ayuda a demanda: lo
+    // descubre ella hablando con la gente. El reloj sigue contando por si algún capítulo mira `seconds`)
+    return false;
   }
 
   /** Vuelve a esperar (al saltar de fase en el modo prueba, al reintentar). */
   reset() {
     this.t = 0;
-    this.help = helpSeq;
   }
 
   /** Segundos con la misma clave (para avisos intermedios, p. ej. un bocadillo a los 20 s). */
