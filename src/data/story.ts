@@ -820,7 +820,7 @@ export const ECLIPSE = {
     { who: 'Narrador', text: 'Y menos mal. Así empieza el día de verdad.' },
   ] as Line[],
   arriveAzul: [
-    { who: 'Narrador', text: 'Vais juntos en su coche a casa de tus padres. Hoy los conoce.' },
+    { who: 'Narrador', text: 'Ya en casa de tus padres, juntos, en su coche. Hoy los conoce.' },
   ] as Line[],
   dateIntro: [{ who: 'Narrador', text: '12 de agosto, en Menorca.' }] as Line[],
   parentsHint: '👋',

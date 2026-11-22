@@ -2421,6 +2421,19 @@ export class Level4 implements Level {
       this.towelPile.visible = false;
       for (const t of this.lawnTowels) t.visible = true;
       this.gasPlan = 'none';
+      // (y lo que pudiera quedar a medias: la luz de la piscina, el ruido, la ventana, las estrellas, el abrazo)
+      this.freezeDone = false;
+      this.freezeT = 0;
+      this.frozeMoved = false;
+      this.lampOn = 0;
+      this.noise = 0;
+      this.alertT = 0;
+      this.hugT = 0;
+      this.hugE?.stop();
+      this.hugE = null;
+      this.nextStar = 0;
+      this.missRun = 0;
+      this.starLine.geometry.setDrawRange(0, 0);
       this.lost.reset();
     };
     return [
@@ -2442,6 +2455,19 @@ export class Level4 implements Level {
           this.player.root.position.copy(BAR_START);
           this.walker.yaw = this.walker.facing = Math.PI / 2;
           this.updateHud();
+        },
+      },
+      {
+        label: 'A2 · En coche hasta casa',
+        run: () => {
+          reset();
+          this.phase = 'atBar';
+          this.towelsTaken = false;
+          this.towelPile.visible = true;
+          for (const t of this.lawnTowels) t.visible = false;
+          this.sneakFreezeDone = false;
+          this.gas.root.visible = false;
+          this.boardCar();
         },
       },
       {

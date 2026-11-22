@@ -2,7 +2,8 @@
 // vóley, Joy en el parque (agility) y la hípica de saltos —, y al acabar, los créditos.
 import { audio } from '../core/audio';
 import { ANIVERSARIO, FINALE } from '../data/story';
-import { dialogue, clearScreens, phoneChat, hud, closeDialogue, pauseState } from './ui';
+import { dialogue, clearScreens, phoneChat, hud, closeDialogue, pauseState, debugPanel, isTestMode } from './ui';
+import { parkMission } from '../world/missions/park';
 import { stage } from '../core/stage';
 import { CHATS } from '../data/chats';
 import { voley, joyTraining } from './minis';
@@ -57,6 +58,8 @@ export function hobbiesFinale(onDone: () => void, onExit: () => void = onDone) {
     '',
   );
   h.root.style.display = 'none';
+  // Cada paso, con su «siguiente». En modo prueba, «Saltar a una fase» (en la pausa) lleva a cualquiera de ellos,
+  // también al circuito de agility sin pasar por los trucos
   const steps: ((next: () => void) => void)[] = [
     (next) => dialogue(FINALE.barcelona, () => dialogue(ANIVERSARIO.september, next)),
     (next) => voley(next),
@@ -64,17 +67,47 @@ export function hobbiesFinale(onDone: () => void, onExit: () => void = onDone) {
     (next) => phoneChat(CHATS.caballos, () => dialogue(FINALE.horses, next)),
     (next) => ridingMission(next),
   ];
+  let token = 0;
+  let closeDebug: (() => void) | null = null;
+  const end = () => {
+    closeDebug?.();
+    closeDebug = null;
+  };
+  const exit0 = onExit;
+  onExit = () => {
+    end();
+    exit0();
+  };
   const run = (i: number) => {
     if (gone) return;
+    const my = ++token;
     setStep(i);
     if (i >= steps.length) {
       setStep(0);
+      end();
       h.remove();
       dialogue(FINALE.end, () => credits(onDone));
       return;
     }
-    steps[i](() => run(i + 1));
+    steps[i](() => my === token && run(i + 1));
   };
+  if (isTestMode())
+    closeDebug = debugPanel([
+      { label: '1 · Barcelona', run: () => run(0) },
+      { label: '2 · Vóley playa', run: () => run(1) },
+      { label: '3 · Joy: los trucos', run: () => run(2) },
+      {
+        label: '3b · Joy: el circuito de agility',
+        run: () => {
+          const my = ++token;
+          setStep(2);
+          parkMission(() => my === token && run(3), true);
+        },
+      },
+      { label: '4 · Chat de los caballos', run: () => run(3) },
+      { label: '5 · Hípica', run: () => run(4) },
+      { label: '6 · Final y créditos', run: () => run(5) },
+    ]);
   run(Math.min(getStep(), steps.length - 1));
 }
 

@@ -1883,9 +1883,12 @@ export class Level1 implements Level {
       this.invuln = 0;
       this.endingT = this.pairT = this.barT = this.kissT = 0;
       this.confetti.active = false;
-      this.donkeys.forEach((d) => {
+      this.donkeys.forEach((d, i) => {
         d.ring.visible = d.alert.visible = false;
         d.warnT = d.rearT = 0;
+        // (y la estampida de cada uno, otra vez desde el principio)
+        d.wildT = 0;
+        d.nextWild = 6 + i * 3.5 + Math.random() * 4;
       });
       this.walker.stop();
       this.lost.reset();

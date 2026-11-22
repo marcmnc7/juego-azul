@@ -5,7 +5,7 @@ import { Surf } from '../../core/surfaces';
 import { stage, type Mission, type MissionCtx } from '../../core/stage';
 import { AZUL_DIARIO, GAS_DIARIO } from '../../data/characters';
 import { G, Merger, makePerson, makeHorse, animatePerson, type Person, type Donkey } from '../../entities/models';
-import { hud, comicWord, missionCard, failCard, type Hud } from '../../ui/ui';
+import { hud, comicWord, missionCard, failCard, livesChip, type Hud } from '../../ui/ui';
 import { disposeScene } from '../level';
 
 // Hípica de saltos (21 nov), en 3D: el picadero de arena de la foto (seto alrededor, focos, obstáculos de barras),
@@ -15,6 +15,8 @@ import { disposeScene } from '../level';
 
 const JUMPS = 12;
 const NEED = 0.75;
+/** Derribos que se pueden permitir (con uno más, ya no llega al 75 %: se repite en el momento). */
+const KNOCKS_OK = JUMPS - Math.ceil(NEED * JUMPS);
 const SPEED = 9; // m/s, al galope
 const V0 = 6.2; // impulso del salto
 const GRAV = 16;
@@ -165,7 +167,8 @@ class RidingMission implements Mission {
   }
 
   private paint() {
-    this.hud.setCounters(`<span class="chip">🏇 ${Math.min(JUMPS, this.clean + this.knocks)}/${JUMPS}</span><span class="chip">✓ ${this.clean}</span><span class="chip">✗ ${this.knocks}</span>`);
+    // (el objetivo, saltos limpios x/N; los derribos, en corazones: sin corazones, se repite)
+    this.hud.setCounters(`<span class="chip${this.clean >= Math.ceil(NEED * JUMPS) ? ' ok' : ''}">🏇 ${this.clean}/${Math.ceil(NEED * JUMPS)}</span>${livesChip('🚧', KNOCKS_OK + 1 - this.knocks, KNOCKS_OK + 1)}`);
   }
 
   private jump() {
@@ -219,6 +222,8 @@ class RidingMission implements Mission {
         vibrate(60);
         comicWord('¡DERRIBO!', 'hit');
         this.paint();
+        // (con un derribo de más ya no se llega: se repite ya, sin esperar al final)
+        if (this.knocks > KNOCKS_OK && !this.over) this.finish();
       }
       if (f.state === 'up' && back > f.z + f.depth) {
         f.state = 'clear';
@@ -252,7 +257,7 @@ class RidingMission implements Mission {
     const pct = this.clean / JUMPS;
     setTimeout(() => {
       if (pct < NEED) {
-        failCard('Demasiados derribos', `${this.clean} de ${JUMPS} saltos limpios (${Math.round(pct * 100)} %). Hace falta más del 75 %: otra vez el recorrido.`, () => this.reset());
+        failCard('Demasiados derribos', `${this.clean} de ${JUMPS} saltos limpios (${Math.round(pct * 100)} %). Hace falta al menos el 75 %: otra vez el recorrido.`, () => this.reset());
         return;
       }
       audio.fanfare();

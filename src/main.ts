@@ -36,7 +36,7 @@ import { cinema } from './core/cinema';
 import { stage } from './core/stage';
 import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, installGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { prepareMapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
 import { TEASERS } from './data/extras';
@@ -438,6 +438,7 @@ function leaveLevel() {
   pauseState.on = false;
   mapIntroNow?.cancel();
   mapIntroNow = null;
+  laterHold.on = false;
   stage.end();
   audio.stopTrack();
   // Lo que una partida o una misión deja encima de la escena (si se sale a medias, no se queda colgado)
@@ -526,6 +527,7 @@ function startLevel(n: number) {
     console.warn('[juego] montar capítulo', e);
     crumb(`montar: error ${e instanceof Error ? e.message : String(e)}`);
     loadingLevel = false;
+    laterHold.on = false;
     mapIntroNow?.cancel();
     mapIntroNow = null;
     card.done();
@@ -546,6 +548,8 @@ async function settle(maxMs: number) {
 
 async function buildLevel(n: number, card: ChapterLoading) {
   loadingLevel = true;
+  // (lo que el capítulo programe al montarse espera a que se vea: ni detrás del rótulo ni detrás del mapa)
+  laterHold.on = true;
   // El vuelo de satélite del principio: el mapa ya tapa la pantalla (debajo del rótulo) desde ahora, así nunca se ve
   // el escenario ni una frase antes de tiempo; sus fotos se bajan mientras se monta el resto
   const NOMAP = new URLSearchParams(location.search).has('nomap') || !hasMapIntro(n);
@@ -645,8 +649,11 @@ async function buildLevel(n: number, card: ChapterLoading) {
     loadingLevel = false;
     levelAt = performance.now();
   };
+  // (lo programado, en marcha cuando ya no hay mapa delante: ver el capítulo es lo primero)
+  const release = () => (laterHold.on = false);
   if (!intro) {
     start();
+    release();
     card.done();
     return;
   }
@@ -655,6 +662,7 @@ async function buildLevel(n: number, card: ChapterLoading) {
   intro.play(
     () => level === me && start(),
     () => {
+      release();
       if (mapIntroNow === intro) mapIntroNow = null;
     },
   );
@@ -715,7 +723,11 @@ if (TEST)
       },
       skip: dbgSkip,
       /** El final del año (hobbies, hípica y créditos), para probarlo sin jugar el cap. 9. */
-      finale: () => hobbiesFinale(() => goMap()),
+      finale: () => {
+        leaveLevel();
+        clearScreens();
+        hobbiesFinale(() => goMap());
+      },
       hipica: () => ridingMission(() => {}),
       credits: () => credits(() => goMap()),
       /** Anima a los personajes un paso (con la página oculta el bucle casi no corre). */

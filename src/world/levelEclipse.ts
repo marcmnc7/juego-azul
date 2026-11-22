@@ -354,7 +354,7 @@ export class LevelEclipse implements Level {
     this.buildKayak();
     this.updateHud();
     const go = this.chain(() => this.startKayak());
-    later(() => dialogue(ECLIPSE.dateIntro, () => phoneChat(CHATS.eclipseReady, () => dialogue(ECLIPSE.kayakIntro, go))), 1800);
+    later(() => dialogue(ECLIPSE.dateIntro, this.chain(() => phoneChat(CHATS.eclipseReady, this.chain(() => dialogue(ECLIPSE.kayakIntro, go))))), 1800);
     audio.startMusic('road');
   }
 
@@ -957,7 +957,7 @@ export class LevelEclipse implements Level {
       applyShadows(this.scene);
       this.startArrive();
     });
-    fadeFlash(() => dialogue(ECLIPSE.kayakEnd, () => phoneChat(CHATS.eclipseCoche, go)), 600);
+    fadeFlash(this.chain(() => dialogue(ECLIPSE.kayakEnd, this.chain(() => phoneChat(CHATS.eclipseCoche, go)))), 600);
   }
 
   private startArrive() {
@@ -2089,7 +2089,8 @@ export class LevelEclipse implements Level {
     this.diamond.scale.setScalar(6 + dk * 26);
     if (this.halo) this.halo.material.opacity = 1 - dark;
     if (!this.llStage) {
-      this.camera.position.lerp(this.v1.set(-1.6, 1.7, -3.4), Math.min(1, dt * 2));
+      // (más centrada detrás de los dos: en vertical, Gas quedaba medio fuera por la izquierda)
+      this.camera.position.lerp(this.v1.set(this.camera.aspect < 1 ? -0.55 : -1.6, 1.7, this.camera.aspect < 1 ? -3.9 : -3.4), Math.min(1, dt * 2));
       this.camLook.lerp(this.phase === 'eclipse' || this.phase === 'done' ? this.v1.copy(this.sunDir).multiplyScalar(40) : new THREE.Vector3(0, 1.2, 6), Math.min(1, dt * 1.5));
       this.camera.lookAt(this.camLook);
     }

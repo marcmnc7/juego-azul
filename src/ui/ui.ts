@@ -1744,10 +1744,17 @@ export function newEpoch() {
   epoch++;
   root.querySelectorAll('.gauge, .phone-overlay, .fade, .toast').forEach((n) => n.remove());
 }
-/** setTimeout que no se dispara si mientras tanto se ha salido del capítulo. */
+/** Mientras carga el capítulo y vuela el mapa del principio, lo que el capítulo programa espera (no avanza a escondidas). */
+export const laterHold = { on: false };
+/** setTimeout que no se dispara si mientras tanto se ha salido del capítulo (y espera mientras `laterHold`). */
 export function later(fn: () => void, ms: number) {
   const e = epoch;
-  return window.setTimeout(() => e === epoch && fn(), ms);
+  const fire = () => {
+    if (e !== epoch) return;
+    if (laterHold.on) return void window.setTimeout(fire, 200);
+    fn();
+  };
+  return window.setTimeout(fire, ms);
 }
 
 /** Dónde está en pantalla la cabeza de quien habla (en píxeles), o null si no se le ve. Lo pone main.ts. */

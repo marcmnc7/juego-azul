@@ -296,6 +296,12 @@ class ParkMission implements Mission {
 
   // ---------- Circuito ----------
 
+  /** Modo prueba: sin trucos, al circuito. */
+  skipToCourse() {
+    this.cmd = this.order.length;
+    this.startCourse();
+  }
+
   private startCourse() {
     this.phase = 'course';
     this.bar.remove();
@@ -452,6 +458,11 @@ class ParkMission implements Mission {
 }
 
 /** Octubre: adiestrar a Joy y el circuito de agility. */
-export function parkMission(onDone: () => void) {
-  stage.start((ctx) => new ParkMission(ctx, onDone), false);
+export function parkMission(onDone: () => void, course = false) {
+  stage.start((ctx) => {
+    const m = new ParkMission(ctx, onDone);
+    // (modo prueba: directo al circuito de agility)
+    if (course) m.skipToCourse();
+    return m;
+  }, false);
 }
