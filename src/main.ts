@@ -452,6 +452,10 @@ function leaveLevel() {
     level.dispose();
     level = null;
   }
+  // (y lo que cada capítulo deja a medias si se sale por la pausa: la mochila del cap. 5 se quedaba encima del mapa)
+  document
+    .querySelectorAll('#ui > .pack-screen, #ui > .side-panel, #ui > .side-spot, #ui > .gh-panel, #ui > .kp-pop, #ui > .rose-phone, #ui > .cam, #ui > .rhythm, #ui > .rhythm-btns, #ui > .route, #ui > .wind-arrow, #ui > .bark, #ui > .fail-back, #ui > .hud-top, #ui > .counters, #ui > .action-btn, #ui > .pause-fab, #ui > .hint-move')
+    .forEach((e) => e.remove());
   clearRigPeople();
   input.reset();
   input.enabled = true;

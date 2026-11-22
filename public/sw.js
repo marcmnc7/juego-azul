@@ -11,10 +11,22 @@ const CACHE = 'margaux-' + VERSION;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', '__ASSETS__'].filter((f) => f !== '__ASSETS__');
 
 self.addEventListener('install', (e) => {
+  // Los archivos de assets/ llevan su huella en el nombre: los que ya estaban en una versión anterior se copian de
+  // allí (no se vuelven a bajar los cientos de MB de modelos y vídeos en cada actualización); solo se baja lo nuevo
   e.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => c.addAll(FILES))
+      .then(async (c) => {
+        const old = (await caches.keys()).filter((k) => k.startsWith('margaux-') && k !== CACHE);
+        const fresh = [];
+        for (const f of FILES) {
+          let hit = null;
+          if (f.includes('assets/')) for (const k of old) if ((hit = await (await caches.open(k)).match(f))) break;
+          if (hit) await c.put(f, hit);
+          else fresh.push(f);
+        }
+        await c.addAll(fresh);
+      })
       // La primera vez (no hay ninguna versión funcionando) se pone en marcha directamente
       .then(() => (self.registration.active ? undefined : self.skipWaiting())),
   );

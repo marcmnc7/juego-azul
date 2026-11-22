@@ -2394,7 +2394,9 @@ export function hud(onAction: () => void, onMenu: () => void, hintText = 'Arrast
     leave.onclick = () => {
       if (!armed) {
         armed = true;
-        leave.innerHTML = '<span>Se pierde lo que llevas del capítulo. Toca otra vez para salir</span>';
+        leave.innerHTML = n
+          ? '<span>Se pierde lo que llevas del capítulo. Toca otra vez para salir</span>'
+          : '<span>Al volver, sigues por este juego. Toca otra vez para salir</span>';
         return;
       }
       closePause();
