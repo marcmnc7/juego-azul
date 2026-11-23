@@ -78,11 +78,11 @@ export class ChapterExtras {
     this.t += dt;
     const key = String(L.stage ?? L.phase ?? '');
     const talking = cinema.active || !!document.querySelector('.dialogue, .phone-overlay, .princesa-screen, .gauge, .pack-screen, .mission-card, .gift-overlay');
-    this.updateBarks(dt, key, talking || !!L.busy);
+    this.updateBarks(dt, key, talking || !!L.busy, this.walkerOf(L, key));
     this.updateKeepsakes(L, key, talking, camera);
   }
 
-  private updateBarks(dt: number, key: string, quiet: boolean) {
+  private updateBarks(dt: number, key: string, quiet: boolean, at?: THREE.Vector3) {
     if (key !== this.lastKey) {
       this.lastKey = key;
       this.barkT = Math.min(this.barkT, 3.5 + Math.random() * 3);
@@ -97,6 +97,12 @@ export class ChapterExtras {
       return;
     }
     this.next.set(key, i + 1);
+    const nr = lines[i].near;
+    // (lo que dice alguien que está en un sitio solo se oye cerca: si no, se lo salta)
+    if (nr && (!at || Math.hypot(at.x - nr[0], at.z - nr[1]) > nr[2])) {
+      this.barkT = 2;
+      return;
+    }
     bark(lines[i].who, lines[i].text);
     this.barkT = 13 + Math.random() * 9;
   }

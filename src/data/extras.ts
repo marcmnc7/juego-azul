@@ -53,21 +53,25 @@ export const TEASERS: Record<number, string> = {
 export interface Bark {
   who: string;
   text: string;
+  /** Solo se oye cerca de este sitio [x, z, radio] (quien lo dice está ahí, no en todo el pueblo). */
+  near?: [number, number, number];
 }
-const b = (who: string, text: string): Bark => ({ who, text });
+const b = (who: string, text: string, near?: [number, number, number]): Bark => ({ who, text, near });
+/** Sa Font, donde está Carme en el cap. 1. */
+const FONT: [number, number, number] = [-5.2, 21.6, 13];
 
 /** Lo que van diciendo mientras andas, sin parar el juego. Capítulo → fase → frases, en orden. */
 export const BARKS: Record<number, Record<string, Bark[]>> = {
   1: {
     collect: [
-      b('Tòfol', 'Pomades per ses barres, i alerta amb ses potes!'),
-      b('Carme', 'Tens purpurina fins a ses orelles!'),
+      b('Tòfol', 'Pomades per ses terrasses, i alerta amb ses potes!'),
+      b('Carme', 'Tens purpurina fins a ses orelles!', FONT),
       b('Una veïna', 'Quan s’aturi, una carícia. Du sort, al·lota.'),
       b('Tòfol', 'Aquest ase no mira on va. Aparta!'),
-      b('Carme', 'Vina ja a Sa Font, que aquí no es balla.'),
+      b('Carme', 'Vina ja a Sa Font, que aquí no es balla.', FONT),
     ],
     returnTofol: [b('Tòfol', 'Vina, vina, que tenc set!'), b('Una veïna', 'Alerta, que no se t’abocin!')],
-    findMarc: [b('Carme', 'Som aquí! Sa Font és per aquí!'), b('Tòfol', 'Vés, vés, que es jaleo no espera.')],
+    findMarc: [b('Carme', 'Som aquí! Sa Font és per aquí!', FONT), b('Tòfol', 'Vés, vés, que es jaleo no espera.')],
   },
   2: {
     // (Gas no está en el bar: viene en coche; lo suyo son mensajes, no un bocadillo flotando por el Born)

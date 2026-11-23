@@ -28,6 +28,18 @@ import { Lost } from '../core/lost';
 // Los ases no saltan: se paran un momento (avisan con un "!") y entonces se les puede hacer una caricia.
 
 /** El mismo jaleo sirve para Ferreries (Sant Bartomeu) y para Ciutadella (Sant Joan). */
+/** Nombres de la gente del pueblo (menorquines; ninguno de los personajes). */
+const FOLK_F = ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia', 'Margalida', 'Catalina', 'Francesca', 'Antònia', 'Maria', 'Elena', 'Clara', 'Paula', 'Júlia', 'Núria', 'Mònica', 'Rosa', 'Teresa', 'Àngela', 'Irene', 'Sílvia', 'Cristina', 'Lucía', 'Andrea', 'Esther', 'Roser', 'Bàrbara', 'Llucia'];
+const FOLK_M = ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel', 'Jaume', 'Sebastià', 'Bernat', 'Guillem', 'Rafel', 'Pau', 'Jordi', 'Josep', 'Nofre', 'Tomeu', 'Andreu', 'Damià', 'Lluís', 'Martí', 'Vicenç', 'Ramon', 'Albert', 'Gaspar', 'Arnau', 'Pol', 'Quim', 'Nando', 'Sergi'];
+const shuffle = <T,>(a: readonly T[]) => {
+  const r = a.slice();
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+};
+
 export interface JaleoVariant {
   text: typeof FERRERIES & { gasMoves?: string[] };
   town?: TownDressing;
@@ -285,6 +297,13 @@ export class Level1 implements Level {
   private boughtGun: THREE.Group | null = null;
   /** (4.4.13, solo cap. 1) Embestidas de ase desde el último punto de control: a la tercera, otra vez. */
   private asHits = 0;
+  private namesF: string[] = [];
+  /** Ya le ha presentado el regalo (la primera mitad de su charla). */
+  private helloDone = false;
+  private namesM: string[] = [];
+  /** Empujones al empezar la parte en curso: si sale mal y se repite, los del intento fallido no cuentan. */
+  private hitsMark = 0;
+  private markKey = '';
   private noteT = 0;
   private partyColors: Float32Array;
   private hue = 0;
@@ -862,6 +881,7 @@ export class Level1 implements Level {
     this.busy = true;
     this.walker.stop();
     this.input.reset();
+    this.hits = this.hitsMark;
     later(() => failCard(f.title, f.text, () => {
       this.failing = false;
       this.busy = false;
@@ -877,22 +897,27 @@ export class Level1 implements Level {
     // hablan de la fiesta (sueltas o con una mini conversación) y, si les vuelves a hablar, se despiden
     let who = this.folk.get(w.b);
     if (!who) {
-      const names = w.female ? ['Xisca', 'Aina', 'Joana', 'Marta', 'Neus', 'Bel', 'Laia'] : ['Biel', 'Toni', 'Pere', 'Llorenç', 'Joan', 'Xavi', 'Miquel'];
-      who = { name: names[Math.floor(Math.random() * names.length)], hint: this.folk.size % 3 === 1, talk: this.folkNext++ % FERRERIES_CHATTER.length, times: 0 };
+      // (sin repetir: cada nombre sale una vez, en orden aleatorio; si se acaban, vuelta a empezar)
+      const pool = w.female ? this.namesF : this.namesM;
+      if (!pool.length) pool.push(...shuffle(w.female ? FOLK_F : FOLK_M));
+      who = { name: pool.pop()!, hint: this.folk.size % 3 === 1, talk: this.folkNext++ % FERRERIES_CHATTER.length, times: 0 };
       this.folk.set(w.b, who);
     }
     const name = who.name;
     const g = this.V.guide;
     const hint: Record<string, string[]> = {
       talkTofol: [`¿Buscas a ${g}? Siempre está detrás de la barra del Bar Es Pla, en la plaza.`, `${g} andaba preguntando por ti. Está en el Es Pla, el de la plaza de la iglesia.`],
-      collect: ['Dicen que si acaricias a un ase justo cuando se para, da suerte todo el año.', 'Las pomadas las ponen en las barras de los bares. Hay tres bares por aquí.', 'Cuidado con los burros, que cuando se encabritan empujan. Espera a que se paren.'],
+      collect: ['Dicen que si acaricias a un ase justo cuando se para, da suerte todo el año.', 'Las pomadas están en las mesas de las terrazas de los bares.', 'Cuidado con los burros, que cuando se encabritan empujan. Espera a que se paren.'],
       returnTofol: [`${g} estaba esperando sus pomadas, ¿no?`],
       findMarc: this.V.findFirst
         ? // (le busca por sus ubicaciones; la del Barça, como siempre, ayuda a que la gente se acuerde)
           this.gasStep === 0
             ? ['¿Uno con la del Barça? Hace nada estaba delante del Feymar, en la otra punta de la calle mayor.', '¿El de la ubicación? Eso es la calle mayor, hacia el final, donde el Feymar.']
             : ['El de la del Barça se ha ido a por un bocata. Con patatas, eh.', 'Lo he visto con un bocata en la mano, al lado del Sa Font.']
-        : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
+        : this.gunQuest === 1
+          ? // (con el encargo de la pistola: el puesto, no Sa Font)
+            ['¿Pistolas? Al final de la calle, el de los cubos rosas.', 'El de las pistolas de agua está al final de la calle mayor, con el toldo de rayas.']
+          : ['He visto a un chico con la camiseta del Barça. Iba hacia el Bar Sa Font.', 'Tu amigo está por el Sa Font, al fondo de la plaza, al lado de la iglesia.'],
       toFont: ['¿A Sa Font? Al fondo de la plaza, al lado de la iglesia.'],
     };
     const pool = hint[this.stage];
@@ -1075,6 +1100,11 @@ export class Level1 implements Level {
       this.walker.facing = this.eyesFrom + Math.atan2(Math.sin(d), Math.cos(d)) * Math.min(1, this.eyesT / 0.7);
     }
     this.t += dt;
+    const mk = `${this.stage}|${this.gunQuest}`;
+    if (mk !== this.markKey) {
+      this.markKey = mk;
+      this.hitsMark = this.hits;
+    }
     const ending = this.stage === 'ending' || this.stage === 'done';
     const close0 = this.stage === 'meet' || this.stage === 'eyes' || this.stage === 'pairDance' || this.stage === 'kiss' || this.stage === 'kissing';
     // (en la primera mirada y el beso, quietos de verdad: nada de asentir)
@@ -1258,6 +1288,13 @@ export class Level1 implements Level {
         animatePerson(this.carme, dt, this.stage === 'ending' ? 'dance' : 'idle', 0, this.t * 7);
       }
     } else animatePerson(this.carme, dt, this.stage === 'meet' ? 'talk' : 'dance', 0, this.t * 7);
+    // (4.4.16) Paseando, si la cámara queda pegada a Carme (al llegar a Sa Font por detrás), se esconde como la
+    // gente: tapaba todo el plano. En las escenas y en el cine, siempre a la vista.
+    {
+      const roam = !cinema.active && !close0 && !ending && this.stage !== 'barDance';
+      const cc = this.camera.position, cr = this.carme.root.position;
+      this.carme.root.visible = !(roam && Math.hypot(cc.x - cr.x, cc.z - cr.z) < 0.9);
+    }
     if (this.together && !this.marcTo && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'toFont')) {
       // Gas va a su lado (a la izquierda y un poco por detrás), no en fila: detrás de ella la tapaba en cámara
       const mp = this.marc.root.position;
@@ -1382,6 +1419,10 @@ export class Level1 implements Level {
       } else if (this.stage === 'findMarc' && !this.V.findFirst && this.gunQuest === 1 && this.vendor && Math.hypot(pp.x - STALL.x, pp.z - (STALL.z + 1.4)) < 2.2) {
         label = '🛒 Comprar';
         this.pendingAction = () => this.buyGun();
+      } else if (!F && dG < 1.8 && dG < dM && (this.stage === 'talkTofol' || this.stage === 'collect' || this.stage === 'returnTofol' || this.stage === 'findMarc')) {
+        // (junto a Gas, antes de conoceros: no contesta un desconocido; ella lo piensa para sí)
+        label = 'Hablar';
+        this.pendingAction = () => bark('Margaux', this.T.gasPeek ?? '(¿Y ese de la del Barça?)');
       } else if (dM < 3.5 && this.stage === 'findMarc' && !this.V.findFirst) {
         // (4.4.13) Antes de bailar, Carme le pide una pistola de agua; con ella en la mano, se la da y a bailar
         if (this.gunQuest === 0) {
@@ -1401,7 +1442,9 @@ export class Level1 implements Level {
         label = 'Hablar';
         this.pendingAction = () => {
           this.busy = true;
-          dialogue(F && this.together ? F.lines.carmeAfter : this.T.carme, () => (this.busy = false));
+          // (antes de tiempo no invita a bailar: primero Tòfol, luego las pomadas)
+          const early = this.stage === 'talkTofol' ? this.T.carmeEarly : this.stage === 'collect' || this.stage === 'returnTofol' ? this.T.carmePomadas : null;
+          dialogue(F && this.together ? F.lines.carmeAfter : early ?? this.T.carme, () => (this.busy = false));
         };
       } else if (this.stage !== 'water' && !this.sit) {
         // Con cualquiera de la gente: una charla corta (y, a veces, una pista de lo que toca)
@@ -1487,7 +1530,6 @@ export class Level1 implements Level {
             stats: [
               ['Caricias perfectas', `${this.perfects}/3`],
               [this.V.statHits, `${this.hits}`],
-              ['Pomadas que llegaron', `${3 - this.spilled}/3 🍋`],
               ['Tiempo', clock(this.playTime)],
             ],
           }),
@@ -1557,7 +1599,12 @@ export class Level1 implements Level {
       if (next) this.stage = next;
       this.updateHud();
     };
-    if (this.stage === 'talkTofol') dialogue(this.T.tofolQuest, done('collect'));
+    if (this.stage === 'talkTofol' && !this.helloDone && this.T.tofolHello.length)
+      dialogue(this.T.tofolHello, () => {
+        this.helloDone = true;
+        done()();
+      });
+    else if (this.stage === 'talkTofol') dialogue(this.T.tofolQuest, done('collect'));
     else if (this.stage === 'collect') dialogue(this.T.tofolNotYet, done());
     else if (this.stage === 'returnTofol') {
       this.giveCups();
@@ -1565,7 +1612,7 @@ export class Level1 implements Level {
       const lines = this.spilled ? [...FERRERIES.hints.arrived(3 - this.spilled), ...this.T.tofolDone.slice(2)] : this.T.tofolDone;
       // (capítulo 9: antes del beso, a bailar juntos a Sa Font, donde se conocieron; antes el beso era ahí mismo)
       dialogue(lines, this.V.findFirst ? () => this.goToFont() : done('findMarc'));
-    } else dialogue(this.T.tofolAgain, done());
+    } else dialogue(this.gunQuest === 1 && this.T.tofolGun ? this.T.tofolGun : this.T.tofolAgain, done());
   }
 
   /** Le da las tres a Tòfol: ella se queda con las manos libres y él, con el vaso en la mano. */
@@ -2128,7 +2175,7 @@ export class Level1 implements Level {
       });
     }
     items.push(
-      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => { cups(false); collect(false); tofolSpot(); gas(true); }) },
+      { label: `1 · Hablar con ${this.V.guide}`, run: go('talkTofol', () => { this.helloDone = false; cups(false); collect(false); tofolSpot(); gas(true); }) },
       { label: '2 · Pomadas y ases', run: go('collect', () => { cups(false); collect(false); tp(0, 6); gas(true); }) },
       {
         label: `3 · Volver a ${this.V.guide}`,

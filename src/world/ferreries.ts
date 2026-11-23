@@ -28,7 +28,7 @@ export interface Box2 {
 
 export interface Crowd {
   people: CrowdLike;
-  base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk; turnT?: number }[];
+  base: { x: number; z: number; ry: number; phase: number; speed: number; walk?: Walk; turnT?: number; circ?: Circle }[];
   /** Bailarines de los bares: se mueven más (cadera y brazos), siempre con los pies en el suelo. */
   dance?: boolean;
   /** Chicas (para que, al hablarles, digan un nombre de chica). */
@@ -740,6 +740,7 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
       near(px, pz, MARC.x, MARC.z, 2.5) ||
       barFronts.some((b) => near(px, pz, b.x, b.z, 3.2)) ||
       near(px, pz, 9, 9.5, 2.5) ||
+      near(px, pz, 4.2, 5.6, 1.2) || // (4.4.16: la entrada de la plaza junto al Es Pla, sin corrillo que la tape)
       spots.some((s) => near(px, pz, s.x, s.z, 1.0));
     if (!bad) spots.push({ x: px, z: pz, ry: pz > 5 ? Math.atan2(0 - px, 14 - pz) : (pz < 0 ? 0 : Math.PI) + (r() - 0.5) });
   }
@@ -830,8 +831,8 @@ export function buildFerreries(scene: THREE.Scene, town?: TownDressing): Ferreri
     marcPos: MARC.clone(),
     plazaCenter: new THREE.Vector3(0, 0, 14),
     crowds,
-    // (los que pasean no: se mueven; con ellos no se choca)
-    people: [...(spots as { x: number; z: number; walk?: Walk }[]).filter((s) => !s.walk), ...dancers].map((s) => ({ x: s.x, z: s.z, r: 0.35 })),
+    // (cada persona, también las que pasean, con su círculo de choque: animateCrowd lo lleva con ella)
+    people: crowds.flatMap((c) => c.base.map((b) => (b.circ = { x: b.x, z: b.z, r: 0.35 }))),
     lights,
     partyLights,
     bars: barFronts,
@@ -850,6 +851,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
   // (quien quede pegado a la cámara se esconde bajo el suelo: apartarse no basta cuando la cámara va deprisa)
   const hy = (x: number, z: number) => (hideNear && Math.hypot(x - hideNear.x, z - hideNear.z) < hideNear.r ? -60 : undefined);
   const k = Math.min(1, dt * 5);
+  const who = avoid[0];
   // dónde está cada uno ahora: los que pasean esquivan a los demás (antes se atravesaban)
   _all.length = 0;
   for (const c of crowds) for (const b of c.base) {
@@ -883,7 +885,12 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
           const ahead = (w.ax === 'x' ? ox : oz) * w.dir;
           const side = Math.abs(w.ax === 'x' ? oz : ox);
           return ahead > 0.05 && ahead < 0.9 && side < 0.55 && Math.hypot(o.x - px, o.z - pz) > 0.01;
-        });
+        }) || (!!who && (() => {
+          // (y delante de Azul también se paran y dan media vuelta: ya no se la atraviesa)
+          const ox = who.x - (b.x + ox0), oz = who.z - (b.z + oz0);
+          const ahead = (w.ax === 'x' ? ox : oz) * w.dir;
+          return ahead > 0.05 && ahead < 1.1 && Math.abs(w.ax === 'x' ? oz : ox) < 0.7;
+        })());
         if (blocked && (b.turnT ?? 0) <= 0) {
           w.dir = (-w.dir) as 1 | -1;
           b.turnT = 1.2;
@@ -902,6 +909,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
         pose.sway = pose.twist = pose.shift = 0;
         tq.setFromAxisAngle(up, b.ry);
         c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose, hy(b.x + bb.ox, b.z + bb.oz));
+        if (b.circ) { b.circ.x = b.x + bb.ox; b.circ.z = b.z + bb.oz; }
         return;
       }
       // De pie, gesticulando; los bailarines con más energía y girando un poco sobre sí mismos
@@ -912,6 +920,7 @@ export function animateCrowd(crowds: Crowd[], t: number, energy = 1, clear?: { x
       }
       tq.setFromAxisAngle(up, b.ry + (c.dance ? Math.sin(t * 0.8 + b.phase) * 0.6 : Math.sin(t * 0.4 + b.phase) * 0.2));
       c.people.set(i, b.x + bb.ox, b.z + bb.oz, tq, pose, hy(b.x + bb.ox, b.z + bb.oz));
+      if (b.circ) { b.circ.x = b.x + bb.ox; b.circ.z = b.z + bb.oz; }
     });
     c.people.commit();
   }

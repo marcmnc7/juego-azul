@@ -32,7 +32,8 @@ export const FERRERIES = {
     { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2025. Último día de las fiestas de Sant Bartomeu: el jaleo de burros.' },
     { who: 'Narrador', text: 'Pistolas de agua, purpurina y confeti por todas partes. Has subido con tus amigas. Todavía no le conoces.' },
   ] as Line[],
-  tofolQuest: [
+  /** (4.4.16) La primera charla, partida en dos: primero el regalo y la fiesta; lo de las pomadas, cuando ella vuelve a preguntar. */
+  tofolHello: [
     // La primera persona con la que habla en todo el juego: presenta el regalo (inventado: Marc, cámbialo si quieres)
     { who: 'Tòfol', text: 'Ei, al·lota! Jo som en Tòfol. Abans de res, t’he de dir una cosa.' },
     { who: 'Tòfol', text: 'Te lo digo en castellano, que esto es importante: esto no es un juego cualquiera. Es un regalo. Para ti.' },
@@ -44,6 +45,9 @@ export const FERRERIES = {
     { who: 'Tòfol', text: 'Bé, au! I avui aquí mano jo. Benvinguda a Ferreries: darrer dia de Sant Bartomeu.' },
     { who: 'Tòfol', text: 'Tot s’any som un poble tranquil. Avui no: pistoles d’aigua, purpurina, i ases pel mig de sa plaça amb tot es poble ballant-los devora. Aquí ningú torna sec a ca seva.' },
     { who: 'Tòfol', text: 'I alerta, que es jaleo té sa seva màgia. Un ve a passar sa tarda, i no sap mai què se’n durà.' },
+    { who: 'Tòfol', text: 'I quan vulguis saber què toca fer avui, me demanes.' },
+  ] as Line[],
+  tofolQuest: [
     { who: 'Margaux', text: '¿Y qué se hace aquí?' },
     { who: 'Tòfol', text: 'Primera vegada an es jaleo d’ases? Dues coses: pomada a sa mà, i quan un ase s’atura, li fas una carícia. Du sort.' },
     { who: 'Margaux', text: '¿Una caricia? ¿Al burro?' },
@@ -58,6 +62,13 @@ export const FERRERIES = {
   ] as Line[],
   tofolAgain: [{ who: 'Tòfol', text: 'Què fas aquí encara? Vés a Sa Font!' }] as Line[],
   carme: [{ who: 'Carme', text: 'Ja era hora! Vina, balla!' }] as Line[],
+  /** Si va a verla antes de tiempo: antes de hablar con Tòfol, y mientras busca las pomadas. */
+  carmeEarly: [{ who: 'Carme', text: 'Primer vés a veure en Tòfol, que te cerca.' }] as Line[],
+  carmePomadas: [{ who: 'Carme', text: 'Primer ses pomades, després ballam!' }] as Line[],
+  /** Con el encargo de la pistola: Tòfol ya no la manda a Sa Font. */
+  tofolGun: [{ who: 'Tòfol', text: 'Sa pistola de na Carme? Al final des carrer.' }] as Line[],
+  /** Junto a Gas, antes de conocerse: para sí. */
+  gasPeek: '(¿Y ese de la del Barça?)',
   /** (4.4.13) Antes de bailar, Carme le pide una pistola de agua: la vende un hombre al final del carrer. */
   gunAsk: [
     { who: 'Carme', text: 'Ja era hora! Escolta, m’han robat sa pistola i aquí tothom me banya.' },
@@ -915,6 +926,7 @@ export const ANIVERSARIO = {
     { who: 'Narrador', text: 'Ferreries. 25 de agosto de 2026, Sant Bartomeu. Un año justo.' },
     { who: 'Narrador', text: 'Esta vez ya le conoces. Y está por el pueblo, en algún sitio.' },
   ] as Line[],
+  tofolHello: [] as Line[],
   tofolQuest: [
     { who: 'Tòfol', text: 'Tu altra vegada! I aquest any acompanyada.' },
     { who: 'Tòfol', text: 'Ja sabeu com va: tres pomades i tres carícies, però ara a dues mans.' },

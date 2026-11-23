@@ -74,7 +74,7 @@ class Dust {
       this.pos.set([x + Math.cos(a) * 0.15, y + 0.05, z + Math.sin(a) * 0.15], i * 3);
       this.vel.set([Math.cos(a) * sp, 0.25 + Math.random() * 0.5 * strength, Math.sin(a) * sp], i * 3);
       this.max[i] = this.life[i] = 0.5 + Math.random() * 0.5;
-      this.size[i] = 0.25 + Math.random() * 0.2 + strength * 0.2;
+      this.size[i] = 0.15 + Math.random() * 0.1 + strength * 0.12; // (4.4.16: más pequeñas: parecían bolas)
     }
   }
 
@@ -91,8 +91,8 @@ class Dust {
         this.pos[i * 3 + a] += this.vel[i * 3 + a] * dt;
       }
       // Crece y se desvanece, como el polvo de verdad
-      this.size[i] += dt * 0.6;
-      this.alpha[i] = Math.sin(k * Math.PI) * 0.45;
+      this.size[i] += dt * 0.35;
+      this.alpha[i] = Math.sin(k * Math.PI) * 0.3;
     }
     const g = this.points.geometry;
     g.attributes.position.needsUpdate = true;

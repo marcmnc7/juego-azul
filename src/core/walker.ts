@@ -212,7 +212,7 @@ export class Walker implements AirState {
       const flat = mag > 0.92 && turnPenalty > 0.85 && this.traction >= 1 && this.stumble <= 0;
       this.fullT = flat ? this.fullT + dt : 0;
       const wantBoost = this.fullT > SPRINT_AFTER && this.canSprint ? SPRINT : 1;
-      if (wantBoost > 1 && this.boost < 1.02) dust.puff(p.x, p.y, p.z, 7, 0.6);
+      if (wantBoost > 1 && this.boost < 1.02) dust.puff(p.x, p.y, p.z, 5, 0.5);
       this.boost += (wantBoost - this.boost) * Math.min(1, dt * (wantBoost > this.boost ? 2.5 : 6));
       tx = (mx / len) * this.speed * this.boost * mag * turnPenalty;
       tz = (mz / len) * this.speed * this.boost * mag * turnPenalty;
@@ -442,21 +442,6 @@ export class Walker implements AirState {
       const L = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
       const dir = { x: (to.x - from.x) / L, y: (to.y - from.y) / L, z: (to.z - from.z) / L };
       d = Math.max(minD, (phys.camCast(from, dir, L) / L) * dist - 0.15);
-      // Con una pared justo detrás, la cámara gira poco a poco hacia donde haya sitio en vez de quedarse
-      // pegada a la nuca (a mano manda quien juega)
-      if (d < dist * 0.62 && this.manualCam <= 0 && dt > 0) {
-        let best = d, side = 0;
-        for (const da of [0.5, -0.5, 1, -1]) {
-          const ax = p.x - Math.sin(this.yaw + da) * dist - from.x, az = p.z - Math.cos(this.yaw + da) * dist - from.z, ay = to.y - from.y;
-          const LL = Math.hypot(ax, ay, az);
-          const f = (phys.camCast(from, { x: ax / LL, y: ay / LL, z: az / LL }, LL) / LL) * dist;
-          if (f > best + 0.8) {
-            best = f;
-            side = da;
-          }
-        }
-        if (side) this.yaw += Math.sign(side) * Math.min(Math.abs(side), dt * 0.45);
-      }
     } else {
       for (; d < dist; d += 0.25) {
         const x = p.x + sx * d;
@@ -479,6 +464,25 @@ export class Walker implements AirState {
         camWorld.cast(from.x - nx, from.y, from.z - nz, dx, dy, dz, L, walls),
       );
       if (hit < L) d = Math.max(0.9, d * Math.max(0, hit - 0.3) / L);
+    }
+    // Con algo justo detrás (una pared, una esquina, el tronco de un pino), la cámara gira poco a poco hacia
+    // donde haya sitio en vez de quedarse pegada a la nuca (a mano manda quien juega). (4.4.16: mira también
+    // lo que se ve, no solo los muros; y más abierto y algo más deprisa: en las esquinas ±60° no bastaban)
+    if (d < dist * 0.62 && this.manualCam <= 0 && dt > 0 && !this.camPivot) {
+      const fy = baseY + 1.5, ay = baseY + h - fy;
+      let best = d, side = 0;
+      for (const da of [0.5, -0.5, 1, -1, 1.5, -1.5]) {
+        const ax = -Math.sin(this.yaw + da) * dist, az = -Math.cos(this.yaw + da) * dist;
+        const LL = Math.hypot(ax, ay, az);
+        const dir = { x: ax / LL, y: ay / LL, z: az / LL };
+        const free = Math.min(phys ? phys.camCast({ x: p.x, y: fy, z: p.z }, dir, LL) : LL, camWorld.cast(p.x, fy, p.z, dir.x, dir.y, dir.z, LL, walls));
+        const f = (free / LL) * dist;
+        if (f > best + 0.8) {
+          best = f;
+          side = da;
+        }
+      }
+      if (side) this.yaw += Math.sign(side) * Math.min(Math.abs(side), dt * 0.8);
     }
     if (this.camD < 0 || !this.camInit) this.camD = d;
     else this.camD += (d - this.camD) * Math.min(1, dt * (d < this.camD ? 14 : 2.2));
