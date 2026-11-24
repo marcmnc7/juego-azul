@@ -38,7 +38,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
   return e;
 }
 
-/** Modo prueba (#test): solo entonces hay atajos como «Saltar» en los chats. */
+/** Modo prueba (#test): todo desbloqueado, panel de fases y atajos de consola. */
 let testMode = false;
 export const setTestMode = (v: boolean) => void (testMode = v);
 export const isTestMode = () => testMode;
@@ -338,6 +338,16 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     // letra; luego lo demás y, al final, la fiesta. Tocar el botón a medias lo enseña entero de golpe.
     let revealed = false;
     let party = 0;
+    // Mientras se descubre, nada del vale se puede tocar (la foto de los billetes se abría antes de tiempo)
+    ticket.addEventListener(
+      'click',
+      (e) => {
+        if (revealed) return;
+        e.stopPropagation();
+        e.preventDefault();
+      },
+      true,
+    );
     const finish = () => {
       if (revealed) return;
       revealed = true;
@@ -346,7 +356,8 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
       audio.cheer(0.35);
       cssConfetti(o, 90);
       vibrate([20, 30, 50]);
-      refresh();
+      // (la fiesta del final también se ve: un momento sin poder seguir, para que un toque de más no la corte)
+      lock(1800);
     };
     const open = () => {
       if (giftOpen) return;
@@ -358,7 +369,7 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
       party = window.setTimeout(finish, revealAt);
       refresh();
     };
-    env.onclick = open;
+    env.onclick = () => performance.now() >= lockedUntil && open();
     beats.push({
       el: b,
       // (sin «Verlo ya»: el vale se descubre entero, de borroso a nítido, antes de poder seguir; da intriga)
@@ -449,13 +460,22 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
   }
 
   let cur = 0;
+  /** Hasta cuándo no se puede seguir (mientras entra un momento o acaba la animación del regalo). */
+  let lockedUntil = 0;
+  let lockTimer = 0;
+  function lock(ms: number) {
+    lockedUntil = Math.max(lockedUntil, performance.now() + ms);
+    clearTimeout(lockTimer);
+    lockTimer = window.setTimeout(refresh, lockedUntil - performance.now() + 20);
+    refresh();
+  }
   beats.forEach((bt, i) => {
     stage.append(bt.el);
     dots.append(el('i', i === 0 ? 'on' : ''));
   });
   const refresh = () => {
     btn.textContent = beats[cur].label();
-    (btn as HTMLButtonElement).disabled = !!beats[cur].wait?.();
+    (btn as HTMLButtonElement).disabled = !!beats[cur].wait?.() || performance.now() < lockedUntil;
     [...dots.children].forEach((d, i) => d.classList.toggle('on', i === cur));
   };
   const show = (i: number) => {
@@ -465,10 +485,13 @@ export function chapterComplete(n: number, result: LevelResult | undefined, gift
     });
     cur = i;
     beats[i].enter?.();
-    refresh();
+    // (cada momento entra animado: un doble toque no se salta el siguiente, p. ej. abrir el sobre sin verlo)
+    lock(700);
   };
   btn.onclick = () => {
+    if (performance.now() < lockedUntil) return;
     const bt = beats[cur];
+    if (bt.wait?.()) return;
     if (bt.next && !bt.next()) return;
     if (cur < beats.length - 1) {
       audio.whoosh();
@@ -2138,14 +2161,21 @@ export function timingGauge(o: GaugeOptions, onResult: (quality: number, zone: G
   };
 }
 
-/** Pantalla de móvil con un chat de WhatsApp que se va escribiendo. Toca para cerrar al final. */
-/**
- * WhatsApp en pantalla: uno o varios fragmentos literales del chat, mensaje a mensaje.
- * Tocar enseña el siguiente al momento; «Saltar» los enseña todos.
- */
 /** Cuántas de sus respuestas ha acertado a la primera en este capítulo. */
 export const quizScore = { right: 0, total: 0 };
 
+/** Modo prueba (`__dbg.skip()`): enseña de golpe el chat que esté en pantalla. En el juego no hay «Saltar». */
+let phoneSkipAll: (() => void) | null = null;
+export const dbgFinishChat = () => phoneSkipAll?.();
+
+/** El doble check azul de «leído», dibujado como el de WhatsApp (los dos ✓ de texto quedaban separados). */
+const TICKS = '<svg class="ticks" viewBox="0 0 16 11" aria-hidden="true"><path d="M11.07.65a.5.5 0 0 1 .08.7L5.4 8.6a.5.5 0 0 1-.74.04L1.35 5.33a.5.5 0 1 1 .7-.7l2.92 2.92L10.37.73a.5.5 0 0 1 .7-.08zm4 0a.5.5 0 0 1 .08.7L9.4 8.6a.5.5 0 0 1-.74.04l-.9-.9a.5.5 0 1 1 .7-.7l.52.52L14.37.73a.5.5 0 0 1 .7-.08z"/></svg>';
+
+/**
+ * WhatsApp en pantalla: uno o varios fragmentos literales del chat, mensaje a mensaje y a ritmo de lectura.
+ * Antes de cada mensaje de la otra persona sale «escribiendo…» (arriba y con los tres puntos). Tocar la pantalla no
+ * adelanta nada (se saltaban mensajes sin querer): solo al final aparece el botón «Toca para seguir», que cierra.
+ */
 export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   const asked = new Set<number>();
   const frags = Array.isArray(input) ? input : [input];
@@ -2155,12 +2185,12 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   ph.append(
     el('div', 'phone-bar', `<span class="pb-back">‹</span><span class="pb-avatar">${contact[0]}</span><span class="pb-name"><b>${contact}</b><small>en línea</small></span><span class="pb-icons">📹 📞</span>`),
   );
+  const status = ph.querySelector('.pb-name small') as HTMLElement;
   const chat = el('div', 'phone-chat');
   ph.append(chat);
-  const skip = el('button', 'phone-skip', 'Saltar ⏭');
-  const hint = el('div', 'phone-hint', 'Toca para seguir');
-  // «Saltar» solo en el modo prueba: Azul lee los chats enteros (21 nov)
-  o.append(ph, hint, ...(testMode ? [skip] : []));
+  const hint = el('button', 'phone-hint', 'Toca para seguir ▸');
+  hint.hidden = true;
+  o.append(ph, hint);
   root.append(o);
   type Item = { kind: 'date'; text: string } | { kind: 'msg'; me: boolean; t: string; text: string; first: boolean };
   const items: Item[] = [];
@@ -2190,16 +2220,32 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
   let i = 0;
   let timer = 0;
   let typing: HTMLElement | null = null;
+  let closed = false;
   /** La pregunta que está en pantalla: hasta contestarla, el chat no avanza. */
   let asking: HTMLElement | null = null;
   const done = () => i >= items.length;
   const scroll = () => (chat.scrollTop = chat.scrollHeight);
+  // (largo del texto sin etiquetas: algunos mensajes llevan emojis o <b>)
+  const len = (it: Item) => (it.kind === 'msg' ? it.text.replace(/<[^>]+>/g, '').length : 0);
+  // Ritmo: lo que se tarda en leer el mensaje que acaba de salir y lo que tarda la otra persona en escribir el siguiente
+  const readMs = (it: Item) => (it.kind === 'date' ? 1000 : Math.min(3600, 1100 + len(it) * 38));
+  const typeMs = (it: Item) => Math.min(2400, 1000 + len(it) * 22);
   const show = (it: Item) => {
     if (it.kind === 'date') chat.append(el('div', 'chat-date', it.text));
     else {
-      const b = el('div', 'bubble' + (it.me ? ' me' : '') + (it.first ? ' first' : ''), `<span class="bt">${it.text}</span><span class="bm">${it.t}${it.me ? ' <i class="ticks">✓✓</i>' : ''}</span>`);
+      const b = el('div', 'bubble' + (it.me ? ' me' : '') + (it.first ? ' first' : ''), `<span class="bt">${it.text}</span><span class="bm">${it.t}${it.me ? TICKS : ''}</span>`);
       chat.append(b);
     }
+  };
+  const setTyping = (on: boolean) => {
+    typing?.remove();
+    typing = null;
+    status.textContent = on ? 'escribiendo…' : 'en línea';
+    status.classList.toggle('typing', on);
+    if (!on) return;
+    typing = el('div', 'bubble typing', '<i></i><i></i><i></i>');
+    chat.append(typing);
+    scroll();
   };
   /** Antes de un mensaje suyo señalado: qué contestó. El mensaje real no cambia, y hasta acertar no sale. */
   const ask = (it: Item & { kind: 'msg' }) => {
@@ -2236,54 +2282,56 @@ export function phoneChat(input: ChatFrag | ChatFrag[], onDone: () => void) {
     ph.append(q);
     scroll();
   };
+  /** Sale el siguiente mensaje y se programa el que viene (con su «escribiendo…» si es de la otra persona). */
   const step = () => {
     clearTimeout(timer);
-    typing?.remove();
-    typing = null;
+    setTyping(false);
     if (done()) return finish();
     const up = items[i];
     if (up.kind === 'msg' && up.me && QUIZ[up.text] && !asked.has(i)) {
       asked.add(i);
       return ask(up);
     }
-    show(items[i++]);
+    const cur = items[i++];
+    show(cur);
     audio.pop();
     scroll();
-    if (done()) return finish();
+    if (done()) return (timer = window.setTimeout(finish, readMs(cur)));
     const nx = items[i];
     if (nx.kind === 'msg' && !nx.me) {
-      typing = el('div', 'bubble typing', '<i></i><i></i><i></i>');
-      chat.append(typing);
-      scroll();
-    }
-    // Ritmo de lectura: lo justo para leer cada mensaje, sin esperas largas entre uno y otro
-    timer = window.setTimeout(step, nx.kind === 'date' ? 400 : 420 + Math.min(700, (nx.kind === 'msg' ? nx.text.length : 0) * 9));
+      // Primero se lee lo que hay; luego la otra persona se pone a escribir
+      timer = window.setTimeout(() => {
+        setTyping(true);
+        timer = window.setTimeout(step, typeMs(nx));
+      }, Math.max(500, readMs(cur) - 600));
+    } else timer = window.setTimeout(step, readMs(cur));
   };
   const finish = () => {
     clearTimeout(timer);
-    typing?.remove();
+    setTyping(false);
     asking?.remove();
     asking = null;
-    hint.textContent = 'Toca para seguir ▸';
+    hint.hidden = false;
     hint.classList.add('ready');
-    skip.hidden = true;
   };
-  skip.onpointerdown = (e) => {
-    e.stopPropagation();
+  phoneSkipAll = () => {
+    clearTimeout(timer);
     while (!done()) show(items[i++]);
     scroll();
     finish();
   };
-  o.onpointerdown = (e) => {
+  // Tocar fuera no hace nada (y no le llega al juego): el chat va solo y solo el botón del final cierra
+  o.onpointerdown = (e) => e.stopPropagation();
+  hint.onpointerdown = (e) => {
     e.stopPropagation();
-    if (asking) return; // primero, contestar
-    if (!done()) return step();
-    if (!hint.classList.contains('ready')) return;
+    if (closed || !hint.classList.contains('ready')) return;
+    closed = true;
     clearTimeout(timer);
+    phoneSkipAll = null;
     o.remove();
     onDone();
   };
-  timer = window.setTimeout(step, 350);
+  timer = window.setTimeout(step, 600);
 }
 
 export interface DebugItem {

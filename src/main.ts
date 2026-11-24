@@ -37,7 +37,7 @@ import { stage } from './core/stage';
 import { hobbiesFinale, credits } from './ui/finale';
 import { ridingMission } from './world/missions/riding';
 import { surfMission } from './world/missions/surf';
-import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, installGate, phoneOnlyGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
+import { titleScreen, mapScreen, chapterComplete, clearScreens, debugPanel, closeDialogue, newEpoch, chapterCard, setSpeakerResolver, talkingNow, laterHold, toast, comicWord, quizScore, dbgFinishChat, installGate, phoneOnlyGate, countdownScreen, beforeGate, pauseState, openPause, setCastChapter, setTestMode, type ChapterLoading } from './ui/ui';
 import { ChapterExtras } from './core/extras';
 import { prepareMapIntro, preloadMap, hasMapIntro } from './ui/mapIntro';
 import { TEASERS } from './data/extras';
@@ -698,9 +698,10 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function dbgSkip(max = 30) {
   for (let i = 0; i < max; i++) {
     if (document.querySelector('.phone-overlay')) {
-      document.querySelector('.phone-skip')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      dbgFinishChat();
       await wait(300);
-      document.querySelector('.phone-overlay')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      // (el chat se cierra con su botón; otras pantallas de móvil, como el radar, tocando encima)
+      (document.querySelector('.phone-hint') ?? document.querySelector('.phone-overlay'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
       await wait(500);
       continue;
     }

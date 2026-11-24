@@ -573,17 +573,14 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; touch
 .bubble.me.first { border-top-left-radius: 10px; border-top-right-radius: 2px; }
 .bubble .bt { white-space: normal; }
 .bubble .bm { float: right; margin: 6px 0 -3px 10px; font-size: 10.5px; font-weight: 500; color: #667781; white-space: nowrap; }
-.bubble .ticks { font-style: normal; color: #53bdeb; letter-spacing: -2px; margin-left: 2px; }
+.bubble .ticks { display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; fill: #53bdeb; }
+.pb-name small.typing { color: #c8f7c5; font-style: italic; }
 .bubble.typing { display: flex; gap: 4px; padding: 10px 12px; }
 .bubble.typing i { width: 6px; height: 6px; border-radius: 50%; background: #8696a0; animation: beat .9s infinite; }
 .bubble.typing i:nth-child(2) { animation-delay: .15s; } .bubble.typing i:nth-child(3) { animation-delay: .3s; }
-.phone-hint { color: var(--paper); font-size: 13px; font-weight: 800; }
+.phone-hint { color: var(--paper); font-size: 13px; font-weight: 800; background: none; border: 0; font-family: inherit; min-height: 44px; cursor: pointer; }
+.phone-hint[hidden] { display: none; }
 .phone-hint.ready { color: var(--sea); background: var(--gold); border: 3px solid var(--sea); padding: 6px 16px; border-radius: 12px; animation: beat 1.4s ease-in-out infinite; }
-.phone-skip {
-  position: absolute; right: max(14px, env(safe-area-inset-right)); top: max(14px, env(safe-area-inset-top));
-  background: var(--paper); color: var(--sea); border: 3px solid var(--sea); border-radius: 12px; padding: 6px 12px; font-size: 13px; font-weight: 900; min-height: 38px; box-shadow: 0 3px 0 var(--sea);
-}
-.phone-skip[hidden] { display: none; }
 @media (max-height: 520px) {
   .phone { height: calc(100dvh - 58px); border-radius: 28px; border-width: 5px; }
   .phone-bar { padding: 8px 10px; }
@@ -1789,6 +1786,8 @@ html, body { background: #000; }
 .wn-gift.open > .wn-hint:not(.wn-saved) { opacity: 0; }
 /* El vale sube del sobre muy borroso y se va enfocando despacio; el título sale letra a letra (--d de cada una) */
 .wn-gift.open .wn-ticket { animation: wnTicket 4.2s .5s cubic-bezier(.25, .8, .3, 1) both; pointer-events: auto; }
+/* (hasta que se ha descubierto entero, el vale no se toca: ni la foto ni «Guardar») */
+.wn-gift.open:not(.revealed) .wn-ticket, .wn-gift.open:not(.revealed) .wn-ticket * { pointer-events: none; }
 @keyframes wnTicket {
   0% { opacity: 0; transform: translateY(90px) scale(.7) rotate(-4deg); filter: blur(26px) brightness(1.8); }
   30% { opacity: 1; transform: translateY(0) scale(.97) rotate(0); filter: blur(22px) brightness(1.5); }
@@ -2510,7 +2509,6 @@ html, body { background: #000; }
 
 /* 4.4 · Vuelo de satélite al empezar cada capítulo (como la app de mapas del móvil) */
 .map-intro { position: fixed; inset: 0; z-index: 59; background: #0b2a3d; overflow: hidden; touch-action: none; }
-.map-intro.diving { pointer-events: none; }
 .map-intro .mi-search, .map-intro .mi-scale, .map-intro .mi-credit { transition: opacity .5s ease, transform .5s ease; }
 .map-intro.diving .mi-search { opacity: 0; transform: translateY(-16px); }
 .map-intro.diving .mi-scale, .map-intro.diving .mi-credit { opacity: 0; }

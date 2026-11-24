@@ -70,8 +70,13 @@ export async function preloadMap(n: number) {
   await Promise.all(Array.from({ length: 8 }, worker));
 }
 
-// El vuelo: arranca muy despacio desde lejos y va cogiendo velocidad hasta zambullirse en el sitio
-const fly = (t: number) => t * t;
+// El vuelo: arranca despacio desde lejos, coge velocidad y frena al llegar, ya a ras de calle (aterriza)
+const fly = (t: number) => t * t * (3 - 2 * t);
+/** Hasta dónde baja: un poco más que la última foto (Z1), para que el fundido se haga casi en el suelo. */
+const Z_END = Z1 + 0.8;
+/** El fundido empieza cuando el vuelo ya está prácticamente abajo (antes empezaba a ~7 m por píxel). */
+const FADE_AT = 0.9;
+const FADE_MS = 1500;
 const easeIn = (t: number) => t * t * t;
 const easeInOut = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 
@@ -82,7 +87,8 @@ export function hasMapIntro(n: number) {
 /**
  * Prepara el mapa (encima de todo, quieto, con la barra vacía) en cuanto empieza a cargar el capítulo: así es
  * imposible ver el escenario o un diálogo antes de tiempo. `play` arranca el vuelo: `onReveal` cuando empieza el
- * fundido (el capítulo puede ponerse en marcha) y `onDone` al acabar. Tocar la pantalla adelanta el fundido.
+ * fundido (el capítulo puede ponerse en marcha) y `onDone` al acabar. Tocar la pantalla no lo adelanta: no se
+ * puede saltar, y hasta que se va del todo los toques no llegan al capítulo.
  */
 export function prepareMapIntro(n: number) {
   const s = SPOTS[n];
@@ -165,16 +171,14 @@ export function prepareMapIntro(n: number) {
   want(Z0 + 1);
   let t0 = Infinity;
   let raf = 0;
-  let skipAt = Infinity;
   let revealed = false;
   let finished = false;
   let onReveal = () => {};
   let onDone = () => {};
   // Escrito el sitio (con el mapa quieto), arranca despacio, acelera y, ya rápido, se funde suave en el capítulo
   const startZ = TYPE_MS + WAIT_MS;
-  const FADE_AT = 0.85;
   let fadeStart = Infinity;
-  let fadeLen = (1 - FADE_AT) * ZOOM_MS;
+  const fadeLen = FADE_MS;
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const now = performance.now();
@@ -186,11 +190,10 @@ export function prepareMapIntro(n: number) {
     bar.classList.toggle('done', typed >= 1);
     // 2) El vuelo: de lejos y despacio a la calle y deprisa (sigue un poco más allá de Z1 mientras se funde)
     const zt = Math.max(0, Math.min(1, (t - startZ) / ZOOM_MS));
-    const z = Z0 + (Z1 + 1.3 - Z0) * fly(zt);
-    // 3) El fundido, en marcha (tocar la pantalla lo adelanta: empieza ya y dura menos)
-    if (fadeStart === Infinity && t0 !== Infinity && (t >= startZ + FADE_AT * ZOOM_MS || skipAt !== Infinity)) {
+    const z = Z0 + (Z_END - Z0) * fly(zt);
+    // 3) El fundido, ya casi en el suelo
+    if (fadeStart === Infinity && t0 !== Infinity && t >= startZ + FADE_AT * ZOOM_MS) {
       fadeStart = now;
-      if (skipAt !== Infinity) fadeLen = 1100;
       o.classList.add('diving');
       if (!revealed) {
         revealed = true;
@@ -226,9 +229,10 @@ export function prepareMapIntro(n: number) {
     o.remove();
     onDone();
   };
+  // Los toques se quedan aquí (ni saltan el vuelo ni llegan al capítulo que espera debajo)
   o.onpointerdown = (e) => {
     e.stopPropagation();
-    if (t0 !== Infinity && skipAt === Infinity) skipAt = Math.max(0, performance.now() - t0);
+    e.preventDefault();
   };
   raf = requestAnimationFrame(frame);
   return {
@@ -245,7 +249,7 @@ export function prepareMapIntro(n: number) {
           onReveal();
         }
         finish();
-      }, 900 + startZ + ZOOM_MS + 6000);
+      }, 900 + startZ + ZOOM_MS + FADE_MS + 6000);
     },
     /** Se sale del capítulo antes de que empiece: fuera sin más. */
     cancel() {
